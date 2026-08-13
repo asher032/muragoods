@@ -7,6 +7,8 @@ export type OrderStatus =
   | "Out for Delivery"
   | "Delivered";
 
+export type DeliveryService = "Free Shipping" | "Saturday Delivery" | "Grab Express";
+
 export type Product = {
   id: string;
   name: string;
@@ -25,16 +27,22 @@ export type Order = {
   phone: string;
   zone: ZoneKey;
   address: string;
+  latitude?: number;
+  longitude?: number;
   payment: "GCash" | "Cash on Delivery";
+  gcashRefNumber?: string;
+  gcashScreenshotUrl?: string;
+  deliveryDate: string;
   status: OrderStatus;
   total: number;
   items: string[];
-  deliveryType: "Free Shipping" | "Saturday Delivery" | "Grab Express";
+  deliveryType: DeliveryService;
+  createdAt: string;
 };
 
 export const adminCredentials = {
-  email: "admin@muragoods.test",
-  password: "muragoods123",
+  email: "muragoods0@gmail.com",
+  password: "Jesusmaryosepcasiram",
 };
 
 export const products: Product[] = [
@@ -122,11 +130,16 @@ export const mockOrders: Order[] = [
     phone: "0917-234-9904",
     zone: "DWCL",
     address: "DWCL Student Center",
+    latitude: 13.1528,
+    longitude: 123.7384,
     payment: "GCash",
+    gcashRefNumber: "REF123456",
     status: "Payment Verified",
+    deliveryDate: "2026-08-16",
     total: 210,
     items: ["Musubi x 2", "Churros x 1"],
     deliveryType: "Free Shipping",
+    createdAt: "2026-08-13T10:30:00Z",
   },
   {
     id: "MUR-102",
@@ -134,11 +147,15 @@ export const mockOrders: Order[] = [
     phone: "0936-800-1010",
     zone: "Legazpi",
     address: "9th St., Old Albay",
+    latitude: 13.1450,
+    longitude: 123.7425,
     payment: "Cash on Delivery",
     status: "Preparing",
+    deliveryDate: "2026-08-17",
     total: 190,
     items: ["Musubi x 3"],
     deliveryType: "Saturday Delivery",
+    createdAt: "2026-08-12T14:20:00Z",
   },
   {
     id: "MUR-103",
@@ -146,10 +163,15 @@ export const mockOrders: Order[] = [
     phone: "0998-189-7422",
     zone: "Daraga",
     address: "Zone 5, Daraga",
+    latitude: 13.1600,
+    longitude: 123.7450,
     payment: "GCash",
+    gcashRefNumber: "REF789012",
     status: "Out for Delivery",
+    deliveryDate: "2026-08-15",
     total: 150,
     items: ["Churros x 2"],
     deliveryType: "Grab Express",
+    createdAt: "2026-08-13T08:00:00Z",
   },
 ];

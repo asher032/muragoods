@@ -1,7 +1,7 @@
 'use client';
 
 import { adminCredentials, mockOrders, products, type InventoryStatus } from "@/app/lib/muragoods-data";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 const statusOptions = [
   "Pending Payment",
@@ -24,6 +24,27 @@ export default function AdminPage() {
   const [error, setError] = useState("");
   const [orders, setOrders] = useState(mockOrders);
   const [catalog, setCatalog] = useState(products);
+  const [alert, setAlert] = useState<{ show: boolean; message: string; orderId?: string }>({ show: false, message: "" });
+
+  // Real-time alert system
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const interval = setInterval(() => {
+      const lastAlert = localStorage.getItem("lastAdminAlert");
+      const newOrderNotification = localStorage.getItem("newOrderAlert");
+      
+      if (newOrderNotification && newOrderNotification !== lastAlert) {
+        const orderData = JSON.parse(newOrderNotification);
+        setAlert({ show: true, message: `🔔 NEW ORDER! ${orderData.customer} - ₱${orderData.total}`, orderId: orderData.id });
+        localStorage.setItem("lastAdminAlert", newOrderNotification);
+        
+        setTimeout(() => setAlert({ show: false, message: "" }), 5000);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
 
   const summary = useMemo(() => {
     const totalSales = orders.reduce((sum, order) => sum + order.total, 0);
@@ -41,7 +62,7 @@ export default function AdminPage() {
       return;
     }
 
-    setError("Invalid admin credentials. Use the default Muragoods admin account.");
+    setError("❌ UNAUTHORIZED! Only the primary admin account has access.");
   };
 
   const updateOrderStatus = (orderId: string, nextStatus: string) => {
@@ -126,6 +147,13 @@ export default function AdminPage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-red-600 to-red-700 px-4 py-8 sm:px-8">
       <div className="mx-auto max-w-7xl">
+        {/* Real-time Alert Notification */}
+        {alert.show && (
+          <div className="mb-8 rounded-lg border-4 border-yellow-300 bg-yellow-300 p-4 text-lg font-black text-black shadow-2xl animate-pulse">
+            {alert.message}
+          </div>
+        )}
+
         <header className="mb-8 flex flex-col gap-4 rounded-lg bg-black border-4 border-yellow-300 p-6 text-white shadow-2xl md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm font-black uppercase tracking-widest text-yellow-300">🎮 Admin</p>
