@@ -72,7 +72,9 @@ export default function Home() {
               <a href="#menu" className="rounded-full px-3 py-2 transition hover:bg-orange-100">Menu</a>
               <a href="#shipping" className="rounded-full px-3 py-2 transition hover:bg-orange-100">Delivery</a>
               <a href="#checkout" className="rounded-full px-3 py-2 transition hover:bg-orange-100">Checkout</a>
-              <a href="/account/orders" className="rounded-full bg-orange-500 px-4 py-2 text-white transition hover:bg-orange-400">Orders</a>
+              <a href="/login" className="rounded-full px-3 py-2 transition hover:bg-orange-100">Login</a>
+              <a href="/signup" className="rounded-full bg-orange-500 px-4 py-2 text-white transition hover:bg-orange-400">Sign Up</a>
+              <a href="/account/orders" className="rounded-full border border-orange-500 px-4 py-2 text-orange-500 transition hover:bg-orange-100">Orders</a>
             </div>
           </nav>
 
