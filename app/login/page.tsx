@@ -17,7 +17,6 @@ export default function LoginPage() {
       return;
     }
 
-    // Simple validation - in production, connect to real auth
     if (email && password.length >= 6) {
       localStorage.setItem('user', JSON.stringify({ email, name: email.split('@')[0] }));
       router.push('/account/orders');
@@ -27,66 +26,72 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#fffef8,_#f7f0d8_22%,_#c2f2d4_58%,_#d7f3ff_100%)] flex items-center justify-center px-4 py-8">
+    <main className="min-h-screen bg-gradient-to-b from-red-600 to-red-700 flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md">
-        <div className="rounded-[36px] border border-white/60 bg-white/30 p-8 shadow-[0_30px_100px_rgba(88,116,51,0.12)] backdrop-blur">
-          <div className="flex flex-col items-center gap-4 mb-8">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-red-600 text-5xl font-black text-white ring-4 ring-yellow-200">
-              M
-            </div>
-            <div className="text-center">
-              <p className="text-xs font-black uppercase tracking-[0.28em] text-orange-500">Muragoods</p>
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Mínura-ng Pagkain</p>
+        <div className="rounded-lg border-4 border-black bg-white p-8 shadow-2xl">
+          <div className="diagonal-stripes rounded-lg p-6 mb-8 text-center relative">
+            <div className="relative flex flex-col items-center gap-4">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-yellow-300 bg-red-600 text-5xl font-black text-white shadow-lg">
+                M
+              </div>
+              <div>
+                <p className="text-sm font-black uppercase tracking-widest text-yellow-300">Muragoods</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-yellow-100">Mario's Food</p>
+              </div>
             </div>
           </div>
 
-          <h1 className="text-3xl font-black text-slate-900 mb-2">Login</h1>
-          <p className="text-sm text-slate-600 mb-6">Sign in to your Muragoods account</p>
+          <h1 className="text-4xl font-black text-black mb-2 text-center uppercase">🎮 LOGIN 🎮</h1>
+          <p className="text-sm font-bold text-slate-700 mb-6 text-center">Sign in to your account</p>
 
           <form onSubmit={handleLogin} className="space-y-4">
-            <label className="block text-sm font-semibold text-slate-700">
+            <label className="block text-sm font-black text-black uppercase">
               Email
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-orange-400"
+                className="mt-2 w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none transition focus:border-red-600 focus:bg-white"
                 placeholder="your@email.com"
               />
             </label>
 
-            <label className="block text-sm font-semibold text-slate-700">
+            <label className="block text-sm font-black text-black uppercase">
               Password
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-orange-400"
+                className="mt-2 w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none transition focus:border-red-600 focus:bg-white"
                 placeholder="••••••••"
               />
             </label>
 
-            {error && <p className="text-sm font-medium text-red-600">{error}</p>}
+            {error && (
+              <div className="rounded-lg border-4 border-red-600 bg-red-100 p-3 text-sm font-black text-red-700 uppercase">
+                ⚠️ {error}
+              </div>
+            )}
 
             <button
               type="submit"
-              className="w-full rounded-full bg-slate-900 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-700"
+              className="mario-btn w-full bg-black text-yellow-300 hover:bg-slate-900 uppercase font-black text-lg tracking-widest mt-6"
             >
-              Sign In
+              🎮 SIGN IN 🎮
             </button>
           </form>
 
-          <div className="mt-6 border-t border-slate-200 pt-6">
-            <p className="text-center text-sm text-slate-600">
-              Don't have an account?{' '}
-              <a href="/signup" className="font-bold text-orange-500 hover:text-orange-400">
-                Sign up
+          <div className="mt-8 border-t-4 border-black pt-6">
+            <p className="text-center text-sm font-black text-black uppercase">
+              No account yet?{' '}
+              <a href="/signup" className="text-red-600 hover:text-red-700 underline">
+                Sign up!
               </a>
             </p>
           </div>
 
-          <a href="/" className="mt-4 block text-center text-sm font-bold text-slate-600 hover:text-slate-900">
-            Continue Shopping
+          <a href="/" className="mario-btn mt-4 block text-center bg-red-600 text-white border-black hover:bg-red-700 uppercase font-black">
+            ← Back to Shop
           </a>
         </div>
       </div>
