@@ -116,17 +116,22 @@ export default function PresentationPage() {
               <span style={{ fontSize: '1.5rem' }}>🪙</span>
               <span>NEW! Mushroom Kingdom Express</span>
             </div>
-            <div
+            <img
+              src="/images/mario-hero.png"
+              alt="Mario Hero"
               style={{
-                fontSize: '12rem',
+                width: '280px',
+                height: '280px',
+                objectFit: 'contain',
                 filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.5))',
                 animation: 'float 3s ease-in-out infinite',
                 lineHeight: 1,
                 margin: '20px 0',
               }}
-            >
-              🍄
-            </div>
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
             <h1
               style={{
                 fontSize: '3rem',
@@ -207,17 +212,22 @@ export default function PresentationPage() {
                 transform: 'skewX(-15deg)',
               }}
             />
-            <div
+            <img
+              src="/images/mario-waving.png"
+              alt="Mario Waving"
               style={{
-                fontSize: '8rem',
+                width: '200px',
+                height: '200px',
+                objectFit: 'contain',
                 filter: 'drop-shadow(0 15px 30px rgba(0,0,0,0.4))',
                 animation: 'wave 2s ease-in-out infinite',
                 position: 'relative',
                 zIndex: 2,
               }}
-            >
-              👋
-            </div>
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
             <h2
               style={{
                 color: 'white',
@@ -410,20 +420,27 @@ export default function PresentationPage() {
           >
             <div
               style={{
-                width: '100px',
-                height: '100px',
-                borderRadius: '50%',
-                background: '#FFD700',
-                border: '6px solid white',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '3rem',
-                marginBottom: '24px',
-                boxShadow: '0 8px 0 #b39700, 0 15px 30px rgba(0,0,0,0.3)',
+              width: '100px',
+              height: '100px',
+              borderRadius: '50%',
+              background: '#FFD700',
+              border: '6px solid white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '24px',
+              boxShadow: '0 8px 0 #b39700, 0 15px 30px rgba(0,0,0,0.3)',
+              overflow: 'hidden',
+            }}
+          >
+            <img
+              src="/images/luigi-badge.png"
+              alt="Luigi Badge"
+              style={{ width: '70px', height: '70px', objectFit: 'contain' }}
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
               }}
-            >
-              🌱
+            />
             </div>
             <h1
               style={{
@@ -644,10 +661,10 @@ export default function PresentationPage() {
             }}
           >
             {[
-              { emoji: '🍔', name: 'Super Mushroom Meal', desc: 'Full burger combo set.', color: '#ffebee' },
-              { emoji: '🍗', name: 'Fire Flower Wings', desc: 'Spicy boneless chicken.', color: '#fff3e0' },
-              { emoji: '🥤', name: 'Super Star Shake', desc: 'Vanilla sparkle milkshake.', color: '#f3e5f5' },
-              { emoji: '🍎', name: "Yoshi's Fruit Bowl", desc: 'Fresh seasonal fruit platter.', color: '#e8f5e9' },
+              { image: '/images/menu-mushroom-meal.png', name: 'Super Mushroom Meal', desc: 'Full burger combo set.', color: '#ffebee' },
+              { image: '/images/menu-fire-flower-wings.png', name: 'Fire Flower Wings', desc: 'Spicy boneless chicken.', color: '#fff3e0' },
+              { image: '/images/menu-super-star-shake.png', name: 'Super Star Shake', desc: 'Vanilla sparkle milkshake.', color: '#f3e5f5' },
+              { image: '/images/menu-yoshi-fruit.png', name: "Yoshi's Fruit Bowl", desc: 'Fresh seasonal fruit platter.', color: '#e8f5e9' },
             ].map((item, i) => (
               <div
                 key={i}
@@ -679,7 +696,14 @@ export default function PresentationPage() {
                     background: item.color,
                   }}
                 >
-                  {item.emoji}
+                  <img
+                    src={item.image}
+                    alt={item.name}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
                 </div>
                 <div style={{ padding: '16px', textAlign: 'center' }}>
                   <h3
