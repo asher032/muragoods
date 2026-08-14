@@ -1,6 +1,5 @@
 'use client';
 
-import Image from "next/image";
 import Link from "next/link";
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -46,7 +45,7 @@ export default function SignupPage() {
 
       if (result.success) {
         localStorage.setItem('user', JSON.stringify(result.data));
-        router.push('/account/orders');
+        router.push('/');
       } else {
         setError(result.error || 'Signup failed');
       }
@@ -63,7 +62,7 @@ export default function SignupPage() {
         <div className="rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
           <div className="flex flex-col items-center gap-4 mb-8">
             <div className="relative w-20 h-20 rounded-full border-4 border-yellow-300 bg-rose-400 flex items-center justify-center text-3xl font-black text-white shadow-lg overflow-hidden">
-              <Image src="/images/luigi-badge.png" alt="Luigi" fill className="object-contain p-2" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              <span className="text-2xl">🍄</span>
             </div>
             <div className="text-center">
               <p className="text-sm font-black uppercase tracking-widest text-green-600">Muragoods</p>

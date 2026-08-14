@@ -10,7 +10,7 @@ interface LocationPickerProps {
   initialLng?: number;
 }
 
-export default function LocationPicker({ onLocationSelect, initialLat = 13.1370, initialLng = 123.7340 }: LocationPickerProps) {
+export default function LocationPicker({ onLocationSelect, initialLat = 13.1550, initialLng = 123.7450 }: LocationPickerProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
@@ -18,7 +18,18 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1370,
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
 
-    const map = L.map(mapRef.current).setView([initialLat, initialLng], 14);
+    const daragaLegazpiBounds = [
+      [13.1400, 123.7200],
+      [13.1800, 123.7800],
+    ] as [[number, number], [number, number]];
+
+    const map = L.map(mapRef.current, {
+      center: [initialLat, initialLng],
+      zoom: 14,
+      maxBounds: daragaLegazpiBounds,
+      minZoom: 13,
+      maxZoom: 18,
+    });
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
@@ -29,7 +40,6 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1370,
 
     const updateMarker = (lat: number, lng: number) => {
       marker.setLatLng([lat, lng]);
-      map.setView([lat, lng], 16);
       if (onLocationSelect) {
         onLocationSelect(lat, lng, `${lat.toFixed(4)}, ${lng.toFixed(4)}`);
       }

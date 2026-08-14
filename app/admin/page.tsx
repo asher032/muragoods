@@ -3,7 +3,6 @@
 import { adminCredentials, adminEmails, products, type InventoryStatus, type Order, type OrderStatus } from "@/app/lib/muragoods-data";
 import { useMemo, useState, useEffect, useCallback } from "react";
 
-
 const statusOptions = [
   "Pending Payment",
   "Payment Verified",
@@ -26,6 +25,7 @@ export default function AdminPage() {
   const [orders, setOrders] = useState<(Order & { userId: string; _id?: string })[]>([]);
   const [catalog, setCatalog] = useState(products);
   const [alert, setAlert] = useState<{ show: boolean; message: string; orderId?: string }>({ show: false, message: "" });
+  const [previewReceipt, setPreviewReceipt] = useState<string | null>(null);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -148,7 +148,7 @@ export default function AdminPage() {
 
   if (!isAuthenticated) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-gradient-to-b from-rose-300 to-rose-400 px-4">
+      <main className="min-h-screen flex items-center justify-center px-4" style={{ background: 'linear-gradient(135deg, #121212 0%, #1a1a1a 100%)' }}>
         <div className="w-full max-w-md rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
           <div className="flex flex-col items-center gap-4 mb-8">
             <div className="relative flex h-16 w-16 items-center justify-center rounded-full border-4 border-yellow-300 bg-rose-400 text-2xl font-black text-white shadow-lg">
@@ -200,7 +200,7 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-rose-300 to-rose-400 px-4 py-8 sm:px-8">
+    <main className="min-h-screen px-4 py-8 sm:px-8" style={{ background: 'linear-gradient(180deg, #E60012 0%, #c2000e 100%)' }}>
       <div className="mx-auto max-w-7xl">
         {alert.show && (
           <div className="mb-8 rounded-lg border-4 border-yellow-300 bg-yellow-300 p-4 text-lg font-black text-black shadow-2xl animate-pulse">
@@ -271,7 +271,12 @@ export default function AdminPage() {
                         <div className="text-xs font-bold text-black">₱{order.total}</div>
                         <div className="text-[10px] text-slate-500">{order.items.join(', ')}</div>
                         {order.gcashScreenshotUrl && (
-                          <a href={order.gcashScreenshotUrl} target="_blank" className="text-xs font-black text-rose-500 underline">View Receipt</a>
+                          <button
+                            onClick={() => setPreviewReceipt(order.gcashScreenshotUrl || null)}
+                            className="text-xs font-black text-rose-500 underline"
+                          >
+                            View Receipt
+                          </button>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -327,6 +332,29 @@ export default function AdminPage() {
           </div>
         </section>
       </div>
+
+      {previewReceipt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setPreviewReceipt(null)}>
+          <div className="mario-card max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-black p-4 border-b-4 border-black flex items-center justify-between">
+              <h3 className="text-xl font-black text-yellow-300 uppercase">Payment Receipt</h3>
+              <button
+                onClick={() => setPreviewReceipt(null)}
+                className="text-white text-2xl font-black hover:text-rose-400"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-4 bg-white">
+              <img
+                src={previewReceipt}
+                alt="Payment Receipt"
+                className="w-full h-auto rounded-lg border-4 border-black"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

@@ -56,7 +56,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
           <div className="flex flex-col items-center gap-4 mb-8">
-            <div className="relative w-20 h-20 rounded-full border-4 border-yellow-300 bg-rose-400 flex items-center justify-center text-3xl font-black text-white shadow-lg">
+            <div className="relative w-20 h-20 rounded-full border-4 border-yellow-300 bg-rose-400 flex items-center justify-center text-3xl font-black text-white shadow-lg logo-badge">
               M
             </div>
             <div className="text-center">

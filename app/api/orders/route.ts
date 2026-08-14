@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import Order from '@/app/lib/models/Order';
-import { sendOrderNotification } from '@/app/lib/email';
 
 export async function POST(req: Request) {
   try {
@@ -21,19 +20,6 @@ export async function POST(req: Request) {
     }
 
     const order = await Order.create(body);
-
-    await sendOrderNotification({
-      customer: String(body.customer || ''),
-      phone: String(body.phone || ''),
-      zone: String(body.zone || ''),
-      address: String(body.address || ''),
-      total: Number(body.total || 0),
-      items: JSON.parse(String(body.items || '[]')),
-      deliveryDate: String(body.deliveryDate || ''),
-      deliveryType: String(body.deliveryType || ''),
-      payment: String(body.payment || ''),
-      orderId: String(order._id),
-    });
 
     return NextResponse.json({ success: true, data: order }, { status: 201 });
   } catch (error: unknown) {
