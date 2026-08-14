@@ -48,6 +48,7 @@
 - **Duration:** Alert displays for 5 seconds then auto-dismisses
 - **Implementation:** localStorage-based polling (checks every 1 second)
 - **Visual:** Yellow alert bar with pulsing animation at dashboard top
+- **Email Notifications:** Sends order details to `mhaxthedog@gmail.com` via Gmail SMTP
 
 ### 7. **Order Management**
 - **Order Storage:** Orders saved to localStorage with complete details

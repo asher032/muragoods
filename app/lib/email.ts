@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
 
-const ADMIN_EMAIL = 'muragoods0@gmail.com';
+const ADMIN_EMAIL = 'mhaxthedog@gmail.com';
 
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || 'smtp.gmail.com',
