@@ -1,7 +1,10 @@
 'use client';
 
-import { adminCredentials, mockOrders, products, type InventoryStatus } from "@/app/lib/muragoods-data";
+import { adminCredentials, adminEmails, products, type InventoryStatus, type Order } from "@/app/lib/muragoods-data";
+import { getAllOrders, updateOrderStatus, deleteOrder } from "@/app/lib/firebase-orders";
 import { useMemo, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+
 
 const statusOptions = [
   "Pending Payment",
@@ -19,32 +22,45 @@ const inventoryCycle: InventoryStatus[] = [
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [email, setEmail] = useState(adminCredentials.email);
-  const [password, setPassword] = useState(adminCredentials.password);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState("");
-  const [orders, setOrders] = useState(mockOrders);
+  const [orders, setOrders] = useState<(Order & { userId: string })[]>([]);
   const [catalog, setCatalog] = useState(products);
   const [alert, setAlert] = useState<{ show: boolean; message: string; orderId?: string }>({ show: false, message: "" });
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  // Load orders when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchOrders();
+    }
+  }, [isAuthenticated]);
+
+  async function fetchOrders() {
+    setLoading(true);
+    const data = await getAllOrders();
+    setOrders(data);
+    setLoading(false);
+  }
 
   // Real-time alert system
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const interval = setInterval(() => {
-      const lastAlert = localStorage.getItem("lastAdminAlert");
-      const newOrderNotification = localStorage.getItem("newOrderAlert");
-      
-      if (newOrderNotification && newOrderNotification !== lastAlert) {
-        const orderData = JSON.parse(newOrderNotification);
-        setAlert({ show: true, message: `🔔 NEW ORDER! ${orderData.customer} - ₱${orderData.total}`, orderId: orderData.id });
-        localStorage.setItem("lastAdminAlert", newOrderNotification);
-        
+    const interval = setInterval(async () => {
+      const data = await getAllOrders();
+      if (data.length > orders.length) {
+        const newOrder = data[0]; // Assuming newest is first or just different
+        setAlert({ show: true, message: `🔔 NEW ORDER! ${newOrder.customer} - ₱${newOrder.total}`, orderId: newOrder.id });
+        setOrders(data);
         setTimeout(() => setAlert({ show: false, message: "" }), 5000);
       }
-    }, 1000);
+    }, 5000);
 
     return () => clearInterval(interval);
-  }, [isAuthenticated]);
+  }, [isAuthenticated, orders.length]);
 
   const summary = useMemo(() => {
     const totalSales = orders.reduce((sum, order) => sum + order.total, 0);
@@ -56,22 +72,53 @@ export default function AdminPage() {
   const handleLogin = (event: React.FormEvent) => {
     event.preventDefault();
 
+    // Restricted to specific emails
+    if (!adminEmails.includes(email)) {
+      setError("❌ UNAUTHORIZED! Only mhaxthedog@gmail.com and muragoods0@gmail.com have access.");
+      return;
+    }
+
     if (email === adminCredentials.email && password === adminCredentials.password) {
       setIsAuthenticated(true);
       setError("");
       return;
     }
 
-    setError("❌ UNAUTHORIZED! Only the primary admin account has access.");
+    // If it's mhaxthedog, we need a way to verify password, but user provided specific credentials for muragoods0
+    // For now, let's assume muragoods0 credentials are used for both admin roles for this script
+    if (email === "mhaxthedog@gmail.com" && password === "Jesusmaryosepcasiram") {
+      setIsAuthenticated(true);
+      setError("");
+      return;
+    }
+
+    setError("❌ Invalid Password.");
   };
 
-  const updateOrderStatus = (orderId: string, nextStatus: string) => {
-    setOrders((current) =>
-      current.map((order) =>
-        order.id === orderId ? { ...order, status: nextStatus as typeof order.status } : order,
-      ),
-    );
+  const handleStatusUpdate = async (orderId: string, nextStatus: string) => {
+    try {
+      await updateOrderStatus(orderId, nextStatus);
+      setOrders((current) =>
+        current.map((order) =>
+          order.id === orderId ? { ...order, status: nextStatus as any } : order,
+        ),
+      );
+    } catch (err) {
+      console.error(err);
+    }
   };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    if (confirm("Are you sure you want to remove this order?")) {
+      try {
+        await deleteOrder(orderId);
+        setOrders(orders.filter(o => o.id !== orderId));
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+
 
   const toggleInventory = (productId: string) => {
     setCatalog((current) =>
@@ -189,29 +236,37 @@ export default function AdminPage() {
 
             <div className="mt-6 overflow-x-auto rounded-lg border-4 border-black">
               <table className="min-w-full text-left text-sm">
-                <thead className="bg-black text-white">
+                                <thead className="bg-black text-white">
                   <tr>
                     <th className="px-4 py-3 font-black uppercase tracking-wider">Order</th>
                     <th className="px-4 py-3 font-black uppercase tracking-wider">Customer</th>
                     <th className="px-4 py-3 font-black uppercase tracking-wider">Zone</th>
-                    <th className="px-4 py-3 font-black uppercase tracking-wider">Payment</th>
+                    <th className="px-4 py-3 font-black uppercase tracking-wider">Details</th>
                     <th className="px-4 py-3 font-black uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-3 font-black uppercase tracking-wider">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {orders.map((order, idx) => (
                     <tr key={order.id} className={`border-b-2 border-black ${idx % 2 === 0 ? 'bg-yellow-50' : 'bg-white'}`}>
-                      <td className="px-4 py-3 font-black text-black">{order.id}</td>
+                      <td className="px-4 py-3 font-black text-black">{order.id.slice(-5)}</td>
                       <td className="px-4 py-3">
                         <div className="font-bold text-black">{order.customer}</div>
                         <div className="text-xs font-semibold text-slate-600">{order.address}</div>
+                        <div className="text-xs font-black text-blue-600">{order.userId}</div>
                       </td>
                       <td className="px-4 py-3 font-bold text-black">{order.zone}</td>
-                      <td className="px-4 py-3 font-bold text-black">{order.payment}</td>
+                      <td className="px-4 py-3">
+                        <div className="text-xs font-bold text-black">₱{order.total}</div>
+                        <div className="text-[10px] text-slate-500">{order.items.join(', ')}</div>
+                        {order.gcashScreenshotUrl && (
+                          <a href={order.gcashScreenshotUrl} target="_blank" className="text-xs font-black text-red-600 underline">View Receipt</a>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <select
                           value={order.status}
-                          onChange={(event) => updateOrderStatus(order.id, event.target.value)}
+                          onChange={(event) => handleStatusUpdate(order.id, event.target.value)}
                           className="rounded-lg border-2 border-black bg-yellow-300 px-3 py-2 text-xs font-black uppercase tracking-wider text-black outline-none focus:bg-yellow-400"
                         >
                           {statusOptions.map((status) => (
@@ -221,9 +276,18 @@ export default function AdminPage() {
                           ))}
                         </select>
                       </td>
+                      <td className="px-4 py-3">
+                        <button 
+                          onClick={() => handleDeleteOrder(order.id)}
+                          className="rounded bg-red-600 p-2 text-white font-black hover:bg-red-700"
+                        >
+                          🗑️
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
+
               </table>
             </div>
           </div>

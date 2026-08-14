@@ -18,9 +18,13 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const user = localStorage.getItem("user");
-    setIsLoggedIn(!!user);
-  }, []);
+    const userStr = localStorage.getItem("user");
+    if (!userStr) {
+      router.push("/login");
+      return;
+    }
+    setIsLoggedIn(true);
+  }, [router]);
 
   const handleCheckout = (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,56 +71,54 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
     const user = JSON.parse(localStorage.getItem("user") || "{}");
     const orderId = `MUR-${Math.floor(Math.random() * 10000)}`;
     const newOrder = {
-      id: orderId,
       customer: user.name || user.email,
-      phone: "0917-000-0000", // Would come from user profile
+      phone: "0917-000-0000", 
       zone: location,
       address: mapAddress,
       latitude: coordinates.lat,
       longitude: coordinates.lng,
-      payment: paymentMethod,
+      payment: paymentMethod as any,
       gcashRefNumber: gcashRef || undefined,
+      gcashScreenshotUrl: gcashFile ? URL.createObjectURL(gcashFile) : undefined, // In production, upload to storage
       deliveryDate: deliveryDate,
-      status: "Pending Payment",
+      status: "Pending Payment" as any,
       total: total,
       items: cartItems.map((item: any) => `${item.name} x ${item.quantity}`),
-      deliveryType: deliveryService,
-      createdAt: new Date().toISOString(),
+      deliveryType: deliveryService as any,
     };
 
-    // Save order to localStorage
-    const existingOrders = JSON.parse(localStorage.getItem("orders") || "[]");
-    existingOrders.push(newOrder);
-    localStorage.setItem("orders", JSON.stringify(existingOrders));
-
-    // Trigger admin alert
-    localStorage.setItem("newOrderAlert", JSON.stringify(newOrder));
-
-    // Success message
-    alert(`✅ Order placed!\nOrder ID: ${orderId}\nDelivery: ${deliveryDate}\nTotal: ₱${total}`);
-    
-    // Reset form
-    setMapAddress("");
-    setDeliveryDate("");
-    setGcashRef("");
-    setGcashFile(null);
+    // Save order to Firebase
+    import("@/app/lib/firebase-orders").then(async ({ createOrder }) => {
+      try {
+        await createOrder(user.email, newOrder);
+        alert(`✅ Order placed!\nDelivery: ${deliveryDate}\nTotal: ₱${total}`);
+        // Reset form
+        setMapAddress("");
+        setDeliveryDate("");
+        setGcashRef("");
+        setGcashFile(null);
+      } catch (err) {
+        setError("❌ Failed to place order. Please try again.");
+      }
+    });
   };
 
   if (!isLoggedIn) {
     return (
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="mario-card">
-          <div className="bg-black p-6 border-b-4 border-yellow-300">
-            <h2 className="text-3xl font-black text-yellow-300 uppercase tracking-widest">🔐 Checkout Required</h2>
+          <div className="bg-black p-6 border-b-4 border-black">
+            <h2 className="text-3xl font-black text-yellow-300 uppercase tracking-widest">🔐 LEVEL LOCKED</h2>
           </div>
           <div className="bg-white p-6 text-center">
-            <p className="text-lg font-black text-black mb-4">⚠️ You must log in to proceed with checkout</p>
-            <div className="space-y-3">
-              <a href="/login" className="mario-btn w-full bg-black text-yellow-300 hover:bg-slate-900 uppercase font-black block">
-                🔑 Sign In
+            <div className="mx-auto w-20 h-20 bg-yellow-400 border-4 border-black flex items-center justify-center text-4xl mb-4 coin-float">❓</div>
+            <p className="text-lg font-black text-black mb-4">⚠️ You must sign in to play!</p>
+            <div className="space-y-4">
+              <a href="/login" className="mario-btn w-full bg-red-600 text-white uppercase font-black block">
+                🔑 LOG IN
               </a>
-              <a href="/signup" className="mario-btn w-full bg-yellow-400 text-black hover:bg-yellow-300 uppercase font-black block border-black">
-                ✨ Create Account
+              <a href="/signup" className="mario-btn mario-btn-yellow w-full uppercase font-black block">
+                ✨ CREATE ACCOUNT
               </a>
             </div>
           </div>
@@ -129,8 +131,10 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
     <form onSubmit={handleCheckout} className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
       {/* Left Column - Cart & Checkout Form */}
       <div className="mario-card">
-        <div className="bg-black p-6 border-b-4 border-yellow-300">
-          <h2 className="text-3xl font-black text-yellow-300 uppercase tracking-widest">🛒 Your Cart</h2>
+        <div className="bg-red-600 p-6 border-b-4 border-black">
+          <h2 className="text-3xl font-black text-white uppercase tracking-widest flex items-center gap-2">
+            <span className="coin-float">🪙</span> YOUR CART
+          </h2>
         </div>
 
         <div className="bg-white p-6 space-y-6">
@@ -268,15 +272,15 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
 
       {/* Right Column - Order Summary */}
       <aside className="mario-card">
-        <div className="bg-black p-6 border-b-4 border-yellow-300">
-          <h3 className="text-2xl font-black text-yellow-300 uppercase tracking-widest">💰 Order Summary</h3>
+        <div className="bg-blue-600 p-6 border-b-4 border-black">
+          <h3 className="text-2xl font-black text-white uppercase tracking-widest">💰 TOTAL SCORE</h3>
         </div>
 
         <div className="bg-white p-6 flex flex-col h-full">
           <div className="space-y-4 text-base font-black text-black border-b-4 border-black pb-4 mb-4">
             <div className="flex justify-between"><span>Subtotal:</span><span className="text-red-600">₱{subtotal}</span></div>
             <div className="flex justify-between"><span>Shipping:</span><span className="text-red-600">₱{shippingFee}</span></div>
-            <div className="flex justify-between text-2xl bg-yellow-300 p-3 rounded-lg"><span>TOTAL:</span><span>₱{total}</span></div>
+            <div className="flex justify-between text-2xl bg-yellow-400 p-3 border-4 border-black"><span>TOTAL:</span><span>₱{total}</span></div>
           </div>
 
           <div className="space-y-2 text-xs font-bold text-black mb-4">
@@ -300,13 +304,31 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
 }
 
 export default function Home() {
+  const router = useRouter();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [location, setLocation] = useState("DWCL");
   const [cart, setCart] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const user = localStorage.getItem("user");
+    if (!user) {
+      router.push("/login");
+    } else {
+      setIsLoggedIn(true);
+    }
+  }, [router]);
 
   const zoneInfo = useMemo(
     () => deliveryZones.find((zone) => zone.code === location) ?? deliveryZones[0],
     [location],
   );
+
+  if (!isLoggedIn) {
+    return <div className="min-h-screen bg-blue-500 flex flex-col items-center justify-center font-black text-white">
+      <div className="text-4xl animate-bounce mb-4">🍄</div>
+      <div className="text-3xl uppercase tracking-tighter">Warping to World 1-1...</div>
+    </div>;
+  }
 
   const cartItems = useMemo(
     () =>
@@ -346,68 +368,59 @@ export default function Home() {
     <main className="min-h-screen bg-gradient-to-b from-red-600 to-red-700">
       <section className="relative px-4 pb-12 pt-7 sm:px-8">
         <div className="mx-auto max-w-7xl">
-          <nav className="mb-8 flex flex-col gap-4 rounded-lg bg-black/90 px-6 py-4 shadow-2xl md:flex-row md:items-center md:justify-between">
+          <nav className="mb-8 flex flex-col gap-4 bg-white border-4 border-black p-4 shadow-[8px_8px_0px_0px_#000] md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full border-4 border-yellow-300 bg-red-600 text-3xl font-black text-white shadow-lg">
+              <div className="flex h-14 w-14 items-center justify-center border-4 border-black bg-red-600 text-3xl font-black text-white shadow-[4px_4px_0px_0px_#000]">
                 M
               </div>
               <div>
-                <p className="text-sm font-black uppercase tracking-widest text-yellow-300">Muragoods</p>
-                <p className="text-xs font-bold uppercase tracking-widest text-white">Mario's Food</p>
+                <p className="text-sm font-black uppercase tracking-widest text-red-600">Muragoods</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-black">World 1-1 Food</p>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 text-xs font-black uppercase">
-              <a href="#menu" className="mario-btn">Menu</a>
-              <a href="#shipping" className="mario-btn">Delivery</a>
-              <a href="#checkout" className="mario-btn">Checkout</a>
-              <a href="/login" className="mario-btn">Login</a>
-              <a href="/signup" className="mario-btn bg-yellow-400 text-black hover:bg-yellow-300">Sign Up</a>
-              <a href="/account/orders" className="mario-btn border-yellow-300 bg-transparent text-yellow-300">Orders</a>
+            <div className="flex flex-wrap items-center gap-3 text-xs font-black uppercase">
+              <a href="#menu" className="mario-btn mario-btn-blue">Menu</a>
+              <a href="#shipping" className="mario-btn mario-btn-green">Map</a>
+              <a href="#checkout" className="mario-btn">Cart</a>
+              <a href="/account/orders" className="mario-btn mario-btn-yellow">Orders</a>
+              <button onClick={() => { localStorage.removeItem('user'); window.location.reload(); }} className="mario-btn bg-black text-white">Logout</button>
             </div>
           </nav>
 
-          <div className="diagonal-stripes relative rounded-lg p-6 shadow-2xl overflow-hidden">
-            <div className="absolute inset-0 opacity-20" style={{ background: 'url("data:image/svg+xml,%3Csvg width=\'40\' height=\'40\' viewBox=\'0 0 40 40\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M0 0l40 40M40 0L0 40\' stroke=\'white\' stroke-width=\'2\'/%3E%3C/svg%3E")' }} />
+          <div className="diagonal-stripes relative border-4 border-black p-8 shadow-[12px_12px_0px_0px_rgba(0,0,0,0.5)] overflow-hidden">
             <div className="relative grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
               <div className="text-white">
-                <div className="mb-5 inline-flex rounded-full border-4 border-yellow-300 bg-yellow-400 px-6 py-3 text-sm font-black uppercase tracking-wider text-black shadow-lg">
-                  🎮 Fresh • Fast • Mario 🎮
+                <div className="mb-5 inline-flex border-4 border-black bg-yellow-400 px-6 py-3 text-sm font-black uppercase tracking-wider text-black shadow-[4px_4px_0px_0px_#000]">
+                  ⭐ POWER UP YOUR HUNGER ⭐
                 </div>
-                <h1 className="max-w-xl text-5xl font-black leading-tight tracking-tight text-yellow-300 sm:text-6xl md:text-7xl drop-shadow-lg">
-                  MURAGOODS
+                <h1 className="max-w-xl text-6xl font-black leading-tight tracking-tighter text-white sm:text-7xl md:text-8xl [text-shadow:8px_8px_0px_#000]">
+                  MURA<br/>GOODS
                 </h1>
-                <p className="mt-5 max-w-xl text-lg font-bold text-white drop-shadow">
-                  🍙 Musubi • 🌭 Churros • ☕ Coffee Jelly • 🍪 Cookies
-                </p>
-                <p className="mt-3 max-w-xl text-base font-semibold text-yellow-200">
-                  FREE Shipping to DWCL | ₱30 Saturday Delivery to Legazpi & Daraga!
+                <p className="mt-5 max-w-xl text-xl font-black text-yellow-300 [text-shadow:4px_4px_0px_#000]">
+                  🍙 MUSUBI • 🌭 CHURROS • ☕ COFFEE JELLY
                 </p>
                 <div className="mt-8 flex flex-wrap gap-4">
-                  <a href="#menu" className="mario-btn bg-yellow-400 text-black hover:bg-yellow-300 border-black">
-                    🎯 Order Now
+                  <a href="#menu" className="mario-btn mario-btn-yellow text-lg">
+                    PLAY NOW 🎮
                   </a>
-                  <a href="#checkout" className="mario-btn border-yellow-400 text-yellow-300 hover:bg-red-700">
-                    🛒 Checkout
+                  <a href="#checkout" className="mario-btn mario-btn-blue text-lg">
+                    VIEW CART 🛒
                   </a>
                 </div>
               </div>
 
               <div className="flex min-h-[420px] items-center justify-center">
-                <div className="mario-card">
-                  <div className="flex items-center justify-between bg-red-600 p-6">
-                    <span className="rounded-full bg-yellow-400 px-4 py-2 text-xs font-black uppercase text-black shadow-lg">⭐ Popular</span>
-                    <span className="rounded-full bg-yellow-400 px-4 py-2 text-xs font-black uppercase text-black shadow-lg">🔥 Fresh</span>
+                <div className="mario-card w-full max-w-sm overflow-hidden">
+                  <div className="bg-red-600 p-4 border-b-4 border-black flex justify-between items-center">
+                    <span className="text-white font-black">HIGH SCORE: ₱55</span>
+                    <span className="animate-pulse text-yellow-300">✨ NEW!</span>
                   </div>
-                  <div className="bg-white p-8">
-                    <div className="mx-auto flex h-40 w-40 items-center justify-center rounded-full bg-gradient-to-br from-yellow-100 to-yellow-200 text-6xl shadow-lg">
-                      🍙
-                    </div>
+                  <div className="bg-white p-12 flex justify-center items-center">
+                    <div className="text-8xl coin-float">🍙</div>
                   </div>
-                  <div className="bg-black px-6 py-6 text-white">
-                    <p className="text-xs font-black uppercase tracking-widest text-yellow-300">Best seller</p>
-                    <h3 className="mt-3 text-3xl font-black text-white">MUSUBI</h3>
-                    <p className="mt-3 text-2xl font-black text-yellow-300">₱55</p>
+                  <div className="bg-black p-4 text-center">
+                    <h3 className="text-2xl font-black text-white uppercase">SUPER MUSUBI</h3>
                   </div>
                 </div>
               </div>
@@ -416,38 +429,34 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="menu" className="px-4 py-12 sm:px-8 bg-red-600">
+      <section id="menu" className="px-4 py-12 sm:px-8">
         <div className="mx-auto max-w-7xl">
-          <div className="mb-8">
-            <p className="text-sm font-black uppercase tracking-widest text-yellow-300">🎮 Menu</p>
-            <h2 className="mt-3 text-5xl font-black text-white drop-shadow-lg">OUR DELICIOUS ITEMS</h2>
+          <div className="mb-12 text-center">
+            <h2 className="text-6xl font-black text-white uppercase tracking-tighter [text-shadow:6px_6px_0px_#000]">SELECT YOUR POWER-UP</h2>
+            <div className="h-2 w-48 bg-yellow-400 mx-auto mt-4 border-2 border-black"></div>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-4">
             {products.map((product) => (
-              <div key={product.id} className="mario-card hover:scale-105 transition transform">
-                <div className="h-40 bg-black/80 p-6 flex items-center justify-center text-6xl shadow-inner">
-                  {product.id === "musubi" ? "🍙" : product.id === "churros" ? "🌭" : product.id === "coffee-jelly" ? "☕" : "🍪"}
+              <div key={product.id} className="mario-card group">
+                <div className="h-48 bg-blue-400 p-6 flex items-center justify-center text-8xl border-b-4 border-black group-hover:bg-blue-300 transition-colors">
+                  <span className="coin-float">
+                    {product.id === "musubi" ? "🍙" : product.id === "churros" ? "🌭" : product.id === "coffee-jelly" ? "☕" : "🍪"}
+                  </span>
                 </div>
 
                 <div className="p-6 bg-white">
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <h3 className="text-2xl font-black text-black">{product.name}</h3>
-                    <span className="rounded-full bg-yellow-300 px-3 py-1 text-xs font-black uppercase text-black">
-                      {product.badge}
-                    </span>
-                  </div>
+                  <h3 className="text-2xl font-black text-black uppercase">{product.name}</h3>
+                  <p className="mt-2 text-sm font-bold text-slate-700 h-12 overflow-hidden">{product.description}</p>
 
-                  <p className="text-sm font-semibold text-slate-700">{product.description}</p>
-
-                  <div className="mt-5 flex items-center justify-between">
-                    <span className="text-3xl font-black text-red-600">₱{product.price}</span>
+                  <div className="mt-6 flex items-center justify-between">
+                    <span className="text-3xl font-black text-red-600 [text-shadow:2px_2px_0px_#000]">₱{product.price}</span>
                     <button
                       type="button"
                       onClick={() => addToCart(product)}
-                      className="mario-btn bg-black text-yellow-300 hover:bg-slate-900"
+                      className="mario-btn mario-btn-yellow"
                     >
-                      + Cart
+                      + ADD
                     </button>
                   </div>
                 </div>

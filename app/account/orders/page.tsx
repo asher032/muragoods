@@ -1,7 +1,9 @@
 'use client';
 
-import { mockOrders, type OrderStatus } from "@/app/lib/muragoods-data";
-import { useState } from "react";
+import { type Order, type OrderStatus } from "@/app/lib/muragoods-data";
+import { getUserOrders } from "@/app/lib/firebase-orders";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 const statusFlow: OrderStatus[] = [
   "Pending Payment",
@@ -12,17 +14,39 @@ const statusFlow: OrderStatus[] = [
 ];
 
 export default function AccountOrdersPage() {
-  const [orders, setOrders] = useState(mockOrders);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
-  const reorder = (orderId: string) => {
-    setOrders((current) =>
-      current.map((order) =>
-        order.id === orderId
-          ? { ...order, status: "Pending Payment" }
-          : order,
-      ),
-    );
+  useEffect(() => {
+    const userStr = localStorage.getItem("user");
+    if (!userStr) {
+      router.push("/login");
+      return;
+    }
+    const user = JSON.parse(userStr);
+    
+    async function fetchOrders() {
+      const userOrders = await getUserOrders(user.email);
+      setOrders(userOrders);
+      setLoading(false);
+    }
+    fetchOrders();
+  }, [router]);
+
+  const logout = () => {
+    localStorage.removeItem("user");
+    router.push("/login");
   };
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-red-600 to-red-700 flex items-center justify-center">
+        <div className="text-white text-2xl font-black animate-bounce uppercase">Loading Orders...</div>
+      </main>
+    );
+  }
+
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-red-600 to-red-700 px-4 py-8 text-black sm:px-8">
@@ -34,12 +58,21 @@ export default function AccountOrdersPage() {
             </p>
             <h1 className="mt-2 text-4xl font-black text-black uppercase tracking-wider">Muragoods Account</h1>
           </div>
-          <a
-            href="/"
-            className="mario-btn bg-black text-yellow-300 hover:bg-slate-900 uppercase font-black border-black"
-          >
-            ← Back to Shop
-          </a>
+                    <div className="flex gap-4">
+            <button
+              onClick={logout}
+              className="mario-btn bg-red-600 text-white hover:bg-red-700 uppercase font-black border-black"
+            >
+              Logout
+            </button>
+            <a
+              href="/"
+              className="mario-btn bg-black text-yellow-300 hover:bg-slate-900 uppercase font-black border-black"
+            >
+              ← Back to Shop
+            </a>
+          </div>
+
         </header>
 
         <section className="grid gap-5 md:grid-cols-3">
@@ -61,8 +94,14 @@ export default function AccountOrdersPage() {
           </div>
         </section>
 
-        <section className="mt-8 space-y-6">
-          {orders.map((order) => {
+                <section className="mt-8 space-y-6">
+          {orders.length === 0 ? (
+            <div className="rounded-lg border-4 border-black bg-white p-12 text-center shadow-2xl">
+              <p className="text-2xl font-black text-black uppercase mb-4">No orders found!</p>
+              <a href="/" className="mario-btn inline-block bg-yellow-400 text-black">Start Shopping</a>
+            </div>
+          ) : orders.map((order) => {
+
             const currentIndex = statusFlow.indexOf(order.status);
 
             return (
@@ -84,18 +123,12 @@ export default function AccountOrdersPage() {
                     <span className="rounded-lg border-2 border-black bg-yellow-300 px-4 py-2 text-xs font-black uppercase tracking-widest text-black">
                       📍 {order.zone}
                     </span>
-                    <span className="rounded-lg border-2 border-black bg-black px-4 py-2 text-xs font-black uppercase tracking-widest text-yellow-300">
+                                        <span className="rounded-lg border-2 border-black bg-black px-4 py-2 text-xs font-black uppercase tracking-widest text-yellow-300">
                       💳 {order.payment}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => reorder(order.id)}
-                      className="mario-btn bg-red-600 text-yellow-300 hover:bg-red-700 uppercase font-black border-black"
-                    >
-                      🔄 Re-Order
-                    </button>
                   </div>
                 </div>
+
 
                 <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_0.8fr]">
                   <div>

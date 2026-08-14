@@ -1,13 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { adminCredentials } from '@/app/lib/muragoods-data';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const router = useRouter();
+
+  useEffect(() => {
+    // If already logged in, redirect
+    const user = localStorage.getItem('user');
+    if (user) {
+      router.push('/');
+    }
+  }, [router]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,13 +26,21 @@ export default function LoginPage() {
       return;
     }
 
+    // Special case for admin login
+    if (email === adminCredentials.email && password === adminCredentials.password) {
+      localStorage.setItem('user', JSON.stringify({ email, name: 'Admin' }));
+      router.push('/admin');
+      return;
+    }
+
     if (email && password.length >= 6) {
       localStorage.setItem('user', JSON.stringify({ email, name: email.split('@')[0] }));
-      router.push('/account/orders');
+      router.push('/');
     } else {
       setError('Invalid email or password');
     }
   };
+
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-red-600 to-red-700 flex items-center justify-center px-4 py-8">
