@@ -66,7 +66,6 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
 
     const updateMarker = (lat: number, lng: number) => {
       marker.setLatLng([lat, lng]);
-      map.setView([lat, lng], 16);
       if (onLocationSelect) {
         onLocationSelect(lat, lng, `DELIVERY PIN: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
       }
