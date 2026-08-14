@@ -412,6 +412,7 @@ export default function Home() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3 text-xs font-black uppercase">
+              <Link href="/presentation" className="mario-btn bg-purple-600 text-white hover:bg-purple-500">🎮 Presentation</Link>
               <a href="#menu" className="mario-btn mario-btn-blue">Menu</a>
               <a href="#shipping" className="mario-btn mario-btn-green">Map</a>
               <a href="#checkout" className="mario-btn">Cart</a>
