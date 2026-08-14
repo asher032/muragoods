@@ -53,13 +53,16 @@ export default function MenuPage() {
 
   const isDwcl = location === "DWCL";
 
-  const hasMusubiOrChurros = cartItems.some(item => item.id === "musubi" || item.id === "churros");
-
-  const isStrictlyMusubiChurros = hasMusubiOrChurros && !isDwcl;
+  const isProductAvailable = (product: Product) => {
+    if (!isDwcl && dwclOnlyProducts.includes(product.id)) {
+      return false;
+    }
+    return true;
+  };
 
   const addToCart = (product: Product, variantId?: string) => {
-    if (isStrictlyMusubiChurros && (product.id === "coffee-jelly" || product.id === "cookies")) {
-      setRestrictionMessage("Cannot add Coffee Jelly or Cookies when Musubi/Churros are in cart for delivery.");
+    if (!isProductAvailable(product)) {
+      setRestrictionMessage("This item is only available for DWCL pickup.");
       setTimeout(() => setRestrictionMessage(""), 3000);
       return;
     }
@@ -97,32 +100,19 @@ export default function MenuPage() {
       setShowLoginPrompt(true);
       return;
     }
-
-    if (isStrictlyMusubiChurros && (product.id === "coffee-jelly" || product.id === "cookies")) {
-      setRestrictionMessage("Cannot add Coffee Jelly or Cookies when Musubi/Churros are in cart for delivery.");
+    if (!isProductAvailable(product)) {
+      setRestrictionMessage("This item is only available for DWCL pickup.");
       setTimeout(() => setRestrictionMessage(""), 3000);
       return;
     }
-
     setSelectedProduct(product);
     setSelectedVariantId(product.variants[0].id);
   };
 
   const confirmVariant = () => {
     if (selectedProduct) {
-      if (isStrictlyMusubiChurros && (selectedProduct.id === "coffee-jelly" || selectedProduct.id === "cookies")) {
-        setRestrictionMessage("Cannot add Coffee Jelly or Cookies when Musubi/Churros are in cart for delivery.");
-        setTimeout(() => setRestrictionMessage(""), 3000);
-        return;
-      }
       addToCart(selectedProduct, selectedVariantId);
     }
-  };
-
-  const isProductAvailable = (product: Product) => {
-    if (!isDwcl && dwclOnlyProducts.includes(product.id)) return false;
-    if (isStrictlyMusubiChurros && (product.id === "coffee-jelly" || product.id === "cookies")) return false;
-    return true;
   };
 
   return (
@@ -202,9 +192,6 @@ export default function MenuPage() {
             {!isDwcl && (
               <p className="mt-2 text-sm font-black text-yellow-300">Notice: Coffee Jelly and Cookies are available exclusively for DWCL pickup.</p>
             )}
-            {isStrictlyMusubiChurros && (
-              <p className="mt-2 text-sm font-black text-rose-500">Restriction: Musubi/Churros delivery orders cannot include Coffee Jelly or Cookies.</p>
-            )}
           </div>
 
           <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-4">
@@ -221,7 +208,7 @@ export default function MenuPage() {
                     {!available && (
                       <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20">
                         <span className="bg-yellow-400 text-black px-4 py-2 font-black text-sm uppercase border-4 border-black rotate-[-3deg]">
-                          {!isDwcl && dwclOnlyProducts.includes(product.id) ? 'DWCL Only' : 'Not Available'}
+                          DWCL Only
                         </span>
                       </div>
                     )}

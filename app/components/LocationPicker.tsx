@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -14,6 +14,7 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
+  const [error, setError] = useState<string>("");
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
@@ -23,8 +24,27 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
       [13.1800, 123.7800],
     ] as [[number, number], [number, number]];
 
+    let startLat = initialLat;
+    let startLng = initialLng;
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          startLat = position.coords.latitude;
+          startLng = position.coords.longitude;
+          if (mapInstanceRef.current && markerRef.current) {
+            mapInstanceRef.current.setView([startLat, startLng], 14);
+            markerRef.current.setLatLng([startLat, startLng]);
+          }
+        },
+        () => {
+          setError('Location access denied. Using default area.');
+        }
+      );
+    }
+
     const map = L.map(mapRef.current, {
-      center: [initialLat, initialLng],
+      center: [startLat, startLng],
       zoom: 14,
       maxBounds: daragaLegazpiBounds,
       minZoom: 13,
@@ -61,7 +81,7 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
       iconAnchor: [20, 40],
     });
 
-    const marker = L.marker([initialLat, initialLng], { icon: pinIcon, draggable: true }).addTo(map);
+    const marker = L.marker([startLat, startLng], { icon: pinIcon, draggable: true }).addTo(map);
     markerRef.current = marker;
 
     const updateMarker = (lat: number, lng: number) => {
@@ -89,9 +109,16 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
   }, [initialLat, initialLng, onLocationSelect]);
 
   return (
-    <div
-      ref={mapRef}
-      style={{ height: '400px', width: '100%', borderRadius: '12px', border: '4px solid #000', zIndex: 1 }}
-    />
+    <div>
+      {error && (
+        <div className="mb-2 rounded-lg border-4 border-yellow-400 bg-yellow-50 p-2 text-xs font-black text-black">
+          {error}
+        </div>
+      )}
+      <div
+        ref={mapRef}
+        style={{ height: '400px', width: '100%', borderRadius: '12px', border: '4px solid #000', zIndex: 1 }}
+      />
+    </div>
   );
 }

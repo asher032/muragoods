@@ -296,20 +296,18 @@ export default function CheckoutPage() {
                       <p className="text-xs text-gray-600 mt-1">Required for delivery confirmation calls</p>
                     </div>
 
-                    {!isDwcl && (
-                      <div>
-                        <label className="block text-sm font-black text-black uppercase mb-2">Preferred Delivery Date</label>
-                        <input
-                          type="date"
-                          value={customOrderDate}
-                          onChange={(e) => setCustomOrderDate(e.target.value)}
-                          required
-                            min={tomorrow}
-                          className="w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-black text-black outline-none focus:border-rose-400"
-                        />
-                        <p className="text-xs text-gray-600 mt-1">Select a valid future date</p>
-                      </div>
-                    )}
+                    <div>
+                      <label className="block text-sm font-black text-black uppercase mb-2">Preferred Order Date</label>
+                      <input
+                        type="date"
+                        value={customOrderDate}
+                        onChange={(e) => setCustomOrderDate(e.target.value)}
+                        required
+                        min={tomorrow}
+                        className="w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-black text-black outline-none focus:border-rose-400"
+                      />
+                      <p className="text-xs text-gray-600 mt-1">Select a valid future date</p>
+                    </div>
 
                     {!isDwcl && (
                       <div>
