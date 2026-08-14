@@ -28,7 +28,7 @@
 - **Reference Number:** Customers must enter GCash transaction reference
 - **Receipt Screenshot:** File upload for GCash payment proof
 - **Format:** Accepts image files (PNG, JPG, GIF, WebP)
-- **Display:** Shows GCash number: `0917-123-4567 (Muragoods)`
+- **Display:** Shows GCash number: `639466472599 (Muragoods)`
 - **Validation:** Both fields mandatory for GCash payment method
 - **Fallback:** Cash on Delivery option available (no upload needed)
 

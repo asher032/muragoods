@@ -1,6 +1,5 @@
 'use client';
 
-import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -53,26 +52,23 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center font-serif">
-      <div className="flex w-full max-w-4xl rounded-2xl border-4 border-black overflow-hidden shadow-2xl">
-        <div className="charcoal-pattern hidden md:flex md:w-1/2 bg-rose-400 flex-col items-center justify-center p-8 text-center relative">
-          <div className="relative z-10">
-            <div className="relative w-48 h-48 mx-auto mb-6">
-              <Image src="/images/mario-waving.png" alt="Mario Waving" fill className="object-contain wave-anim" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+    <main className="min-h-screen flex items-center justify-center px-4" style={{ background: 'linear-gradient(135deg, #E60012 0%, #c2000e 100%)' }}>
+      <div className="w-full max-w-md">
+        <div className="rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
+          <div className="flex flex-col items-center gap-4 mb-8">
+            <div className="relative w-20 h-20 rounded-full border-4 border-yellow-300 bg-rose-400 flex items-center justify-center text-3xl font-black text-white shadow-lg">
+              M
             </div>
-            <h2 className="text-3xl font-black text-white uppercase tracking-wider" style={{ textShadow: '4px 4px 0 rgba(0,0,0,0.5)' }}>
-              Mario
-            </h2>
-            <p className="mt-2 text-sm font-bold text-yellow-300 uppercase tracking-widest">Welcome back, Player 1</p>
-          </div>
-        </div>
-
-        <div className="w-full md:w-1/2 bg-white p-8 md:p-12">
-          <div className="bg-yellow-200 p-2 mb-6 border-2 border-black rotate-1 inline-block">
-            <h1 className="text-2xl font-black text-rose-500 text-center uppercase tracking-wider">Player 1, Press Start</h1>
+            <div className="text-center">
+              <p className="text-sm font-black uppercase tracking-widest text-rose-500">Muragoods</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-600">Player Login</p>
+            </div>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-6">
+          <h1 className="text-3xl font-black text-black mb-2 text-center uppercase">Sign In</h1>
+          <p className="text-sm font-bold text-slate-700 mb-6 text-center">Access your orders and favorites</p>
+
+          <form onSubmit={handleLogin} className="space-y-4">
             <label className="block text-sm font-black text-black uppercase">
               Email
               <input
@@ -105,7 +101,7 @@ export default function LoginPage() {
               type="submit"
               className="mario-btn mario-btn-black w-full uppercase font-black text-lg tracking-widest mt-6"
             >
-              🎮 SIGN IN 🎮
+              🎮 SIGN IN
             </button>
           </form>
 

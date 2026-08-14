@@ -58,32 +58,21 @@ export default function SignupPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-4 py-8" style={{ background: 'linear-gradient(135deg, var(--luigi-green), var(--luigi-green-dark))' }}>
+    <main className="min-h-screen flex items-center justify-center px-4 py-8" style={{ background: 'linear-gradient(135deg, #27ae60 0%, #1e8449 100%)' }}>
       <div className="w-full max-w-md">
-        <div className="wavy-divider absolute left-0 right-0 top-0">
-          <svg viewBox="0 0 1200 60" preserveAspectRatio="none" className="w-full">
-            <path d="M0,0 L1200,0 L1200,30 C1000,60 800,0 600,30 C400,60 200,0 0,30 Z" fill="var(--luigi-green)"/>
-          </svg>
-        </div>
-        <div className="wavy-divider absolute left-0 right-0 bottom-0">
-          <svg viewBox="0 0 1200 60" preserveAspectRatio="none" className="w-full">
-            <path d="M0,30 C200,0 400,60 600,30 C800,0 1000,60 1200,30 L1200,60 L0,60 Z" fill="var(--luigi-green)"/>
-          </svg>
-        </div>
-
-        <div className="relative z-10 rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
+        <div className="rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
           <div className="flex flex-col items-center gap-4 mb-8">
-            <div className="relative w-24 h-24 rounded-full border-4 border-yellow-300 bg-rose-400 flex items-center justify-center shadow-lg overflow-hidden">
-              <Image src="/images/luigi-badge.png" alt="Luigi Badge" fill className="object-contain p-2" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            <div className="relative w-20 h-20 rounded-full border-4 border-yellow-300 bg-rose-400 flex items-center justify-center text-3xl font-black text-white shadow-lg overflow-hidden">
+              <Image src="/images/luigi-badge.png" alt="Luigi" fill className="object-contain p-2" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
             </div>
             <div className="text-center">
               <p className="text-sm font-black uppercase tracking-widest text-green-600">Muragoods</p>
-              <p className="text-xs font-bold uppercase tracking-widest text-slate-600">Luigi&apos;s Food</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-600">Create Account</p>
             </div>
           </div>
 
-          <h1 className="text-4xl font-black text-black mb-2 text-center uppercase">Join the Crew (New Game)</h1>
-          <p className="text-sm font-bold text-slate-700 mb-6 text-center">Create your account</p>
+          <h1 className="text-3xl font-black text-black mb-2 text-center uppercase">Join the Crew</h1>
+          <p className="text-sm font-bold text-slate-700 mb-6 text-center">Create your account to start ordering</p>
 
           <form onSubmit={handleSignup} className="space-y-4">
             <label className="block text-sm font-black text-black uppercase">
@@ -141,7 +130,7 @@ export default function SignupPage() {
               disabled={loading}
               className="mario-btn mario-btn-green w-full uppercase font-black text-lg tracking-widest mt-6 border-black disabled:opacity-50"
             >
-              {loading ? "⏳ CREATING..." : "✨ CREATE ACCOUNT ✨"}
+              {loading ? "⏳ CREATING..." : "✨ CREATE ACCOUNT"}
             </button>
           </form>
 

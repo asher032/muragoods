@@ -5,6 +5,9 @@ import Link from "next/link";
 import { products, deliveryZones, type Product } from "@/app/lib/muragoods-data";
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
+
+const LocationPicker = dynamic(() => import("@/app/components/LocationPicker"), { ssr: false });
 
 function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shippingFee, total, removeFromCart, addToCart, clearCart }: {
   cartItems: Array<Product & { quantity: number }>;
@@ -26,6 +29,8 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
   const [gcashFile, setGcashFile] = useState<File | null>(null);
   const [gcashNoProof, setGcashNoProof] = useState(false);
   const [mapAddress, setMapAddress] = useState("");
+  const [latitude, setLatitude] = useState("13.1370");
+  const [longitude, setLongitude] = useState("123.7340");
   const [showGCashUpload, setShowGCashUpload] = useState(true);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -81,11 +86,11 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
 
     const formData = new FormData();
     formData.append("customer", user.name || user.email);
-    formData.append("phone", "0917-000-0000");
+    formData.append("phone", "639466472599");
     formData.append("zone", location);
     formData.append("address", mapAddress);
-    formData.append("latitude", "13.1370");
-    formData.append("longitude", "123.7340");
+    formData.append("latitude", latitude);
+    formData.append("longitude", longitude);
     formData.append("payment", paymentMethod === "GCash-NoProof" ? "GCash" : paymentMethod);
     formData.append("deliveryDate", deliveryDate);
     formData.append("status", "Pending Payment");
@@ -227,14 +232,21 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
 
               <div>
                 <label className="block text-sm font-black text-black uppercase mb-2">📍 Delivery Address</label>
+                <LocationPicker
+                  onLocationSelect={(lat, lng, address) => {
+                    setMapAddress(address);
+                    setLatitude(String(lat));
+                    setLongitude(String(lng));
+                  }}
+                />
                 <input
                   type="text"
                   value={mapAddress}
                   onChange={(e) => setMapAddress(e.target.value)}
                   placeholder="Enter your delivery address"
-                  className="w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none focus:border-rose-400"
+                  className="w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none focus:border-rose-400 mt-3"
                 />
-                <p className="text-xs text-gray-600 mt-2">Coordinates: 13.1370, 123.7340</p>
+                <p className="text-xs text-gray-600 mt-2">Click on the map to set your delivery location</p>
               </div>
 
               <div>
@@ -257,7 +269,7 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
               {showGCashUpload && paymentMethod === "GCash" && (
                 <div className="rounded-lg border-4 border-rose-400 bg-rose-50 p-4 space-y-3">
                   <p className="text-xs font-black text-rose-600 uppercase">💳 GCash Payment Details</p>
-                  <p className="text-sm font-bold text-black">Send ₱{total} to: <span className="text-rose-500 font-black">0917-123-4567</span> (Muragoods)</p>
+                  <p className="text-sm font-bold text-black">Send ₱{total} to: <span className="text-rose-500 font-black">639466472599</span> (Muragoods)</p>
 
                   <input
                     type="text"
@@ -292,7 +304,7 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
               {paymentMethod === "GCash-NoProof" && (
                 <div className="rounded-lg border-4 border-rose-400 bg-rose-50 p-4 space-y-3">
                   <p className="text-xs font-black text-rose-600 uppercase">💳 GCash Payment Details</p>
-                  <p className="text-sm font-bold text-black">Send ₱{total} to: <span className="text-rose-500 font-black">0917-123-4567</span> (Muragoods)</p>
+                  <p className="text-sm font-bold text-black">Send ₱{total} to: <span className="text-rose-500 font-black">639466472599</span> (Muragoods)</p>
                   <p className="text-xs font-bold text-black">No receipt upload required.</p>
                 </div>
               )}
@@ -412,7 +424,7 @@ export default function Home() {
           </Link>
 
           <div className="hidden md:flex items-center gap-3 text-xs font-black uppercase">
-            <Link href="/presentation" className="mario-btn bg-purple-600 text-white hover:bg-purple-500">🎮 Presentation</Link>
+
             <a href="#menu" className="mario-btn mario-btn-blue">Menu</a>
             <a href="#shipping" className="mario-btn mario-btn-green">Map</a>
             <a href="#checkout" className="mario-btn">Cart</a>
@@ -545,7 +557,7 @@ export default function Home() {
               {[
                 { title: "🏫 DWCL", detail: "FREE Shipping • All Items" },
                 { title: "🏘️ Legazpi/Daraga", detail: "₱30 Saturday • Musubi & Churros" },
-                { title: "🌍 Outside", detail: "Custom Orders Available" },
+                { title: "🌍 Outside", detail: "Musubi & Churros Delivery" },
               ].map((card) => (
                 <div key={card.title} className="mario-card">
                   <div className="bg-rose-400 p-4 border-b-4 border-black">
@@ -565,12 +577,10 @@ export default function Home() {
             </svg>
           </div>
           <div className="rounded-lg border-4 border-black bg-white p-2 shadow-2xl">
-            <iframe
-              title="Muragoods Delivery Map"
-              src="https://www.openstreetmap.org/export/embed.html?bbox=123.68%2C13.12%2C123.78%2C13.17&layer=mapnik&marker=13.1370%2C123.7340"
-              style={{ border: 0, width: '100%', height: '400px' }}
-              allowFullScreen
-              loading="lazy"
+            <LocationPicker
+              onLocationSelect={() => {
+                // Map picker is also available in checkout for precise selection
+              }}
             />
           </div>
           <div className="wavy-divider mt-4">

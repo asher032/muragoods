@@ -122,8 +122,8 @@ export const deliveryZones = [
     code: "Outside",
     label: "Outside Legazpi / Daraga",
     fee: 0,
-    note: "Contact Muragoods on social media for custom orders.",
-    eligible: [],
+    note: "Musubi & Churros available for delivery outside DWCL.",
+    eligible: ["musubi", "churros"],
   },
 ] as const;
 

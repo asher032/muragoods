@@ -73,7 +73,7 @@ export default function AdminPage() {
     event.preventDefault();
 
     if (!adminEmails.includes(email)) {
-      setError("❌ UNAUTHORIZED! Only mhaxthedog@gmail.com and muragoods0@gmail.com have access.");
+      setError("❌ UNAUTHORIZED! Only authorized admin accounts have access.");
       return;
     }
 
@@ -148,16 +148,16 @@ export default function AdminPage() {
 
   if (!isAuthenticated) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-rose-300 to-rose-400 px-4">
+      <main className="min-h-screen flex items-center justify-center bg-gradient-to-b from-rose-300 to-rose-400 px-4">
         <div className="w-full max-w-md rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
           <div className="flex flex-col items-center gap-4 mb-8">
-            <div className="relative flex h-20 w-20 items-center justify-center rounded-full border-4 border-yellow-300 bg-rose-400 text-4xl font-black text-white shadow-lg">
-              M
+            <div className="relative flex h-16 w-16 items-center justify-center rounded-full border-4 border-yellow-300 bg-rose-400 text-2xl font-black text-white shadow-lg">
+              A
             </div>
             <p className="text-sm font-black uppercase tracking-widest text-yellow-300">Admin Portal</p>
           </div>
 
-          <h1 className="text-4xl font-black text-black text-center uppercase mb-2">🎮 Dashboard 🎮</h1>
+          <h1 className="text-3xl font-black text-black text-center uppercase mb-2">Admin Login</h1>
           <p className="text-sm font-bold text-slate-700 text-center mb-6">Muragoods Secure Access</p>
 
           <form onSubmit={handleLogin} className="space-y-4">

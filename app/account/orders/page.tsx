@@ -81,7 +81,7 @@ export default function AccountOrdersPage() {
             <p className="text-sm font-black uppercase tracking-widest text-rose-500">
               📦 My Orders
             </p>
-            <h1 className="mt-2 text-4xl font-black text-black uppercase tracking-wider">Muragoods Account</h1>
+            <h1 className="mt-2 text-4xl font-black text-black uppercase tracking-wider">My Orders</h1>
           </div>
           <div className="flex gap-4">
             <button
