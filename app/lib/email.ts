@@ -2,15 +2,37 @@ import nodemailer from 'nodemailer';
 
 const ADMIN_EMAIL = 'mhaxthedog@gmail.com';
 
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.EMAIL_PORT || '587'),
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+let transporter: nodemailer.Transporter | null = null;
+
+async function getTransporter() {
+  if (transporter) return transporter;
+
+  const host = process.env.EMAIL_HOST;
+  const user = process.env.EMAIL_USER;
+  const pass = process.env.EMAIL_PASS;
+
+  if (host && user && pass) {
+    transporter = nodemailer.createTransport({
+      host,
+      port: parseInt(process.env.EMAIL_PORT || '587'),
+      secure: false,
+      auth: { user, pass },
+    });
+    return transporter;
+  }
+
+  transporter = nodemailer.createTransport({
+    host: 'smtp.ethereal.email',
+    port: 587,
+    secure: false,
+    auth: {
+      user: 'muragoods.test@ethereal.email',
+      pass: 'test-password',
+    },
+  });
+
+  return transporter;
+}
 
 export async function sendOrderNotification(orderData: {
   customer: string;
@@ -24,14 +46,11 @@ export async function sendOrderNotification(orderData: {
   payment: string;
   orderId: string;
 }) {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.warn('Email credentials not configured. Skipping email notification.');
-    return;
-  }
-
   try {
+    const mailTransporter = await getTransporter();
+
     const mailOptions = {
-      from: process.env.EMAIL_USER,
+      from: process.env.EMAIL_USER || 'muragoods.test@ethereal.email',
       to: ADMIN_EMAIL,
       subject: `🎮 New Order #${orderData.orderId} - ₱${orderData.total}`,
       html: `
@@ -93,8 +112,8 @@ export async function sendOrderNotification(orderData: {
       `,
     };
 
-    await transporter.sendMail(mailOptions);
-    console.log('Order notification email sent successfully');
+    const info = await mailTransporter.sendMail(mailOptions);
+    console.log('Order notification email sent:', info.messageId);
   } catch (error) {
     console.error('Failed to send order notification email:', error);
   }
