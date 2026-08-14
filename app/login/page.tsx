@@ -18,48 +18,49 @@ export default function LoginPage() {
     }
   }, [router]);
 
-  const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     
     if (!email || !password) {
       setError('Please fill in all fields');
       return;
     }
 
-    // Special case for admin login
-    if (email === adminCredentials.email && password === adminCredentials.password) {
-      localStorage.setItem('user', JSON.stringify({ email, name: 'Admin' }));
-      router.push('/admin');
-      return;
-    }
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
 
-    if (email && password.length >= 6) {
-      localStorage.setItem('user', JSON.stringify({ email, name: email.split('@')[0] }));
-      router.push('/');
-    } else {
-      setError('Invalid email or password');
+      const result = await res.json();
+
+      if (result.success) {
+        localStorage.setItem('user', JSON.stringify(result.data));
+        if (email === adminCredentials.email || email === 'mhaxthedog@gmail.com') {
+          router.push('/admin');
+        } else {
+          router.push('/');
+        }
+      } else {
+        setError(result.error || 'Login failed');
+      }
+    } catch (err) {
+      setError('An error occurred. Please try again.');
     }
   };
 
 
+
   return (
-    <main className="min-h-screen bg-gradient-to-b from-red-600 to-red-700 flex items-center justify-center px-4 py-8">
+        <main className="min-h-screen bg-[#ffcccc] flex items-center justify-center px-4 py-8 font-serif">
       <div className="w-full max-w-md">
-        <div className="rounded-lg border-4 border-black bg-white p-8 shadow-2xl">
-          <div className="diagonal-stripes rounded-lg p-6 mb-8 text-center relative">
-            <div className="relative flex flex-col items-center gap-4">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-yellow-300 bg-red-600 text-5xl font-black text-white shadow-lg">
-                M
-              </div>
-              <div>
-                <p className="text-sm font-black uppercase tracking-widest text-yellow-300">Muragoods</p>
-                <p className="text-xs font-bold uppercase tracking-widest text-yellow-100">Mario's Food</p>
-              </div>
-            </div>
+        <div className="border-[10px] border-dotted border-pink-500 bg-white p-8 shadow-none">
+          <div className="bg-yellow-200 p-2 mb-4 border-2 border-black rotate-3">
+            <h1 className="text-2xl font-bold text-red-400 text-center uppercase italic">Log in now!!!</h1>
           </div>
 
-          <h1 className="text-4xl font-black text-black mb-2 text-center uppercase">🎮 LOGIN 🎮</h1>
-          <p className="text-sm font-bold text-slate-700 mb-6 text-center">Sign in to your account</p>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <label className="block text-sm font-black text-black uppercase">

@@ -10,7 +10,10 @@
   },
   "dependencies": {
     "firebase": "^12.17.1",
+    "mongodb": "^7.5.0",
+    "mongoose": "^9.9.2",
     "next": "16.3.0",
+    "next-auth": "^4.24.15",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

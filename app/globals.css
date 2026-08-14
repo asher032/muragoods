@@ -1,103 +1,58 @@
 @import "tailwindcss";
 
-@font-face {
-  font-family: 'Mario';
-  src: url('https://fonts.cdnfonts.com/s/14885/SuperMario256.woff') format('woff');
-}
-
 :root {
-  --background: #ef4444;
-  --foreground: #ffffff;
-  --mario-red: #e60012;
-  --mario-blue: #008cd2;
-  --mario-yellow: #fbd000;
-  --mario-green: #43b02a;
-}
-
-html {
-  scroll-behavior: smooth;
+  --background: #fff;
+  --foreground: #333;
+  --mario-red: #ff8a8a; /* Light/Baby Red */
+  --mario-blue: #a3d8ff;
+  --mario-yellow: #fff2a3;
+  --mario-green: #a3ffa3;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: #5c94fc; /* Mario Sky Blue */
-  background-image: 
-    linear-gradient(transparent 70%, #43b02a 70%), /* Ground */
-    radial-gradient(circle at 20% 20%, white 2%, transparent 2.5%),
-    radial-gradient(circle at 80% 10%, white 3%, transparent 3.5%);
+  background: #f0f0f0;
   color: var(--foreground);
-  font-family: 'Arial Black', Arial, sans-serif;
-  font-weight: bold;
+  font-family: 'Comic Sans MS', 'Arial Black', sans-serif;
 }
 
-/* 8-bit Border Style */
-.mario-border {
-  border: 4px solid #000;
-  box-shadow: 
-    inset -4px -4px 0px 0px rgba(0,0,0,0.1),
-    4px 4px 0px 0px #000;
-}
-
-/* Diagonal stripe pattern for accent sections */
-.diagonal-stripes {
-  position: relative;
-  background: linear-gradient(45deg, #e60012 25%, #c40010 25%, #c40010 50%, #e60012 50%, #e60012 75%, #c40010 75%, #c40010 100%);
-  background-size: 56.57px 56.57px;
-}
-
-/* Mario card styling */
 .mario-card {
   background: white;
-  border: 4px solid #000;
-  border-radius: 0; /* Boxy look */
-  box-shadow: 8px 8px 0px 0px #000;
+  border: 2px solid #ccc;
+  border-radius: 15px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
   position: relative;
-  transition: transform 0.1s ease;
+  transition: all 0.2s ease;
 }
 
 .mario-card:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: 10px 10px 0px 0px #000;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(0,0,0,0.1);
 }
 
-/* Question Block Style */
-.question-block {
-  background: #f8d870;
-  border: 4px solid #000;
-  position: relative;
-  animation: block-bounce 2s infinite ease-in-out;
-}
-
-@keyframes block-bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
-}
-
-/* Vibrant button styles */
 .mario-btn {
-  background: #e60012;
+  background: var(--mario-red);
   color: white;
-  border: 4px solid #000;
+  border: none;
+  border-radius: 10px;
   padding: 10px 20px;
-  font-weight: 900;
+  font-weight: bold;
   cursor: pointer;
-  position: relative;
   text-transform: uppercase;
   font-size: 14px;
-  box-shadow: 4px 4px 0px 0px #000;
-  display: inline-block;
+  box-shadow: 0 4px 0px 0px #e07070;
 }
 
 .mario-btn:hover {
-  background: #ff0000;
-  transform: translate(-2px, -2px);
-  box-shadow: 6px 6px 0px 0px #000;
+  background: #ff7575;
+  transform: translateY(1px);
+  box-shadow: 0 3px 0px 0px #e07070;
 }
 
 .mario-btn:active {
-  transform: translate(2px, 2px);
-  box-shadow: 0px 0px 0px 0px #000;
+  transform: translateY(4px);
+  box-shadow: 0 0px 0px 0px #e07070;
 }
 
 .mario-btn-yellow {
