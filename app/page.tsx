@@ -83,8 +83,8 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
     formData.append("phone", "0917-000-0000");
     formData.append("zone", location);
     formData.append("address", mapAddress);
-    formData.append("latitude", "13.1528");
-    formData.append("longitude", "123.7384");
+    formData.append("latitude", "13.1370");
+    formData.append("longitude", "123.7340");
     formData.append("payment", paymentMethod === "GCash-NoProof" ? "GCash" : paymentMethod);
     formData.append("deliveryDate", deliveryDate);
     formData.append("status", "Pending Payment");
@@ -233,7 +233,7 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
                   placeholder="Enter your delivery address"
                   className="w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none focus:border-rose-400"
                 />
-                <p className="text-xs text-gray-600 mt-2">Coordinates: 13.1528, 123.7384</p>
+                <p className="text-xs text-gray-600 mt-2">Coordinates: 13.1370, 123.7340</p>
               </div>
 
               <div>
@@ -552,7 +552,7 @@ export default function Home() {
           <div className="mt-8 rounded-lg border-4 border-black bg-white p-2 shadow-2xl">
             <iframe
               title="Muragoods Delivery Map"
-              src="https://www.openstreetmap.org/export/embed.html?bbox=123.7%2C13.14%2C123.77%2C13.16&layer=mapnik&marker=13.1528%2C123.7384"
+              src="https://www.openstreetmap.org/export/embed.html?bbox=123.68%2C13.12%2C123.78%2C13.17&layer=mapnik&marker=13.1370%2C123.7340"
               style={{ border: 0, width: '100%', height: '400px' }}
               allowFullScreen
               loading="lazy"
