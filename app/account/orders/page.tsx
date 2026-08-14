@@ -14,7 +14,7 @@ const statusFlow: OrderStatus[] = [
 ];
 
 export default function AccountOrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<(Order & { _id?: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -36,8 +36,8 @@ export default function AccountOrdersPage() {
             id: o._id || o.id,
           })));
         }
-      } catch (e) {
-        console.error("Failed to fetch orders:", e);
+      } catch (fetchError) {
+        console.error("Failed to fetch orders:", fetchError);
       } finally {
         setLoading(false);
       }
@@ -48,6 +48,21 @@ export default function AccountOrdersPage() {
   const logout = () => {
     localStorage.removeItem("user");
     router.push("/login");
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!confirm("Are you sure you want to cancel this order?")) return;
+    try {
+      const res = await fetch(`/api/orders?id=${orderId}`, { method: "DELETE" });
+      const result = await res.json();
+      if (result.success) {
+        setOrders((current) => current.filter((o) => (o._id || o.id) !== orderId));
+      } else {
+        alert(result.error || "Failed to delete order");
+      }
+    } catch {
+      alert("Failed to delete order");
+    }
   };
 
   if (loading) {
@@ -134,6 +149,12 @@ export default function AccountOrdersPage() {
                     <span className="rounded-lg border-2 border-black bg-black px-4 py-2 text-xs font-black uppercase tracking-widest text-yellow-300">
                       💳 {order.payment}
                     </span>
+                    <button
+                      onClick={() => handleDeleteOrder(order._id || order.id)}
+                      className="rounded bg-rose-400 px-3 py-2 text-xs font-black text-white hover:bg-rose-500"
+                    >
+                      🗑️ Cancel
+                    </button>
                   </div>
                 </div>
 

@@ -23,6 +23,7 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
   const [paymentMethod, setPaymentMethod] = useState("GCash");
   const [gcashRef, setGcashRef] = useState("");
   const [gcashFile, setGcashFile] = useState<File | null>(null);
+  const [gcashNoProof, setGcashNoProof] = useState(false);
   const [mapAddress, setMapAddress] = useState("");
   const [showGCashUpload, setShowGCashUpload] = useState(true);
   const [error, setError] = useState("");
@@ -63,7 +64,7 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
       return;
     }
 
-    if (paymentMethod === "GCash") {
+    if (paymentMethod === "GCash" && !gcashNoProof) {
       if (!gcashRef) {
         setError("❌ Please enter GCash reference number");
         return;
@@ -84,7 +85,7 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
     formData.append("address", mapAddress);
     formData.append("latitude", "13.1528");
     formData.append("longitude", "123.7384");
-    formData.append("payment", paymentMethod);
+    formData.append("payment", paymentMethod === "GCash-NoProof" ? "GCash" : paymentMethod);
     formData.append("deliveryDate", deliveryDate);
     formData.append("status", "Pending Payment");
     formData.append("total", String(total));
@@ -242,15 +243,17 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
                   onChange={(e) => {
                     setPaymentMethod(e.target.value);
                     setShowGCashUpload(e.target.value === "GCash");
+                    setGcashNoProof(false);
                   }}
                   className="w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-black text-black outline-none focus:border-rose-400"
                 >
-                  <option value="GCash">💳 GCash (Requires Receipt Upload)</option>
+                  <option value="GCash">💳 GCash (with receipt)</option>
+                  <option value="GCash-NoProof">💳 GCash (no receipt)</option>
                   <option value="COD">🪙 Cash on Delivery</option>
                 </select>
               </div>
 
-              {showGCashUpload && (
+              {showGCashUpload && paymentMethod === "GCash" && (
                 <div className="rounded-lg border-4 border-rose-400 bg-rose-50 p-4 space-y-3">
                   <p className="text-xs font-black text-rose-600 uppercase">💳 GCash Payment Details</p>
                   <p className="text-sm font-bold text-black">Send ₱{total} to: <span className="text-rose-500 font-black">0917-123-4567</span> (Muragoods)</p>
@@ -270,9 +273,26 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
                       accept="image/*"
                       onChange={(e) => setGcashFile(e.target.files?.[0] || null)}
                       className="w-full text-xs font-semibold text-black"
-                      required
+                      required={!gcashNoProof}
                     />
                   </div>
+
+                  <label className="flex items-center gap-2 text-xs font-black text-black uppercase">
+                    <input
+                      type="checkbox"
+                      checked={gcashNoProof}
+                      onChange={(e) => setGcashNoProof(e.target.checked)}
+                    />
+                    Skip receipt - I already paid
+                  </label>
+                </div>
+              )}
+
+              {paymentMethod === "GCash-NoProof" && (
+                <div className="rounded-lg border-4 border-rose-400 bg-rose-50 p-4 space-y-3">
+                  <p className="text-xs font-black text-rose-600 uppercase">💳 GCash Payment Details</p>
+                  <p className="text-sm font-bold text-black">Send ₱{total} to: <span className="text-rose-500 font-black">0917-123-4567</span> (Muragoods)</p>
+                  <p className="text-xs font-bold text-black">No receipt upload required.</p>
                 </div>
               )}
             </>
@@ -527,6 +547,16 @@ export default function Home() {
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="mt-8 rounded-lg border-4 border-black bg-white p-2 shadow-2xl">
+            <iframe
+              title="Muragoods Delivery Map"
+              src="https://www.openstreetmap.org/export/embed.html?bbox=123.7%2C13.14%2C123.77%2C13.16&layer=mapnik&marker=13.1528%2C123.7384"
+              style={{ border: 0, width: '100%', height: '400px' }}
+              allowFullScreen
+              loading="lazy"
+            />
           </div>
         </div>
       </section>

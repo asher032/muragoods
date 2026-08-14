@@ -34,6 +34,10 @@ export async function GET(req: Request) {
     const userId = searchParams.get('userId');
     const isAdmin = searchParams.get('isAdmin') === 'true';
 
+    if (!isAdmin && !userId) {
+      return NextResponse.json({ success: false, error: 'userId or isAdmin=true is required' }, { status: 400 });
+    }
+
     let query: Record<string, unknown> = {};
     if (!isAdmin && userId) {
       query = { userId };
