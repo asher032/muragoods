@@ -20,8 +20,8 @@ export default function Home() {
       <nav className="sticky top-0 z-50 bg-white border-b-4 border-black shadow-[0_4px_0px_0px_#000]">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-8 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
-            <div className="relative h-12 w-12 rounded-full border-4 border-black bg-rose-400 flex items-center justify-center shadow-[4px_4px_0px_0px_#000] logo-badge">
-              <span className="text-xl"></span>
+            <div className="relative h-12 w-12 rounded-full border-4 border-black bg-white flex items-center justify-center shadow-[4px_4px_0px_0px_#000] overflow-hidden">
+              <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-contain p-2" />
             </div>
             <div>
               <p className="text-sm font-black uppercase tracking-widest text-rose-500">Muragoods</p>
@@ -87,7 +87,11 @@ export default function Home() {
                   </div>
                   <div className="relative aspect-square w-full bg-white flex items-center justify-center">
                     <Image src="/images/hero-musubi.png" alt="Mario Hero" fill className="object-contain p-4" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                    <div className="absolute top-4 right-4 w-16 h-16 bg-yellow-400 border-4 border-black rounded-full flex items-center justify-center text-3xl coin-float z-10">COIN</div>
+                    <div className="absolute top-4 right-4 w-16 h-16 bg-gradient-to-br from-yellow-300 to-yellow-500 border-4 border-black rounded-full flex items-center justify-center coin-float z-10 shadow-[4px_4px_0px_0px_#000]">
+                      <div className="w-12 h-12 bg-gradient-to-br from-yellow-200 to-yellow-400 border-2 border-black rounded-full flex items-center justify-center">
+                        <span className="text-xl font-black text-black">P</span>
+                      </div>
+                    </div>
                   </div>
                   <div className="bg-black p-4 text-center">
                     <h3 className="text-2xl font-black text-white uppercase">SUPER MUSUBI</h3>
@@ -108,14 +112,14 @@ export default function Home() {
 
           <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-4">
             {[
-              { name: "Musubi", icon: "MUSUBI", price: "₱40", desc: "Regular / With Egg / With Flakes" },
-              { name: "Mini Churros", icon: "CHURROS", price: "₱70", desc: "Option 1 / Option 2" },
-              { name: "Coffee Jelly", icon: "COFFEE", price: "₱15", desc: "Option 1 / Option 2" },
-              { name: "Cookies", icon: "COOKIES", price: "₱25", desc: "Regular / Cookies and Cream" },
+              { name: "Musubi", image: "/images/product-musubi.png", price: "₱40", desc: "Regular / With Egg / With Flakes" },
+              { name: "Mini Churros", image: "/images/product-churros.png", price: "₱70", desc: "Option 1 / Option 2" },
+              { name: "Coffee Jelly", image: "/images/product-coffee-jelly.png", price: "₱15", desc: "Option 1 / Option 2" },
+              { name: "Cookies", image: "/images/product-cookies.png", price: "₱25", desc: "Regular / Cookies and Cream" },
             ].map((item) => (
               <div key={item.name} className="menu-card">
-                <div className="h-48 bg-blue-400 p-6 flex items-center justify-center text-8xl border-b-4 border-black relative overflow-hidden">
-                  <span className="coin-float relative z-10">{item.icon}</span>
+                <div className="h-48 bg-blue-400 border-b-4 border-black relative overflow-hidden">
+                  <Image src={item.image} alt={item.name} fill className="object-contain p-2" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
                 </div>
                 <div className="p-6 bg-white">

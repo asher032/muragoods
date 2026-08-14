@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { products, type Product, type CartItem, dwclOnlyProducts, deliveryZones, type ZoneKey } from '@/app/lib/muragoods-data';
@@ -100,8 +101,8 @@ export default function MenuPage() {
       <nav className="sticky top-0 z-50 bg-white border-b-4 border-black shadow-[0_4px_0px_0px_#000]">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-8 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
-            <div className="relative h-10 w-10 rounded-full border-4 border-black bg-rose-400 flex items-center justify-center shadow-[4px_4px_0px_0px_#000] logo-badge">
-              <span className="text-lg"></span>
+            <div className="relative h-10 w-10 rounded-full border-4 border-black bg-white flex items-center justify-center shadow-[4px_4px_0px_0px_#000] overflow-hidden">
+              <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-contain p-2" />
             </div>
             <div>
               <p className="text-sm font-black uppercase tracking-widest text-rose-500">Muragoods</p>
@@ -176,8 +177,8 @@ export default function MenuPage() {
                   key={product.id}
                   className={`menu-card group ${!available ? 'opacity-60' : ''}`}
                 >
-                  <div className="h-48 bg-blue-400 p-6 flex items-center justify-center text-8xl border-b-4 border-black group-hover:bg-blue-300 transition-colors relative overflow-hidden">
-                    <span className="coin-float relative z-10">{product.icon}</span>
+                  <div className="h-48 bg-blue-400 p-6 border-b-4 border-black group-hover:bg-blue-300 transition-colors relative overflow-hidden">
+                    <Image src={product.image} alt={product.name} fill className="object-contain p-2" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
                     {!available && (
                       <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20">

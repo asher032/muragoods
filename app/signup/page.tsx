@@ -1,5 +1,6 @@
 'use client';
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -61,8 +62,8 @@ export default function SignupPage() {
       <div className="w-full max-w-md">
         <div className="rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
           <div className="flex flex-col items-center gap-4 mb-8">
-            <div className="relative w-20 h-20 rounded-full border-4 border-yellow-300 bg-rose-400 flex items-center justify-center text-3xl font-black text-white shadow-lg overflow-hidden">
-              <span className="text-2xl"></span>
+            <div className="relative w-20 h-20 rounded-full border-4 border-yellow-300 bg-white flex items-center justify-center shadow-lg overflow-hidden">
+              <Image src="/images/signup-badge.png" alt="Muragoods Signup" fill className="object-contain p-2" />
             </div>
             <div className="text-center">
               <p className="text-sm font-black uppercase tracking-widest text-green-600">Muragoods</p>

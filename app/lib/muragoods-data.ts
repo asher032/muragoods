@@ -26,6 +26,7 @@ export type Product = {
   inventory: InventoryStatus;
   variants: ProductVariant[];
   icon: string;
+  image: string;
 };
 
 export type CartItem = Product & {
@@ -71,6 +72,7 @@ export const products: Product[] = [
     availability: ["DWCL"],
     inventory: "In Stock",
     icon: "COOKIES",
+    image: "/images/product-cookies.png",
     variants: [
       { id: "regular", name: "Regular Cookie", price: 25 },
       { id: "cream", name: "Cookies and Cream", price: 30 },
@@ -86,6 +88,7 @@ export const products: Product[] = [
     availability: ["DWCL"],
     inventory: "In Stock",
     icon: "COFFEE",
+    image: "/images/product-coffee-jelly.png",
     variants: [
       { id: "option1", name: "Option 1", price: 15 },
       { id: "option2", name: "Option 2", price: 20 },
@@ -101,6 +104,7 @@ export const products: Product[] = [
     availability: ["DWCL", "Legazpi", "Daraga"],
     inventory: "In Stock",
     icon: "MUSUBI",
+    image: "/images/product-musubi.png",
     variants: [
       { id: "regular", name: "Regular Musubi", price: 40 },
       { id: "egg", name: "With Egg", price: 45 },
@@ -117,6 +121,7 @@ export const products: Product[] = [
     availability: ["DWCL", "Legazpi", "Daraga"],
     inventory: "Pre-Order Only",
     icon: "CHURROS",
+    image: "/images/product-churros.png",
     variants: [
       { id: "option1", name: "Option 1", price: 70 },
       { id: "option2", name: "Option 2", price: 100 },

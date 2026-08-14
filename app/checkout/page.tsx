@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -143,6 +144,20 @@ export default function CheckoutPage() {
     }
   };
 
+  const addToCartFromCheckout = (productId: string) => {
+    setCart(prev => {
+      const next = {
+        ...prev,
+        [productId]: {
+          ...(prev[productId] || { variantId: products.find(p => p.id === productId)?.variants[0].id }),
+          quantity: (prev[productId]?.quantity || 0) + 1,
+        }
+      };
+      localStorage.setItem("cart", JSON.stringify(next));
+      return next;
+    });
+  };
+
   const removeFromCart = (productId: string) => {
     setCart(prev => {
       const next = { ...prev };
@@ -171,8 +186,8 @@ export default function CheckoutPage() {
       <nav className="sticky top-0 z-50 bg-white border-b-4 border-black shadow-[0_4px_0px_0px_#000]">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-8 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
-            <div className="relative h-10 w-10 rounded-full border-4 border-black bg-rose-400 flex items-center justify-center shadow-[4px_4px_0px_0px_#000] logo-badge">
-              <span className="text-lg"></span>
+            <div className="relative h-10 w-10 rounded-full border-4 border-black bg-white flex items-center justify-center shadow-[4px_4px_0px_0px_#000] overflow-hidden">
+              <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-contain p-2" />
             </div>
             <div>
               <p className="text-sm font-black uppercase tracking-widest text-rose-500">Muragoods</p>
@@ -240,6 +255,13 @@ export default function CheckoutPage() {
                             >
                               −
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => addToCartFromCheckout(item.id)}
+                              className="flex h-10 w-10 items-center justify-center rounded-full border-4 border-black bg-black text-lg font-black text-yellow-300 hover:bg-slate-900"
+                            >
+                              +
+                            </button>
                             <span className="w-6 text-center font-black text-black">{item.quantity}</span>
                           </div>
                         </div>
@@ -296,7 +318,13 @@ export default function CheckoutPage() {
                           }}
                         />
                       </div>
-                      <p className="text-xs text-gray-600 mt-2">Click on the map to pin your delivery location (Daraga/Legazpi area only)</p>
+                      {mapAddress && (
+                        <div className="mt-3 p-3 bg-yellow-400 border-4 border-black rounded-lg">
+                          <p className="text-sm font-black text-black uppercase">Selected Delivery Location</p>
+                          <p className="text-lg font-black text-black">{mapAddress}</p>
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-600 mt-2">Click on the map or drag the pin to set your delivery location</p>
                     </div>
 
                     <div>

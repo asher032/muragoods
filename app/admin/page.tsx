@@ -1,5 +1,6 @@
 'use client';
 
+import Image from "next/image";
 import { adminCredentials, adminEmails, products, type InventoryStatus, type Order, type OrderStatus } from "@/app/lib/muragoods-data";
 import { useMemo, useState, useEffect, useCallback } from "react";
 
@@ -151,8 +152,8 @@ export default function AdminPage() {
       <main className="min-h-screen flex items-center justify-center px-4 mario-pattern">
         <div className="w-full max-w-md rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
           <div className="flex flex-col items-center gap-4 mb-8">
-            <div className="relative flex h-16 w-16 items-center justify-center rounded-full border-4 border-yellow-300 bg-rose-400 text-2xl font-black text-white shadow-lg">
-              A
+            <div className="relative flex h-16 w-16 items-center justify-center rounded-full border-4 border-yellow-300 bg-white overflow-hidden shadow-lg">
+              <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-contain p-2" />
             </div>
             <p className="text-sm font-black uppercase tracking-widest text-yellow-300">Admin Portal</p>
           </div>

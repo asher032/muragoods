@@ -35,13 +35,40 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
       attribution: '&copy; OpenStreetMap contributors',
     }).addTo(map);
 
-    const marker = L.marker([initialLat, initialLng], { draggable: true }).addTo(map);
+    const pinIcon = L.divIcon({
+      className: 'custom-pin',
+      html: `<div style="
+        width: 40px;
+        height: 40px;
+        background: #E60012;
+        border: 4px solid #000;
+        border-radius: 50% 50% 50% 0;
+        transform: rotate(-45deg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+      ">
+        <div style="
+          width: 16px;
+          height: 16px;
+          background: #FFD700;
+          border: 2px solid #000;
+          border-radius: 50%;
+        "></div>
+      </div>`,
+      iconSize: [40, 40],
+      iconAnchor: [20, 40],
+    });
+
+    const marker = L.marker([initialLat, initialLng], { icon: pinIcon, draggable: true }).addTo(map);
     markerRef.current = marker;
 
     const updateMarker = (lat: number, lng: number) => {
       marker.setLatLng([lat, lng]);
+      map.setView([lat, lng], 16);
       if (onLocationSelect) {
-        onLocationSelect(lat, lng, `${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+        onLocationSelect(lat, lng, `DELIVERY PIN: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
       }
     };
 
