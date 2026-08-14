@@ -149,14 +149,12 @@ export default function AdminPage() {
   if (!isAuthenticated) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-rose-300 to-rose-400 px-4">
-        <div className="w-full max-w-md rounded-lg border-4 border-black bg-white p-8 shadow-2xl">
-          <div className="diagonal-stripes rounded-lg p-6 mb-8 text-center relative">
-            <div className="relative flex flex-col items-center gap-4">
-              <div className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-yellow-300 bg-rose-400 text-4xl font-black text-white shadow-lg">
-                M
-              </div>
-              <p className="text-sm font-black uppercase tracking-widest text-yellow-300">Admin Portal</p>
+        <div className="w-full max-w-md rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
+          <div className="flex flex-col items-center gap-4 mb-8">
+            <div className="relative flex h-20 w-20 items-center justify-center rounded-full border-4 border-yellow-300 bg-rose-400 text-4xl font-black text-white shadow-lg">
+              M
             </div>
+            <p className="text-sm font-black uppercase tracking-widest text-yellow-300">Admin Portal</p>
           </div>
 
           <h1 className="text-4xl font-black text-black text-center uppercase mb-2">🎮 Dashboard 🎮</h1>
@@ -169,7 +167,7 @@ export default function AdminPage() {
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                className="mt-2 w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none transition focus:border-rose-400 focus:bg-white"
+                className="mario-input mt-2 bg-yellow-50 focus:bg-white"
               />
             </label>
 
@@ -179,7 +177,7 @@ export default function AdminPage() {
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                className="mt-2 w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none transition focus:border-rose-400 focus:bg-white"
+                className="mario-input mt-2 bg-yellow-50 focus:bg-white"
               />
             </label>
 
@@ -191,7 +189,7 @@ export default function AdminPage() {
 
             <button
               type="submit"
-              className="mario-btn w-full bg-black text-yellow-300 hover:bg-slate-900 uppercase font-black text-lg tracking-widest mt-6"
+              className="mario-btn mario-btn-black w-full uppercase font-black text-lg tracking-widest mt-6"
             >
               🔐 ENTER DASHBOARD
             </button>
@@ -225,22 +223,22 @@ export default function AdminPage() {
         </header>
 
         <section className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-lg border-4 border-black bg-white p-6 shadow-xl">
+          <div className="mario-card p-6 shadow-xl">
             <p className="text-sm font-black uppercase tracking-widest text-rose-500">💰 Today&apos;s Sales</p>
             <p className="mt-3 text-4xl font-black text-black">₱{summary.totalSales}</p>
           </div>
-          <div className="rounded-lg border-4 border-black bg-white p-6 shadow-xl">
+          <div className="mario-card p-6 shadow-xl">
             <p className="text-sm font-black uppercase tracking-widest text-rose-500">⏳ Pending</p>
             <p className="mt-3 text-4xl font-black text-black">{summary.pending}</p>
           </div>
-          <div className="rounded-lg border-4 border-black bg-white p-6 shadow-xl">
+          <div className="mario-card p-6 shadow-xl">
             <p className="text-sm font-black uppercase tracking-widest text-rose-500">🍳 Preparing</p>
             <p className="mt-3 text-4xl font-black text-black">{summary.preparing}</p>
           </div>
         </section>
 
         <section className="mt-8 grid gap-8 xl:grid-cols-[1.4fr_0.8fr]">
-          <div className="rounded-lg border-4 border-black bg-white p-6 shadow-xl">
+          <div className="mario-card p-6 shadow-xl">
             <h2 className="text-2xl font-black text-black uppercase tracking-wider">📋 Live Order Feed</h2>
 
             <div className="mt-6 overflow-x-auto rounded-lg border-4 border-black">
@@ -276,7 +274,7 @@ export default function AdminPage() {
                         <select
                           value={order.status}
                           onChange={(event) => handleStatusUpdate(order._id || order.id, event.target.value)}
-                          className="rounded-lg border-2 border-black bg-yellow-300 px-3 py-2 text-xs font-black uppercase tracking-wider text-black outline-none focus:bg-yellow-400"
+                          className="mario-input rounded-lg px-3 py-2 text-xs font-black uppercase tracking-wider"
                         >
                           {statusOptions.map((status) => (
                             <option key={status} value={status}>
@@ -300,7 +298,7 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div className="rounded-lg border-4 border-black bg-white p-6 shadow-xl">
+          <div className="mario-card p-6 shadow-xl">
             <h2 className="text-2xl font-black text-black uppercase tracking-wider">📦 Inventory Control</h2>
             <div className="mt-6 space-y-3">
               {catalog.map((product) => (
@@ -315,7 +313,7 @@ export default function AdminPage() {
                   <button
                     type="button"
                     onClick={() => toggleInventory(product.id)}
-                    className="mario-btn bg-black text-yellow-300 border-black hover:bg-slate-900 uppercase font-black"
+                    className="mario-btn mario-btn-black border-black hover:bg-slate-900 uppercase font-black"
                   >
                     Update
                   </button>

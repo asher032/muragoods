@@ -130,7 +130,7 @@ export default function AccountOrdersPage() {
             return (
               <article
                 key={order.id}
-                className="rounded-lg border-4 border-black bg-white p-6 shadow-2xl"
+                className="rounded-lg border-4 border-black bg-white p-6 shadow-2xl slide-in"
               >
                 <div className="flex flex-col gap-5 border-b-4 border-black pb-4 md:flex-row md:items-center md:justify-between">
                   <div>
@@ -143,7 +143,7 @@ export default function AccountOrdersPage() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3">
-                    <span className="rounded-lg border-2 border-black bg-yellow-300 px-4 py-2 text-xs font-black uppercase tracking-widest text-black">
+                    <span className="rounded-lg border-2 border-black bg-yellow-300 px-4 py-2 text-xs font-black uppercase tracking-widest text-black pulse-badge">
                       📍 {order.zone}
                     </span>
                     <span className="rounded-lg border-2 border-black bg-black px-4 py-2 text-xs font-black uppercase tracking-widest text-yellow-300">
@@ -168,7 +168,7 @@ export default function AccountOrdersPage() {
                             <div
                               className={`flex h-12 w-12 items-center justify-center rounded-full border-4 text-xs font-black transition ${
                                 active
-                                  ? "border-black bg-rose-400 text-white shadow-lg"
+                                  ? "border-black bg-rose-400 text-white shadow-lg pulse-badge"
                                   : "border-black bg-white text-black"
                               }`}
                             >

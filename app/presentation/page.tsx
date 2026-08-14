@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from "next/image";
 
 interface Stats {
   totalSales: number;
@@ -98,47 +99,44 @@ export default function PresentationPage() {
           />
           <div style={{ position: 'relative', zIndex: 2, maxWidth: '900px', padding: '40px' }}>
             <div
+              className="pill-badge"
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '10px',
-                background: '#FFD700',
-                color: '#1a1a1a',
-                padding: '10px 24px',
-                borderRadius: '50px',
-                fontWeight: 900,
-                fontSize: '0.9rem',
-                textTransform: 'uppercase',
                 marginBottom: '20px',
-                boxShadow: '0 4px 0 #b39700',
               }}
             >
-              <img
+              <Image
                 src="/images/muragoods.png"
                 alt="Muragoods"
-                style={{ width: '32px', height: '32px', objectFit: 'contain' }}
+                width={32}
+                height={32}
+                className="object-contain"
                 onError={(e) => {
                   (e.target as HTMLImageElement).style.display = 'none';
                 }}
               />
               <span>NEW! Mushroom Kingdom Express</span>
             </div>
-            <img
-              src="/images/mario-hero.png"
-              alt="Mario Hero"
+            <div
               style={{
                 width: '280px',
                 height: '280px',
-                objectFit: 'contain',
+                position: 'relative',
                 filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.5))',
                 animation: 'float 3s ease-in-out infinite',
                 lineHeight: 1,
                 margin: '20px 0',
               }}
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
+            >
+              <Image
+                src="/images/mario-hero.png"
+                alt="Mario Hero"
+                fill
+                className="object-contain"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            </div>
             <h1
               style={{
                 fontSize: '3rem',
@@ -219,22 +217,25 @@ export default function PresentationPage() {
                 transform: 'skewX(-15deg)',
               }}
             />
-            <img
-              src="/images/mario-waving.png"
-              alt="Mario Waving"
+            <div
               style={{
                 width: '200px',
                 height: '200px',
-                objectFit: 'contain',
+                position: 'relative',
                 filter: 'drop-shadow(0 15px 30px rgba(0,0,0,0.4))',
                 animation: 'wave 2s ease-in-out infinite',
-                position: 'relative',
-                zIndex: 2,
               }}
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
+            >
+              <Image
+                src="/images/mario-waving.png"
+                alt="Mario Waving"
+                fill
+                className="object-contain"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            </div>
             <h2
               style={{
                 color: 'white',
@@ -248,9 +249,9 @@ export default function PresentationPage() {
             </h2>
           </div>
           <div
+            className="charcoal-pattern"
             style={{
               flex: 1,
-              background: '#1a1a1a',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'center',
@@ -269,10 +270,9 @@ export default function PresentationPage() {
               }}
             />
             <div
+              className="mario-card"
               style={{
                 background: '#2a2a2a',
-                border: '3px solid #333',
-                borderRadius: '20px',
                 padding: '40px',
                 width: '100%',
                 maxWidth: '420px',
@@ -307,16 +307,10 @@ export default function PresentationPage() {
                   <input
                     type="text"
                     placeholder="player1"
+                    className="mario-input"
                     style={{
-                      width: '100%',
-                      padding: '14px 18px',
-                      borderRadius: '12px',
-                      border: '3px solid #444',
                       background: '#1a1a1a',
                       color: 'white',
-                      fontSize: '1rem',
-                      fontWeight: 700,
-                      outline: 'none',
                     }}
                   />
                 </div>
@@ -337,34 +331,17 @@ export default function PresentationPage() {
                   <input
                     type="password"
                     placeholder="••••••••"
+                    className="mario-input"
                     style={{
-                      width: '100%',
-                      padding: '14px 18px',
-                      borderRadius: '12px',
-                      border: '3px solid #444',
                       background: '#1a1a1a',
                       color: 'white',
-                      fontSize: '1rem',
-                      fontWeight: 700,
-                      outline: 'none',
                     }}
                   />
                 </div>
                 <button
                   type="submit"
+                  className="mario-btn mario-btn-yellow w-full"
                   style={{
-                    width: '100%',
-                    padding: '14px 32px',
-                    borderRadius: '50px',
-                    background: '#FFD700',
-                    color: '#1a1a1a',
-                    fontWeight: 900,
-                    fontSize: '1rem',
-                    textTransform: 'uppercase',
-                    letterSpacing: '1px',
-                    border: 'none',
-                    cursor: 'pointer',
-                    boxShadow: '0 6px 0 #b39700, 0 10px 20px rgba(0,0,0,0.3)',
                     marginTop: '10px',
                   }}
                 >
@@ -388,30 +365,16 @@ export default function PresentationPage() {
             flexDirection: 'column',
           }}
         >
-          <div
-            style={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              height: '60px',
-              background: '#1a1a1a',
-              clipPath: 'polygon(0 0, 100% 50%, 100% 100%, 0 100%)',
-              zIndex: 2,
-            }}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              height: '60px',
-              background: '#1a1a1a',
-              clipPath: 'polygon(0 0, 100% 50%, 100% 100%, 0 100%)',
-              bottom: 0,
-              transform: 'scaleY(-1)',
-              zIndex: 2,
-            }}
-          />
+          <div className="wavy-divider absolute left-0 right-0 top-0">
+            <svg viewBox="0 0 1200 60" preserveAspectRatio="none" className="w-full">
+              <path d="M0,0 L1200,0 L1200,30 C1000,60 800,0 600,30 C400,60 200,0 0,30 Z" fill="#1a1a1a"/>
+            </svg>
+          </div>
+          <div className="wavy-divider absolute left-0 right-0 bottom-0">
+            <svg viewBox="0 0 1200 60" preserveAspectRatio="none" className="w-full">
+              <path d="M0,30 C200,0 400,60 600,30 C800,0 1000,60 1200,30 L1200,60 L0,60 Z" fill="#1a1a1a"/>
+            </svg>
+          </div>
           <div
             style={{
               flex: 1,
@@ -426,29 +389,31 @@ export default function PresentationPage() {
             }}
           >
             <div
+              className="gold-ring"
               style={{
-              width: '100px',
-              height: '100px',
-              borderRadius: '50%',
-              background: '#FFD700',
-              border: '6px solid white',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: '24px',
-              boxShadow: '0 8px 0 #b39700, 0 15px 30px rgba(0,0,0,0.3)',
-              overflow: 'hidden',
-            }}
-          >
-            <img
-              src="/images/luigi-badge.png"
-              alt="Luigi Badge"
-              style={{ width: '70px', height: '70px', objectFit: 'contain' }}
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
+                width: '100px',
+                height: '100px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '24px',
+                boxShadow: '0 8px 0 #b39700, 0 15px 30px rgba(0,0,0,0.3)',
+                overflow: 'hidden',
+                background: '#FFD700',
               }}
-            />
-            </div>
+            >
+               <Image
+                 src="/images/luigi-badge.png"
+                 alt="Luigi Badge"
+                 width={70}
+                 height={70}
+                 className="object-contain"
+                 onError={(e) => {
+                   (e.target as HTMLImageElement).style.display = 'none';
+                 }}
+               />
+             </div>
             <h1
               style={{
                 color: 'white',
@@ -474,6 +439,7 @@ export default function PresentationPage() {
               Create your profile today and earn 100 Bonus Coins on your very first order!
             </p>
             <div
+              className="mario-card"
               style={{
                 background: 'rgba(255,255,255,0.95)',
                 borderRadius: '24px',
@@ -507,17 +473,8 @@ export default function PresentationPage() {
                   <input
                     type="text"
                     placeholder="LuigiFan42"
-                    style={{
-                      width: '100%',
-                      padding: '14px 18px',
-                      borderRadius: '12px',
-                      border: '3px solid #ddd',
-                      background: '#f5f5f5',
-                      color: '#1a1a1a',
-                      fontSize: '1rem',
-                      fontWeight: 700,
-                      outline: 'none',
-                    }}
+                    className="mario-input"
+                    style={{ background: '#f5f5f5' }}
                   />
                 </div>
                 <div style={{ marginBottom: '20px', textAlign: 'left' }}>
@@ -537,17 +494,8 @@ export default function PresentationPage() {
                   <input
                     type="email"
                     placeholder="player@kingdom.com"
-                    style={{
-                      width: '100%',
-                      padding: '14px 18px',
-                      borderRadius: '12px',
-                      border: '3px solid #ddd',
-                      background: '#f5f5f5',
-                      color: '#1a1a1a',
-                      fontSize: '1rem',
-                      fontWeight: 700,
-                      outline: 'none',
-                    }}
+                    className="mario-input"
+                    style={{ background: '#f5f5f5' }}
                   />
                 </div>
                 <div style={{ marginBottom: '20px', textAlign: 'left' }}>
@@ -567,51 +515,26 @@ export default function PresentationPage() {
                   <input
                     type="password"
                     placeholder="••••••••"
-                    style={{
-                      width: '100%',
-                      padding: '14px 18px',
-                      borderRadius: '12px',
-                      border: '3px solid #ddd',
-                      background: '#f5f5f5',
-                      color: '#1a1a1a',
-                      fontSize: '1rem',
-                      fontWeight: 700,
-                      outline: 'none',
-                    }}
+                    className="mario-input"
+                    style={{ background: '#f5f5f5' }}
                   />
                 </div>
                 <button
                   type="submit"
+                  className="mario-btn mario-btn-green w-full"
                   style={{
-                    width: '100%',
-                    padding: '14px 32px',
-                    borderRadius: '50px',
-                    background: '#27ae60',
-                    color: 'white',
-                    fontWeight: 900,
-                    fontSize: '1rem',
-                    textTransform: 'uppercase',
-                    letterSpacing: '1px',
-                    border: 'none',
-                    cursor: 'pointer',
-                    boxShadow: '0 6px 0 #1e8449, 0 10px 20px rgba(0,0,0,0.2)',
+                    marginTop: '10px',
                   }}
                 >
                   Create Account &gt;
                 </button>
                 <div
+                  className="pill-badge"
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '8px',
-                    background: '#FFD700',
-                    color: '#1a1a1a',
-                    padding: '8px 16px',
-                    borderRadius: '50px',
-                    fontWeight: 900,
-                    fontSize: '0.85rem',
                     marginTop: '16px',
-                    boxShadow: '0 3px 0 #b39700',
                   }}
                 >
                   <span>🪙</span>
@@ -675,12 +598,13 @@ export default function PresentationPage() {
             ].map((item, i) => (
               <div
                 key={i}
+                className="gold-ring"
                 style={{
                   background: 'white',
-                  borderRadius: '20px',
+                  borderRadius: '16px',
                   overflow: 'hidden',
                   boxShadow: '0 10px 0 rgba(0,0,0,0.3)',
-                  border: '4px solid transparent',
+                  border: '5px solid transparent',
                   transition: 'transform 0.2s, border-color 0.2s',
                 }}
                 onMouseEnter={(e) => {
@@ -701,17 +625,19 @@ export default function PresentationPage() {
                     fontSize: '4rem',
                     borderBottom: '4px solid rgba(0,0,0,0.1)',
                     background: item.color,
+                    position: 'relative',
                   }}
                 >
-                  <img
-                    src={item.image}
-                    alt={item.name}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                </div>
+                   <Image
+                     src={item.image}
+                     alt={item.name}
+                     fill
+                     className="object-cover"
+                     onError={(e) => {
+                       (e.target as HTMLImageElement).style.display = 'none';
+                     }}
+                   />
+                 </div>
                 <div style={{ padding: '16px', textAlign: 'center' }}>
                   <h3
                     style={{
@@ -824,6 +750,7 @@ export default function PresentationPage() {
                 <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <div
+                      className={step.status === 'completed' ? 'pulse-badge' : ''}
                       style={{
                         width: '50px',
                         height: '50px',
@@ -867,6 +794,7 @@ export default function PresentationPage() {
             </div>
 
             <div
+              className="mario-card"
               style={{
                 background: '#2a2a2a',
                 border: '3px solid #444',
@@ -900,9 +828,9 @@ export default function PresentationPage() {
           }}
         >
           <div
+            className="mario-card"
             style={{
               background: 'white',
-              borderRadius: '24px',
               padding: '32px',
               width: '100%',
               maxWidth: '400px',
@@ -955,51 +883,33 @@ export default function PresentationPage() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '20px' }}>
               <button
+                className="mario-btn mario-btn-yellow w-full"
                 style={{
-                  padding: '16px',
-                  borderRadius: '16px',
-                  border: '3px solid #ddd',
-                  background: '#f9f9f9',
-                  fontWeight: 800,
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
+                  justifyContent: 'flex-start',
                 }}
               >
                 💳 GCash — Instant Payment
               </button>
               <button
+                className="mario-btn mario-btn-green w-full"
                 style={{
-                  padding: '16px',
-                  borderRadius: '16px',
-                  border: '3px solid #ddd',
-                  background: '#f9f9f9',
-                  fontWeight: 800,
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
+                  justifyContent: 'flex-start',
                 }}
               >
                 🪙 Cash on Delivery
               </button>
               <button
+                className="mario-btn mario-btn-blue w-full"
                 style={{
-                  padding: '16px',
-                  borderRadius: '16px',
-                  border: '3px solid #ddd',
-                  background: '#f9f9f9',
-                  fontWeight: 800,
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
+                  justifyContent: 'flex-start',
                 }}
               >
                 🍄 Coins Only
               </button>
             </div>
             <button
-              className="pill-btn"
-              style={{ width: '100%', marginTop: '20px', textAlign: 'center' }}
+              className="pill-btn w-full mt-6"
+              style={{ textAlign: 'center', justifyContent: 'center' }}
               onClick={() => alert('Checkout demo!')}
             >
               Confirm & Pay &gt;
@@ -1083,6 +993,7 @@ export default function PresentationPage() {
               }}
             >
               <div
+                className="mario-card"
                 style={{
                   background: '#2a2a2a',
                   border: '3px solid #333',
@@ -1109,6 +1020,7 @@ export default function PresentationPage() {
                 </div>
               </div>
               <div
+                className="mario-card"
                 style={{
                   background: '#2a2a2a',
                   border: '3px solid #333',
@@ -1135,6 +1047,7 @@ export default function PresentationPage() {
                 </div>
               </div>
               <div
+                className="mario-card"
                 style={{
                   background: '#2a2a2a',
                   border: '3px solid #333',
@@ -1161,6 +1074,7 @@ export default function PresentationPage() {
                 </div>
               </div>
               <div
+                className="mario-card"
                 style={{
                   background: '#2a2a2a',
                   border: '3px solid #333',
@@ -1196,6 +1110,7 @@ export default function PresentationPage() {
               }}
             >
               <div
+                className="mario-card"
                 style={{
                   background: 'linear-gradient(135deg, #2a2a2a, #1a1a1a)',
                   border: '3px solid #333',
@@ -1218,6 +1133,7 @@ export default function PresentationPage() {
                 </button>
               </div>
               <div
+                className="mario-card"
                 style={{
                   background: 'linear-gradient(135deg, #2a2a2a, #1a1a1a)',
                   border: '3px solid #333',
@@ -1240,6 +1156,7 @@ export default function PresentationPage() {
                 </button>
               </div>
               <div
+                className="mario-card"
                 style={{
                   background: 'linear-gradient(135deg, #2a2a2a, #1a1a1a)',
                   border: '3px solid #333',

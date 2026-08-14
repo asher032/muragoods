@@ -1,102 +1,258 @@
 @import "tailwindcss";
 
+@theme {
+  --font-mario: 'Segoe UI', 'Arial Rounded MT Bold', 'Arial', sans-serif;
+}
+
 :root {
-  --background: #fff;
-  --foreground: #333;
-  --mario-red: #ff8a8a;
-  --mario-blue: #a3d8ff;
-  --mario-yellow: #fff2a3;
-  --mario-green: #a3ffa3;
+  --nintendo-red: #E60012;
+  --nintendo-red-dark: #c2000e;
+  --charcoal: #1a1a1a;
+  --charcoal-light: #2a2a2a;
+  --charcoal-mid: #333333;
+  --gold: #FFD700;
+  --gold-dark: #b39700;
+  --luigi-green: #27ae60;
+  --luigi-green-dark: #1e8449;
+  --peach-pink: #ffb7b2;
+  --bowser-purple: #6c3483;
+  --bowser-red: #922b21;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: #f0f0f0;
-  color: var(--foreground);
-  font-family: 'Comic Sans MS', 'Arial Black', sans-serif;
+  background: var(--charcoal);
+  color: #ffffff;
+  font-family: 'Segoe UI', 'Arial Rounded MT Bold', 'Arial', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes coinFloat {
+  0%, 100% { transform: translateY(0) rotate(-5deg); }
+  50% { transform: translateY(-20px) rotate(5deg); }
+}
+
+@keyframes wave {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(10deg); }
+  75% { transform: rotate(-10deg); }
+}
+
+@keyframes pulseBadge {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.coin-float {
+  animation: coinFloat 1.5s infinite ease-in-out;
+}
+
+.wave-anim {
+  animation: wave 2s ease-in-out infinite;
+}
+
+.pulse-badge {
+  animation: pulseBadge 2s ease-in-out infinite;
+}
+
+.slide-in {
+  animation: slideIn 0.4s ease-out forwards;
 }
 
 .mario-card {
-  background: white;
-  border: 2px solid #ccc;
-  border-radius: 15px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+  background: #ffffff;
+  border: 4px solid #000000;
+  border-radius: 16px;
+  box-shadow: 8px 8px 0px 0px rgba(0, 0, 0, 0.3);
   position: relative;
-  transition: all 0.2s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .mario-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+  transform: translateY(-4px);
+  box-shadow: 12px 12px 0px 0px rgba(0, 0, 0, 0.4);
 }
 
 .mario-btn {
-  background: var(--mario-red);
-  color: white;
-  border: none;
-  border-radius: 10px;
-  padding: 10px 20px;
-  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--nintendo-red);
+  color: #ffffff;
+  border: 3px solid #000000;
+  border-radius: 50px;
+  padding: 10px 24px;
+  font-weight: 900;
   cursor: pointer;
   text-transform: uppercase;
   font-size: 14px;
-  box-shadow: 0 4px 0px 0px #e07070;
+  box-shadow: 0 4px 0px 0px var(--nintendo-red-dark);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  text-decoration: none;
+  line-height: 1.2;
 }
 
 .mario-btn:hover {
-  background: #ff7575;
-  transform: translateY(1px);
-  box-shadow: 0 3px 0px 0px #e07070;
+  transform: translateY(2px);
+  box-shadow: 0 2px 0px 0px var(--nintendo-red-dark);
 }
 
 .mario-btn:active {
   transform: translateY(4px);
-  box-shadow: 0 0px 0px 0px #e07070;
+  box-shadow: 0 0px 0px 0px var(--nintendo-red-dark);
 }
 
 .mario-btn-yellow {
-  background: #fbd000;
-  color: #000;
+  background: var(--gold);
+  color: #000000;
+  box-shadow: 0 4px 0px 0px var(--gold-dark);
+}
+
+.mario-btn-yellow:hover {
+  box-shadow: 0 2px 0px 0px var(--gold-dark);
 }
 
 .mario-btn-green {
-  background: #43b02a;
+  background: var(--luigi-green);
+  box-shadow: 0 4px 0px 0px var(--luigi-green-dark);
+}
+
+.mario-btn-green:hover {
+  box-shadow: 0 2px 0px 0px var(--luigi-green-dark);
 }
 
 .mario-btn-blue {
   background: #008cd2;
+  box-shadow: 0 4px 0px 0px #006f9e;
 }
 
-/* Animations */
-.coin-float {
-  animation: float 1.5s infinite ease-in-out;
+.mario-btn-blue:hover {
+  box-shadow: 0 2px 0px 0px #006f9e;
 }
 
-@keyframes float {
-  0% { transform: translateY(0); }
-  50% { transform: translateY(-15px); }
-  100% { transform: translateY(0); }
+.mario-btn-black {
+  background: #000000;
+  color: var(--gold);
+  box-shadow: 0 4px 0px 0px #333333;
 }
 
-.mario-shake:hover {
-  animation: shake 0.5s infinite;
+.mario-btn-black:hover {
+  box-shadow: 0 2px 0px 0px #333333;
 }
 
-@keyframes shake {
-  0% { transform: rotate(0deg); }
-  25% { transform: rotate(5deg); }
-  50% { transform: rotate(0deg); }
-  75% { transform: rotate(-5deg); }
-  100% { transform: rotate(0deg); }
+.mario-input {
+  width: 100%;
+  border-radius: 12px;
+  border: 4px solid #000000;
+  padding: 14px 18px;
+  font-weight: 800;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
-.diagonal-stripes {
-  background: repeating-linear-gradient(
+.mario-input:focus {
+  border-color: var(--nintendo-red);
+}
+
+.pill-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--gold);
+  color: #000000;
+  padding: 8px 20px;
+  border-radius: 50px;
+  font-weight: 900;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  border: 3px solid #000000;
+  box-shadow: 0 3px 0px 0px var(--gold-dark);
+}
+
+.gold-ring {
+  border: 5px solid var(--gold);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.2), 0 10px 0 rgba(0,0,0,0.3);
+}
+
+.charcoal-pattern {
+  background-color: var(--charcoal);
+  background-image: repeating-linear-gradient(
     45deg,
-    #ff8a8a,
-    #ff8a8a 10px,
-    #ffb3b3 10px,
-    #ffb3b3 20px
+    transparent,
+    transparent 10px,
+    rgba(255, 255, 255, 0.03) 10px,
+    rgba(255, 255, 255, 0.03) 20px
   );
+}
+
+.wavy-divider {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  line-height: 0;
+}
+
+.wavy-divider svg {
+  position: relative;
+  display: block;
+  width: calc(100% + 1.3px);
+  height: 60px;
+}
+
+@media (max-width: 768px) {
+  .wavy-divider svg {
+    height: 40px;
+  }
+}
+
+.angled-divider {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.angled-divider::after {
+  content: '';
+  position: absolute;
+  bottom: -40px;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: inherit;
+  transform: skewY(-2deg);
+}
+
+.angled-divider-top {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.angled-divider-top::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: inherit;
+  transform: skewY(2deg);
 }

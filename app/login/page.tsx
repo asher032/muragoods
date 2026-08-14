@@ -1,5 +1,6 @@
 'use client';
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -52,21 +53,33 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-rose-300 to-rose-400 flex items-center justify-center px-4 py-8 font-serif">
-      <div className="w-full max-w-md">
-        <div className="border-[10px] border-dotted border-pink-400 bg-white p-8 shadow-none">
-          <div className="bg-yellow-200 p-2 mb-4 border-2 border-black rotate-3">
-            <h1 className="text-2xl font-bold text-rose-500 text-center uppercase italic">Log in now!!!</h1>
+    <main className="min-h-screen flex items-center justify-center font-serif">
+      <div className="flex w-full max-w-4xl rounded-2xl border-4 border-black overflow-hidden shadow-2xl">
+        <div className="charcoal-pattern hidden md:flex md:w-1/2 bg-rose-400 flex-col items-center justify-center p-8 text-center relative">
+          <div className="relative z-10">
+            <div className="relative w-48 h-48 mx-auto mb-6">
+              <Image src="/images/mario-waving.png" alt="Mario Waving" fill className="object-contain wave-anim" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            </div>
+            <h2 className="text-3xl font-black text-white uppercase tracking-wider" style={{ textShadow: '4px 4px 0 rgba(0,0,0,0.5)' }}>
+              Mario
+            </h2>
+            <p className="mt-2 text-sm font-bold text-yellow-300 uppercase tracking-widest">Welcome back, Player 1</p>
+          </div>
+        </div>
+
+        <div className="w-full md:w-1/2 bg-white p-8 md:p-12">
+          <div className="bg-yellow-200 p-2 mb-6 border-2 border-black rotate-1 inline-block">
+            <h1 className="text-2xl font-black text-rose-500 text-center uppercase tracking-wider">Player 1, Press Start</h1>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleLogin} className="space-y-6">
             <label className="block text-sm font-black text-black uppercase">
               Email
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-2 w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none transition focus:border-rose-400 focus:bg-white"
+                className="mario-input mt-2 bg-yellow-50 focus:bg-white"
                 placeholder="your@email.com"
               />
             </label>
@@ -77,7 +90,7 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-2 w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none transition focus:border-rose-400 focus:bg-white"
+                className="mario-input mt-2 bg-yellow-50 focus:bg-white"
                 placeholder="••••••••"
               />
             </label>
@@ -90,7 +103,7 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              className="mario-btn w-full bg-black text-yellow-300 hover:bg-slate-900 uppercase font-black text-lg tracking-widest mt-6"
+              className="mario-btn mario-btn-black w-full uppercase font-black text-lg tracking-widest mt-6"
             >
               🎮 SIGN IN 🎮
             </button>

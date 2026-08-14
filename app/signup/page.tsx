@@ -1,5 +1,6 @@
 'use client';
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -57,22 +58,31 @@ export default function SignupPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-rose-300 to-rose-400 flex items-center justify-center px-4 py-8">
+    <main className="min-h-screen flex items-center justify-center px-4 py-8" style={{ background: 'linear-gradient(135deg, var(--luigi-green), var(--luigi-green-dark))' }}>
       <div className="w-full max-w-md">
-        <div className="rounded-lg border-4 border-black bg-white p-8 shadow-2xl">
-          <div className="diagonal-stripes rounded-lg p-6 mb-8 text-center relative">
-            <div className="relative flex flex-col items-center gap-4">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-yellow-300 bg-rose-400 text-5xl font-black text-white shadow-lg">
-                M
-              </div>
-              <div>
-                <p className="text-sm font-black uppercase tracking-widest text-yellow-300">Muragoods</p>
-                <p className="text-xs font-bold uppercase tracking-widest text-yellow-100">Mario&apos;s Food</p>
-              </div>
+        <div className="wavy-divider absolute left-0 right-0 top-0">
+          <svg viewBox="0 0 1200 60" preserveAspectRatio="none" className="w-full">
+            <path d="M0,0 L1200,0 L1200,30 C1000,60 800,0 600,30 C400,60 200,0 0,30 Z" fill="var(--luigi-green)"/>
+          </svg>
+        </div>
+        <div className="wavy-divider absolute left-0 right-0 bottom-0">
+          <svg viewBox="0 0 1200 60" preserveAspectRatio="none" className="w-full">
+            <path d="M0,30 C200,0 400,60 600,30 C800,0 1000,60 1200,30 L1200,60 L0,60 Z" fill="var(--luigi-green)"/>
+          </svg>
+        </div>
+
+        <div className="relative z-10 rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
+          <div className="flex flex-col items-center gap-4 mb-8">
+            <div className="relative w-24 h-24 rounded-full border-4 border-yellow-300 bg-rose-400 flex items-center justify-center shadow-lg overflow-hidden">
+              <Image src="/images/luigi-badge.png" alt="Luigi Badge" fill className="object-contain p-2" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-black uppercase tracking-widest text-green-600">Muragoods</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-600">Luigi&apos;s Food</p>
             </div>
           </div>
 
-          <h1 className="text-4xl font-black text-black mb-2 text-center uppercase">🎮 JOIN MURAGOODS 🎮</h1>
+          <h1 className="text-4xl font-black text-black mb-2 text-center uppercase">Join the Crew (New Game)</h1>
           <p className="text-sm font-bold text-slate-700 mb-6 text-center">Create your account</p>
 
           <form onSubmit={handleSignup} className="space-y-4">
@@ -82,7 +92,7 @@ export default function SignupPage() {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-2 w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none transition focus:border-rose-400 focus:bg-white"
+                className="mario-input mt-2 bg-yellow-50 focus:bg-white"
                 placeholder="Your name"
               />
             </label>
@@ -93,7 +103,7 @@ export default function SignupPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-2 w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none transition focus:border-rose-400 focus:bg-white"
+                className="mario-input mt-2 bg-yellow-50 focus:bg-white"
                 placeholder="your@email.com"
               />
             </label>
@@ -104,7 +114,7 @@ export default function SignupPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-2 w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none transition focus:border-rose-400 focus:bg-white"
+                className="mario-input mt-2 bg-yellow-50 focus:bg-white"
                 placeholder="••••••••"
               />
             </label>
@@ -115,7 +125,7 @@ export default function SignupPage() {
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mt-2 w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none transition focus:border-rose-400 focus:bg-white"
+                className="mario-input mt-2 bg-yellow-50 focus:bg-white"
                 placeholder="••••••••"
               />
             </label>
@@ -129,7 +139,7 @@ export default function SignupPage() {
             <button
               type="submit"
               disabled={loading}
-              className="mario-btn w-full bg-yellow-400 text-black hover:bg-yellow-300 uppercase font-black text-lg tracking-widest mt-6 border-black disabled:opacity-50"
+              className="mario-btn mario-btn-green w-full uppercase font-black text-lg tracking-widest mt-6 border-black disabled:opacity-50"
             >
               {loading ? "⏳ CREATING..." : "✨ CREATE ACCOUNT ✨"}
             </button>

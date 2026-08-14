@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { products, deliveryZones, type Product } from "@/app/lib/muragoods-data";
 import { useMemo, useState, useEffect } from "react";
@@ -398,30 +399,32 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-rose-300 to-rose-400">
+      <nav className="sticky top-0 z-50 bg-white border-b-4 border-black shadow-[0_4px_0px_0px_#000]">
+        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-8 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-3">
+            <div className="relative h-12 w-12 border-4 border-black bg-rose-400 flex items-center justify-center shadow-[4px_4px_0px_0px_#000]">
+              <Image src="/images/muragoods.png" alt="Muragoods" fill className="object-contain p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            </div>
+            <div>
+              <p className="text-sm font-black uppercase tracking-widest text-rose-500">Muragoods</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-black">World 1-1 Food</p>
+            </div>
+          </Link>
+
+          <div className="hidden md:flex items-center gap-3 text-xs font-black uppercase">
+            <Link href="/presentation" className="mario-btn bg-purple-600 text-white hover:bg-purple-500">🎮 Presentation</Link>
+            <a href="#menu" className="mario-btn mario-btn-blue">Menu</a>
+            <a href="#shipping" className="mario-btn mario-btn-green">Map</a>
+            <a href="#checkout" className="mario-btn">Cart</a>
+            <Link href="/account/orders" className="mario-btn mario-btn-yellow">Orders</Link>
+            <button onClick={() => { localStorage.removeItem('user'); window.location.reload(); }} className="mario-btn bg-black text-white">Logout</button>
+          </div>
+        </div>
+      </nav>
+
       <section className="relative px-4 pb-12 pt-7 sm:px-8">
         <div className="mx-auto max-w-7xl">
-          <nav className="mb-8 flex flex-col gap-4 bg-white border-4 border-black p-4 shadow-[8px_8px_0px_0px_#000] md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-14 w-14 items-center justify-center border-4 border-black bg-rose-400 text-3xl font-black text-white shadow-[4px_4px_0px_0px_#000]">
-                M
-              </div>
-              <div>
-                <p className="text-sm font-black uppercase tracking-widest text-rose-500">Muragoods</p>
-                <p className="text-xs font-bold uppercase tracking-widest text-black">World 1-1 Food</p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3 text-xs font-black uppercase">
-              <Link href="/presentation" className="mario-btn bg-purple-600 text-white hover:bg-purple-500">🎮 Presentation</Link>
-              <a href="#menu" className="mario-btn mario-btn-blue">Menu</a>
-              <a href="#shipping" className="mario-btn mario-btn-green">Map</a>
-              <a href="#checkout" className="mario-btn">Cart</a>
-              <Link href="/account/orders" className="mario-btn mario-btn-yellow">Orders</Link>
-              <button onClick={() => { localStorage.removeItem('user'); window.location.reload(); }} className="mario-btn bg-black text-white">Logout</button>
-            </div>
-          </nav>
-
-          <div className="diagonal-stripes relative border-4 border-black p-8 shadow-[12px_12px_0px_0px_rgba(0,0,0,0.5)] overflow-hidden">
+          <div className="angled-divider charcoal-pattern relative border-4 border-black p-8 shadow-[12px_12px_0px_0px_rgba(0,0,0,0.5)] overflow-hidden">
             <div className="relative grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
               <div className="text-white">
                 <div className="mb-5 inline-flex border-4 border-black bg-yellow-400 px-6 py-3 text-sm font-black uppercase tracking-wider text-black shadow-[4px_4px_0px_0px_#000]">
@@ -444,13 +447,14 @@ export default function Home() {
               </div>
 
               <div className="flex min-h-[420px] items-center justify-center">
-                <div className="mario-card w-full max-w-sm overflow-hidden">
+                <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border-4 border-yellow-400 bg-white shadow-[8px_8px_0px_0px_#000]">
                   <div className="bg-rose-400 p-4 border-b-4 border-black flex justify-between items-center">
                     <span className="text-white font-black">HIGH SCORE: ₱55</span>
                     <span className="animate-pulse text-yellow-300">✨ NEW!</span>
                   </div>
-                  <div className="bg-white p-12 flex justify-center items-center">
-                    <div className="text-8xl coin-float">🍙</div>
+                  <div className="relative aspect-square w-full bg-white flex items-center justify-center">
+                    <Image src="/images/mario-hero.png" alt="Mario Hero" fill className="object-contain p-4" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    <div className="absolute top-4 right-4 w-16 h-16 bg-yellow-400 border-4 border-black rounded-full flex items-center justify-center text-3xl coin-float z-10">🪙</div>
                   </div>
                   <div className="bg-black p-4 text-center">
                     <h3 className="text-2xl font-black text-white uppercase">SUPER MUSUBI</h3>
@@ -462,7 +466,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="menu" className="px-4 py-12 sm:px-8">
+      <section id="menu" className="px-4 py-12 sm:px-8 bg-gradient-to-b from-rose-300 to-rose-400">
         <div className="mx-auto max-w-7xl">
           <div className="mb-12 text-center">
             <h2 className="text-6xl font-black text-white uppercase tracking-tighter [text-shadow:6px_6px_0px_#000]">SELECT YOUR POWER-UP</h2>
@@ -471,7 +475,7 @@ export default function Home() {
 
           <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-4">
             {products.map((product) => (
-              <div key={product.id} className="mario-card group">
+              <div key={product.id} className="gold-ring group">
                 <div className="h-48 bg-blue-400 p-6 flex items-center justify-center text-8xl border-b-4 border-black group-hover:bg-blue-300 transition-colors">
                   <span className="coin-float">
                     {product.id === "musubi" ? "🍙" : product.id === "churros" ? "🌭" : product.id === "coffee-jelly" ? "☕" : "🍪"}
@@ -499,8 +503,13 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="shipping" className="diagonal-stripes px-4 py-12 text-white sm:px-8">
+      <section id="shipping" className="px-4 py-12 text-white sm:px-8 bg-gradient-to-b from-rose-300 to-rose-400">
         <div className="mx-auto max-w-7xl">
+          <div className="wavy-divider -mt-12 mb-8">
+            <svg viewBox="0 0 1200 60" preserveAspectRatio="none" className="w-full">
+              <path d="M0,30 C200,60 400,0 600,30 C800,60 1000,0 1200,30 L1200,60 L0,60 Z" fill="var(--charcoal)"/>
+            </svg>
+          </div>
           <div className="mb-8">
             <p className="text-sm font-black uppercase tracking-widest text-yellow-300">📍 Delivery Rules</p>
             <h2 className="mt-3 text-5xl font-black text-yellow-300 drop-shadow-lg">CHOOSE YOUR ZONE</h2>
@@ -550,7 +559,12 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-8 rounded-lg border-4 border-black bg-white p-2 shadow-2xl">
+          <div className="mt-8 wavy-divider">
+            <svg viewBox="0 0 1200 60" preserveAspectRatio="none" className="w-full">
+              <path d="M0,0 L1200,0 L1200,30 C1000,60 800,0 600,30 C400,60 200,0 0,30 Z" fill="var(--charcoal)"/>
+            </svg>
+          </div>
+          <div className="rounded-lg border-4 border-black bg-white p-2 shadow-2xl">
             <iframe
               title="Muragoods Delivery Map"
               src="https://www.openstreetmap.org/export/embed.html?bbox=123.68%2C13.12%2C123.78%2C13.17&layer=mapnik&marker=13.1370%2C123.7340"
@@ -558,6 +572,11 @@ export default function Home() {
               allowFullScreen
               loading="lazy"
             />
+          </div>
+          <div className="wavy-divider mt-4">
+            <svg viewBox="0 0 1200 60" preserveAspectRatio="none" className="w-full">
+              <path d="M0,30 C200,0 400,60 600,30 C800,0 1000,60 1200,30 L1200,60 L0,60 Z" fill="var(--charcoal)"/>
+            </svg>
           </div>
         </div>
       </section>
