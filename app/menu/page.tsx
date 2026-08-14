@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { products, type Product, type CartItem, dwclOnlyProducts } from '@/app/lib/muragoods-data';
+import { products, type Product, type CartItem, dwclOnlyProducts, deliveryZones, type ZoneKey } from '@/app/lib/muragoods-data';
 import { useRouter } from 'next/navigation';
 
 const categories = ["All", "Musubi & Churros", "Coffee Jelly & Cookies"];
@@ -10,6 +10,7 @@ const categories = ["All", "Musubi & Churros", "Coffee Jelly & Cookies"];
 export default function MenuPage() {
   const router = useRouter();
   const [activeCategory, setActiveCategory] = useState("All");
+  const [location, setLocation] = useState<ZoneKey>("DWCL");
   const [cart, setCart] = useState<Record<string, { quantity: number; variantId?: string }>>({});
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedVariantId, setSelectedVariantId] = useState<string>("");
@@ -48,7 +49,7 @@ export default function MenuPage() {
       });
   }, [cart]);
 
-  const isDwcl = true;
+  const isDwcl = location === "DWCL";
 
   const addToCart = (product: Product, variantId?: string) => {
     const key = product.id;
@@ -149,6 +150,22 @@ export default function MenuPage() {
                 {cat}
               </button>
             ))}
+          </div>
+
+          <div className="mb-8">
+            <label className="block text-sm font-black text-white uppercase mb-2">Select Delivery / Pickup Zone</label>
+            <select
+              value={location}
+              onChange={(e) => setLocation(e.target.value as ZoneKey)}
+              className="w-full max-w-md rounded-lg border-4 border-black bg-white px-4 py-3 font-black text-black outline-none focus:border-yellow-300"
+            >
+              {deliveryZones.map(zone => (
+                <option key={zone.code} value={zone.code}>{zone.label}</option>
+              ))}
+            </select>
+            {!isDwcl && (
+              <p className="mt-2 text-sm font-black text-yellow-300">Notice: Coffee Jelly and Cookies are available exclusively for DWCL pickup.</p>
+            )}
           </div>
 
           <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-4">

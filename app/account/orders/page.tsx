@@ -51,6 +51,12 @@ export default function AccountOrdersPage() {
   };
 
   const handleDeleteOrder = async (orderId: string) => {
+    const order = orders.find(o => (o._id || o.id) === orderId);
+    if (!order || order.status !== "Pending Payment") {
+      alert("You can only cancel orders that are still pending.");
+      return;
+    }
+
     if (!confirm("Are you sure you want to cancel this order?")) return;
     try {
       const res = await fetch(`/api/orders?id=${orderId}`, { method: "DELETE" });
@@ -67,14 +73,14 @@ export default function AccountOrdersPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-gradient-to-b from-rose-300 to-rose-400 flex items-center justify-center">
+      <main className="min-h-screen flex items-center justify-center mario-pattern">
         <div className="text-white text-2xl font-black animate-bounce uppercase">Loading Orders...</div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-rose-300 to-rose-400 px-4 py-8 text-black sm:px-8">
+    <main className="min-h-screen mario-pattern px-4 py-8 text-black sm:px-8">
       <div className="mx-auto max-w-6xl">
         <header className="mb-8 flex flex-col gap-4 rounded-lg border-4 border-black bg-white p-6 shadow-2xl sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -142,20 +148,26 @@ export default function AccountOrdersPage() {
                     </h2>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="rounded-lg border-2 border-black bg-yellow-300 px-4 py-2 text-xs font-black uppercase tracking-widest text-black pulse-badge">
-                      {order.zone}
-                    </span>
-                    <span className="rounded-lg border-2 border-black bg-black px-4 py-2 text-xs font-black uppercase tracking-widest text-yellow-300">
-                      {order.payment}
-                    </span>
-                    <button
-                      onClick={() => handleDeleteOrder(order._id || order.id)}
-                      className="rounded bg-rose-400 px-3 py-2 text-xs font-black text-white hover:bg-rose-500"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="rounded-lg border-2 border-black bg-yellow-300 px-4 py-2 text-xs font-black uppercase tracking-widest text-black pulse-badge">
+                        {order.zone}
+                      </span>
+                      <span className="rounded-lg border-2 border-black bg-black px-4 py-2 text-xs font-black uppercase tracking-widest text-yellow-300">
+                        {order.payment}
+                      </span>
+                      {order.status === "Pending Payment" ? (
+                        <button
+                          onClick={() => handleDeleteOrder(order._id || order.id)}
+                          className="rounded bg-rose-400 px-3 py-2 text-xs font-black text-white hover:bg-rose-500"
+                        >
+                          Cancel
+                        </button>
+                      ) : (
+                        <span className="rounded bg-gray-300 px-3 py-2 text-xs font-black text-gray-500 border-2 border-black">
+                          Locked
+                        </span>
+                      )}
+                    </div>
                 </div>
 
                 <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_0.8fr]">
