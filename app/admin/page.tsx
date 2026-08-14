@@ -248,6 +248,7 @@ export default function AdminPage() {
                     <th className="px-4 py-3 font-black uppercase tracking-wider">Order</th>
                     <th className="px-4 py-3 font-black uppercase tracking-wider">Customer</th>
                     <th className="px-4 py-3 font-black uppercase tracking-wider">Zone</th>
+                    <th className="px-4 py-3 font-black uppercase tracking-wider">Delivery Pin</th>
                     <th className="px-4 py-3 font-black uppercase tracking-wider">Details</th>
                     <th className="px-4 py-3 font-black uppercase tracking-wider">Status</th>
                     <th className="px-4 py-3 font-black uppercase tracking-wider">Action</th>
@@ -263,6 +264,9 @@ export default function AdminPage() {
                         <div className="text-xs font-black text-blue-600">{order.userId}</div>
                       </td>
                       <td className="px-4 py-3 font-bold text-black">{order.zone}</td>
+                      <td className="px-4 py-3">
+                        <div className="text-xs font-bold text-black">📍 {order.latitude}, {order.longitude}</div>
+                      </td>
                       <td className="px-4 py-3">
                         <div className="text-xs font-bold text-black">₱{order.total}</div>
                         <div className="text-[10px] text-slate-500">{order.items.join(', ')}</div>

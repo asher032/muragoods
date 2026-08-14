@@ -61,7 +61,7 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
     }
 
     if (!mapAddress) {
-      setError("❌ Please enter your delivery address");
+      setError("❌ Please select your delivery location on the map");
       return;
     }
 
@@ -231,22 +231,24 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
               </div>
 
               <div>
-                <label className="block text-sm font-black text-black uppercase mb-2">📍 Delivery Address</label>
-                <LocationPicker
-                  onLocationSelect={(lat, lng, address) => {
-                    setMapAddress(address);
-                    setLatitude(String(lat));
-                    setLongitude(String(lng));
-                  }}
-                />
+                <label className="block text-sm font-black text-black uppercase mb-2">📍 Delivery Location</label>
+                <div className="rounded-lg border-4 border-black overflow-hidden">
+                  <LocationPicker
+                    onLocationSelect={(lat, lng, address) => {
+                      setMapAddress(address);
+                      setLatitude(String(lat));
+                      setLongitude(String(lng));
+                    }}
+                  />
+                </div>
                 <input
                   type="text"
                   value={mapAddress}
                   onChange={(e) => setMapAddress(e.target.value)}
-                  placeholder="Enter your delivery address"
+                  placeholder="Or enter address manually"
                   className="w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none focus:border-rose-400 mt-3"
                 />
-                <p className="text-xs text-gray-600 mt-2">Click on the map to set your delivery location</p>
+                <p className="text-xs text-gray-600 mt-2">Click on the map to pin your delivery location</p>
               </div>
 
               <div>
@@ -313,12 +315,12 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
         </div>
       </div>
 
-      <aside className="mario-card">
-        <div className="bg-blue-600 p-6 border-b-4 border-black">
-          <h3 className="text-2xl font-black text-white uppercase tracking-widest">💰 TOTAL SCORE</h3>
+      <aside className="checkout-summary">
+        <div className="bg-black p-6 border-b-4 border-black">
+          <h3 className="text-2xl font-black text-yellow-300 uppercase tracking-widest">💰 TOTAL SCORE</h3>
         </div>
 
-        <div className="bg-white p-6 flex flex-col h-full">
+        <div className="p-6 flex flex-col h-full">
           <div className="space-y-4 text-base font-black text-black border-b-4 border-black pb-4 mb-4">
             <div className="flex justify-between"><span>Subtotal:</span><span className="text-rose-500">₱{subtotal}</span></div>
             <div className="flex justify-between"><span>Shipping:</span><span className="text-rose-500">₱{shippingFee}</span></div>
@@ -328,7 +330,7 @@ function CheckoutSection({ cartItems, restrictedItems, location, subtotal, shipp
           <div className="space-y-2 text-xs font-bold text-black mb-4">
             <p>📅 Delivery: {deliveryDate || "Not selected"}</p>
             <p>🚚 Service: {deliveryService}</p>
-            <p>📍 Location Saved: {mapAddress ? "✅" : "❌"}</p>
+            <p>📍 Location: {mapAddress ? "✅ Pinned" : "❌ Not selected"}</p>
             <p>💳 Payment: {paymentMethod}</p>
           </div>
 
@@ -410,7 +412,7 @@ export default function Home() {
   );
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-rose-300 to-rose-400">
+    <main className="min-h-screen" style={{ background: 'linear-gradient(180deg, #E60012 0%, #c2000e 100%)' }}>
       <nav className="sticky top-0 z-50 bg-white border-b-4 border-black shadow-[0_4px_0px_0px_#000]">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-8 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
@@ -424,9 +426,8 @@ export default function Home() {
           </Link>
 
           <div className="hidden md:flex items-center gap-3 text-xs font-black uppercase">
-
             <a href="#menu" className="mario-btn mario-btn-blue">Menu</a>
-            <a href="#shipping" className="mario-btn mario-btn-green">Map</a>
+            <a href="#map" className="mario-btn mario-btn-green">Map</a>
             <a href="#checkout" className="mario-btn">Cart</a>
             <Link href="/account/orders" className="mario-btn mario-btn-yellow">Orders</Link>
             <button onClick={() => { localStorage.removeItem('user'); window.location.reload(); }} className="mario-btn bg-black text-white">Logout</button>
@@ -440,17 +441,20 @@ export default function Home() {
             <div className="relative grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
               <div className="text-white">
                 <div className="mb-5 inline-flex border-4 border-black bg-yellow-400 px-6 py-3 text-sm font-black uppercase tracking-wider text-black shadow-[4px_4px_0px_0px_#000]">
-                  ⭐ POWER UP YOUR HUNGER ⭐
+                  ⭐ EARN 2X COINS ON TODAY&apos;S ORDERS! ⭐
                 </div>
-                <h1 className="max-w-xl text-6xl font-black leading-tight tracking-tighter text-white sm:text-7xl md:text-8xl [text-shadow:8px_8px_0px_#000]">
-                  MURA<br/>GOODS
+                <h1 className="max-w-xl text-6xl font-black leading-tight tracking-tighter text-white sm:text-7xl md:text-8xl" style={{ textShadow: '8px 8px 0px #000' }}>
+                  WELCOME TO THE<br/>MUSHROOM KINGDOM<br/>EXPRESS!
                 </h1>
-                <p className="mt-5 max-w-xl text-xl font-black text-yellow-300 [text-shadow:4px_4px_0px_#000]">
+                <p className="mt-5 max-w-xl text-xl font-black text-yellow-300" style={{ textShadow: '4px 4px 0px #000' }}>
                   🍙 MUSUBI • 🌭 CHURROS • ☕ COFFEE JELLY
+                </p>
+                <p className="mt-2 max-w-xl text-lg font-black text-white" style={{ textShadow: '2px 2px 0px #000' }}>
+                  Fuel your adventure with iconic treats and power-ups delivered straight to your door!
                 </p>
                 <div className="mt-8 flex flex-wrap gap-4">
                   <a href="#menu" className="mario-btn mario-btn-yellow text-lg">
-                    PLAY NOW 🎮
+                    ORDER NOW &gt;
                   </a>
                   <a href="#checkout" className="mario-btn mario-btn-blue text-lg">
                     VIEW CART 🛒
@@ -459,7 +463,7 @@ export default function Home() {
               </div>
 
               <div className="flex min-h-[420px] items-center justify-center">
-                <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border-4 border-yellow-400 bg-white shadow-[8px_8px_0px_0px_#000]">
+                <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border-4 border-yellow-400 bg-white shadow-[8px_8px_0px_0px_#000] hero-3d-cutout">
                   <div className="bg-rose-400 p-4 border-b-4 border-black flex justify-between items-center">
                     <span className="text-white font-black">HIGH SCORE: ₱55</span>
                     <span className="animate-pulse text-yellow-300">✨ NEW!</span>
@@ -478,20 +482,22 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="menu" className="px-4 py-12 sm:px-8 bg-gradient-to-b from-rose-300 to-rose-400">
+      <section id="menu" className="px-4 py-12 sm:px-8" style={{ background: 'linear-gradient(180deg, #E60012 0%, #c2000e 100%)' }}>
         <div className="mx-auto max-w-7xl">
           <div className="mb-12 text-center">
-            <h2 className="text-6xl font-black text-white uppercase tracking-tighter [text-shadow:6px_6px_0px_#000]">SELECT YOUR POWER-UP</h2>
+            <h2 className="text-6xl font-black text-white uppercase tracking-tighter" style={{ textShadow: '6px 6px 0px #000' }}>Choose Your Power-Up Menu</h2>
+            <p className="mt-4 text-lg font-black text-yellow-300" style={{ textShadow: '2px 2px 0px #000' }}>Pick your favorites from our legendary selection of meals, drinks, and side quests.</p>
             <div className="h-2 w-48 bg-yellow-400 mx-auto mt-4 border-2 border-black"></div>
           </div>
 
           <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-4">
             {products.map((product) => (
-              <div key={product.id} className="gold-ring group">
-                <div className="h-48 bg-blue-400 p-6 flex items-center justify-center text-8xl border-b-4 border-black group-hover:bg-blue-300 transition-colors">
-                  <span className="coin-float">
+              <div key={product.id} className="menu-card group">
+                <div className="h-48 bg-blue-400 p-6 flex items-center justify-center text-8xl border-b-4 border-black group-hover:bg-blue-300 transition-colors relative overflow-hidden">
+                  <span className="coin-float relative z-10">
                     {product.id === "musubi" ? "🍙" : product.id === "churros" ? "🌭" : product.id === "coffee-jelly" ? "☕" : "🍪"}
                   </span>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
                 </div>
 
                 <div className="p-6 bg-white">
@@ -499,7 +505,7 @@ export default function Home() {
                   <p className="mt-2 text-sm font-bold text-slate-700 h-12 overflow-hidden">{product.description}</p>
 
                   <div className="mt-6 flex items-center justify-between">
-                    <span className="text-3xl font-black text-rose-500 [text-shadow:2px_2px_0px_#000]">₱{product.price}</span>
+                    <span className="text-3xl font-black text-rose-500" style={{ textShadow: '2px 2px 0px #000' }}>₱{product.price}</span>
                     <button
                       type="button"
                       onClick={() => addToCart(product)}
@@ -515,9 +521,9 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="shipping" className="px-4 py-12 text-white sm:px-8 bg-gradient-to-b from-rose-300 to-rose-400">
+      <section id="map" className="px-4 py-12 text-white sm:px-8" style={{ background: 'linear-gradient(180deg, #E60012 0%, #c2000e 100%)' }}>
         <div className="mx-auto max-w-7xl">
-          <div className="wavy-divider -mt-12 mb-8">
+          <div className="section-divider-charcoal -mt-12 mb-8">
             <svg viewBox="0 0 1200 60" preserveAspectRatio="none" className="w-full">
               <path d="M0,30 C200,60 400,0 600,30 C800,60 1000,0 1200,30 L1200,60 L0,60 Z" fill="var(--charcoal)"/>
             </svg>
@@ -571,19 +577,15 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-8 wavy-divider">
+          <div className="mt-8 section-divider-charcoal">
             <svg viewBox="0 0 1200 60" preserveAspectRatio="none" className="w-full">
               <path d="M0,0 L1200,0 L1200,30 C1000,60 800,0 600,30 C400,60 200,0 0,30 Z" fill="var(--charcoal)"/>
             </svg>
           </div>
           <div className="rounded-lg border-4 border-black bg-white p-2 shadow-2xl">
-            <LocationPicker
-              onLocationSelect={() => {
-                // Map picker is also available in checkout for precise selection
-              }}
-            />
+            <LocationPicker />
           </div>
-          <div className="wavy-divider mt-4">
+          <div className="section-divider-charcoal mt-4">
             <svg viewBox="0 0 1200 60" preserveAspectRatio="none" className="w-full">
               <path d="M0,30 C200,0 400,60 600,30 C800,0 1000,60 1200,30 L1200,60 L0,60 Z" fill="var(--charcoal)"/>
             </svg>
@@ -591,7 +593,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="checkout" className="px-4 py-12 sm:px-8 bg-gradient-to-b from-rose-300 to-rose-400">
+      <section id="checkout" className="px-4 py-12 sm:px-8" style={{ background: 'linear-gradient(180deg, #E60012 0%, #c2000e 100%)' }}>
         <div className="mx-auto max-w-7xl">
           <CheckoutSection
             cartItems={cartItems}
