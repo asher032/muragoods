@@ -113,7 +113,14 @@ export default function PresentationPage() {
                 boxShadow: '0 4px 0 #b39700',
               }}
             >
-              <span style={{ fontSize: '1.5rem' }}>🪙</span>
+              <img
+                src="/images/muragoods.png"
+                alt="Muragoods"
+                style={{ width: '32px', height: '32px', objectFit: 'contain' }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
               <span>NEW! Mushroom Kingdom Express</span>
             </div>
             <img
