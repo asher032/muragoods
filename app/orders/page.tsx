@@ -80,12 +80,12 @@ export default function OrdersPage() {
   }
 
   return (
-    <main className="min-h-screen" style={{ background: 'linear-gradient(180deg, #E60012 0%, #c2000e 100%)' }}>
+    <main className="min-h-screen mario-pattern">
       <nav className="sticky top-0 z-50 bg-white border-b-4 border-black shadow-[0_4px_0px_0px_#000]">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-8 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
             <div className="relative h-10 w-10 rounded-full border-4 border-black bg-rose-400 flex items-center justify-center shadow-[4px_4px_0px_0px_#000] logo-badge">
-              <span className="text-lg">🍙</span>
+              <span className="text-lg"></span>
             </div>
             <div>
               <p className="text-sm font-black uppercase tracking-widest text-rose-500">Muragoods</p>
@@ -135,10 +135,10 @@ export default function OrdersPage() {
 
                       <div className="flex flex-wrap items-center gap-3">
                         <span className="rounded-lg border-2 border-black bg-yellow-300 px-4 py-2 text-xs font-black uppercase tracking-widest text-black pulse-badge">
-                          📍 {order.zone}
+                          {order.zone}
                         </span>
                         <span className="rounded-lg border-2 border-black bg-black px-4 py-2 text-xs font-black uppercase tracking-widest text-yellow-300">
-                          💳 {order.payment}
+                          {order.payment}
                         </span>
                         {canCancel ? (
                           <button
@@ -146,7 +146,7 @@ export default function OrdersPage() {
                             disabled={cancellingId === (order._id || order.id)}
                             className="rounded bg-rose-400 px-3 py-2 text-xs font-black text-white hover:bg-rose-500 disabled:opacity-50"
                           >
-                            {cancellingId === (order._id || order.id) ? "Cancelling..." : "🗑️ Cancel"}
+                            {cancellingId === (order._id || order.id) ? "Cancelling..." : "Cancel"}
                           </button>
                         ) : (
                           <span className="rounded bg-gray-300 px-3 py-2 text-xs font-black text-gray-500 border-2 border-black">
@@ -170,7 +170,7 @@ export default function OrdersPage() {
                                       : "border-black bg-white text-black"
                                   }`}
                                 >
-                                  {active && index > 0 ? '✓' : index + 1}
+                                  {active && index > 0 ? 'OK' : index + 1}
                                 </div>
                                 <p className="mt-2 text-xs font-black uppercase tracking-widest text-white drop-shadow-lg">
                                   {step}
@@ -187,13 +187,13 @@ export default function OrdersPage() {
                       </div>
 
                       <div className="rounded-lg border-4 border-black bg-white p-5">
-                        <p className="text-sm font-black uppercase tracking-widest text-rose-500">📮 Delivery Info</p>
+                        <p className="text-sm font-black uppercase tracking-widest text-rose-500">Delivery Info</p>
                         <ul className="mt-4 space-y-3 text-sm">
-                          <li className="font-bold text-black">📍 <span className="font-black text-rose-500">{order.address}</span></li>
-                          <li className="font-bold text-black">📞 <span className="font-black text-rose-500">{order.phone}</span></li>
-                          <li className="font-bold text-black">🚚 <span className="font-black text-rose-500">{order.deliveryType}</span></li>
-                          <li className="font-bold text-black">📅 <span className="font-black text-rose-500">{order.deliveryDate}</span></li>
-                          <li className="font-bold text-black text-lg">💰 <span className="font-black text-rose-500">₱{order.total}</span></li>
+<li className="font-bold text-black"><span className="font-black text-rose-500">{order.address}</span></li>
+                  <li className="font-bold text-black"><span className="font-black text-rose-500">{order.phone}</span></li>
+                  <li className="font-bold text-black"><span className="font-black text-rose-500">{order.deliveryType}</span></li>
+                  <li className="font-bold text-black"><span className="font-black text-rose-500">{order.deliveryDate}</span></li>
+                  <li className="font-bold text-black text-lg"><span className="font-black text-rose-500">₱{order.total}</span></li>
                         </ul>
                       </div>
                     </div>

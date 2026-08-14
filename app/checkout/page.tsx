@@ -160,19 +160,19 @@ export default function CheckoutPage() {
   if (!isLoggedIn) {
     return (
       <main className="min-h-screen bg-blue-500 flex flex-col items-center justify-center font-black text-white">
-        <div className="text-4xl animate-bounce mb-4">🍄</div>
+        <div className="text-4xl animate-bounce mb-4"></div>
         <div className="text-3xl uppercase tracking-tighter">Warping to World 1-1...</div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen" style={{ background: 'linear-gradient(180deg, #E60012 0%, #c2000e 100%)' }}>
+    <main className="min-h-screen mario-pattern">
       <nav className="sticky top-0 z-50 bg-white border-b-4 border-black shadow-[0_4px_0px_0px_#000]">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-8 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
             <div className="relative h-10 w-10 rounded-full border-4 border-black bg-rose-400 flex items-center justify-center shadow-[4px_4px_0px_0px_#000] logo-badge">
-              <span className="text-lg">🍙</span>
+              <span className="text-lg"></span>
             </div>
             <div>
               <p className="text-sm font-black uppercase tracking-widest text-rose-500">Muragoods</p>
@@ -197,7 +197,7 @@ export default function CheckoutPage() {
           <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
             <div className="mario-card">
               <div className="bg-rose-400 p-6 border-b-4 border-black">
-                <h2 className="text-3xl font-black text-white uppercase tracking-widest">🛒 Your Cart</h2>
+                <h2 className="text-3xl font-black text-white uppercase tracking-widest">Your Cart</h2>
               </div>
 
               <div className="p-6 space-y-6">
@@ -209,13 +209,13 @@ export default function CheckoutPage() {
 
                 {restrictedItems.length > 0 && (
                   <div className="rounded-lg border-4 border-rose-400 bg-rose-50 p-4 text-sm font-black text-rose-600 uppercase">
-                    ⚠️ Coffee Jelly & Cookies are only available for DWCL pickup!
+                    Coffee Jelly & Cookies are only available for DWCL pickup!
                   </div>
                 )}
 
                 {!isDwcl && totalItems < 2 && (
                   <div className="rounded-lg border-4 border-yellow-400 bg-yellow-50 p-4 text-sm font-black text-black uppercase">
-                    ⚠️ Minimum 2 items required for delivery outside DWCL.
+                    Minimum 2 items required for delivery outside DWCL.
                   </div>
                 )}
 
@@ -247,7 +247,7 @@ export default function CheckoutPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-black text-black uppercase mb-2">📍 Delivery Zone</label>
+                      <label className="block text-sm font-black text-black uppercase mb-2">Delivery Zone</label>
                       <select
                         value={location}
                         onChange={(e) => setLocation(e.target.value as ZoneKey)}
@@ -261,7 +261,7 @@ export default function CheckoutPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-black text-black uppercase mb-2">📞 Phone Number *</label>
+                      <label className="block text-sm font-black text-black uppercase mb-2">Phone Number *</label>
                       <input
                         type="tel"
                         value={phone}
@@ -273,7 +273,7 @@ export default function CheckoutPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-black text-black uppercase mb-2">📆 Preferred Delivery Date</label>
+                      <label className="block text-sm font-black text-black uppercase mb-2">Preferred Delivery Date</label>
                       <input
                         type="date"
                         value={deliveryDate}
@@ -284,7 +284,7 @@ export default function CheckoutPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-black text-black uppercase mb-2">📍 Delivery Location</label>
+                      <label className="block text-sm font-black text-black uppercase mb-2">Delivery Location</label>
                       <div className="rounded-lg border-4 border-black overflow-hidden">
                         <LocationPicker
                           initialLat={13.1550}
@@ -300,7 +300,7 @@ export default function CheckoutPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-black text-black uppercase mb-2">🚚 Delivery Service</label>
+                      <label className="block text-sm font-black text-black uppercase mb-2">Delivery Service</label>
                       <select
                         value={deliveryService}
                         onChange={(e) => setDeliveryService(e.target.value)}
@@ -317,7 +317,7 @@ export default function CheckoutPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-black text-black uppercase mb-2">💳 Payment Method</label>
+                      <label className="block text-sm font-black text-black uppercase mb-2">Payment Method</label>
                       <select
                         value={paymentMethod}
                         onChange={(e) => {
@@ -326,15 +326,15 @@ export default function CheckoutPage() {
                         }}
                         className="w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-black text-black outline-none focus:border-rose-400"
                       >
-                        <option value="GCash">💳 GCash (with receipt)</option>
-                        <option value="GCash-NoProof">💳 GCash (no receipt)</option>
-                        <option value="COD">🪙 Cash on Delivery</option>
+                        <option value="GCash">GCash (with receipt)</option>
+                        <option value="GCash-NoProof">GCash (no receipt)</option>
+                        <option value="COD">Cash on Delivery</option>
                       </select>
                     </div>
 
                     {(paymentMethod === "GCash") && (
                       <div className="rounded-lg border-4 border-rose-400 bg-rose-50 p-4 space-y-3">
-                        <p className="text-xs font-black text-rose-600 uppercase">💳 GCash Payment Details</p>
+                        <p className="text-xs font-black text-rose-600 uppercase">GCash Payment Details</p>
                         <p className="text-sm font-bold text-black">Send ₱{total} to: <span className="text-rose-500 font-black">639466472599</span> (Muragoods)</p>
 
                         <input
@@ -346,7 +346,7 @@ export default function CheckoutPage() {
                         />
 
                         <div>
-                          <label className="block text-xs font-black text-black uppercase mb-1">Upload Payment Receipt 📸</label>
+                          <label className="block text-xs font-black text-black uppercase mb-1">Upload Payment Receipt</label>
                           <input
                             type="file"
                             accept="image/*"
@@ -373,7 +373,7 @@ export default function CheckoutPage() {
 
             <aside className="checkout-summary">
               <div className="bg-black p-6 border-b-4 border-black">
-                <h3 className="text-2xl font-black text-yellow-300 uppercase tracking-widest">💰 Order Summary</h3>
+                <h3 className="text-2xl font-black text-yellow-300 uppercase tracking-widest">Order Summary</h3>
               </div>
 
               <div className="p-6 flex flex-col h-full">
@@ -384,11 +384,11 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="space-y-2 text-xs font-bold text-black mb-4">
-                  <p>📅 Delivery: {deliveryDate || "Not selected"}</p>
-                  <p>🚚 Service: {deliveryService}</p>
-                  <p>📍 Location: {mapAddress ? "✅ Pinned" : "❌ Not selected"}</p>
-                  <p>💳 Payment: {paymentMethod}</p>
-                  <p>📞 Phone: {phone || "Not provided"}</p>
+                  <p>Delivery: {deliveryDate || "Not selected"}</p>
+                  <p>Service: {deliveryService}</p>
+                  <p>Location: {mapAddress ? "Pinned" : "Not selected"}</p>
+                  <p>Payment: {paymentMethod}</p>
+                  <p>Phone: {phone || "Not provided"}</p>
                 </div>
 
                 <button
@@ -396,7 +396,7 @@ export default function CheckoutPage() {
                   disabled={cartItems.length === 0 || isSubmitting}
                   className="mario-btn mt-auto w-full bg-black text-yellow-300 hover:bg-slate-900 uppercase font-black text-lg tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSubmitting ? "⏳ PLACING ORDER..." : "🎮 PLACE ORDER"}
+                  {isSubmitting ? "PLACING ORDER..." : "PLACE ORDER"}
                 </button>
               </div>
             </aside>
@@ -406,12 +406,14 @@ export default function CheckoutPage() {
 
       {showInstagramModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setShowInstagramModal(false)}>
-          <div className="mario-card max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
+          <div className="mario-card max-w-lg w-full animate-bounce-in" onClick={(e) => e.stopPropagation()}>
             <div className="bg-gradient-to-r from-purple-600 to-pink-500 p-6 border-b-4 border-black text-center">
-              <h2 className="text-3xl font-black text-white uppercase">🎉 Order Placed!</h2>
+              <h2 className="text-3xl font-black text-white uppercase">Order Placed!</h2>
             </div>
             <div className="p-8 bg-white text-center space-y-4">
-              <div className="text-6xl">📸</div>
+              <div className="w-20 h-20 mx-auto bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-3xl font-black shadow-lg">
+                IG
+              </div>
               <h3 className="text-2xl font-black text-black">Please message @muragoods_ on Instagram</h3>
               <p className="text-sm font-bold text-slate-700">Confirm your order and get updates!</p>
               <a

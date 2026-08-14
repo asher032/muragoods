@@ -52,7 +52,7 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-4" style={{ background: 'linear-gradient(135deg, #E60012 0%, #c2000e 100%)' }}>
+    <main className="min-h-screen flex items-center justify-center px-4 mario-pattern">
       <div className="w-full max-w-md">
         <div className="rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
           <div className="flex flex-col items-center gap-4 mb-8">
@@ -93,7 +93,7 @@ export default function LoginPage() {
 
             {error && (
               <div className="rounded-lg border-4 border-rose-400 bg-rose-50 p-3 text-sm font-black text-rose-600 uppercase">
-                ⚠️ {error}
+                {error}
               </div>
             )}
 
@@ -101,7 +101,7 @@ export default function LoginPage() {
               type="submit"
               className="mario-btn mario-btn-black w-full uppercase font-black text-lg tracking-widest mt-6"
             >
-              🎮 SIGN IN
+              SIGN IN
             </button>
           </form>
 

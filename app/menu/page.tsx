@@ -22,6 +22,11 @@ export default function MenuPage() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsLoggedIn(true);
     }
+
+    const savedCart = localStorage.getItem('cart');
+    if (savedCart) {
+      setCart(JSON.parse(savedCart));
+    }
   }, []);
 
   const filteredProducts = useMemo(() => {
@@ -47,13 +52,17 @@ export default function MenuPage() {
 
   const addToCart = (product: Product, variantId?: string) => {
     const key = product.id;
-    setCart(prev => ({
-      ...prev,
-      [key]: {
-        quantity: (prev[key]?.quantity || 0) + 1,
-        variantId: variantId || prev[key]?.variantId || product.variants[0].id,
-      }
-    }));
+    setCart(prev => {
+      const next = {
+        ...prev,
+        [key]: {
+          quantity: (prev[key]?.quantity || 0) + 1,
+          variantId: variantId || prev[key]?.variantId || product.variants[0].id,
+        }
+      };
+      localStorage.setItem('cart', JSON.stringify(next));
+      return next;
+    });
     setSelectedProduct(null);
     setSelectedVariantId("");
   };
@@ -86,12 +95,12 @@ export default function MenuPage() {
   };
 
   return (
-    <main className="min-h-screen" style={{ background: 'linear-gradient(180deg, #E60012 0%, #c2000e 100%)' }}>
+    <main className="min-h-screen mario-pattern">
       <nav className="sticky top-0 z-50 bg-white border-b-4 border-black shadow-[0_4px_0px_0px_#000]">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-8 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
             <div className="relative h-10 w-10 rounded-full border-4 border-black bg-rose-400 flex items-center justify-center shadow-[4px_4px_0px_0px_#000] logo-badge">
-              <span className="text-lg">🍙</span>
+              <span className="text-lg"></span>
             </div>
             <div>
               <p className="text-sm font-black uppercase tracking-widest text-rose-500">Muragoods</p>
@@ -274,7 +283,7 @@ export default function MenuPage() {
             className="mario-btn mario-btn-yellow text-lg shadow-2xl"
             style={{ borderRadius: '16px', padding: '16px 32px' }}
           >
-            🛒 View Cart ({totalItems}) - ₱{totalPrice}
+            View Cart ({totalItems}) - ₱{totalPrice}
           </button>
         </div>
       )}

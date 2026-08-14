@@ -41,7 +41,7 @@ export function MarioLogoLarge() {
         
         {/* Flesh tone box (Mario face) */}
         <div className="absolute top-12 left-4 w-24 h-12 bg-yellow-200 border-4 border-black rounded-lg shadow-2xl flex items-center justify-center">
-          <span className="text-2xl font-black">👨</span>
+            <span className="text-2xl font-black">M</span>
         </div>
         
         {/* Blue overalls */}
@@ -51,7 +51,7 @@ export function MarioLogoLarge() {
       {/* Text */}
       <div className="text-center">
         <h1 className="text-4xl font-black uppercase tracking-widest text-yellow-300 drop-shadow-lg">Muragoods</h1>
-        <p className="text-sm font-bold uppercase tracking-widest text-white drop-shadow-lg mt-2">🍙 Musubi • 🌭 Churros • ☕ Coffee • 🍪 Cookies 🍙</p>
+        <p className="text-sm font-bold uppercase tracking-widest text-white drop-shadow-lg mt-2">Musubi • Churros • Coffee • Cookies</p>
       </div>
     </div>
   );

@@ -70,7 +70,7 @@ export const products: Product[] = [
     color: "from-pink-200 via-red-100 to-yellow-100",
     availability: ["DWCL"],
     inventory: "In Stock",
-    icon: "🍪",
+    icon: "COOKIES",
     variants: [
       { id: "regular", name: "Regular Cookie", price: 25 },
       { id: "cream", name: "Cookies and Cream", price: 30 },
@@ -85,7 +85,7 @@ export const products: Product[] = [
     color: "from-rose-200 via-violet-100 to-fuchsia-200",
     availability: ["DWCL"],
     inventory: "In Stock",
-    icon: "☕",
+    icon: "COFFEE",
     variants: [
       { id: "option1", name: "Option 1", price: 15 },
       { id: "option2", name: "Option 2", price: 20 },
@@ -100,7 +100,7 @@ export const products: Product[] = [
     color: "from-amber-200 via-yellow-100 to-orange-200",
     availability: ["DWCL", "Legazpi", "Daraga"],
     inventory: "In Stock",
-    icon: "🍙",
+    icon: "MUSUBI",
     variants: [
       { id: "regular", name: "Regular Musubi", price: 40 },
       { id: "egg", name: "With Egg", price: 45 },
@@ -116,7 +116,7 @@ export const products: Product[] = [
     color: "from-orange-200 via-amber-100 to-yellow-200",
     availability: ["DWCL", "Legazpi", "Daraga"],
     inventory: "Pre-Order Only",
-    icon: "🌭",
+    icon: "CHURROS",
     variants: [
       { id: "option1", name: "Option 1", price: 70 },
       { id: "option2", name: "Option 2", price: 100 },

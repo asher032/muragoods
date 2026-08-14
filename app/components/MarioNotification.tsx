@@ -33,8 +33,8 @@ export function MarioNotification({ title, message, type, duration = 5000, onClo
           headerBg: "bg-green-600",
           headerText: "text-white",
           bodyBg: "bg-white",
-          icon: "✅",
-          headerTitle: type === 'order-placed' ? "🎮 ORDER PLACED! 🎮" : "✅ SUCCESS!"
+          icon: "",
+          headerTitle: type === 'order-placed' ? "ORDER PLACED!" : "SUCCESS!"
         };
       case 'order-completed':
         return {
@@ -43,8 +43,8 @@ export function MarioNotification({ title, message, type, duration = 5000, onClo
           headerBg: "bg-red-600",
           headerText: "text-yellow-300",
           bodyBg: "bg-white",
-          icon: "🎉",
-          headerTitle: "🎉 ORDER COMPLETED! 🎉"
+          icon: "",
+          headerTitle: "ORDER COMPLETED!"
         };
       case 'error':
         return {
@@ -53,8 +53,8 @@ export function MarioNotification({ title, message, type, duration = 5000, onClo
           headerBg: "bg-red-600",
           headerText: "text-white",
           bodyBg: "bg-red-50",
-          icon: "❌",
-          headerTitle: "⚠️ ERROR!"
+          icon: "",
+          headerTitle: "ERROR!"
         };
       case 'warning':
         return {
@@ -63,8 +63,8 @@ export function MarioNotification({ title, message, type, duration = 5000, onClo
           headerBg: "bg-yellow-400",
           headerText: "text-black",
           bodyBg: "bg-yellow-50",
-          icon: "⚠️",
-          headerTitle: "⚠️ WARNING!"
+          icon: "",
+          headerTitle: "WARNING!"
         };
       default:
         return {
@@ -73,8 +73,8 @@ export function MarioNotification({ title, message, type, duration = 5000, onClo
           headerBg: "bg-blue-600",
           headerText: "text-white",
           bodyBg: "bg-blue-50",
-          icon: "ℹ️",
-          headerTitle: "ℹ️ INFO"
+          icon: "",
+          headerTitle: "INFO"
         };
     }
   };
@@ -98,10 +98,6 @@ export function MarioNotification({ title, message, type, duration = 5000, onClo
 
           {/* Mario-themed decorative elements */}
           <div className="flex justify-center gap-4 text-3xl pt-4">
-            <span>🍙</span>
-            <span>🌭</span>
-            <span>☕</span>
-            <span>🍪</span>
           </div>
         </div>
 
@@ -111,7 +107,7 @@ export function MarioNotification({ title, message, type, duration = 5000, onClo
             onClick={onClose}
             className="mario-btn bg-yellow-400 text-black hover:bg-yellow-300 uppercase font-black text-sm tracking-widest w-full"
           >
-            🎮 Close
+            Close
           </button>
         </div>
       </div>

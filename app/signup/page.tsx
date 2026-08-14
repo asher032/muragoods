@@ -57,12 +57,12 @@ export default function SignupPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-4 py-8" style={{ background: 'linear-gradient(135deg, #27ae60 0%, #1e8449 100%)' }}>
+    <main className="min-h-screen flex items-center justify-center px-4 py-8 mario-pattern">
       <div className="w-full max-w-md">
         <div className="rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
           <div className="flex flex-col items-center gap-4 mb-8">
             <div className="relative w-20 h-20 rounded-full border-4 border-yellow-300 bg-rose-400 flex items-center justify-center text-3xl font-black text-white shadow-lg overflow-hidden">
-              <span className="text-2xl">🍄</span>
+              <span className="text-2xl"></span>
             </div>
             <div className="text-center">
               <p className="text-sm font-black uppercase tracking-widest text-green-600">Muragoods</p>
@@ -120,7 +120,7 @@ export default function SignupPage() {
 
             {error && (
               <div className="rounded-lg border-4 border-rose-400 bg-rose-50 p-3 text-sm font-black text-rose-600 uppercase">
-                ⚠️ {error}
+                {error}
               </div>
             )}
 
@@ -129,7 +129,7 @@ export default function SignupPage() {
               disabled={loading}
               className="mario-btn mario-btn-green w-full uppercase font-black text-lg tracking-widest mt-6 border-black disabled:opacity-50"
             >
-              {loading ? "⏳ CREATING..." : "✨ CREATE ACCOUNT"}
+              {loading ? "CREATING..." : "CREATE ACCOUNT"}
             </button>
           </form>
 

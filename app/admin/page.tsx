@@ -49,7 +49,7 @@ export default function AdminPage() {
         if (result.success) {
           if (result.data.length > orders.length) {
             const newOrder = result.data[0];
-            setAlert({ show: true, message: `🔔 NEW ORDER! ${newOrder.customer} - ₱${newOrder.total}`, orderId: newOrder._id || newOrder.id });
+            setAlert({ show: true, message: `NEW ORDER! ${newOrder.customer} - ₱${newOrder.total}`, orderId: newOrder._id || newOrder.id });
             setOrders(result.data);
             setTimeout(() => setAlert({ show: false, message: "" }), 5000);
           }
@@ -73,7 +73,7 @@ export default function AdminPage() {
     event.preventDefault();
 
     if (!adminEmails.includes(email)) {
-      setError("❌ UNAUTHORIZED! Only authorized admin accounts have access.");
+      setError("UNAUTHORIZED! Only authorized admin accounts have access.");
       return;
     }
 
@@ -91,7 +91,7 @@ export default function AdminPage() {
       return;
     }
 
-    setError("❌ Invalid Password.");
+    setError("Invalid Password.");
   };
 
   const handleStatusUpdate = async (orderId: string, nextStatus: string) => {
@@ -148,7 +148,7 @@ export default function AdminPage() {
 
   if (!isAuthenticated) {
     return (
-      <main className="min-h-screen flex items-center justify-center px-4" style={{ background: 'linear-gradient(135deg, #121212 0%, #1a1a1a 100%)' }}>
+      <main className="min-h-screen flex items-center justify-center px-4 mario-pattern">
         <div className="w-full max-w-md rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
           <div className="flex flex-col items-center gap-4 mb-8">
             <div className="relative flex h-16 w-16 items-center justify-center rounded-full border-4 border-yellow-300 bg-rose-400 text-2xl font-black text-white shadow-lg">
@@ -183,7 +183,7 @@ export default function AdminPage() {
 
             {error ? (
               <div className="rounded-lg border-4 border-rose-400 bg-rose-50 p-3 text-sm font-black text-rose-600 uppercase">
-                ⚠️ {error}
+                {error}
               </div>
             ) : null}
 
@@ -191,7 +191,7 @@ export default function AdminPage() {
               type="submit"
               className="mario-btn mario-btn-black w-full uppercase font-black text-lg tracking-widest mt-6"
             >
-              🔐 ENTER DASHBOARD
+              ENTER DASHBOARD
             </button>
           </form>
         </div>
@@ -200,7 +200,7 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="min-h-screen px-4 py-8 sm:px-8" style={{ background: 'linear-gradient(180deg, #E60012 0%, #c2000e 100%)' }}>
+    <main className="min-h-screen px-4 py-8 sm:px-8 mario-pattern">
       <div className="mx-auto max-w-7xl">
         {alert.show && (
           <div className="mb-8 rounded-lg border-4 border-yellow-300 bg-yellow-300 p-4 text-lg font-black text-black shadow-2xl animate-pulse">
@@ -210,7 +210,7 @@ export default function AdminPage() {
 
         <header className="mb-8 flex flex-col gap-4 rounded-lg bg-black border-4 border-yellow-300 p-6 text-white shadow-2xl md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm font-black uppercase tracking-widest text-yellow-300">🎮 Admin</p>
+            <p className="text-sm font-black uppercase tracking-widest text-yellow-300">Admin</p>
             <h1 className="mt-2 text-4xl font-black text-white uppercase tracking-wide">Muragoods Dashboard</h1>
           </div>
           <button
@@ -218,28 +218,28 @@ export default function AdminPage() {
             onClick={() => setIsAuthenticated(false)}
             className="mario-btn bg-rose-400 text-yellow-300 border-yellow-300 hover:bg-rose-500 uppercase font-black"
           >
-            🚪 LOG OUT
+            LOG OUT
           </button>
         </header>
 
         <section className="grid gap-4 md:grid-cols-3">
           <div className="mario-card p-6 shadow-xl">
-            <p className="text-sm font-black uppercase tracking-widest text-rose-500">💰 Today&apos;s Sales</p>
+            <p className="text-sm font-black uppercase tracking-widest text-rose-500">Today&apos;s Sales</p>
             <p className="mt-3 text-4xl font-black text-black">₱{summary.totalSales}</p>
           </div>
           <div className="mario-card p-6 shadow-xl">
-            <p className="text-sm font-black uppercase tracking-widest text-rose-500">⏳ Pending</p>
+            <p className="text-sm font-black uppercase tracking-widest text-rose-500">Pending</p>
             <p className="mt-3 text-4xl font-black text-black">{summary.pending}</p>
           </div>
           <div className="mario-card p-6 shadow-xl">
-            <p className="text-sm font-black uppercase tracking-widest text-rose-500">🍳 Preparing</p>
+            <p className="text-sm font-black uppercase tracking-widest text-rose-500">Preparing</p>
             <p className="mt-3 text-4xl font-black text-black">{summary.preparing}</p>
           </div>
         </section>
 
         <section className="mt-8 grid gap-8 xl:grid-cols-[1.4fr_0.8fr]">
           <div className="mario-card p-6 shadow-xl">
-            <h2 className="text-2xl font-black text-black uppercase tracking-wider">📋 Live Order Feed</h2>
+            <h2 className="text-2xl font-black text-black uppercase tracking-wider">Live Order Feed</h2>
 
             <div className="mt-6 overflow-x-auto rounded-lg border-4 border-black">
               <table className="min-w-full text-left text-sm">
@@ -265,7 +265,7 @@ export default function AdminPage() {
                       </td>
                       <td className="px-4 py-3 font-bold text-black">{order.zone}</td>
                       <td className="px-4 py-3">
-                        <div className="text-xs font-bold text-black">📍 {order.latitude}, {order.longitude}</div>
+                        <div className="text-xs font-bold text-black">{order.latitude}, {order.longitude}</div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="text-xs font-bold text-black">₱{order.total}</div>
@@ -297,7 +297,7 @@ export default function AdminPage() {
                           onClick={() => handleDeleteOrder(order._id || order.id)}
                           className="rounded bg-rose-400 p-2 text-white font-black hover:bg-rose-500"
                         >
-                          🗑️
+                          Delete
                         </button>
                       </td>
                     </tr>
@@ -308,7 +308,7 @@ export default function AdminPage() {
           </div>
 
           <div className="mario-card p-6 shadow-xl">
-            <h2 className="text-2xl font-black text-black uppercase tracking-wider">📦 Inventory Control</h2>
+            <h2 className="text-2xl font-black text-black uppercase tracking-wider">Inventory Control</h2>
             <div className="mt-6 space-y-3">
               {catalog.map((product) => (
                 <div

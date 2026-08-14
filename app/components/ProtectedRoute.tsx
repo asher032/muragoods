@@ -52,7 +52,7 @@ export function ProtectedRoute({ children, redirectTo = '/login' }: ProtectedRou
     return (
       <main className="min-h-screen bg-gradient-to-b from-rose-300 to-rose-400 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-6xl mb-4">🎮</div>
+          <div className="text-6xl mb-4">LOADING</div>
           <p className="text-white text-2xl font-black uppercase tracking-widest">Loading Muragoods...</p>
         </div>
       </main>
