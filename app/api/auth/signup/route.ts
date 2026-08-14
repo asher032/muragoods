@@ -5,7 +5,7 @@ import User from '@/app/lib/models/User';
 export async function POST(req: Request) {
   try {
     await dbConnect();
-    const { name, email, password } = await req.json();
+    const { name, email, password } = (await req.json()) as { name: string; email: string; password: string };
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -14,7 +14,8 @@ export async function POST(req: Request) {
 
     const user = await User.create({ name, email, password });
     return NextResponse.json({ success: true, data: { name: user.name, email: user.email } }, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'An error occurred';
+    return NextResponse.json({ success: false, error: message }, { status: 400 });
   }
 }

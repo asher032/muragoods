@@ -3,10 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+interface UserData {
+  name?: string;
+  email?: string;
+  [key: string]: unknown;
+}
+
 export function useAuth() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<UserData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const router = useRouter();
 
   useEffect(() => {
     const checkAuth = () => {
@@ -45,7 +50,7 @@ export function ProtectedRoute({ children, redirectTo = '/login' }: ProtectedRou
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-gradient-to-b from-red-600 to-red-700 flex items-center justify-center">
+      <main className="min-h-screen bg-gradient-to-b from-rose-300 to-rose-400 flex items-center justify-center">
         <div className="text-center">
           <div className="text-6xl mb-4">🎮</div>
           <p className="text-white text-2xl font-black uppercase tracking-widest">Loading Muragoods...</p>

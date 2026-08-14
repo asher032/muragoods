@@ -5,7 +5,7 @@ import User from '@/app/lib/models/User';
 export async function POST(req: Request) {
   try {
     await dbConnect();
-    const { email, password } = await req.json();
+    const { email, password } = (await req.json()) as { email: string; password: string };
 
     const user = await User.findOne({ email });
     if (!user || user.password !== password) {
@@ -13,7 +13,8 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ success: true, data: { name: user.name, email: user.email } });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'An error occurred';
+    return NextResponse.json({ success: false, error: message }, { status: 400 });
   }
 }

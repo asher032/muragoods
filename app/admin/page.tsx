@@ -1,9 +1,7 @@
 'use client';
 
-import { adminCredentials, adminEmails, products, type InventoryStatus, type Order } from "@/app/lib/muragoods-data";
-import { getAllOrders, updateOrderStatus, deleteOrder } from "@/app/lib/firebase-orders";
-import { useMemo, useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { adminCredentials, adminEmails, products, type InventoryStatus, type Order, type OrderStatus } from "@/app/lib/muragoods-data";
+import { useMemo, useState, useEffect, useCallback } from "react";
 
 
 const statusOptions = [
@@ -25,37 +23,39 @@ export default function AdminPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState("");
-  const [orders, setOrders] = useState<(Order & { userId: string })[]>([]);
+  const [orders, setOrders] = useState<(Order & { userId: string; _id?: string })[]>([]);
   const [catalog, setCatalog] = useState(products);
   const [alert, setAlert] = useState<{ show: boolean; message: string; orderId?: string }>({ show: false, message: "" });
-  const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
-  // Load orders when authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchOrders();
+  const fetchOrders = useCallback(async () => {
+    try {
+      const res = await fetch('/api/orders?isAdmin=true');
+      const result = await res.json();
+      if (result.success) {
+        setOrders(result.data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch orders:", err);
     }
-  }, [isAuthenticated]);
+  }, []);
 
-  async function fetchOrders() {
-    setLoading(true);
-    const data = await getAllOrders();
-    setOrders(data);
-    setLoading(false);
-  }
-
-  // Real-time alert system
   useEffect(() => {
     if (!isAuthenticated) return;
 
     const interval = setInterval(async () => {
-      const data = await getAllOrders();
-      if (data.length > orders.length) {
-        const newOrder = data[0]; // Assuming newest is first or just different
-        setAlert({ show: true, message: `🔔 NEW ORDER! ${newOrder.customer} - ₱${newOrder.total}`, orderId: newOrder.id });
-        setOrders(data);
-        setTimeout(() => setAlert({ show: false, message: "" }), 5000);
+      try {
+        const res = await fetch('/api/orders?isAdmin=true');
+        const result = await res.json();
+        if (result.success) {
+          if (result.data.length > orders.length) {
+            const newOrder = result.data[0];
+            setAlert({ show: true, message: `🔔 NEW ORDER! ${newOrder.customer} - ₱${newOrder.total}`, orderId: newOrder._id || newOrder.id });
+            setOrders(result.data);
+            setTimeout(() => setAlert({ show: false, message: "" }), 5000);
+          }
+        }
+      } catch (err) {
+        console.error(err);
       }
     }, 5000);
 
@@ -72,7 +72,6 @@ export default function AdminPage() {
   const handleLogin = (event: React.FormEvent) => {
     event.preventDefault();
 
-    // Restricted to specific emails
     if (!adminEmails.includes(email)) {
       setError("❌ UNAUTHORIZED! Only mhaxthedog@gmail.com and muragoods0@gmail.com have access.");
       return;
@@ -81,14 +80,14 @@ export default function AdminPage() {
     if (email === adminCredentials.email && password === adminCredentials.password) {
       setIsAuthenticated(true);
       setError("");
+      fetchOrders();
       return;
     }
 
-    // If it's mhaxthedog, we need a way to verify password, but user provided specific credentials for muragoods0
-    // For now, let's assume muragoods0 credentials are used for both admin roles for this script
     if (email === "mhaxthedog@gmail.com" && password === "Jesusmaryosepcasiram") {
       setIsAuthenticated(true);
       setError("");
+      fetchOrders();
       return;
     }
 
@@ -97,12 +96,19 @@ export default function AdminPage() {
 
   const handleStatusUpdate = async (orderId: string, nextStatus: string) => {
     try {
-      await updateOrderStatus(orderId, nextStatus);
-      setOrders((current) =>
-        current.map((order) =>
-          order.id === orderId ? { ...order, status: nextStatus as any } : order,
-        ),
-      );
+      const res = await fetch(`/api/orders?id=${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        setOrders((current) =>
+          current.map((order) =>
+            (order._id || order.id) === orderId ? { ...order, status: nextStatus as OrderStatus } : order,
+          ),
+        );
+      }
     } catch (err) {
       console.error(err);
     }
@@ -111,14 +117,18 @@ export default function AdminPage() {
   const handleDeleteOrder = async (orderId: string) => {
     if (confirm("Are you sure you want to remove this order?")) {
       try {
-        await deleteOrder(orderId);
-        setOrders(orders.filter(o => o.id !== orderId));
+        const res = await fetch(`/api/orders?id=${orderId}`, {
+          method: 'DELETE',
+        });
+        const result = await res.json();
+        if (result.success) {
+          setOrders(orders.filter(o => (o._id || o.id) !== orderId));
+        }
       } catch (err) {
         console.error(err);
       }
     }
   };
-
 
   const toggleInventory = (productId: string) => {
     setCatalog((current) =>
@@ -138,11 +148,11 @@ export default function AdminPage() {
 
   if (!isAuthenticated) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-red-600 to-red-700 px-4">
+      <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-rose-300 to-rose-400 px-4">
         <div className="w-full max-w-md rounded-lg border-4 border-black bg-white p-8 shadow-2xl">
           <div className="diagonal-stripes rounded-lg p-6 mb-8 text-center relative">
             <div className="relative flex flex-col items-center gap-4">
-              <div className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-yellow-300 bg-red-600 text-4xl font-black text-white shadow-lg">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-yellow-300 bg-rose-400 text-4xl font-black text-white shadow-lg">
                 M
               </div>
               <p className="text-sm font-black uppercase tracking-widest text-yellow-300">Admin Portal</p>
@@ -159,7 +169,7 @@ export default function AdminPage() {
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                className="mt-2 w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none transition focus:border-red-600 focus:bg-white"
+                className="mt-2 w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none transition focus:border-rose-400 focus:bg-white"
               />
             </label>
 
@@ -169,12 +179,12 @@ export default function AdminPage() {
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                className="mt-2 w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none transition focus:border-red-600 focus:bg-white"
+                className="mt-2 w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none transition focus:border-rose-400 focus:bg-white"
               />
             </label>
 
             {error ? (
-              <div className="rounded-lg border-4 border-red-600 bg-red-100 p-3 text-sm font-black text-red-700 uppercase">
+              <div className="rounded-lg border-4 border-rose-400 bg-rose-50 p-3 text-sm font-black text-rose-600 uppercase">
                 ⚠️ {error}
               </div>
             ) : null}
@@ -192,9 +202,8 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-red-600 to-red-700 px-4 py-8 sm:px-8">
+    <main className="min-h-screen bg-gradient-to-b from-rose-300 to-rose-400 px-4 py-8 sm:px-8">
       <div className="mx-auto max-w-7xl">
-        {/* Real-time Alert Notification */}
         {alert.show && (
           <div className="mb-8 rounded-lg border-4 border-yellow-300 bg-yellow-300 p-4 text-lg font-black text-black shadow-2xl animate-pulse">
             {alert.message}
@@ -209,7 +218,7 @@ export default function AdminPage() {
           <button
             type="button"
             onClick={() => setIsAuthenticated(false)}
-            className="mario-btn bg-red-600 text-yellow-300 border-yellow-300 hover:bg-red-700 uppercase font-black"
+            className="mario-btn bg-rose-400 text-yellow-300 border-yellow-300 hover:bg-rose-500 uppercase font-black"
           >
             🚪 LOG OUT
           </button>
@@ -217,15 +226,15 @@ export default function AdminPage() {
 
         <section className="grid gap-4 md:grid-cols-3">
           <div className="rounded-lg border-4 border-black bg-white p-6 shadow-xl">
-            <p className="text-sm font-black uppercase tracking-widest text-red-600">💰 Today's Sales</p>
+            <p className="text-sm font-black uppercase tracking-widest text-rose-500">💰 Today&apos;s Sales</p>
             <p className="mt-3 text-4xl font-black text-black">₱{summary.totalSales}</p>
           </div>
           <div className="rounded-lg border-4 border-black bg-white p-6 shadow-xl">
-            <p className="text-sm font-black uppercase tracking-widest text-red-600">⏳ Pending</p>
+            <p className="text-sm font-black uppercase tracking-widest text-rose-500">⏳ Pending</p>
             <p className="mt-3 text-4xl font-black text-black">{summary.pending}</p>
           </div>
           <div className="rounded-lg border-4 border-black bg-white p-6 shadow-xl">
-            <p className="text-sm font-black uppercase tracking-widest text-red-600">🍳 Preparing</p>
+            <p className="text-sm font-black uppercase tracking-widest text-rose-500">🍳 Preparing</p>
             <p className="mt-3 text-4xl font-black text-black">{summary.preparing}</p>
           </div>
         </section>
@@ -236,7 +245,7 @@ export default function AdminPage() {
 
             <div className="mt-6 overflow-x-auto rounded-lg border-4 border-black">
               <table className="min-w-full text-left text-sm">
-                                <thead className="bg-black text-white">
+                <thead className="bg-black text-white">
                   <tr>
                     <th className="px-4 py-3 font-black uppercase tracking-wider">Order</th>
                     <th className="px-4 py-3 font-black uppercase tracking-wider">Customer</th>
@@ -248,8 +257,8 @@ export default function AdminPage() {
                 </thead>
                 <tbody>
                   {orders.map((order, idx) => (
-                    <tr key={order.id} className={`border-b-2 border-black ${idx % 2 === 0 ? 'bg-yellow-50' : 'bg-white'}`}>
-                      <td className="px-4 py-3 font-black text-black">{order.id.slice(-5)}</td>
+                    <tr key={order._id || order.id} className={`border-b-2 border-black ${idx % 2 === 0 ? 'bg-yellow-50' : 'bg-white'}`}>
+                      <td className="px-4 py-3 font-black text-black">{(order._id || order.id).slice(-5)}</td>
                       <td className="px-4 py-3">
                         <div className="font-bold text-black">{order.customer}</div>
                         <div className="text-xs font-semibold text-slate-600">{order.address}</div>
@@ -260,13 +269,13 @@ export default function AdminPage() {
                         <div className="text-xs font-bold text-black">₱{order.total}</div>
                         <div className="text-[10px] text-slate-500">{order.items.join(', ')}</div>
                         {order.gcashScreenshotUrl && (
-                          <a href={order.gcashScreenshotUrl} target="_blank" className="text-xs font-black text-red-600 underline">View Receipt</a>
+                          <a href={order.gcashScreenshotUrl} target="_blank" className="text-xs font-black text-rose-500 underline">View Receipt</a>
                         )}
                       </td>
                       <td className="px-4 py-3">
                         <select
                           value={order.status}
-                          onChange={(event) => handleStatusUpdate(order.id, event.target.value)}
+                          onChange={(event) => handleStatusUpdate(order._id || order.id, event.target.value)}
                           className="rounded-lg border-2 border-black bg-yellow-300 px-3 py-2 text-xs font-black uppercase tracking-wider text-black outline-none focus:bg-yellow-400"
                         >
                           {statusOptions.map((status) => (
@@ -277,9 +286,9 @@ export default function AdminPage() {
                         </select>
                       </td>
                       <td className="px-4 py-3">
-                        <button 
-                          onClick={() => handleDeleteOrder(order.id)}
-                          className="rounded bg-red-600 p-2 text-white font-black hover:bg-red-700"
+                        <button
+                          onClick={() => handleDeleteOrder(order._id || order.id)}
+                          className="rounded bg-rose-400 p-2 text-white font-black hover:bg-rose-500"
                         >
                           🗑️
                         </button>
@@ -287,7 +296,6 @@ export default function AdminPage() {
                     </tr>
                   ))}
                 </tbody>
-
               </table>
             </div>
           </div>
@@ -302,7 +310,7 @@ export default function AdminPage() {
                 >
                   <div>
                     <p className="font-black text-black text-lg">{product.name}</p>
-                    <p className="text-xs font-black uppercase tracking-wider text-red-600">{product.inventory}</p>
+                    <p className="text-xs font-black uppercase tracking-wider text-rose-500">{product.inventory}</p>
                   </div>
                   <button
                     type="button"

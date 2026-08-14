@@ -3,7 +3,7 @@
 :root {
   --background: #fff;
   --foreground: #333;
-  --mario-red: #ff8a8a; /* Light/Baby Red */
+  --mario-red: #ff8a8a;
   --mario-blue: #a3d8ff;
   --mario-yellow: #fff2a3;
   --mario-green: #a3ffa3;
@@ -89,4 +89,14 @@ body {
   50% { transform: rotate(0deg); }
   75% { transform: rotate(-5deg); }
   100% { transform: rotate(0deg); }
+}
+
+.diagonal-stripes {
+  background: repeating-linear-gradient(
+    45deg,
+    #ff8a8a,
+    #ff8a8a 10px,
+    #ffb3b3 10px,
+    #ffb3b3 20px
+  );
 }

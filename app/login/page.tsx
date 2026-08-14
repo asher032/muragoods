@@ -1,5 +1,6 @@
 'use client';
 
+import Link from "next/link";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminCredentials } from '@/app/lib/muragoods-data';
@@ -11,17 +12,16 @@ export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // If already logged in, redirect
     const user = localStorage.getItem('user');
     if (user) {
       router.push('/');
     }
   }, [router]);
 
-    const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
+
     if (!email || !password) {
       setError('Please fill in all fields');
       return;
@@ -46,21 +46,18 @@ export default function LoginPage() {
       } else {
         setError(result.error || 'Login failed');
       }
-    } catch (err) {
+    } catch {
       setError('An error occurred. Please try again.');
     }
   };
 
-
-
   return (
-        <main className="min-h-screen bg-[#ffcccc] flex items-center justify-center px-4 py-8 font-serif">
+    <main className="min-h-screen bg-gradient-to-b from-rose-300 to-rose-400 flex items-center justify-center px-4 py-8 font-serif">
       <div className="w-full max-w-md">
-        <div className="border-[10px] border-dotted border-pink-500 bg-white p-8 shadow-none">
+        <div className="border-[10px] border-dotted border-pink-400 bg-white p-8 shadow-none">
           <div className="bg-yellow-200 p-2 mb-4 border-2 border-black rotate-3">
-            <h1 className="text-2xl font-bold text-red-400 text-center uppercase italic">Log in now!!!</h1>
+            <h1 className="text-2xl font-bold text-rose-500 text-center uppercase italic">Log in now!!!</h1>
           </div>
-
 
           <form onSubmit={handleLogin} className="space-y-4">
             <label className="block text-sm font-black text-black uppercase">
@@ -69,7 +66,7 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-2 w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none transition focus:border-red-600 focus:bg-white"
+                className="mt-2 w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none transition focus:border-rose-400 focus:bg-white"
                 placeholder="your@email.com"
               />
             </label>
@@ -80,13 +77,13 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-2 w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none transition focus:border-red-600 focus:bg-white"
+                className="mt-2 w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none transition focus:border-rose-400 focus:bg-white"
                 placeholder="••••••••"
               />
             </label>
 
             {error && (
-              <div className="rounded-lg border-4 border-red-600 bg-red-100 p-3 text-sm font-black text-red-700 uppercase">
+              <div className="rounded-lg border-4 border-rose-400 bg-rose-50 p-3 text-sm font-black text-rose-600 uppercase">
                 ⚠️ {error}
               </div>
             )}
@@ -102,15 +99,15 @@ export default function LoginPage() {
           <div className="mt-8 border-t-4 border-black pt-6">
             <p className="text-center text-sm font-black text-black uppercase">
               No account yet?{' '}
-              <a href="/signup" className="text-red-600 hover:text-red-700 underline">
+              <Link href="/signup" className="text-rose-500 hover:text-rose-600 underline">
                 Sign up!
-              </a>
+              </Link>
             </p>
           </div>
 
-          <a href="/" className="mario-btn mt-4 block text-center bg-red-600 text-white border-black hover:bg-red-700 uppercase font-black">
+          <Link href="/" className="mario-btn mt-4 block text-center bg-rose-400 text-white border-black hover:bg-rose-500 uppercase font-black">
             ← Back to Shop
-          </a>
+          </Link>
         </div>
       </div>
     </main>

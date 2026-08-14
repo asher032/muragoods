@@ -23,7 +23,7 @@ export function MarioLogo() {
       {/* Text */}
       <div>
         <p className="text-sm font-black uppercase tracking-widest text-yellow-300 drop-shadow-lg">Muragoods</p>
-        <p className="text-xs font-bold uppercase tracking-widest text-white drop-shadow-lg">Mario's Food</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-white drop-shadow-lg">Mario&apos;s Food</p>
       </div>
     </div>
   );
