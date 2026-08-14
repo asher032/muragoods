@@ -34,7 +34,7 @@
 
 ### 5. **Strict Admin Access Control**
 - **Single Authorized Account:**
-  - **Email:** `muragoods0@gmail.com`
+  - **Email:** `mhaxthedog@gmail.com`
   - **Password:** `Jesusmaryosepcasiram`
 - **Security:** All other login attempts rejected with "UNAUTHORIZED" message
 - **Access URL:** `/admin`
@@ -101,7 +101,7 @@
 ## 📱 Admin Dashboard Enhancements
 
 - **Real-time Alerts:** Yellow notification bar at top
-- **Strict Login:** Only `muragoods0@gmail.com` can access
+- **Strict Login:** Only `mhaxthedog@gmail.com` can access
 - **Live Order Feed:** Shows all orders with GCash references
 - **Order Status:** Update status for each order
 - **Inventory Control:** Toggle product availability
@@ -148,7 +148,7 @@ Each order now includes:
 - Login at `/login`
 
 **Admin (Strict Access):**
-- Email: `muragoods0@gmail.com`
+- Email: `mhaxthedog@gmail.com`
 - Password: `Jesusmaryosepcasiram`
 - Access: https://muragoods-1xx6.vercel.app/admin
 

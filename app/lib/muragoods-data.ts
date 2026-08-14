@@ -44,7 +44,7 @@ export type Order = {
 export const adminEmails = ["muragoods0@gmail.com", "mhaxthedog@gmail.com"];
 
 export const adminCredentials = {
-  email: "muragoods0@gmail.com",
+  email: "mhaxthedog@gmail.com",
   password: "Jesusmaryosepcasiram",
 };
 
