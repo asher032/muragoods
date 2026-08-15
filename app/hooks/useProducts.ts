@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { products as staticProducts, type Product } from '@/app/lib/muragoods-data';
+import { products as staticProducts, type Product, type InventoryStatus } from '@/app/lib/muragoods-data';
 
 export function useProducts() {
   const [products, setProducts] = useState<Product[]>(staticProducts);
@@ -15,11 +15,11 @@ export function useProducts() {
         const json = await res.json();
         if (cancelled) return;
         if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-          const dbMap = new Map<string, Partial<Product>>(json.data.map((p: Product) => [p.id, p]));
+          const dbMap = new Map<string, { inventory: InventoryStatus }>(json.data.map((p: { id: string; inventory: InventoryStatus }) => [p.id, { inventory: p.inventory }]));
           setProducts(
             staticProducts.map(p => {
-              const dbProduct = dbMap.get(p.id);
-              return dbProduct ? { ...p, ...dbProduct } : p;
+              const dbFields = dbMap.get(p.id);
+              return dbFields ? { ...p, ...dbFields } : p;
             }),
           );
         }
