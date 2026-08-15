@@ -149,11 +149,11 @@ export default function AdminPage() {
 
   if (!isAuthenticated) {
     return (
-      <main className="min-h-screen flex items-center justify-center px-4 mario-pattern">
+      <main className="min-h-screen flex items-center justify-center px-4" style={{ backgroundImage: 'url(/images/background.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
         <div className="w-full max-w-md rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
           <div className="flex flex-col items-center gap-4 mb-8">
-            <div className="relative flex h-16 w-16 items-center justify-center rounded-full border-4 border-yellow-300 bg-white overflow-hidden shadow-lg">
-              <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-contain p-2" />
+          <div className="relative flex h-16 w-16 items-center justify-center rounded-full border-4 border-yellow-300 overflow-hidden shadow-lg">
+            <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
             </div>
             <p className="text-sm font-black uppercase tracking-widest text-yellow-300">Admin Portal</p>
           </div>
@@ -201,7 +201,7 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="min-h-screen px-4 py-8 sm:px-8 mario-pattern">
+    <main className="min-h-screen px-4 py-8 sm:px-8" style={{ backgroundImage: 'url(/images/background.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
       <div className="mx-auto max-w-7xl">
         {alert.show && (
           <div className="mb-8 rounded-lg border-4 border-yellow-300 bg-yellow-300 p-4 text-lg font-black text-black shadow-2xl animate-pulse">

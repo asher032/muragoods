@@ -26,26 +26,30 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
 
     let startLat = initialLat;
     let startLng = initialLng;
+    let geolocationUsed = false;
 
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           startLat = position.coords.latitude;
           startLng = position.coords.longitude;
+          geolocationUsed = true;
           if (mapInstanceRef.current && markerRef.current) {
-            mapInstanceRef.current.setView([startLat, startLng], 14);
+            mapInstanceRef.current.setView([startLat, startLng], 15, { animate: false });
             markerRef.current.setLatLng([startLat, startLng]);
           }
         },
-        () => {
-          setError('Location access denied. Using default area.');
-        }
+        (err) => {
+          setError('Location access denied or unavailable. Using default Daraga/Legazpi area.');
+          console.warn('Geolocation error:', err.message);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     }
 
     const map = L.map(mapRef.current, {
       center: [startLat, startLng],
-      zoom: 14,
+      zoom: geolocationUsed ? 15 : 14,
       maxBounds: daragaLegazpiBounds,
       minZoom: 13,
       maxZoom: 18,
@@ -58,8 +62,8 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
     const pinIcon = L.divIcon({
       className: 'custom-pin',
       html: `<div style="
-        width: 40px;
-        height: 40px;
+        width: 44px;
+        height: 44px;
         background: #E60012;
         border: 4px solid #000;
         border-radius: 50% 50% 50% 0;
@@ -67,18 +71,18 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.5);
       ">
         <div style="
-          width: 16px;
-          height: 16px;
+          width: 18px;
+          height: 18px;
           background: #FFD700;
           border: 2px solid #000;
           border-radius: 50%;
         "></div>
       </div>`,
-      iconSize: [40, 40],
-      iconAnchor: [20, 40],
+      iconSize: [44, 44],
+      iconAnchor: [22, 44],
     });
 
     const marker = L.marker([startLat, startLng], { icon: pinIcon, draggable: true }).addTo(map);
@@ -86,6 +90,7 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
 
     const updateMarker = (lat: number, lng: number) => {
       marker.setLatLng([lat, lng]);
+      map.setView([lat, lng], 15, { animate: false });
       if (onLocationSelect) {
         onLocationSelect(lat, lng, `DELIVERY PIN: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
       }

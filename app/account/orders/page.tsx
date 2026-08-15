@@ -1,6 +1,7 @@
 'use client';
 
 import Link from "next/link";
+import Image from "next/image";
 import { type Order, type OrderStatus } from "@/app/lib/muragoods-data";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -73,21 +74,24 @@ export default function AccountOrdersPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center mario-pattern">
+      <main className="min-h-screen flex items-center justify-center" style={{ backgroundImage: 'url(/images/background4.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
         <div className="text-white text-2xl font-black animate-bounce uppercase">Loading Orders...</div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen mario-pattern px-4 py-8 text-black sm:px-8">
+    <main className="min-h-screen px-4 py-8 text-black sm:px-8" style={{ backgroundImage: 'url(/images/background4.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
       <div className="mx-auto max-w-6xl">
         <header className="mb-8 flex flex-col gap-4 rounded-lg border-4 border-black bg-white p-6 shadow-2xl sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-black uppercase tracking-widest text-rose-500">
-              My Orders
-            </p>
-            <h1 className="mt-2 text-4xl font-black text-black uppercase tracking-wider">My Orders</h1>
+          <div className="flex items-center gap-4">
+            <div className="relative h-12 w-12 rounded-full border-4 border-black overflow-hidden shadow-[4px_4px_0px_0px_#000]">
+              <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
+            </div>
+            <div>
+              <p className="text-sm font-black uppercase tracking-widest text-rose-500">Muragoods</p>
+              <h1 className="mt-2 text-4xl font-black text-black uppercase tracking-wider">My Orders</h1>
+            </div>
           </div>
           <div className="flex gap-4">
             <button

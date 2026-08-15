@@ -16,12 +16,12 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="min-h-screen mario-pattern">
-      <nav className="sticky top-0 z-50 bg-white border-b-4 border-black shadow-[0_4px_0px_0px_#000]">
+    <main className="min-h-screen" style={{ backgroundImage: 'url(/images/background.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
+      <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b-4 border-black shadow-[0_4px_0px_0px_#000]">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-8 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
-            <div className="relative h-12 w-12 rounded-full border-4 border-black bg-white flex items-center justify-center shadow-[4px_4px_0px_0px_#000] overflow-hidden">
-              <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-contain p-2" />
+            <div className="relative h-12 w-12 rounded-full border-4 border-black overflow-hidden shadow-[4px_4px_0px_0px_#000]">
+              <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
             </div>
             <div>
               <p className="text-sm font-black uppercase tracking-widest text-rose-500">Muragoods</p>
@@ -54,8 +54,8 @@ export default function Home() {
                 <div className="mb-5 inline-flex border-4 border-black bg-yellow-400 px-6 py-3 text-sm font-black uppercase tracking-wider text-black shadow-[4px_4px_0px_0px_#000]">
                   EARN 2X COINS ON TODAY&apos;S ORDERS!
                 </div>
-                <h1 className="max-w-xl text-6xl font-black leading-tight tracking-tighter text-white sm:text-7xl md:text-8xl" style={{ textShadow: '8px 8px 0px #000' }}>
-                  WELCOME TO THE<br/>MUSHROOM KINGDOM<br/>EXPRESS!
+                <h1 className="max-w-xl text-6xl font-black leading-tight tracking-tighter text-white sm:text-7xl md:text-8xl" style={{ fontFamily: 'var(--font-raleway)', textShadow: '8px 8px 0px #000' }}>
+                  WELCOME TO<br/>MURAGOODS
                 </h1>
                 <p className="mt-5 max-w-xl text-xl font-black text-yellow-300" style={{ textShadow: '4px 4px 0px #000' }}>
                   MUSUBI • CHURROS • COFFEE JELLY
@@ -86,10 +86,10 @@ export default function Home() {
                     <span className="animate-pulse text-yellow-300">NEW!</span>
                   </div>
                   <div className="relative aspect-square w-full bg-white flex items-center justify-center">
-                    <Image src="/images/hero-musubi.png" alt="Mario Hero" fill className="object-contain p-4" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    <Image src="/images/hero-musubi.png" alt="Hero Musubi" fill className="object-contain p-4" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                     <div className="absolute top-4 right-4 w-16 h-16 bg-gradient-to-br from-yellow-300 to-yellow-500 border-4 border-black rounded-full flex items-center justify-center coin-float z-10 shadow-[4px_4px_0px_0px_#000]">
                       <div className="w-12 h-12 bg-gradient-to-br from-yellow-200 to-yellow-400 border-2 border-black rounded-full flex items-center justify-center">
-                        <span className="text-xl font-black text-black">P</span>
+                        <span className="text-xl font-black text-black">M</span>
                       </div>
                     </div>
                   </div>
@@ -103,7 +103,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="px-4 py-12 sm:px-8" style={{ background: 'linear-gradient(180deg, #E60012 0%, #c2000e 100%)' }}>
+      <section className="px-4 py-12 sm:px-8" style={{ backgroundImage: 'url(/images/background2.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
         <div className="mx-auto max-w-7xl">
           <div className="mb-12 text-center">
             <h2 className="text-5xl font-black text-white uppercase tracking-tighter" style={{ textShadow: '6px 6px 0px #000' }}>Featured Power-Ups</h2>

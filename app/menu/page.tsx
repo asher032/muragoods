@@ -116,12 +116,12 @@ export default function MenuPage() {
   };
 
   return (
-    <main className="min-h-screen mario-pattern">
-      <nav className="sticky top-0 z-50 bg-white border-b-4 border-black shadow-[0_4px_0px_0px_#000]">
+    <main className="min-h-screen" style={{ backgroundImage: 'url(/images/background3.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
+      <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b-4 border-black shadow-[0_4px_0px_0px_#000]">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-8 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
-            <div className="relative h-10 w-10 rounded-full border-4 border-black bg-white flex items-center justify-center shadow-[4px_4px_0px_0px_#000] overflow-hidden">
-              <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-contain p-2" />
+            <div className="relative h-10 w-10 rounded-full border-4 border-black overflow-hidden shadow-[4px_4px_0px_0px_#000]">
+              <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
             </div>
             <div>
               <p className="text-sm font-black uppercase tracking-widest text-rose-500">Muragoods</p>

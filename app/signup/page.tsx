@@ -1,7 +1,7 @@
 'use client';
 
-import Image from "next/image";
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -58,12 +58,12 @@ export default function SignupPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-4 py-8 mario-pattern">
+    <main className="min-h-screen flex items-center justify-center px-4 py-8" style={{ backgroundImage: 'url(/images/background4.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
       <div className="w-full max-w-md">
         <div className="rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
           <div className="flex flex-col items-center gap-4 mb-8">
-            <div className="relative w-20 h-20 rounded-full border-4 border-yellow-300 bg-white flex items-center justify-center shadow-lg overflow-hidden">
-              <Image src="/images/signup-badge.png" alt="Muragoods Signup" fill className="object-contain p-2" />
+            <div className="relative w-20 h-20 rounded-full border-4 border-yellow-300 overflow-hidden shadow-lg">
+              <Image src="/images/signup-badge.png" alt="Muragoods Signup" fill className="object-cover" />
             </div>
             <div className="text-center">
               <p className="text-sm font-black uppercase tracking-widest text-green-600">Muragoods</p>
