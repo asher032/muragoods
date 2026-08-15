@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { products as staticProducts, type CartItem, deliveryZones, dwclOnlyProducts, type ZoneKey } from '@/app/lib/muragoods-data';
-import { useProducts } from '@/app/hooks/useProducts';
 
 const LocationPicker = dynamic(() => import('@/app/components/LocationPicker'), { ssr: false });
 
@@ -29,15 +28,6 @@ export default function CheckoutPage() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showInstagramModal, setShowInstagramModal] = useState(false);
-  const { products, loading } = useProducts();
-
-  if (!isLoggedIn || loading) {
-    return (
-      <main className="min-h-screen flex items-center justify-center" style={{ backgroundImage: 'url(/images/background4.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
-        <div className="text-white text-2xl font-black animate-pulse uppercase">Loading Checkout...</div>
-      </main>
-    );
-  }
 
   useEffect(() => {
     const userStr = localStorage.getItem("user");
@@ -45,26 +35,31 @@ export default function CheckoutPage() {
       router.push("/login");
       return;
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoggedIn(true);
 
     const savedCart = localStorage.getItem("cart");
     if (savedCart) {
-      setCart(JSON.parse(savedCart));
+      try {
+        setCart(JSON.parse(savedCart));
+      } catch {
+        setCart({});
+      }
     }
   }, [router]);
 
   const cartItems = Object.entries(cart)
     .filter(([, data]) => data.quantity > 0)
     .map(([productId, data]) => {
-      const product = products.find(p => p.id === productId) || staticProducts.find(p => p.id === productId)!;
+      const product = staticProducts.find(p => p.id === productId);
+      if (!product) return null;
       const variant = product.variants.find(v => v.id === (data.variantId || product.variants[0].id));
       return {
         ...product,
         quantity: data.quantity,
-        selectedVariant: variant,
+        selectedVariant: variant || product.variants[0],
       } as CartItem;
-    });
+    })
+    .filter((item): item is CartItem => item !== null);
 
   const isDwcl = location === "DWCL";
   const restrictedItems = cartItems.filter(item => dwclOnlyProducts.includes(item.id) && !isDwcl);
@@ -161,7 +156,7 @@ export default function CheckoutPage() {
       const next = {
         ...prev,
         [productId]: {
-          ...(prev[productId] || { variantId: products.find(p => p.id === productId)?.variants[0].id }),
+          ...(prev[productId] || { variantId: staticProducts.find(p => p.id === productId)?.variants[0].id }),
           quantity: (prev[productId]?.quantity || 0) + 1,
         }
       };
