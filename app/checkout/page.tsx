@@ -5,7 +5,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { products as staticProducts, type CartItem, deliveryZones, dwclOnlyProducts, type ZoneKey } from '@/app/lib/muragoods-data';
+import { products as staticProducts, type CartItem, deliveryZones, dwclOnlyProducts, type ZoneKey, type Product } from '@/app/lib/muragoods-data';
+import { useProducts } from '@/app/hooks/useProducts';
 
 const LocationPicker = dynamic(() => import('@/app/components/LocationPicker'), { ssr: false });
 
@@ -28,6 +29,7 @@ export default function CheckoutPage() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showInstagramModal, setShowInstagramModal] = useState(false);
+  const { products } = useProducts();
 
   useEffect(() => {
     const userStr = localStorage.getItem("user");
@@ -51,7 +53,7 @@ export default function CheckoutPage() {
     .filter(([, data]) => data.quantity > 0)
     .map(([cartKey, data]) => {
       const productId = cartKey.split('__')[0];
-      const product = staticProducts.find(p => p.id === productId);
+      const product = products.find(p => p.id === productId) || staticProducts.find(p => p.id === productId);
       if (!product) return null;
       const variantId = cartKey.split('__')[1] || data.variantId || product.variants[0].id;
       const variant = product.variants.find(v => v.id === variantId);
@@ -158,7 +160,7 @@ export default function CheckoutPage() {
       const next = {
         ...prev,
         [cartKey]: {
-          ...(prev[cartKey] || { variantId: cartKey.split('__')[1] || staticProducts.find(p => p.id === cartKey.split('__')[0])?.variants[0].id }),
+          ...(prev[cartKey] || { variantId: cartKey.split('__')[1] || (products.find(p => p.id === cartKey.split('__')[0])?.variants[0].id || staticProducts.find(p => p.id === cartKey.split('__')[0])?.variants[0].id) }),
           quantity: (prev[cartKey]?.quantity || 0) + 1,
         }
       };

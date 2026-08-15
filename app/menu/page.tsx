@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { products, type Product, type CartItem, dwclOnlyProducts, deliveryZones, type ZoneKey } from '@/app/lib/muragoods-data';
+import { products as staticProducts, type Product, type CartItem, dwclOnlyProducts, deliveryZones, type ZoneKey } from '@/app/lib/muragoods-data';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useProducts } from '@/app/hooks/useProducts';
 
 const categories = ["All", "Musubi & Churros", "Coffee Jelly & Cookies"];
 
@@ -18,6 +19,7 @@ export default function MenuPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [restrictionMessage, setRestrictionMessage] = useState("");
+  const { products } = useProducts();
 
   useEffect(() => {
     const user = localStorage.getItem('user');
@@ -38,14 +40,14 @@ export default function MenuPage() {
   const filteredProducts = useMemo(() => {
     if (activeCategory === "All") return products;
     return products.filter(p => p.category === activeCategory);
-  }, [activeCategory]);
+  }, [activeCategory, products]);
 
   const cartItems = useMemo(() => {
     return Object.entries(cart)
       .filter(([, data]) => data.quantity > 0)
       .map(([cartKey, data]) => {
         const productId = cartKey.split('__')[0];
-        const product = products.find(p => p.id === productId);
+        const product = products.find(p => p.id === productId) || staticProducts.find(p => p.id === productId);
         if (!product) return null;
         const variantId = cartKey.split('__')[1] || data.variantId || product.variants[0].id;
         const variant = product.variants.find(v => v.id === variantId);
@@ -56,7 +58,7 @@ export default function MenuPage() {
         } as CartItem;
       })
       .filter((item): item is CartItem => item !== null);
-  }, [cart]);
+  }, [cart, products]);
 
   const isDwcl = location === "DWCL";
 
