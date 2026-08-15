@@ -190,8 +190,8 @@ export default function AdminPage() {
       <main className="min-h-screen flex items-center justify-center px-4" style={{ backgroundImage: 'url(/images/background.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
         <div className="w-full max-w-md rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
           <div className="flex flex-col items-center gap-4 mb-8">
-          <div className="relative flex h-16 w-16 items-center justify-center rounded-full border-4 border-yellow-300 overflow-hidden shadow-lg">
-            <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
+            <div className="relative flex h-16 w-16 items-center justify-center rounded-full border-4 border-yellow-300 overflow-hidden shadow-lg ring-4 ring-black/10">
+              <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
             </div>
             <p className="text-sm font-black uppercase tracking-widest text-yellow-300">Admin Portal</p>
           </div>
@@ -206,7 +206,7 @@ export default function AdminPage() {
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                className="mario-input mt-2 bg-yellow-50 focus:bg-white"
+                className="mario-input mt-2 bg-yellow-50 focus:bg-white focus:ring-4 focus:ring-rose-200"
               />
             </label>
 
@@ -216,19 +216,19 @@ export default function AdminPage() {
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                className="mario-input mt-2 bg-yellow-50 focus:bg-white"
+                className="mario-input mt-2 bg-yellow-50 focus:bg-white focus:ring-4 focus:ring-rose-200"
               />
             </label>
 
             {error ? (
-              <div className="rounded-lg border-4 border-rose-400 bg-rose-50 p-3 text-sm font-black text-rose-600 uppercase">
+              <div className="rounded-xl border-4 border-rose-400 bg-rose-50 p-3 text-sm font-black text-rose-600 uppercase shadow-lg">
                 {error}
               </div>
             ) : null}
 
             <button
               type="submit"
-              className="mario-btn mario-btn-black w-full uppercase font-black text-lg tracking-widest mt-6"
+              className="mario-btn mario-btn-black w-full uppercase font-black text-lg tracking-widest mt-6 hover:scale-105 transition-all shadow-xl"
             >
               ENTER DASHBOARD
             </button>
@@ -242,12 +242,12 @@ export default function AdminPage() {
     <main className="min-h-screen px-4 py-8 sm:px-8" style={{ backgroundImage: 'url(/images/background.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
       <div className="mx-auto max-w-7xl">
         {alert.show && (
-          <div className="mb-8 rounded-lg border-4 border-yellow-300 bg-yellow-300 p-4 text-lg font-black text-black shadow-2xl animate-pulse">
+          <div className="mb-8 rounded-xl border-4 border-yellow-300 bg-gradient-to-r from-yellow-300 to-yellow-400 p-4 text-lg font-black text-black shadow-2xl animate-pulse">
             {alert.message}
           </div>
         )}
 
-        <header className="mb-8 flex flex-col gap-4 rounded-lg bg-black border-4 border-yellow-300 p-6 text-white shadow-2xl md:flex-row md:items-center md:justify-between">
+        <header className="mb-8 flex flex-col gap-4 rounded-2xl bg-gradient-to-r from-black to-gray-900 border-4 border-yellow-300 p-6 text-white shadow-2xl md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm font-black uppercase tracking-widest text-yellow-300">Admin</p>
             <h1 className="mt-2 text-4xl font-black text-white uppercase tracking-wide">Muragoods Dashboard</h1>
@@ -255,22 +255,22 @@ export default function AdminPage() {
           <button
             type="button"
             onClick={() => setIsAuthenticated(false)}
-            className="mario-btn bg-rose-400 text-yellow-300 border-yellow-300 hover:bg-rose-500 uppercase font-black"
+            className="mario-btn bg-rose-400 text-yellow-300 border-yellow-300 hover:bg-rose-500 uppercase font-black hover:scale-105 transition-all shadow-lg"
           >
             LOG OUT
           </button>
         </header>
 
         <section className="grid gap-4 md:grid-cols-3">
-          <div className="mario-card p-6 shadow-xl">
+          <div className="mario-card p-6 shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all">
             <p className="text-sm font-black uppercase tracking-widest text-rose-500">Today&apos;s Sales</p>
             <p className="mt-3 text-4xl font-black text-black">₱{summary.totalSales}</p>
           </div>
-          <div className="mario-card p-6 shadow-xl">
+          <div className="mario-card p-6 shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all">
             <p className="text-sm font-black uppercase tracking-widest text-rose-500">Pending</p>
             <p className="mt-3 text-4xl font-black text-black">{summary.pending}</p>
           </div>
-          <div className="mario-card p-6 shadow-xl">
+          <div className="mario-card p-6 shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all">
             <p className="text-sm font-black uppercase tracking-widest text-rose-500">Preparing</p>
             <p className="mt-3 text-4xl font-black text-black">{summary.preparing}</p>
           </div>
@@ -280,7 +280,7 @@ export default function AdminPage() {
           <div className="mario-card p-6 shadow-xl">
             <h2 className="text-2xl font-black text-black uppercase tracking-wider">Live Order Feed</h2>
 
-            <div className="mt-6 overflow-x-auto rounded-lg border-4 border-black">
+            <div className="mt-6 overflow-x-auto rounded-xl border-4 border-black">
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-black text-white">
                   <tr>
@@ -295,7 +295,7 @@ export default function AdminPage() {
                 </thead>
                 <tbody>
                   {orders.map((order, idx) => (
-                    <tr key={order._id || order.id} className={`border-b-2 border-black ${idx % 2 === 0 ? 'bg-yellow-50' : 'bg-white'}`}>
+                    <tr key={order._id || order.id} className={`border-b-2 border-black transition-colors hover:bg-yellow-50 ${idx % 2 === 0 ? 'bg-yellow-50/50' : 'bg-white'}`}>
                       <td className="px-2 sm:px-4 py-3 font-black text-black text-xs sm:text-sm">{(order._id || order.id).slice(-5)}</td>
                       <td className="px-2 sm:px-4 py-3">
                         <div className="font-bold text-black text-xs sm:text-sm">{order.customer}</div>
@@ -312,7 +312,7 @@ export default function AdminPage() {
                         {order.gcashScreenshotUrl && (
                           <button
                             onClick={() => setPreviewReceipt(order.gcashScreenshotUrl || "")}
-                            className="text-xs font-black text-rose-500 underline"
+                            className="text-xs font-black text-rose-500 underline hover:text-rose-600 transition-colors"
                           >
                             View Receipt
                           </button>
@@ -334,7 +334,7 @@ export default function AdminPage() {
                       <td className="px-2 sm:px-4 py-3">
                         <button
                           onClick={() => handleDeleteOrder(order._id || order.id)}
-                          className="rounded bg-rose-400 p-2 text-white font-black hover:bg-rose-500 text-xs"
+                          className="rounded bg-rose-400 p-2 text-white font-black hover:bg-rose-500 text-xs hover:scale-105 transition-all shadow-md border-2 border-black"
                         >
                           Delete
                         </button>
@@ -352,7 +352,7 @@ export default function AdminPage() {
               {catalog.map((product) => (
                 <div
                   key={product.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between rounded-lg border-4 border-black bg-yellow-50 p-4 gap-3"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between rounded-xl border-4 border-black bg-yellow-50 p-4 gap-3 shadow-md hover:shadow-lg transition-all"
                 >
                   <div>
                     <p className="font-black text-black text-lg">{product.name}</p>
@@ -361,7 +361,7 @@ export default function AdminPage() {
                   <button
                     type="button"
                     onClick={() => handleUpdateInventory(product.id)}
-                    className="mario-btn mario-btn-black border-black hover:bg-slate-900 uppercase font-black w-full sm:w-auto"
+                    className="mario-btn mario-btn-black border-black hover:bg-slate-900 uppercase font-black w-full sm:w-auto hover:scale-105 transition-all"
                   >
                     Update
                   </button>
@@ -373,22 +373,22 @@ export default function AdminPage() {
       </div>
 
       {previewReceipt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setPreviewReceipt("")}>
-          <div className="mario-card max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-black p-4 border-b-4 border-black flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setPreviewReceipt("")}>
+          <div className="mario-card max-w-2xl w-full animate-bounce-in" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-black to-gray-900 p-4 border-b-4 border-black flex items-center justify-between">
               <h3 className="text-xl font-black text-yellow-300 uppercase">Payment Receipt</h3>
               <button
                 onClick={() => setPreviewReceipt("")}
-                className="text-white text-2xl font-black hover:text-rose-400"
+                className="text-white text-2xl font-black hover:text-rose-400 transition-colors"
               >
                 x
               </button>
             </div>
             <div className="p-4 bg-white">
               {previewReceipt.startsWith('data:') ? (
-                <img src={previewReceipt} alt="Payment Receipt" className="w-full h-auto rounded-lg border-4 border-black" />
+                <img src={previewReceipt} alt="Payment Receipt" className="w-full h-auto rounded-xl border-4 border-black shadow-lg" />
               ) : (
-                <img src={previewReceipt} alt="Payment Receipt" className="w-full h-auto rounded-lg border-4 border-black" />
+                <img src={previewReceipt} alt="Payment Receipt" className="w-full h-auto rounded-xl border-4 border-black shadow-lg" />
               )}
             </div>
           </div>

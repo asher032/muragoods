@@ -17,10 +17,10 @@ export default function Home() {
 
   return (
     <main className="min-h-screen" style={{ backgroundImage: 'url(/images/background.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
-      <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b-4 border-black shadow-[0_4px_0px_0px_#000]">
+      <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b-4 border-black shadow-lg transition-all">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-8 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="relative h-12 w-12 rounded-full border-4 border-black overflow-hidden shadow-[4px_4px_0px_0px_#000]">
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="relative h-12 w-12 rounded-full border-4 border-black overflow-hidden shadow-[4px_4px_0px_0px_#000] transition-transform group-hover:scale-105">
               <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
             </div>
             <div>
@@ -46,44 +46,44 @@ export default function Home() {
         </div>
       </nav>
 
-      <section className="relative px-4 pb-12 pt-7 sm:px-8">
+      <section className="relative px-4 pb-16 pt-8 sm:px-8">
         <div className="mx-auto max-w-7xl">
-          <div className="angled-divider charcoal-pattern relative border-4 border-black p-8 shadow-[12px_12px_0px_0px_rgba(0,0,0,0.5)] overflow-hidden">
+          <div className="angled-divider charcoal-pattern relative border-4 border-black p-6 sm:p-8 lg:p-10 shadow-2xl overflow-hidden rounded-2xl">
             <div className="relative grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
               <div className="text-white">
-                <div className="mb-5 inline-flex border-4 border-black bg-yellow-400 px-6 py-3 text-sm font-black uppercase tracking-wider text-black shadow-[4px_4px_0px_0px_#000]">
+                <div className="mb-5 inline-flex border-4 border-black bg-gradient-to-r from-yellow-300 to-yellow-400 px-6 py-3 text-sm font-black uppercase tracking-wider text-black shadow-[4px_4px_0px_0px_#000] hover:shadow-[6px_6px_0px_0px_#000] transition-all hover:-translate-y-0.5">
                   EARN 2X COINS ON TODAY&apos;S ORDERS!
                 </div>
-                <h1 className="max-w-xl text-6xl font-black leading-tight tracking-tighter text-white sm:text-7xl md:text-8xl" style={{ fontFamily: 'var(--font-raleway)', textShadow: '8px 8px 0px #000' }}>
+                <h1 className="max-w-xl text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black leading-[1.1] tracking-tighter text-white" style={{ fontFamily: 'var(--font-raleway)', textShadow: '6px 6px 0px #000' }}>
                   WELCOME TO<br/>MURAGOODS
                 </h1>
-                <p className="mt-5 max-w-xl text-xl font-black text-yellow-300" style={{ textShadow: '4px 4px 0px #000' }}>
+                <p className="mt-5 max-w-xl text-lg sm:text-xl font-black text-yellow-300" style={{ textShadow: '3px 3px 0px #000' }}>
                   MUSUBI • CHURROS • COFFEE JELLY
                 </p>
-                <p className="mt-2 max-w-xl text-lg font-black text-white" style={{ textShadow: '2px 2px 0px #000' }}>
+                <p className="mt-2 max-w-xl text-base sm:text-lg font-black text-white" style={{ textShadow: '2px 2px 0px #000' }}>
                   Fuel your adventure with iconic treats and power-ups delivered straight to your door!
                 </p>
                 <div className="mt-8 flex flex-wrap gap-4">
-                  <Link href="/menu" className="mario-btn mario-btn-yellow text-lg">
+                  <Link href="/menu" className="mario-btn mario-btn-yellow text-base sm:text-lg hover:scale-105 transition-transform">
                     ORDER NOW &gt;
                   </Link>
                   {isLoggedIn ? (
-                    <Link href="/orders" className="mario-btn mario-btn-blue text-lg">
+                    <Link href="/orders" className="mario-btn mario-btn-blue text-base sm:text-lg hover:scale-105 transition-transform">
                       VIEW ORDERS
                     </Link>
                   ) : (
-                    <Link href="/login" className="mario-btn mario-btn-blue text-lg">
+                    <Link href="/login" className="mario-btn mario-btn-blue text-base sm:text-lg hover:scale-105 transition-transform">
                       PLAY NOW
                     </Link>
                   )}
                 </div>
               </div>
 
-              <div className="flex min-h-[420px] items-center justify-center">
-                <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border-4 border-yellow-400 bg-white shadow-[8px_8px_0px_0px_#000] hero-3d-cutout">
-                  <div className="bg-rose-400 p-4 border-b-4 border-black flex justify-between items-center">
+              <div className="flex min-h-[380px] sm:min-h-[420px] items-center justify-center">
+                <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border-4 border-yellow-400 bg-white shadow-[8px_8px_0px_0px_#000] hero-3d-cutout hover:shadow-[12px_12px_0px_0px_#000] transition-all">
+                  <div className="bg-gradient-to-r from-rose-400 to-rose-500 p-4 border-b-4 border-black flex justify-between items-center">
                     <span className="text-white font-black">HIGH SCORE: ₱55</span>
-                    <span className="animate-pulse text-yellow-300">NEW!</span>
+                    <span className="animate-pulse text-yellow-300 text-sm">NEW!</span>
                   </div>
                   <div className="relative aspect-square w-full bg-white flex items-center justify-center">
                     <Image src="/images/hero-musubi.png" alt="Hero Musubi" fill className="object-contain p-4" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
@@ -93,7 +93,7 @@ export default function Home() {
                       </div>
                     </div>
                   </div>
-                  <div className="bg-black p-4 text-center">
+                  <div className="bg-gradient-to-r from-black to-gray-900 p-4 text-center">
                     <h3 className="text-2xl font-black text-white uppercase">SUPER MUSUBI</h3>
                   </div>
                 </div>
@@ -106,8 +106,8 @@ export default function Home() {
       <section className="px-4 py-12 sm:px-8" style={{ backgroundImage: 'url(/images/background2.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
         <div className="mx-auto max-w-7xl">
           <div className="mb-12 text-center">
-            <h2 className="text-5xl font-black text-white uppercase tracking-tighter" style={{ textShadow: '6px 6px 0px #000' }}>Featured Power-Ups</h2>
-            <div className="h-2 w-48 bg-yellow-400 mx-auto mt-4 border-2 border-black"></div>
+            <h2 className="text-4xl sm:text-5xl font-black text-white uppercase tracking-tighter" style={{ textShadow: '5px 5px 0px #000' }}>Featured Power-Ups</h2>
+            <div className="h-2 w-48 bg-gradient-to-r from-yellow-300 to-yellow-500 mx-auto mt-4 border-2 border-black rounded-full"></div>
           </div>
 
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
@@ -117,9 +117,9 @@ export default function Home() {
               { name: "Coffee Jelly", image: "/images/product-coffee-jelly.png", price: "₱15", desc: "Option 1 / Option 2" },
               { name: "Cookies", image: "/images/product-cookies.png", price: "₱25", desc: "Regular / Cookies and Cream" },
             ].map((item) => (
-              <div key={item.name} className="menu-card">
-                <div className="h-48 bg-blue-400 border-b-4 border-black relative overflow-hidden">
-                  <Image src={item.image} alt={item.name} fill className="object-contain p-2" />
+              <div key={item.name} className="menu-card group">
+                <div className="h-48 bg-gradient-to-br from-blue-400 to-blue-500 border-b-4 border-black relative overflow-hidden">
+                  <Image src={item.image} alt={item.name} fill className="object-contain p-2 transition-transform group-hover:scale-110 duration-300" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
                 </div>
                 <div className="p-6 bg-white">
@@ -127,7 +127,7 @@ export default function Home() {
                   <p className="mt-2 text-sm font-bold text-slate-700">{item.desc}</p>
                   <div className="mt-4 flex items-center justify-between">
                     <span className="text-3xl font-black text-rose-500" style={{ textShadow: '2px 2px 0px #000' }}>{item.price}</span>
-                    <Link href="/menu" className="mario-btn mario-btn-yellow">
+                    <Link href="/menu" className="mario-btn mario-btn-yellow hover:scale-105 transition-transform">
                       + ADD
                     </Link>
                   </div>

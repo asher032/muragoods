@@ -89,10 +89,10 @@ export default function OrdersPage() {
 
   return (
     <main className="min-h-screen" style={{ backgroundImage: 'url(/images/background3.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
-      <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b-4 border-black shadow-[0_4px_0px_0px_#000]">
+      <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b-4 border-black shadow-lg transition-all">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-8 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="relative h-10 w-10 rounded-full border-4 border-black overflow-hidden shadow-[4px_4px_0px_0px_#000]">
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="relative h-10 w-10 rounded-full border-4 border-black overflow-hidden shadow-[4px_4px_0px_0px_#000] transition-transform group-hover:scale-105">
               <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
             </div>
             <div>
@@ -111,18 +111,18 @@ export default function OrdersPage() {
       <section className="px-4 py-12 sm:px-8">
         <div className="mx-auto max-w-6xl">
           <div className="mb-8">
-            <h1 className="text-5xl font-black text-white uppercase tracking-tighter" style={{ textShadow: '6px 6px 0px #000' }}>Track Your Quest</h1>
+            <h1 className="text-4xl sm:text-5xl font-black text-white uppercase tracking-tighter" style={{ textShadow: '5px 5px 0px #000' }}>Track Your Quest</h1>
             <p className="mt-2 text-lg font-black text-yellow-300" style={{ textShadow: '2px 2px 0px #000' }}>Your food is currently being prepped in Bowser&apos;s Castle Kitchen!</p>
           </div>
 
           {error && (
-            <div className="mb-6 rounded-lg border-4 border-rose-400 bg-rose-50 p-4 text-sm font-black text-rose-600 uppercase">
+            <div className="mb-6 rounded-xl border-4 border-rose-400 bg-rose-50 p-4 text-sm font-black text-rose-600 uppercase shadow-lg">
               {error}
             </div>
           )}
 
           {orders.length === 0 ? (
-            <div className="rounded-lg border-4 border-black bg-white p-12 text-center shadow-2xl">
+            <div className="rounded-2xl border-4 border-black bg-white p-12 text-center shadow-2xl">
               <p className="text-2xl font-black text-black uppercase mb-4">No orders found!</p>
               <Link href="/menu" className="mario-btn inline-block bg-yellow-400 text-black">Start Shopping</Link>
             </div>
@@ -135,7 +135,7 @@ export default function OrdersPage() {
                 return (
                   <article
                     key={order.id}
-                    className="rounded-lg border-4 border-black bg-white p-6 shadow-2xl slide-in"
+                    className="rounded-2xl border-4 border-black bg-white p-6 shadow-2xl slide-in hover:shadow-[20px_20px_0px_0px_rgba(0,0,0,0.3)] transition-all"
                   >
                     <div className="flex flex-col gap-5 border-b-4 border-black pb-4 md:flex-row md:items-center md:justify-between">
                       <div>
@@ -148,7 +148,7 @@ export default function OrdersPage() {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                        <span className="rounded-lg border-2 border-black bg-yellow-300 px-3 py-2 text-xs font-black uppercase tracking-widest text-black pulse-badge">
+                        <span className="rounded-lg border-2 border-black bg-yellow-300 px-3 py-2 text-xs font-black uppercase tracking-widest text-black pulse-badge shadow-sm">
                           {order.zone}
                         </span>
                         <span className="rounded-lg border-2 border-black bg-black px-3 py-2 text-xs font-black uppercase tracking-widest text-yellow-300">
@@ -158,7 +158,7 @@ export default function OrdersPage() {
                           <button
                             onClick={() => handleCancelOrder(order._id || order.id)}
                             disabled={cancellingId === (order._id || order.id)}
-                            className="rounded bg-rose-400 px-3 py-2 text-xs font-black text-white hover:bg-rose-500 disabled:opacity-50"
+                            className="rounded bg-rose-400 px-3 py-2 text-xs font-black text-white hover:bg-rose-500 disabled:opacity-50 hover:scale-105 transition-all shadow-md border-2 border-black"
                           >
                             {cancellingId === (order._id || order.id) ? "Cancelling..." : "Cancel"}
                           </button>
@@ -178,9 +178,9 @@ export default function OrdersPage() {
                             return (
                               <div key={step} className="relative">
                                 <div
-                                  className={`flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-4 text-xs font-black transition ${
+                                  className={`flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-4 text-xs font-black transition-all ${
                                     active
-                                      ? "border-black bg-rose-400 text-white shadow-lg pulse-badge"
+                                      ? "border-black bg-rose-400 text-white shadow-lg pulse-badge scale-110"
                                       : "border-black bg-white text-black"
                                   }`}
                                 >
@@ -194,13 +194,13 @@ export default function OrdersPage() {
                           })}
                         </div>
 
-                        <div className="rounded-lg border-4 border-black bg-yellow-100 p-5">
+                        <div className="rounded-xl border-4 border-black bg-yellow-100 p-5 shadow-md">
                           <p className="text-sm font-black uppercase tracking-widest text-black">Current Status</p>
                           <p className="mt-3 text-2xl font-black text-rose-500 uppercase">{order.status}</p>
                         </div>
                       </div>
 
-                      <div className="rounded-lg border-4 border-black bg-white p-5">
+                      <div className="rounded-xl border-4 border-black bg-white p-5 shadow-md">
                         <p className="text-sm font-black uppercase tracking-widest text-rose-500">Delivery Info</p>
                         <ul className="mt-4 space-y-3 text-sm">
                           <li className="font-bold text-black"><span className="font-black text-rose-500">{order.address}</span></li>

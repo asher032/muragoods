@@ -62,7 +62,7 @@ export default function SignupPage() {
       <div className="w-full max-w-md">
         <div className="rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
           <div className="flex flex-col items-center gap-4 mb-8">
-            <div className="relative w-20 h-20 rounded-full border-4 border-yellow-300 overflow-hidden shadow-lg">
+            <div className="relative w-20 h-20 rounded-full border-4 border-yellow-300 overflow-hidden shadow-lg ring-4 ring-black/10">
               <Image src="/images/signup-badge.png" alt="Muragoods Signup" fill className="object-cover" />
             </div>
             <div className="text-center">
@@ -81,7 +81,7 @@ export default function SignupPage() {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mario-input mt-2 bg-yellow-50 focus:bg-white"
+                className="mario-input mt-2 bg-yellow-50 focus:bg-white focus:ring-4 focus:ring-rose-200"
                 placeholder="Your name"
               />
             </label>
@@ -92,7 +92,7 @@ export default function SignupPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mario-input mt-2 bg-yellow-50 focus:bg-white"
+                className="mario-input mt-2 bg-yellow-50 focus:bg-white focus:ring-4 focus:ring-rose-200"
                 placeholder="your@email.com"
               />
             </label>
@@ -103,7 +103,7 @@ export default function SignupPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mario-input mt-2 bg-yellow-50 focus:bg-white"
+                className="mario-input mt-2 bg-yellow-50 focus:bg-white focus:ring-4 focus:ring-rose-200"
                 placeholder="••••••••"
               />
             </label>
@@ -114,13 +114,13 @@ export default function SignupPage() {
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mario-input mt-2 bg-yellow-50 focus:bg-white"
+                className="mario-input mt-2 bg-yellow-50 focus:bg-white focus:ring-4 focus:ring-rose-200"
                 placeholder="••••••••"
               />
             </label>
 
             {error && (
-              <div className="rounded-lg border-4 border-rose-400 bg-rose-50 p-3 text-sm font-black text-rose-600 uppercase">
+              <div className="rounded-xl border-4 border-rose-400 bg-rose-50 p-3 text-sm font-black text-rose-600 uppercase shadow-lg">
                 {error}
               </div>
             )}
@@ -128,7 +128,7 @@ export default function SignupPage() {
             <button
               type="submit"
               disabled={loading}
-              className="mario-btn mario-btn-green w-full uppercase font-black text-lg tracking-widest mt-6 border-black disabled:opacity-50"
+              className="mario-btn mario-btn-green w-full uppercase font-black text-lg tracking-widest mt-6 border-black disabled:opacity-50 hover:scale-105 transition-all shadow-xl"
             >
               {loading ? "CREATING..." : "CREATE ACCOUNT"}
             </button>
@@ -137,13 +137,13 @@ export default function SignupPage() {
           <div className="mt-8 border-t-4 border-black pt-6">
             <p className="text-center text-sm font-black text-black uppercase">
               Have an account?{' '}
-              <Link href="/login" className="text-rose-500 hover:text-rose-600 underline">
+              <Link href="/login" className="text-rose-500 hover:text-rose-600 underline transition-colors">
                 Sign in!
               </Link>
             </p>
           </div>
 
-          <Link href="/" className="mario-btn mt-4 block text-center bg-rose-400 text-white border-black hover:bg-rose-500 uppercase font-black w-full md:w-auto">
+          <Link href="/" className="mario-btn mt-4 block text-center bg-rose-400 text-white border-black hover:bg-rose-500 uppercase font-black w-full md:w-auto hover:scale-105 transition-all shadow-lg">
             ← Back to Shop
           </Link>
         </div>

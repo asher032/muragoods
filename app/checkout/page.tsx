@@ -191,10 +191,10 @@ export default function CheckoutPage() {
 
   return (
     <main className="min-h-screen" style={{ backgroundImage: 'url(/images/background4.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
-      <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b-4 border-black shadow-[0_4px_0px_0px_#000]">
+      <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b-4 border-black shadow-lg transition-all">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-8 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="relative h-10 w-10 rounded-full border-4 border-black overflow-hidden shadow-[4px_4px_0px_0px_#000]">
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="relative h-10 w-10 rounded-full border-4 border-black overflow-hidden shadow-[4px_4px_0px_0px_#000] transition-transform group-hover:scale-105">
               <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
             </div>
             <div>
@@ -213,37 +213,37 @@ export default function CheckoutPage() {
       <section className="px-4 py-12 sm:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="mb-8">
-            <h1 className="text-5xl font-black text-white uppercase tracking-tighter" style={{ textShadow: '6px 6px 0px #000' }}>Final Stage: Checkout</h1>
+            <h1 className="text-4xl sm:text-5xl font-black text-white uppercase tracking-tighter" style={{ textShadow: '5px 5px 0px #000' }}>Final Stage: Checkout</h1>
             <p className="mt-2 text-lg font-black text-yellow-300" style={{ textShadow: '2px 2px 0px #000' }}>Review your items and complete your order.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-1 xl:grid-cols-[1.2fr_0.8fr]">
             <div className="mario-card">
-              <div className="bg-rose-400 p-4 sm:p-6 border-b-4 border-black">
+              <div className="bg-gradient-to-r from-rose-400 to-rose-500 p-4 sm:p-6 border-b-4 border-black">
                 <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-widest">Your Cart</h2>
               </div>
 
               <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
                 {error && (
-                  <div className="rounded-lg border-4 border-rose-400 bg-rose-50 p-4 text-sm font-black text-rose-600 uppercase">
+                  <div className="rounded-xl border-4 border-rose-400 bg-rose-50 p-4 text-sm font-black text-rose-600 uppercase shadow-lg">
                     {error}
                   </div>
                 )}
 
                 {restrictedItems.length > 0 && (
-                  <div className="rounded-lg border-4 border-rose-400 bg-rose-50 p-4 text-sm font-black text-rose-600 uppercase">
+                  <div className="rounded-xl border-4 border-rose-400 bg-rose-50 p-4 text-sm font-black text-rose-600 uppercase shadow-lg">
                     Coffee Jelly & Cookies are only available for DWCL pickup!
                   </div>
                 )}
 
                 {!isDwcl && totalItems < 2 && (
-                  <div className="rounded-lg border-4 border-yellow-400 bg-yellow-50 p-4 text-sm font-black text-black uppercase">
+                  <div className="rounded-xl border-4 border-yellow-400 bg-yellow-50 p-4 text-sm font-black text-black uppercase shadow-lg">
                     Minimum 2 items required for delivery outside DWCL.
                   </div>
                 )}
 
                 {cartItems.length === 0 ? (
-                  <div className="rounded-lg bg-yellow-100 p-8 text-center font-black text-slate-700 border-4 border-black">
+                  <div className="rounded-xl bg-yellow-100 p-8 text-center font-black text-slate-700 border-4 border-black shadow-lg">
                     Cart is empty. Add delicious items!
                   </div>
                 ) : (
@@ -252,7 +252,7 @@ export default function CheckoutPage() {
                       {cartItems.map((item) => {
                         const cartKey = `${item.id}__${item.selectedVariant?.id || item.variants[0]?.id || ''}`;
                         return (
-                          <div key={cartKey} className="flex items-center justify-between rounded-lg border-4 border-black p-4 bg-yellow-50">
+                          <div key={cartKey} className="flex items-center justify-between rounded-xl border-4 border-black p-4 bg-gradient-to-r from-yellow-50 to-white shadow-md hover:shadow-lg transition-all">
                             <div>
                               <p className="text-lg font-black text-black">{item.name}</p>
                               <p className="text-sm font-bold text-slate-700">{item.selectedVariant?.name} • ₱{item.selectedVariant?.price || 0} each</p>
@@ -261,7 +261,7 @@ export default function CheckoutPage() {
                               <button
                                 type="button"
                                 onClick={() => removeFromCart(cartKey)}
-                                className="flex h-10 w-10 items-center justify-center rounded-full border-4 border-black bg-rose-400 text-lg font-black text-white hover:bg-rose-300"
+                                className="flex h-10 w-10 items-center justify-center rounded-full border-4 border-black bg-rose-400 text-lg font-black text-white hover:bg-rose-300 hover:scale-110 transition-all shadow-md"
                               >
                                 −
                               </button>
@@ -269,7 +269,7 @@ export default function CheckoutPage() {
                               <button
                                 type="button"
                                 onClick={() => addToCartFromCheckout(cartKey)}
-                                className="flex h-10 w-10 items-center justify-center rounded-full border-4 border-black bg-black text-lg font-black text-yellow-300 hover:bg-slate-900"
+                                className="flex h-10 w-10 items-center justify-center rounded-full border-4 border-black bg-black text-lg font-black text-yellow-300 hover:bg-slate-900 hover:scale-110 transition-all shadow-md"
                               >
                                 +
                               </button>
@@ -284,7 +284,7 @@ export default function CheckoutPage() {
                       <select
                         value={location}
                         onChange={(e) => setLocation(e.target.value as ZoneKey)}
-                        className="w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-black text-black outline-none focus:border-rose-400 text-sm sm:text-base"
+                        className="w-full rounded-xl border-4 border-black bg-gradient-to-r from-yellow-50 to-white px-4 py-3 font-black text-black outline-none focus:border-rose-400 focus:ring-4 focus:ring-rose-200 transition-all shadow-md text-sm sm:text-base"
                       >
                         {deliveryZones.map(zone => (
                           <option key={zone.code} value={zone.code}>{zone.label}</option>
@@ -300,7 +300,7 @@ export default function CheckoutPage() {
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         placeholder="Enter valid contact number"
-                        className="w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none focus:border-rose-400 text-sm sm:text-base"
+                        className="w-full rounded-xl border-4 border-black bg-gradient-to-r from-yellow-50 to-white px-4 py-3 font-semibold text-black outline-none focus:border-rose-400 focus:ring-4 focus:ring-rose-200 transition-all shadow-md text-sm sm:text-base"
                         required
                       />
                       <p className="text-xs text-gray-600 mt-1">Required for delivery confirmation calls</p>
@@ -314,7 +314,7 @@ export default function CheckoutPage() {
                         onChange={(e) => setCustomOrderDate(e.target.value)}
                         required
                         min={tomorrow}
-                        className="w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-black text-black outline-none focus:border-rose-400 text-sm sm:text-base"
+                        className="w-full rounded-xl border-4 border-black bg-gradient-to-r from-yellow-50 to-white px-4 py-3 font-black text-black outline-none focus:border-rose-400 focus:ring-4 focus:ring-rose-200 transition-all shadow-md text-sm sm:text-base"
                       />
                       <p className="text-xs text-gray-600 mt-1">Select a valid future date</p>
                     </div>
@@ -336,7 +336,7 @@ export default function CheckoutPage() {
                     )}
 
                     {isDwcl && (
-                      <div className="rounded-lg border-4 border-black bg-yellow-100 p-4">
+                      <div className="rounded-xl border-4 border-black bg-yellow-100 p-4 shadow-md">
                         <p className="text-sm font-black text-black uppercase">DWCL Pickup</p>
                         <p className="text-xs text-gray-700 mt-1">No map needed for DWCL pickup. Please proceed to the next steps.</p>
                       </div>
@@ -347,7 +347,7 @@ export default function CheckoutPage() {
                       <select
                         value={deliveryService}
                         onChange={(e) => setDeliveryService(e.target.value)}
-                        className="w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-black text-black outline-none focus:border-rose-400"
+                        className="w-full rounded-xl border-4 border-black bg-gradient-to-r from-yellow-50 to-white px-4 py-3 font-black text-black outline-none focus:border-rose-400 focus:ring-4 focus:ring-rose-200 transition-all shadow-md"
                       >
                         <option value="Free Shipping">DWCL Pickup - Free</option>
                         <option value="Saturday Delivery">Saturday Delivery - Legazpi/Daraga</option>
@@ -356,14 +356,14 @@ export default function CheckoutPage() {
 
                     <div>
                       <label className="block text-sm font-black text-black uppercase mb-2">Payment Method</label>
-                      <div className="rounded-lg border-4 border-black bg-yellow-50 p-4">
+                      <div className="rounded-xl border-4 border-black bg-yellow-50 p-4 shadow-md">
                         <p className="text-sm font-black text-black">GCash</p>
                         <p className="text-xs text-gray-700 mt-1">Proof of payment required upon checkout.</p>
                       </div>
                       <p className="text-xs text-gray-600 mt-1">For other payment arrangements, message us on Instagram @muragoods_.</p>
                     </div>
 
-                    <div className="rounded-lg border-4 border-rose-400 bg-rose-50 p-4 space-y-3">
+                    <div className="rounded-xl border-4 border-rose-400 bg-rose-50 p-4 space-y-3 shadow-lg">
                       <p className="text-xs font-black text-rose-600 uppercase">GCash Payment Details</p>
                       <p className="text-sm font-bold text-black">Send amount to: <span className="text-rose-500 font-black">639466472599</span> (Muragoods)</p>
 
@@ -374,7 +374,7 @@ export default function CheckoutPage() {
                           value={gcashRef}
                           onChange={(e) => setGcashRef(e.target.value)}
                           placeholder="Enter valid GCash reference number"
-                          className="w-full rounded-lg border-2 border-black bg-white px-3 py-2 text-sm font-semibold text-black outline-none focus:border-rose-400"
+                          className="w-full rounded-lg border-2 border-black bg-white px-3 py-2 text-sm font-semibold text-black outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-200 transition-all"
                           required
                         />
                       </div>
@@ -385,14 +385,14 @@ export default function CheckoutPage() {
                           type="file"
                           accept="image/*"
                           onChange={(e) => setGcashFile(e.target.files?.[0] || null)}
-                          className="w-full text-xs font-semibold text-black"
+                          className="w-full text-xs font-semibold text-black rounded-lg border-2 border-black p-2 focus:border-rose-400 transition-all"
                           required
                         />
                         <p className="text-xs text-gray-600 mt-1">Proof is required. Without proof, order may be delayed or rejected.</p>
                       </div>
                     </div>
 
-                    <div className="rounded-lg border-4 border-black bg-blue-100 p-4">
+                    <div className="rounded-xl border-4 border-black bg-blue-100 p-4 shadow-md">
                       <p className="text-xs font-black text-black uppercase">Custom Order / Inquiries</p>
                       <p className="text-xs text-gray-700 mt-1">For custom orders, bulk orders, or special requests, please message us directly:</p>
                       <p className="text-sm font-black text-black mt-1">Instagram: @muragoods_</p>
@@ -404,7 +404,7 @@ export default function CheckoutPage() {
             </div>
 
             <aside className="checkout-summary">
-              <div className="bg-black p-4 sm:p-6 border-b-4 border-black">
+              <div className="bg-gradient-to-r from-black to-gray-900 p-4 sm:p-6 border-b-4 border-black rounded-t-2xl">
                 <h3 className="text-xl sm:text-2xl font-black text-yellow-300 uppercase tracking-widest">Order Summary</h3>
               </div>
 
@@ -412,7 +412,7 @@ export default function CheckoutPage() {
                 <div className="space-y-3 sm:space-y-4 text-base font-black text-black border-b-4 border-black pb-4 mb-4">
                   <div className="flex justify-between text-sm sm:text-base"><span>Subtotal:</span><span className="text-rose-500">₱{subtotal}</span></div>
                   <div className="flex justify-between text-sm sm:text-base"><span>Shipping:</span><span className="text-rose-500">₱{shippingFee}</span></div>
-                  <div className="flex justify-between text-xl sm:text-2xl bg-yellow-400 p-3 border-4 border-black"><span>TOTAL:</span><span>₱{total}</span></div>
+                  <div className="flex justify-between text-xl sm:text-2xl bg-gradient-to-r from-yellow-300 to-yellow-400 p-3 border-4 border-black rounded-xl shadow-md"><span>TOTAL:</span><span>₱{total}</span></div>
                 </div>
 
                 <div className="space-y-2 text-xs font-bold text-black mb-4">
@@ -428,7 +428,7 @@ export default function CheckoutPage() {
                 <button
                   type="submit"
                   disabled={cartItems.length === 0 || isSubmitting}
-                  className="mario-btn mt-auto w-full bg-black text-yellow-300 hover:bg-slate-900 uppercase font-black text-lg tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="mario-btn mt-auto w-full bg-black text-yellow-300 hover:bg-slate-900 uppercase font-black text-lg tracking-widest disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] transition-all shadow-xl"
                 >
                   {isSubmitting ? "PLACING ORDER..." : "PLACE ORDER"}
                 </button>
@@ -439,13 +439,13 @@ export default function CheckoutPage() {
       </section>
 
       {showInstagramModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setShowInstagramModal(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setShowInstagramModal(false)}>
           <div className="mario-card max-w-lg w-full animate-bounce-in" onClick={(e) => e.stopPropagation()}>
             <div className="bg-gradient-to-r from-purple-600 to-pink-500 p-6 border-b-4 border-black text-center">
               <h2 className="text-3xl font-black text-white uppercase">Order Placed!</h2>
             </div>
             <div className="p-8 bg-white text-center space-y-4">
-              <div className="w-20 h-20 mx-auto bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-3xl font-black shadow-lg">
+              <div className="w-20 h-20 mx-auto bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-3xl font-black shadow-lg ring-4 ring-black">
                 IG
               </div>
               <h3 className="text-2xl font-black text-black">Please message @muragoods_ on Instagram</h3>
@@ -454,7 +454,7 @@ export default function CheckoutPage() {
                 href="https://www.instagram.com/muragoods_/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mario-btn mario-btn-yellow w-full"
+                className="mario-btn mario-btn-yellow w-full hover:scale-105 transition-all"
               >
                 Open Instagram @muragoods_
               </a>
@@ -463,7 +463,7 @@ export default function CheckoutPage() {
                   setShowInstagramModal(false);
                   router.push('/orders');
                 }}
-                className="mario-btn bg-black text-yellow-300 w-full"
+                className="mario-btn bg-black text-yellow-300 w-full hover:scale-105 transition-all"
               >
                 View My Orders
               </button>

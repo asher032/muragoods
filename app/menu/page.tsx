@@ -131,10 +131,10 @@ export default function MenuPage() {
 
   return (
     <main className="min-h-screen" style={{ backgroundImage: 'url(/images/background3.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
-      <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b-4 border-black shadow-[0_4px_0px_0px_#000]">
+      <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b-4 border-black shadow-lg transition-all">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-8 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="relative h-10 w-10 rounded-full border-4 border-black overflow-hidden shadow-[4px_4px_0px_0px_#000]">
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="relative h-10 w-10 rounded-full border-4 border-black overflow-hidden shadow-[4px_4px_0px_0px_#000] transition-transform group-hover:scale-105">
               <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
             </div>
             <div>
@@ -154,7 +154,7 @@ export default function MenuPage() {
                 }
                 router.push('/checkout');
               }}
-              className="mario-btn"
+              className="mario-btn hover:scale-105 transition-transform"
             >
               Cart ({totalItems})
             </button>
@@ -170,22 +170,22 @@ export default function MenuPage() {
       <section className="px-4 py-12 sm:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="mb-8">
-            <h1 className="text-5xl font-black text-white uppercase tracking-tighter" style={{ textShadow: '6px 6px 0px #000' }}>Choose Your Power-Up</h1>
+            <h1 className="text-4xl sm:text-5xl font-black text-white uppercase tracking-tighter" style={{ textShadow: '5px 5px 0px #000' }}>Choose Your Power-Up</h1>
             <p className="mt-2 text-lg font-black text-yellow-300" style={{ textShadow: '2px 2px 0px #000' }}>Pick your favorites from our legendary selection.</p>
           </div>
 
           {restrictionMessage && (
-            <div className="mb-6 rounded-lg border-4 border-rose-400 bg-rose-50 p-4 text-sm font-black text-rose-600 uppercase">
+            <div className="mb-6 rounded-xl border-4 border-rose-400 bg-rose-50 p-4 text-sm font-black text-rose-600 uppercase shadow-lg">
               {restrictionMessage}
             </div>
           )}
 
-          <div className="flex flex-wrap gap-4 mb-8">
+          <div className="flex flex-wrap gap-3 mb-8">
             {categories.map(cat => (
               <button
                 key={cat}
                 onClick={() => setActiveCategory(cat)}
-                className={`mario-btn ${activeCategory === cat ? 'mario-btn-yellow' : 'bg-white text-black'}`}
+                className={`mario-btn ${activeCategory === cat ? 'mario-btn-yellow' : 'bg-white text-black hover:scale-105'} transition-all`}
               >
                 {cat}
               </button>
@@ -197,7 +197,7 @@ export default function MenuPage() {
             <select
               value={location}
               onChange={(e) => setLocation(e.target.value as ZoneKey)}
-              className="w-full max-w-md rounded-lg border-4 border-black bg-white px-4 py-3 font-black text-black outline-none focus:border-yellow-300"
+              className="w-full max-w-md rounded-xl border-4 border-black bg-white px-4 py-3 font-black text-black outline-none focus:border-yellow-300 focus:ring-4 focus:ring-yellow-200 transition-all shadow-md"
             >
               {deliveryZones.map(zone => (
                 <option key={zone.code} value={zone.code}>{zone.label}</option>
@@ -216,12 +216,12 @@ export default function MenuPage() {
                   key={product.id}
                   className={`menu-card group ${!available ? 'opacity-60' : ''}`}
                 >
-                  <div className="h-48 bg-blue-400 p-4 border-b-4 border-black group-hover:bg-blue-300 transition-colors relative overflow-hidden">
-                    <Image src={product.image} alt={product.name} fill className="object-contain p-2" />
+                  <div className="h-48 bg-gradient-to-br from-blue-400 to-blue-500 p-4 border-b-4 border-black group-hover:from-blue-300 group-hover:to-blue-400 transition-all relative overflow-hidden">
+                    <Image src={product.image} alt={product.name} fill className="object-contain p-2 transition-transform group-hover:scale-110 duration-300" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
                     {!available && (
                       <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20">
-                        <span className="bg-yellow-400 text-black px-4 py-2 font-black text-sm uppercase border-4 border-black rotate-[-3deg]">
+                        <span className="bg-gradient-to-r from-yellow-300 to-yellow-400 text-black px-4 py-2 font-black text-sm uppercase border-4 border-black rotate-[-3deg] shadow-lg">
                           {product.inventory === "Out of Stock" ? 'Out of Stock' : 'DWCL Only'}
                         </span>
                       </div>
@@ -231,7 +231,7 @@ export default function MenuPage() {
                   <div className="p-6 bg-white">
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="text-2xl font-black text-black uppercase">{product.name}</h3>
-                      <span className="text-xs font-black uppercase tracking-wider text-rose-500 bg-rose-100 px-2 py-1 border-2 border-black">
+                      <span className="text-xs font-black uppercase tracking-wider text-rose-500 bg-rose-100 px-2 py-1 border-2 border-black shadow-sm">
                         {product.inventory}
                       </span>
                     </div>
@@ -250,7 +250,7 @@ export default function MenuPage() {
                       type="button"
                       onClick={() => openVariantModal(product)}
                       disabled={!available}
-                      className={`w-full mario-btn ${available ? 'mario-btn-yellow' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+                      className={`w-full mario-btn ${available ? 'mario-btn-yellow hover:scale-105' : 'bg-gray-300 text-gray-500 cursor-not-allowed'} transition-all`}
                     >
                       {available ? '+ ADD TO CART' : 'NOT AVAILABLE'}
                     </button>
@@ -263,9 +263,9 @@ export default function MenuPage() {
       </section>
 
       {selectedProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setSelectedProduct(null)}>
-          <div className="mario-card max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-rose-400 p-6 border-b-4 border-black">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedProduct(null)}>
+          <div className="mario-card max-w-md w-full animate-bounce-in" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-rose-400 to-rose-500 p-6 border-b-4 border-black">
               <h2 className="text-2xl font-black text-white uppercase">Select Variant</h2>
               <p className="text-sm font-bold text-yellow-300">{selectedProduct.name}</p>
             </div>
@@ -273,8 +273,8 @@ export default function MenuPage() {
               {selectedProduct.variants.map(variant => (
                 <label
                   key={variant.id}
-                  className={`flex items-center justify-between p-4 border-4 border-black rounded-lg cursor-pointer transition-colors ${
-                    selectedVariantId === variant.id ? 'bg-yellow-400' : 'bg-yellow-50 hover:bg-yellow-100'
+                  className={`flex items-center justify-between p-4 border-4 border-black rounded-xl cursor-pointer transition-all hover:shadow-md ${
+                    selectedVariantId === variant.id ? 'bg-gradient-to-r from-yellow-300 to-yellow-400 shadow-lg' : 'bg-yellow-50 hover:bg-yellow-100'
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -284,7 +284,7 @@ export default function MenuPage() {
                       value={variant.id}
                       checked={selectedVariantId === variant.id}
                       onChange={(e) => setSelectedVariantId(e.target.value)}
-                      className="w-5 h-5"
+                      className="w-5 h-5 accent-yellow-500"
                     />
                     <span className="font-black text-black">{variant.name}</span>
                   </div>
@@ -295,14 +295,14 @@ export default function MenuPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedProduct(null)}
-                  className="flex-1 mario-btn bg-white text-black border-black"
+                  className="flex-1 mario-btn bg-white text-black border-black hover:scale-105 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={confirmVariant}
-                  className="flex-1 mario-btn mario-btn-yellow"
+                  className="flex-1 mario-btn mario-btn-yellow hover:scale-105 transition-all"
                 >
                   Add to Cart
                 </button>
@@ -313,18 +313,18 @@ export default function MenuPage() {
       )}
 
       {showLoginPrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowLoginPrompt(false)}>
-          <div className="mario-card max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-black p-6 border-b-4 border-black">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowLoginPrompt(false)}>
+          <div className="mario-card max-w-md w-full animate-bounce-in" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-black to-gray-900 p-6 border-b-4 border-black">
               <h2 className="text-2xl font-black text-yellow-300 uppercase">Login Required</h2>
             </div>
             <div className="p-6 bg-white text-center">
               <p className="text-lg font-black text-black mb-6">You must sign in to add items to cart!</p>
               <div className="space-y-3">
-                <Link href="/login" className="mario-btn w-full bg-rose-400 text-white">
+                <Link href="/login" className="mario-btn w-full bg-rose-400 text-white hover:scale-105 transition-all">
                   LOG IN
                 </Link>
-                <Link href="/signup" className="mario-btn w-full mario-btn-yellow">
+                <Link href="/signup" className="mario-btn w-full mario-btn-yellow hover:scale-105 transition-all">
                   CREATE ACCOUNT
                 </Link>
               </div>
@@ -337,7 +337,7 @@ export default function MenuPage() {
         <div className="fixed bottom-4 right-4 z-40">
           <button
             onClick={handleCheckout}
-            className="mario-btn mario-btn-yellow text-lg shadow-2xl"
+            className="mario-btn mario-btn-yellow text-lg shadow-2xl hover:scale-105 transition-all"
             style={{ borderRadius: '16px', padding: '16px 32px' }}
           >
             View Cart ({totalItems}) - ₱{totalPrice}
