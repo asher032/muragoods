@@ -13,6 +13,7 @@ interface LocationPickerProps {
 export default function LocationPicker({ onLocationSelect, initialLat = 13.1550, initialLng = 123.7450 }: LocationPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const markerRef = useRef<L.Marker | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -22,21 +23,17 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
     let marker: L.Marker | null = null;
 
     try {
-      const daragaLegazpiBounds = [
-        [13.1400, 123.7200],
-        [13.1800, 123.7800],
-      ] as [[number, number], [number, number]];
-
       map = L.map(containerRef.current, {
         center: [initialLat, initialLng],
         zoom: 14,
-        maxBounds: daragaLegazpiBounds,
-        minZoom: 13,
-        maxZoom: 18,
+        minZoom: 14,
+        maxZoom: 14,
+        zoomControl: true,
+        attributionControl: true,
       });
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       }).addTo(map);
 
       const pinIcon = L.divIcon({
@@ -65,12 +62,15 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
         iconAnchor: [22, 44],
       });
 
-      marker = L.marker([initialLat, initialLng], { icon: pinIcon, draggable: true }).addTo(map);
+      marker = L.marker([initialLat, initialLng], {
+        icon: pinIcon,
+        draggable: true,
+        autoPan: false,
+      }).addTo(map);
 
       const updateMarker = (lat: number, lng: number) => {
         if (!marker || !map) return;
         marker.setLatLng([lat, lng]);
-        map.setView([lat, lng], 15, { animate: false });
         if (onLocationSelect) {
           onLocationSelect(lat, lng, `DELIVERY PIN: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
         }
@@ -87,7 +87,16 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
       });
 
       mapRef.current = map;
+      markerRef.current = marker;
       setReady(true);
+
+      if (typeof (map as unknown as Record<string, unknown>).touchZoomRotate === 'object') {
+        try {
+          (map as unknown as { touchZoomRotate: { disableRotation: () => void } }).touchZoomRotate.disableRotation();
+        } catch {
+          // rotation handler not available or already disabled
+        }
+      }
     } catch (err) {
       console.error('Map initialization failed:', err);
       if (containerRef.current) {
@@ -97,21 +106,14 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
 
     return () => {
       if (map) {
+        map.off('click');
         map.remove();
         mapRef.current = null;
+        markerRef.current = null;
       }
       setReady(false);
     };
   }, [initialLat, initialLng, onLocationSelect]);
-
-  if (!ready) {
-    return (
-      <div
-        ref={containerRef}
-        style={{ height: '400px', width: '100%', borderRadius: '12px', border: '4px solid #000', background: '#f3f4f6' }}
-      />
-    );
-  }
 
   return (
     <div
