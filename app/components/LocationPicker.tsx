@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -11,45 +11,21 @@ interface LocationPickerProps {
 }
 
 export default function LocationPicker({ onLocationSelect, initialLat = 13.1550, initialLng = 123.7450 }: LocationPickerProps) {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<L.Map | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
-  const [error, setError] = useState<string>("");
 
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
+    if (!containerRef.current || mapRef.current) return;
 
     const daragaLegazpiBounds = [
       [13.1400, 123.7200],
       [13.1800, 123.7800],
     ] as [[number, number], [number, number]];
 
-    let startLat = initialLat;
-    let startLng = initialLng;
-    let geolocationUsed = false;
-
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          startLat = position.coords.latitude;
-          startLng = position.coords.longitude;
-          geolocationUsed = true;
-          if (mapInstanceRef.current && markerRef.current) {
-            mapInstanceRef.current.setView([startLat, startLng], 15, { animate: false });
-            markerRef.current.setLatLng([startLat, startLng]);
-          }
-        },
-        (err) => {
-          setError('Location access denied or unavailable. Using default Daraga/Legazpi area.');
-          console.warn('Geolocation error:', err.message);
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
-    }
-
-    const map = L.map(mapRef.current, {
-      center: [startLat, startLng],
-      zoom: geolocationUsed ? 15 : 14,
+    const map = L.map(containerRef.current, {
+      center: [initialLat, initialLng],
+      zoom: 14,
       maxBounds: daragaLegazpiBounds,
       minZoom: 13,
       maxZoom: 18,
@@ -85,7 +61,7 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
       iconAnchor: [22, 44],
     });
 
-    const marker = L.marker([startLat, startLng], { icon: pinIcon, draggable: true }).addTo(map);
+    const marker = L.marker([initialLat, initialLng], { icon: pinIcon, draggable: true }).addTo(map);
     markerRef.current = marker;
 
     const updateMarker = (lat: number, lng: number) => {
@@ -105,25 +81,18 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
       updateMarker(pos.lat, pos.lng);
     });
 
-    mapInstanceRef.current = map;
+    mapRef.current = map;
 
     return () => {
       map.remove();
-      mapInstanceRef.current = null;
+      mapRef.current = null;
     };
   }, [initialLat, initialLng, onLocationSelect]);
 
   return (
-    <div>
-      {error && (
-        <div className="mb-2 rounded-lg border-4 border-yellow-400 bg-yellow-50 p-2 text-xs font-black text-black">
-          {error}
-        </div>
-      )}
-      <div
-        ref={mapRef}
-        style={{ height: '400px', width: '100%', borderRadius: '12px', border: '4px solid #000', zIndex: 1 }}
-      />
-    </div>
+    <div
+      ref={containerRef}
+      style={{ height: '400px', width: '100%', borderRadius: '12px', border: '4px solid #000', zIndex: 1 }}
+    />
   );
 }
