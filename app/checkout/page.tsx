@@ -31,6 +31,14 @@ export default function CheckoutPage() {
   const [showInstagramModal, setShowInstagramModal] = useState(false);
   const { products, loading } = useProducts();
 
+  if (!isLoggedIn || loading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center" style={{ backgroundImage: 'url(/images/background4.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
+        <div className="text-white text-2xl font-black animate-pulse uppercase">Loading Checkout...</div>
+      </main>
+    );
+  }
+
   useEffect(() => {
     const userStr = localStorage.getItem("user");
     if (!userStr) {

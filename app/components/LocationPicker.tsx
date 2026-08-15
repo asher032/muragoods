@@ -23,7 +23,9 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
     ] as [[number, number], [number, number]];
 
     const timeout = setTimeout(() => {
-      const map = L.map(containerRef.current!, {
+      if (!containerRef.current) return;
+
+      const map = L.map(containerRef.current, {
         center: [initialLat, initialLng],
         zoom: 14,
         maxBounds: daragaLegazpiBounds,
