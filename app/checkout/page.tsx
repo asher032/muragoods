@@ -432,7 +432,9 @@ export default function CheckoutPage() {
                 <div className="space-y-2 text-xs font-bold text-black mb-4">
                   <p>Order Date: {customOrderDate || "Not selected"}</p>
                   <p>Service: {deliveryService}</p>
-                  {!isDwcl && <p>Location: {mapAddress ? "Pinned" : "Not selected"}</p>}
+                  {!isDwcl && (
+                    <p>Location: {mapAddress ? mapAddress : "Not selected"}</p>
+                  )}
                   <p>Payment: {paymentMethod}</p>
                   <p>Phone: {phone || "Not provided"}</p>
                 </div>

@@ -13,7 +13,8 @@ interface LocationPickerProps {
 export default function LocationPicker({ onLocationSelect, initialLat = 13.1550, initialLng = 123.7450 }: LocationPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
-  const [selected, setSelected] = useState<{ lat: number; lng: number; address: string } | null>(null);
+  const [selected, setSelected] = useState<{ lat: number; lng: number; address: string; placeName?: string } | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -60,13 +61,34 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
       autoPan: false,
     }).addTo(map);
 
+    const fetchPlaceName = async (lat: number, lng: number) => {
+      setLoading(true);
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=en`, {
+          headers: { 'User-Agent': 'Muragoods/1.0' },
+        });
+        if (!res.ok) throw new Error('Geocoding failed');
+        const data = await res.json();
+        const placeName = data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        const address = `DELIVERY PIN: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        setSelected({ lat, lng, address, placeName });
+        if (onLocationSelect) {
+          onLocationSelect(lat, lng, placeName);
+        }
+      } catch {
+        const address = `DELIVERY PIN: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        setSelected({ lat, lng, address });
+        if (onLocationSelect) {
+          onLocationSelect(lat, lng, address);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
     const updateSelection = (lat: number, lng: number) => {
       marker.setLatLng([lat, lng]);
-      const address = `DELIVERY PIN: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-      setSelected({ lat, lng, address });
-      if (onLocationSelect) {
-        onLocationSelect(lat, lng, address);
-      }
+      fetchPlaceName(lat, lng);
     };
 
     map.on('click', (e: L.LeafletMouseEvent) => {
@@ -110,11 +132,17 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
               <p className="text-xs font-black uppercase tracking-widest text-rose-500 mb-1">Selected Location</p>
-              <p className="text-base sm:text-lg font-black text-black break-all">{selected.address}</p>
-              <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-slate-700">
-                <span className="rounded border-2 border-black bg-yellow-100 px-2 py-1">LAT: {selected.lat.toFixed(4)}</span>
-                <span className="rounded border-2 border-black bg-yellow-100 px-2 py-1">LNG: {selected.lng.toFixed(4)}</span>
-              </div>
+              {loading ? (
+                <p className="text-base sm:text-lg font-black text-black">Finding place name...</p>
+              ) : (
+                <>
+                  <p className="text-base sm:text-lg font-black text-black break-all">{selected.placeName || selected.address}</p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-slate-700">
+                    <span className="rounded border-2 border-black bg-yellow-100 px-2 py-1">LAT: {selected.lat.toFixed(4)}</span>
+                    <span className="rounded border-2 border-black bg-yellow-100 px-2 py-1">LNG: {selected.lng.toFixed(4)}</span>
+                  </div>
+                </>
+              )}
             </div>
             <button
               type="button"
