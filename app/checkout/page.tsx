@@ -5,7 +5,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { products, type CartItem, deliveryZones, dwclOnlyProducts, type ZoneKey } from '@/app/lib/muragoods-data';
+import { products as staticProducts, type CartItem, deliveryZones, dwclOnlyProducts, type ZoneKey } from '@/app/lib/muragoods-data';
+import { useProducts } from '@/app/hooks/useProducts';
 
 const LocationPicker = dynamic(() => import('@/app/components/LocationPicker'), { ssr: false });
 
@@ -28,6 +29,7 @@ export default function CheckoutPage() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showInstagramModal, setShowInstagramModal] = useState(false);
+  const { products, loading } = useProducts();
 
   useEffect(() => {
     const userStr = localStorage.getItem("user");
@@ -47,7 +49,7 @@ export default function CheckoutPage() {
   const cartItems = Object.entries(cart)
     .filter(([, data]) => data.quantity > 0)
     .map(([productId, data]) => {
-      const product = products.find(p => p.id === productId)!;
+      const product = products.find(p => p.id === productId) || staticProducts.find(p => p.id === productId)!;
       const variant = product.variants.find(v => v.id === (data.variantId || product.variants[0].id));
       return {
         ...product,

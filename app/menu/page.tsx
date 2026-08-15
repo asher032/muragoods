@@ -3,8 +3,9 @@
 import Image from 'next/image';
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { products, type Product, type CartItem, dwclOnlyProducts, deliveryZones, type ZoneKey } from '@/app/lib/muragoods-data';
+import { products as staticProducts, type Product, type CartItem, dwclOnlyProducts, deliveryZones, type ZoneKey } from '@/app/lib/muragoods-data';
 import { useRouter } from 'next/navigation';
+import { useProducts } from '@/app/hooks/useProducts';
 
 const categories = ["All", "Musubi & Churros", "Coffee Jelly & Cookies"];
 
@@ -18,6 +19,7 @@ export default function MenuPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [restrictionMessage, setRestrictionMessage] = useState("");
+  const { products, loading } = useProducts();
 
   useEffect(() => {
     const user = localStorage.getItem('user');
@@ -35,13 +37,13 @@ export default function MenuPage() {
   const filteredProducts = useMemo(() => {
     if (activeCategory === "All") return products;
     return products.filter(p => p.category === activeCategory);
-  }, [activeCategory]);
+  }, [activeCategory, products]);
 
   const cartItems = useMemo(() => {
     return Object.entries(cart)
       .filter(([, data]) => data.quantity > 0)
       .map(([productId, data]) => {
-        const product = products.find(p => p.id === productId)!;
+        const product = products.find(p => p.id === productId) || staticProducts.find(p => p.id === productId)!;
         const variant = product.variants.find(v => v.id === (data.variantId || product.variants[0].id));
         return {
           ...product,
@@ -49,7 +51,7 @@ export default function MenuPage() {
           selectedVariant: variant,
         } as CartItem;
       });
-  }, [cart]);
+  }, [cart, products]);
 
   const isDwcl = location === "DWCL";
 
@@ -117,6 +119,14 @@ export default function MenuPage() {
       addToCart(selectedProduct, selectedVariantId);
     }
   };
+
+  if (loading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center" style={{ backgroundImage: 'url(/images/background3.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
+        <div className="text-white text-2xl font-black animate-pulse uppercase">Loading Menu...</div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen" style={{ backgroundImage: 'url(/images/background3.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
@@ -336,3 +346,4 @@ export default function MenuPage() {
     </main>
   );
 }
+
