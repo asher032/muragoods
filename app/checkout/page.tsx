@@ -323,24 +323,16 @@ export default function CheckoutPage() {
                     {!isDwcl && (
                       <div>
                         <label className="block text-sm font-black text-black uppercase mb-2">Delivery Location</label>
-                        <div className="rounded-lg border-4 border-black overflow-hidden">
-                          <LocationPicker
-                            initialLat={13.1550}
-                            initialLng={123.7450}
-                            onLocationSelect={(lat, lng, address) => {
-                              setMapAddress(address);
-                              setLatitude(String(lat));
-                              setLongitude(String(lng));
-                            }}
-                          />
-                        </div>
-                        {mapAddress && (
-                          <div className="mt-3 p-3 bg-yellow-400 border-4 border-black rounded-lg">
-                            <p className="text-sm font-black text-black uppercase">Selected Delivery Location</p>
-                            <p className="text-lg font-black text-black">{mapAddress}</p>
-                          </div>
-                        )}
-                        <p className="text-xs text-gray-600 mt-2">Click on the map or drag the pin to set your delivery location</p>
+                        <LocationPicker
+                          initialLat={13.1550}
+                          initialLng={123.7450}
+                          onLocationSelect={(lat, lng, address) => {
+                            setMapAddress(address);
+                            setLatitude(String(lat));
+                            setLongitude(String(lng));
+                          }}
+                        />
+                        <p className="text-xs text-gray-600 mt-2">Tap the map to set your delivery location. Tap Change to update it.</p>
                       </div>
                     )}
 
