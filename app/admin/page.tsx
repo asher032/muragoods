@@ -1,7 +1,7 @@
 'use client';
 
 import Image from "next/image";
-import { adminCredentials, adminEmails, products, type InventoryStatus, type Order, type OrderStatus } from "@/app/lib/muragoods-data";
+import { adminCredentials, adminEmails, products, type InventoryStatus, type Order, type OrderStatus, type Product } from "@/app/lib/muragoods-data";
 import { useMemo, useState, useEffect, useCallback } from "react";
 
 const statusOptions = [
@@ -24,9 +24,33 @@ export default function AdminPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState("");
   const [orders, setOrders] = useState<(Order & { userId: string; _id?: string })[]>([]);
-  const [catalog, setCatalog] = useState(products);
+  const [catalog, setCatalog] = useState<(Product & { dbInventory?: InventoryStatus })[]>(products);
   const [alert, setAlert] = useState<{ show: boolean; message: string; orderId?: string }>({ show: false, message: "" });
   const [previewReceipt, setPreviewReceipt] = useState<string>("");
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
+
+  const syncCatalog = useCallback(async () => {
+    setLoadingCatalog(true);
+    try {
+      const res = await fetch('/api/products');
+      const result = await res.json();
+      if (result.success && Array.isArray(result.data)) {
+        const dbMap = new Map<string, InventoryStatus>(result.data.map((p: { id: string; inventory: InventoryStatus }) => [p.id, p.inventory]));
+        setCatalog(
+          products.map(p => ({
+            ...p,
+            inventory: (dbMap.get(p.id) as InventoryStatus) || p.inventory,
+          })),
+        );
+      } else {
+        setCatalog(products);
+      }
+    } catch {
+      setCatalog(products);
+    } finally {
+      setLoadingCatalog(false);
+    }
+  }, []);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -42,6 +66,9 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
+
+    syncCatalog();
+    fetchOrders();
 
     const interval = setInterval(async () => {
       try {
@@ -61,7 +88,7 @@ export default function AdminPage() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [isAuthenticated, orders.length]);
+  }, [isAuthenticated, orders.length, fetchOrders, syncCatalog]);
 
   const summary = useMemo(() => {
     const totalSales = orders.reduce((sum, order) => sum + order.total, 0);
@@ -151,6 +178,7 @@ export default function AdminPage() {
             p.id === productId ? { ...p, inventory: nextInventory } : p,
           ),
         );
+        setTimeout(syncCatalog, 500);
       }
     } catch (err) {
       console.error(err);

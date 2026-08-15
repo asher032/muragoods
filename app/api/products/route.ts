@@ -13,12 +13,27 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ success: false, error: 'Product ID is required' }, { status: 400 });
     }
 
-    const product = await Product.findByIdAndUpdate(productId, body, { new: true });
+    const product = await Product.findOneAndUpdate(
+      { id: productId },
+      body,
+      { new: true, upsert: true },
+    );
     if (!product) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
     }
 
     return NextResponse.json({ success: true, data: product });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'An error occurred';
+    return NextResponse.json({ success: false, error: message }, { status: 400 });
+  }
+}
+
+export async function GET(req: Request) {
+  try {
+    await dbConnect();
+    const products = await Product.find({});
+    return NextResponse.json({ success: true, data: products });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'An error occurred';
     return NextResponse.json({ success: false, error: message }, { status: 400 });
