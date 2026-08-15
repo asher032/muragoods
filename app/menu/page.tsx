@@ -43,10 +43,12 @@ export default function MenuPage() {
   const cartItems = useMemo(() => {
     return Object.entries(cart)
       .filter(([, data]) => data.quantity > 0)
-      .map(([productId, data]) => {
+      .map(([cartKey, data]) => {
+        const productId = cartKey.split('__')[0];
         const product = products.find(p => p.id === productId);
         if (!product) return null;
-        const variant = product.variants.find(v => v.id === (data.variantId || product.variants[0].id));
+        const variantId = cartKey.split('__')[1] || data.variantId || product.variants[0].id;
+        const variant = product.variants.find(v => v.id === variantId);
         return {
           ...product,
           quantity: data.quantity,
@@ -75,13 +77,15 @@ export default function MenuPage() {
       return;
     }
 
-    const key = product.id;
+    const actualVariantId = variantId || product.variants[0].id;
+    const cartKey = `${product.id}__${actualVariantId}`;
+
     setCart(prev => {
       const next = {
         ...prev,
-        [key]: {
-          quantity: (prev[key]?.quantity || 0) + 1,
-          variantId: variantId || prev[key]?.variantId || product.variants[0].id,
+        [cartKey]: {
+          quantity: (prev[cartKey]?.quantity || 0) + 1,
+          variantId: actualVariantId,
         }
       };
       localStorage.setItem('cart', JSON.stringify(next));

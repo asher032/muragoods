@@ -49,10 +49,12 @@ export default function CheckoutPage() {
 
   const cartItems = Object.entries(cart)
     .filter(([, data]) => data.quantity > 0)
-    .map(([productId, data]) => {
+    .map(([cartKey, data]) => {
+      const productId = cartKey.split('__')[0];
       const product = staticProducts.find(p => p.id === productId);
       if (!product) return null;
-      const variant = product.variants.find(v => v.id === (data.variantId || product.variants[0].id));
+      const variantId = cartKey.split('__')[1] || data.variantId || product.variants[0].id;
+      const variant = product.variants.find(v => v.id === variantId);
       return {
         ...product,
         quantity: data.quantity,
@@ -151,13 +153,13 @@ export default function CheckoutPage() {
     }
   };
 
-  const addToCartFromCheckout = (productId: string) => {
+  const addToCartFromCheckout = (cartKey: string) => {
     setCart(prev => {
       const next = {
         ...prev,
-        [productId]: {
-          ...(prev[productId] || { variantId: staticProducts.find(p => p.id === productId)?.variants[0].id }),
-          quantity: (prev[productId]?.quantity || 0) + 1,
+        [cartKey]: {
+          ...(prev[cartKey] || { variantId: cartKey.split('__')[1] || staticProducts.find(p => p.id === cartKey.split('__')[0])?.variants[0].id }),
+          quantity: (prev[cartKey]?.quantity || 0) + 1,
         }
       };
       localStorage.setItem("cart", JSON.stringify(next));
@@ -165,14 +167,14 @@ export default function CheckoutPage() {
     });
   };
 
-  const removeFromCart = (productId: string) => {
+  const removeFromCart = (cartKey: string) => {
     setCart(prev => {
       const next = { ...prev };
-      if (!next[productId]) return prev;
-      if (next[productId].quantity <= 1) {
-        delete next[productId];
+      if (!next[cartKey]) return prev;
+      if (next[cartKey].quantity <= 1) {
+        delete next[cartKey];
       } else {
-        next[productId] = { ...next[productId], quantity: next[productId].quantity - 1 };
+        next[cartKey] = { ...next[cartKey], quantity: next[cartKey].quantity - 1 };
       }
       localStorage.setItem("cart", JSON.stringify(next));
       return next;
@@ -248,31 +250,34 @@ export default function CheckoutPage() {
                 ) : (
                   <>
                     <div className="space-y-4">
-                      {cartItems.map((item) => (
-                        <div key={item.id + (item.selectedVariant?.id || '')} className="flex items-center justify-between rounded-lg border-4 border-black p-4 bg-yellow-50">
-                          <div>
-                            <p className="text-lg font-black text-black">{item.name}</p>
-                            <p className="text-sm font-bold text-slate-700">{item.selectedVariant?.name} • ₱{item.selectedVariant?.price || 0} each</p>
+                      {cartItems.map((item) => {
+                        const cartKey = `${item.id}__${item.selectedVariant?.id || item.variants[0]?.id || ''}`;
+                        return (
+                          <div key={cartKey} className="flex items-center justify-between rounded-lg border-4 border-black p-4 bg-yellow-50">
+                            <div>
+                              <p className="text-lg font-black text-black">{item.name}</p>
+                              <p className="text-sm font-bold text-slate-700">{item.selectedVariant?.name} • ₱{item.selectedVariant?.price || 0} each</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() => removeFromCart(cartKey)}
+                                className="flex h-10 w-10 items-center justify-center rounded-full border-4 border-black bg-rose-400 text-lg font-black text-white hover:bg-rose-300"
+                              >
+                                −
+                              </button>
+                              <span className="w-8 text-center font-black text-black text-lg">{item.quantity}</span>
+                              <button
+                                type="button"
+                                onClick={() => addToCartFromCheckout(cartKey)}
+                                className="flex h-10 w-10 items-center justify-center rounded-full border-4 border-black bg-black text-lg font-black text-yellow-300 hover:bg-slate-900"
+                              >
+                                +
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <button
-                              type="button"
-                              onClick={() => removeFromCart(item.id)}
-                              className="flex h-10 w-10 items-center justify-center rounded-full border-4 border-black bg-rose-400 text-lg font-black text-white hover:bg-rose-300"
-                            >
-                              −
-                            </button>
-                            <span className="w-8 text-center font-black text-black text-lg">{item.quantity}</span>
-                            <button
-                              type="button"
-                              onClick={() => addToCartFromCheckout(item.id)}
-                              className="flex h-10 w-10 items-center justify-center rounded-full border-4 border-black bg-black text-lg font-black text-yellow-300 hover:bg-slate-900"
-                            >
-                              +
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     <div>
