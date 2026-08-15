@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { products, type Product } from '@/app/lib/muragoods-data';
+import { products as staticProducts, type Product } from '@/app/lib/muragoods-data';
 
 export function useProducts() {
-  const [data, setData] = useState<Product[]>(products);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<Product[]>(staticProducts);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -16,19 +16,15 @@ export function useProducts() {
         const json = await res.json();
         if (cancelled) return;
         if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-          const dbMap = new Map<string, Product>(json.data.map((p: Product) => [p.id, p]));
-          const merged = products.map(p => {
+          const dbMap = new Map<string, Partial<Product>>(json.data.map((p: Product) => [p.id, p]));
+          const merged = staticProducts.map(p => {
             const dbProduct = dbMap.get(p.id);
             return dbProduct ? { ...p, ...dbProduct } : p;
           });
           setData(merged);
-        } else {
-          setData(products);
         }
       } catch {
-        if (!cancelled) setData(products);
-      } finally {
-        if (!cancelled) setLoading(false);
+        // keep static products on any error
       }
     }
 

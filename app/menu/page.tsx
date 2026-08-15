@@ -19,18 +19,21 @@ export default function MenuPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [restrictionMessage, setRestrictionMessage] = useState("");
-  const { products, loading } = useProducts();
+  const { products } = useProducts();
 
   useEffect(() => {
     const user = localStorage.getItem('user');
     if (user) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsLoggedIn(true);
     }
 
-    const savedCart = localStorage.getItem('cart');
-    if (savedCart) {
-      setCart(JSON.parse(savedCart));
+    try {
+      const savedCart = localStorage.getItem('cart');
+      if (savedCart) {
+        setCart(JSON.parse(savedCart));
+      }
+    } catch {
+      setCart({});
     }
   }, []);
 
@@ -43,14 +46,16 @@ export default function MenuPage() {
     return Object.entries(cart)
       .filter(([, data]) => data.quantity > 0)
       .map(([productId, data]) => {
-        const product = products.find(p => p.id === productId) || staticProducts.find(p => p.id === productId)!;
+        const product = products.find(p => p.id === productId) || staticProducts.find(p => p.id === productId);
+        if (!product) return null;
         const variant = product.variants.find(v => v.id === (data.variantId || product.variants[0].id));
         return {
           ...product,
           quantity: data.quantity,
-          selectedVariant: variant,
+          selectedVariant: variant || product.variants[0],
         } as CartItem;
-      });
+      })
+      .filter((item): item is CartItem => item !== null);
   }, [cart, products]);
 
   const isDwcl = location === "DWCL";
@@ -119,14 +124,6 @@ export default function MenuPage() {
       addToCart(selectedProduct, selectedVariantId);
     }
   };
-
-  if (loading) {
-    return (
-      <main className="min-h-screen flex items-center justify-center" style={{ backgroundImage: 'url(/images/background3.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
-        <div className="text-white text-2xl font-black animate-pulse uppercase">Loading Menu...</div>
-      </main>
-    );
-  }
 
   return (
     <main className="min-h-screen" style={{ backgroundImage: 'url(/images/background3.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
@@ -346,4 +343,3 @@ export default function MenuPage() {
     </main>
   );
 }
-
