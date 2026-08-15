@@ -13,8 +13,36 @@ interface LocationPickerProps {
 export default function LocationPicker({ onLocationSelect, initialLat = 13.1550, initialLng = 123.7450 }: LocationPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const markerRef = useRef<L.Marker | null>(null);
   const [selected, setSelected] = useState<{ lat: number; lng: number; address: string; placeName?: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoError, setGeoError] = useState("");
+
+  const fetchPlaceName = async (lat: number, lng: number) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=en`, {
+        headers: { 'User-Agent': 'Muragoods/1.0' },
+      });
+      if (!res.ok) throw new Error('Geocoding failed');
+      const data = await res.json();
+      const placeName = data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      const address = `DELIVERY PIN: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      setSelected({ lat, lng, address, placeName });
+      if (onLocationSelect) {
+        onLocationSelect(lat, lng, placeName);
+      }
+    } catch {
+      const address = `DELIVERY PIN: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      setSelected({ lat, lng, address });
+      if (onLocationSelect) {
+        onLocationSelect(lat, lng, address);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -61,31 +89,6 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
       autoPan: false,
     }).addTo(map);
 
-    const fetchPlaceName = async (lat: number, lng: number) => {
-      setLoading(true);
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=en`, {
-          headers: { 'User-Agent': 'Muragoods/1.0' },
-        });
-        if (!res.ok) throw new Error('Geocoding failed');
-        const data = await res.json();
-        const placeName = data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-        const address = `DELIVERY PIN: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-        setSelected({ lat, lng, address, placeName });
-        if (onLocationSelect) {
-          onLocationSelect(lat, lng, placeName);
-        }
-      } catch {
-        const address = `DELIVERY PIN: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-        setSelected({ lat, lng, address });
-        if (onLocationSelect) {
-          onLocationSelect(lat, lng, address);
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
     const updateSelection = (lat: number, lng: number) => {
       marker.setLatLng([lat, lng]);
       fetchPlaceName(lat, lng);
@@ -101,32 +104,81 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
     });
 
     mapRef.current = map;
+    markerRef.current = marker;
 
     return () => {
       map.off('click');
       map.remove();
       mapRef.current = null;
+      markerRef.current = null;
     };
-  }, [initialLat, initialLng, onLocationSelect]);
+  }, [initialLat, initialLng, onLocationSelect, fetchPlaceName]);
+
+  const handleUseMyLocation = () => {
+    if (!navigator.geolocation) {
+      setGeoError("Geolocation is not supported by your browser");
+      return;
+    }
+
+    setGeoLoading(true);
+    setGeoError("");
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        if (markerRef.current && mapRef.current) {
+          markerRef.current.setLatLng([latitude, longitude]);
+          mapRef.current.setView([latitude, longitude], 14);
+        }
+        await fetchPlaceName(latitude, longitude);
+        setGeoLoading(false);
+      },
+      (error) => {
+        setGeoError("Unable to retrieve your location. Please tap the map instead.");
+        setGeoLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
 
   const handleReset = () => {
     setSelected(null);
+    setGeoError("");
     if (onLocationSelect) {
       onLocationSelect(initialLat, initialLng, '');
     }
-    if (mapRef.current) {
+    if (mapRef.current && markerRef.current) {
       mapRef.current.setView([initialLat, initialLng], 14);
+      markerRef.current.setLatLng([initialLat, initialLng]);
     }
   };
 
   return (
     <div className="w-full">
       {!selected ? (
-        <div
-          ref={containerRef}
-          className="w-full"
-          style={{ height: 'clamp(260px, 50vh, 420px)', borderRadius: '12px', border: '4px solid #000' }}
-        />
+        <div className="w-full">
+          <div
+            ref={containerRef}
+            className="w-full"
+            style={{ height: 'clamp(260px, 50vh, 420px)', borderRadius: '12px', border: '4px solid #000' }}
+          />
+          <div className="mt-3 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={handleUseMyLocation}
+              disabled={geoLoading}
+              className="w-full rounded-lg border-4 border-black bg-black px-4 py-3 text-sm font-black text-yellow-300 hover:bg-slate-900 disabled:opacity-50 active:scale-95 transition-transform"
+            >
+              {geoLoading ? 'Getting your location...' : '📍 Use my current location'}
+            </button>
+            {geoError && (
+              <p className="text-xs font-bold text-rose-600 bg-rose-50 border-2 border-rose-400 rounded px-3 py-2">
+                {geoError}
+              </p>
+            )}
+            <p className="text-xs text-gray-600 text-center">Or tap the map to place a pin</p>
+          </div>
+        </div>
       ) : (
         <div className="rounded-lg border-4 border-black bg-white p-4 sm:p-6 shadow-xl">
           <div className="flex items-start justify-between gap-4">

@@ -20,7 +20,6 @@ export default function CheckoutPage() {
   const [phone, setPhone] = useState("");
   const [deliveryService, setDeliveryService] = useState("Free Shipping");
   const [customOrderDate, setCustomOrderDate] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("GCash");
   const [gcashRef, setGcashRef] = useState("");
   const [gcashFile, setGcashFile] = useState<File | null>(null);
   const [mapAddress, setMapAddress] = useState("");
@@ -102,15 +101,13 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (paymentMethod === "GCash") {
-      if (!gcashRef.trim() || gcashRef.trim().length < 5) {
-        setError("Please enter a valid GCash reference number.");
-        return;
-      }
-      if (!gcashFile) {
-        setError("Payment proof is required. Please upload your GCash receipt.");
-        return;
-      }
+    if (!gcashRef.trim() || gcashRef.trim().length < 5) {
+      setError("Please enter a valid GCash reference number.");
+      return;
+    }
+    if (!gcashFile) {
+      setError("Payment proof is required. Please upload your GCash receipt.");
+      return;
     }
 
     setIsSubmitting(true);
@@ -123,15 +120,15 @@ export default function CheckoutPage() {
     formData.append("address", mapAddress || "DWCL Pickup");
     formData.append("latitude", latitude);
     formData.append("longitude", longitude);
-    formData.append("payment", paymentMethod);
+    formData.append("payment", "GCash");
     formData.append("deliveryDate", customOrderDate);
     formData.append("status", "Pending Payment");
     formData.append("total", String(total));
     formData.append("items", JSON.stringify(cartItems.map(item => `${item.name} (${item.selectedVariant?.name}) x ${item.quantity}`)));
     formData.append("deliveryType", deliveryService);
     formData.append("userId", user.email);
-    if (gcashRef) formData.append("gcashRefNumber", gcashRef);
-    if (gcashFile) formData.append("gcashScreenshot", gcashFile);
+    formData.append("gcashRefNumber", gcashRef);
+    formData.append("gcashScreenshot", gcashFile);
 
     try {
       const res = await fetch("/api/orders", {
@@ -358,55 +355,42 @@ export default function CheckoutPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-black text-black uppercase mb-2">Payment Method *</label>
-                      <select
-                        value={paymentMethod}
-                        onChange={(e) => setPaymentMethod(e.target.value)}
-                        className="w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-black text-black outline-none focus:border-rose-400"
-                      >
-                        <option value="GCash">GCash - Proof Required</option>
-                        <option value="COD">Cash on Delivery</option>
-                      </select>
-                      <p className="text-xs text-gray-600 mt-1">GCash proof is mandatory. Without proof, order may be delayed or rejected.</p>
+                      <label className="block text-sm font-black text-black uppercase mb-2">Payment Method</label>
+                      <div className="rounded-lg border-4 border-black bg-yellow-50 p-4">
+                        <p className="text-sm font-black text-black">GCash</p>
+                        <p className="text-xs text-gray-700 mt-1">Proof of payment required upon checkout.</p>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1">For other payment arrangements, message us on Instagram @muragoods_.</p>
                     </div>
 
-                    {paymentMethod === "GCash" && (
-                      <div className="rounded-lg border-4 border-rose-400 bg-rose-50 p-4 space-y-3">
-                        <p className="text-xs font-black text-rose-600 uppercase">GCash Payment Details</p>
-                        <p className="text-sm font-bold text-black">Send amount to: <span className="text-rose-500 font-black">639466472599</span> (Muragoods)</p>
+                    <div className="rounded-lg border-4 border-rose-400 bg-rose-50 p-4 space-y-3">
+                      <p className="text-xs font-black text-rose-600 uppercase">GCash Payment Details</p>
+                      <p className="text-sm font-bold text-black">Send amount to: <span className="text-rose-500 font-black">639466472599</span> (Muragoods)</p>
 
-                        <div>
-                          <label className="block text-xs font-black text-black uppercase mb-1">GCash Reference Number *</label>
-                          <input
-                            type="text"
-                            value={gcashRef}
-                            onChange={(e) => setGcashRef(e.target.value)}
-                            placeholder="Enter valid GCash reference number"
-                            className="w-full rounded-lg border-2 border-black bg-white px-3 py-2 text-sm font-semibold text-black outline-none focus:border-rose-400"
-                            required
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-black text-black uppercase mb-1">Upload Payment Receipt *</label>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => setGcashFile(e.target.files?.[0] || null)}
-                            className="w-full text-xs font-semibold text-black"
-                            required
-                          />
-                          <p className="text-xs text-gray-600 mt-1">Proof is required. Without proof, order may be delayed or rejected.</p>
-                        </div>
+                      <div>
+                        <label className="block text-xs font-black text-black uppercase mb-1">GCash Reference Number *</label>
+                        <input
+                          type="text"
+                          value={gcashRef}
+                          onChange={(e) => setGcashRef(e.target.value)}
+                          placeholder="Enter valid GCash reference number"
+                          className="w-full rounded-lg border-2 border-black bg-white px-3 py-2 text-sm font-semibold text-black outline-none focus:border-rose-400"
+                          required
+                        />
                       </div>
-                    )}
 
-                    {paymentMethod === "COD" && (
-                      <div className="rounded-lg border-4 border-black bg-yellow-100 p-4">
-                        <p className="text-xs font-black text-black uppercase">Cash on Delivery</p>
-                        <p className="text-xs text-gray-700 mt-1">Pay with cash when your order arrives.</p>
+                      <div>
+                        <label className="block text-xs font-black text-black uppercase mb-1">Upload Payment Receipt *</label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setGcashFile(e.target.files?.[0] || null)}
+                          className="w-full text-xs font-semibold text-black"
+                          required
+                        />
+                        <p className="text-xs text-gray-600 mt-1">Proof is required. Without proof, order may be delayed or rejected.</p>
                       </div>
-                    )}
+                    </div>
 
                     <div className="rounded-lg border-4 border-black bg-blue-100 p-4">
                       <p className="text-xs font-black text-black uppercase">Custom Order / Inquiries</p>
@@ -437,7 +421,7 @@ export default function CheckoutPage() {
                   {!isDwcl && (
                     <p>Location: {mapAddress ? mapAddress : "Not selected"}</p>
                   )}
-                  <p>Payment: {paymentMethod}</p>
+                  <p>Payment: GCash</p>
                   <p>Phone: {phone || "Not provided"}</p>
                 </div>
 
