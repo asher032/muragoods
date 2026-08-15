@@ -54,6 +54,9 @@ export default function MenuPage() {
   const isDwcl = location === "DWCL";
 
   const isProductAvailable = (product: Product) => {
+    if (product.inventory === "Out of Stock") {
+      return false;
+    }
     if (!isDwcl && dwclOnlyProducts.includes(product.id)) {
       return false;
     }
@@ -194,7 +197,7 @@ export default function MenuPage() {
             )}
           </div>
 
-          <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {filteredProducts.map((product) => {
               const available = isProductAvailable(product);
               return (
@@ -202,13 +205,13 @@ export default function MenuPage() {
                   key={product.id}
                   className={`menu-card group ${!available ? 'opacity-60' : ''}`}
                 >
-                  <div className="h-48 bg-blue-400 p-6 border-b-4 border-black group-hover:bg-blue-300 transition-colors relative overflow-hidden">
+                  <div className="h-48 bg-blue-400 p-4 border-b-4 border-black group-hover:bg-blue-300 transition-colors relative overflow-hidden">
                     <Image src={product.image} alt={product.name} fill className="object-contain p-2" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
                     {!available && (
                       <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20">
                         <span className="bg-yellow-400 text-black px-4 py-2 font-black text-sm uppercase border-4 border-black rotate-[-3deg]">
-                          DWCL Only
+                          {product.inventory === "Out of Stock" ? 'Out of Stock' : 'DWCL Only'}
                         </span>
                       </div>
                     )}

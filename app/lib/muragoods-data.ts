@@ -1,4 +1,4 @@
-export type ZoneKey = "DWCL" | "Legazpi" | "Daraga" | "Outside";
+export type ZoneKey = "DWCL" | "Legazpi" | "Daraga";
 export type InventoryStatus = "In Stock" | "Out of Stock" | "Pre-Order Only";
 export type OrderStatus =
   | "Pending Payment"
@@ -148,13 +148,6 @@ export const deliveryZones = [
     code: "Daraga",
     label: "Daraga Delivery",
     fee: 30,
-    note: "Musubi & Churros only. Minimum 2 items required.",
-    eligible: ["musubi", "churros"],
-  },
-  {
-    code: "Outside",
-    label: "Outside Delivery",
-    fee: 0,
     note: "Musubi & Churros only. Minimum 2 items required.",
     eligible: ["musubi", "churros"],
   },

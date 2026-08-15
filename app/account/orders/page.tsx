@@ -109,29 +109,29 @@ export default function AccountOrdersPage() {
           </div>
         </header>
 
-        <section className="grid gap-5 md:grid-cols-3">
-          <div className="rounded-lg border-4 border-black bg-white p-6 shadow-xl">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="rounded-lg border-4 border-black bg-white p-4 sm:p-6 shadow-xl">
             <p className="text-sm font-black uppercase tracking-widest text-rose-500">Total Orders</p>
-            <p className="mt-3 text-4xl font-black text-black">{orders.length}</p>
+            <p className="mt-3 text-3xl sm:text-4xl font-black text-black">{orders.length}</p>
           </div>
-          <div className="rounded-lg border-4 border-black bg-white p-6 shadow-xl">
+          <div className="rounded-lg border-4 border-black bg-white p-4 sm:p-6 shadow-xl">
             <p className="text-sm font-black uppercase tracking-widest text-rose-500">Preparing</p>
-            <p className="mt-3 text-4xl font-black text-black">
+            <p className="mt-3 text-3xl sm:text-4xl font-black text-black">
               {orders.filter((order) => order.status === "Preparing").length}
             </p>
           </div>
-          <div className="rounded-lg border-4 border-black bg-white p-6 shadow-xl">
+          <div className="rounded-lg border-4 border-black bg-white p-4 sm:p-6 shadow-xl">
             <p className="text-sm font-black uppercase tracking-widest text-rose-500">Out for Delivery</p>
-            <p className="mt-3 text-4xl font-black text-black">
+            <p className="mt-3 text-3xl sm:text-4xl font-black text-black">
               {orders.filter((order) => order.status === "Out for Delivery").length}
             </p>
           </div>
         </section>
 
-        <section className="mt-8 space-y-6">
+        <section className="mt-6 sm:mt-8 space-y-4 sm:space-y-6">
           {orders.length === 0 ? (
-            <div className="rounded-lg border-4 border-black bg-white p-12 text-center shadow-2xl">
-              <p className="text-2xl font-black text-black uppercase mb-4">No orders found!</p>
+            <div className="rounded-lg border-4 border-black bg-white p-8 sm:p-12 text-center shadow-2xl">
+              <p className="text-xl sm:text-2xl font-black text-black uppercase mb-4">No orders found!</p>
               <Link href="/" className="mario-btn inline-block bg-yellow-400 text-black">Start Shopping</Link>
             </div>
           ) : orders.map((order) => {
@@ -140,49 +140,49 @@ export default function AccountOrdersPage() {
             return (
               <article
                 key={order.id}
-                className="rounded-lg border-4 border-black bg-white p-6 shadow-2xl slide-in"
+                className="rounded-lg border-4 border-black bg-white p-4 sm:p-6 shadow-2xl slide-in"
               >
-                <div className="flex flex-col gap-5 border-b-4 border-black pb-4 md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-col gap-4 sm:gap-5 border-b-4 border-black pb-4 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <p className="text-sm font-black uppercase tracking-widest text-rose-500">
+                    <p className="text-xs sm:text-sm font-black uppercase tracking-widest text-rose-500">
                       {order.id}
                     </p>
-                    <h2 className="mt-2 text-3xl font-black text-black uppercase">
+                    <h2 className="mt-2 text-2xl sm:text-3xl font-black text-black uppercase">
                       {order.customer}
                     </h2>
                   </div>
 
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span className="rounded-lg border-2 border-black bg-yellow-300 px-4 py-2 text-xs font-black uppercase tracking-widest text-black pulse-badge">
-                        {order.zone}
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <span className="rounded-lg border-2 border-black bg-yellow-300 px-3 py-2 text-xs font-black uppercase tracking-widest text-black pulse-badge">
+                      {order.zone}
+                    </span>
+                    <span className="rounded-lg border-2 border-black bg-black px-3 py-2 text-xs font-black uppercase tracking-widest text-yellow-300">
+                      {order.payment}
+                    </span>
+                    {order.status === "Pending Payment" ? (
+                      <button
+                        onClick={() => handleDeleteOrder(order._id || order.id)}
+                        className="rounded bg-rose-400 px-3 py-2 text-xs font-black text-white hover:bg-rose-500"
+                      >
+                        Cancel
+                      </button>
+                    ) : (
+                      <span className="rounded bg-gray-300 px-3 py-2 text-xs font-black text-gray-500 border-2 border-black">
+                        Locked
                       </span>
-                      <span className="rounded-lg border-2 border-black bg-black px-4 py-2 text-xs font-black uppercase tracking-widest text-yellow-300">
-                        {order.payment}
-                      </span>
-                      {order.status === "Pending Payment" ? (
-                        <button
-                          onClick={() => handleDeleteOrder(order._id || order.id)}
-                          className="rounded bg-rose-400 px-3 py-2 text-xs font-black text-white hover:bg-rose-500"
-                        >
-                          Cancel
-                        </button>
-                      ) : (
-                        <span className="rounded bg-gray-300 px-3 py-2 text-xs font-black text-gray-500 border-2 border-black">
-                          Locked
-                        </span>
-                      )}
-                    </div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_0.8fr]">
+                <div className="mt-4 sm:mt-6 grid gap-4 sm:gap-6 lg:grid-cols-[1.4fr_0.8fr]">
                   <div>
-                    <div className="mb-6 grid gap-3 sm:grid-cols-5">
+                    <div className="mb-6 grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
                       {statusFlow.map((step, index) => {
                         const active = index <= currentIndex;
                         return (
                           <div key={step} className="relative">
                             <div
-                              className={`flex h-12 w-12 items-center justify-center rounded-full border-4 text-xs font-black transition ${
+                              className={`flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-4 text-xs font-black transition ${
                                 active
                                   ? "border-black bg-rose-400 text-white shadow-lg pulse-badge"
                                   : "border-black bg-white text-black"
@@ -190,7 +190,7 @@ export default function AccountOrdersPage() {
                             >
                               {index + 1}
                             </div>
-                            <p className="mt-2 text-xs font-black uppercase tracking-widest text-white drop-shadow-lg">
+                            <p className="mt-2 text-[10px] sm:text-xs font-black uppercase tracking-widest text-white drop-shadow-lg">
                               {step}
                             </p>
                           </div>
@@ -198,19 +198,20 @@ export default function AccountOrdersPage() {
                       })}
                     </div>
 
-                    <div className="rounded-lg border-4 border-black bg-yellow-100 p-5">
+                    <div className="rounded-lg border-4 border-black bg-yellow-100 p-4 sm:p-5">
                       <p className="text-sm font-black uppercase tracking-widest text-black">Current Status</p>
-                      <p className="mt-3 text-2xl font-black text-rose-500 uppercase">{order.status}</p>
+                      <p className="mt-3 text-xl sm:text-2xl font-black text-rose-500 uppercase">{order.status}</p>
                     </div>
                   </div>
 
-                  <div className="rounded-lg border-4 border-black bg-white p-5">
+                  <div className="rounded-lg border-4 border-black bg-white p-4 sm:p-5">
                     <p className="text-sm font-black uppercase tracking-widest text-rose-500">Delivery Info</p>
-                    <ul className="mt-4 space-y-3 text-sm">
-<li className="font-bold text-black"><span className="font-black text-rose-500">{order.address}</span></li>
-                  <li className="font-bold text-black"><span className="font-black text-rose-500">{order.phone}</span></li>
-                  <li className="font-bold text-black"><span className="font-black text-rose-500">{order.deliveryType}</span></li>
-                  <li className="font-bold text-black text-lg"><span className="font-black text-rose-500">₱{order.total}</span></li>
+                    <ul className="mt-4 space-y-2 sm:space-y-3 text-sm">
+                      <li className="font-bold text-black"><span className="font-black text-rose-500">{order.address}</span></li>
+                      <li className="font-bold text-black"><span className="font-black text-rose-500">{order.phone}</span></li>
+                      <li className="font-bold text-black"><span className="font-black text-rose-500">{order.deliveryType}</span></li>
+                      <li className="font-bold text-black"><span className="font-black text-rose-500">{order.deliveryDate}</span></li>
+                      <li className="font-bold text-black text-lg"><span className="font-black text-rose-500">₱{order.total}</span></li>
                     </ul>
                   </div>
                 </div>

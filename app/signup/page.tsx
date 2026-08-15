@@ -143,7 +143,7 @@ export default function SignupPage() {
             </p>
           </div>
 
-          <Link href="/" className="mario-btn mt-4 block text-center bg-rose-400 text-white border-black hover:bg-rose-500 uppercase font-black">
+          <Link href="/" className="mario-btn mt-4 block text-center bg-rose-400 text-white border-black hover:bg-rose-500 uppercase font-black w-full md:w-auto">
             ← Back to Shop
           </Link>
         </div>

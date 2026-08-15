@@ -129,16 +129,16 @@ export default function OrdersPage() {
                         <p className="text-sm font-black uppercase tracking-widest text-rose-500">
                           {order.id}
                         </p>
-                        <h2 className="mt-2 text-3xl font-black text-black uppercase">
+                        <h2 className="mt-2 text-2xl sm:text-3xl font-black text-black uppercase">
                           {order.customer}
                         </h2>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-3">
-                        <span className="rounded-lg border-2 border-black bg-yellow-300 px-4 py-2 text-xs font-black uppercase tracking-widest text-black pulse-badge">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                        <span className="rounded-lg border-2 border-black bg-yellow-300 px-3 py-2 text-xs font-black uppercase tracking-widest text-black pulse-badge">
                           {order.zone}
                         </span>
-                        <span className="rounded-lg border-2 border-black bg-black px-4 py-2 text-xs font-black uppercase tracking-widest text-yellow-300">
+                        <span className="rounded-lg border-2 border-black bg-black px-3 py-2 text-xs font-black uppercase tracking-widest text-yellow-300">
                           {order.payment}
                         </span>
                         {canCancel ? (
@@ -159,13 +159,13 @@ export default function OrdersPage() {
 
                     <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_0.8fr]">
                       <div>
-                        <div className="mb-6 grid gap-3 sm:grid-cols-5">
+                        <div className="mb-6 grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
                           {statusFlow.map((step, index) => {
                             const active = index <= currentIndex;
                             return (
                               <div key={step} className="relative">
                                 <div
-                                  className={`flex h-12 w-12 items-center justify-center rounded-full border-4 text-xs font-black transition ${
+                                  className={`flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-4 text-xs font-black transition ${
                                     active
                                       ? "border-black bg-rose-400 text-white shadow-lg pulse-badge"
                                       : "border-black bg-white text-black"
@@ -173,7 +173,7 @@ export default function OrdersPage() {
                                 >
                                   {active && index > 0 ? 'OK' : index + 1}
                                 </div>
-                                <p className="mt-2 text-xs font-black uppercase tracking-widest text-white drop-shadow-lg">
+                                <p className="mt-2 text-[10px] sm:text-xs font-black uppercase tracking-widest text-white drop-shadow-lg">
                                   {step}
                                 </p>
                               </div>

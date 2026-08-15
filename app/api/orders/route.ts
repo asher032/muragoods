@@ -13,7 +13,9 @@ export async function POST(req: Request) {
       body = Object.fromEntries(formData.entries());
       const gcashScreenshot = formData.get('gcashScreenshot');
       if (gcashScreenshot instanceof File) {
-        body.gcashScreenshotUrl = URL.createObjectURL(gcashScreenshot);
+        const bytes = await gcashScreenshot.arrayBuffer();
+        const base64 = Buffer.from(bytes).toString('base64');
+        body.gcashScreenshotUrl = `data:${gcashScreenshot.type};base64,${base64}`;
       }
     } else {
       body = await req.json();

@@ -211,13 +211,13 @@ export default function CheckoutPage() {
             <p className="mt-2 text-lg font-black text-yellow-300" style={{ textShadow: '2px 2px 0px #000' }}>Review your items and complete your order.</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-1 xl:grid-cols-[1.2fr_0.8fr]">
             <div className="mario-card">
-              <div className="bg-rose-400 p-6 border-b-4 border-black">
-                <h2 className="text-3xl font-black text-white uppercase tracking-widest">Your Cart</h2>
+              <div className="bg-rose-400 p-4 sm:p-6 border-b-4 border-black">
+                <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-widest">Your Cart</h2>
               </div>
 
-              <div className="p-6 space-y-6">
+              <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
                 {error && (
                   <div className="rounded-lg border-4 border-rose-400 bg-rose-50 p-4 text-sm font-black text-rose-600 uppercase">
                     {error}
@@ -275,7 +275,7 @@ export default function CheckoutPage() {
                       <select
                         value={location}
                         onChange={(e) => setLocation(e.target.value as ZoneKey)}
-                        className="w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-black text-black outline-none focus:border-rose-400"
+                        className="w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-black text-black outline-none focus:border-rose-400 text-sm sm:text-base"
                       >
                         {deliveryZones.map(zone => (
                           <option key={zone.code} value={zone.code}>{zone.label}</option>
@@ -291,7 +291,7 @@ export default function CheckoutPage() {
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         placeholder="Enter valid contact number"
-                        className="w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none focus:border-rose-400"
+                        className="w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-semibold text-black outline-none focus:border-rose-400 text-sm sm:text-base"
                         required
                       />
                       <p className="text-xs text-gray-600 mt-1">Required for delivery confirmation calls</p>
@@ -305,7 +305,7 @@ export default function CheckoutPage() {
                         onChange={(e) => setCustomOrderDate(e.target.value)}
                         required
                         min={tomorrow}
-                        className="w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-black text-black outline-none focus:border-rose-400"
+                        className="w-full rounded-lg border-4 border-black bg-yellow-50 px-4 py-3 font-black text-black outline-none focus:border-rose-400 text-sm sm:text-base"
                       />
                       <p className="text-xs text-gray-600 mt-1">Select a valid future date</p>
                     </div>
@@ -416,15 +416,15 @@ export default function CheckoutPage() {
             </div>
 
             <aside className="checkout-summary">
-              <div className="bg-black p-6 border-b-4 border-black">
-                <h3 className="text-2xl font-black text-yellow-300 uppercase tracking-widest">Order Summary</h3>
+              <div className="bg-black p-4 sm:p-6 border-b-4 border-black">
+                <h3 className="text-xl sm:text-2xl font-black text-yellow-300 uppercase tracking-widest">Order Summary</h3>
               </div>
 
-              <div className="p-6 flex flex-col h-full">
-                <div className="space-y-4 text-base font-black text-black border-b-4 border-black pb-4 mb-4">
-                  <div className="flex justify-between"><span>Subtotal:</span><span className="text-rose-500">₱{subtotal}</span></div>
-                  <div className="flex justify-between"><span>Shipping:</span><span className="text-rose-500">₱{shippingFee}</span></div>
-                  <div className="flex justify-between text-2xl bg-yellow-400 p-3 border-4 border-black"><span>TOTAL:</span><span>₱{total}</span></div>
+              <div className="p-4 sm:p-6 flex flex-col h-full">
+                <div className="space-y-3 sm:space-y-4 text-base font-black text-black border-b-4 border-black pb-4 mb-4">
+                  <div className="flex justify-between text-sm sm:text-base"><span>Subtotal:</span><span className="text-rose-500">₱{subtotal}</span></div>
+                  <div className="flex justify-between text-sm sm:text-base"><span>Shipping:</span><span className="text-rose-500">₱{shippingFee}</span></div>
+                  <div className="flex justify-between text-xl sm:text-2xl bg-yellow-400 p-3 border-4 border-black"><span>TOTAL:</span><span>₱{total}</span></div>
                 </div>
 
                 <div className="space-y-2 text-xs font-bold text-black mb-4">

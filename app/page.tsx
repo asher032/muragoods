@@ -110,7 +110,7 @@ export default function Home() {
             <div className="h-2 w-48 bg-yellow-400 mx-auto mt-4 border-2 border-black"></div>
           </div>
 
-          <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
             {[
               { name: "Musubi", image: "/images/product-musubi.png", price: "₱40", desc: "Regular / With Egg / With Flakes" },
               { name: "Mini Churros", image: "/images/product-churros.png", price: "₱70", desc: "Option 1 / Option 2" },

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -14,6 +14,7 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -82,10 +83,12 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
     });
 
     mapRef.current = map;
+    setMapReady(true);
 
     return () => {
       map.remove();
       mapRef.current = null;
+      setMapReady(false);
     };
   }, [initialLat, initialLng, onLocationSelect]);
 

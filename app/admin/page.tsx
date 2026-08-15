@@ -26,7 +26,7 @@ export default function AdminPage() {
   const [orders, setOrders] = useState<(Order & { userId: string; _id?: string })[]>([]);
   const [catalog, setCatalog] = useState(products);
   const [alert, setAlert] = useState<{ show: boolean; message: string; orderId?: string }>({ show: false, message: "" });
-  const [previewReceipt, setPreviewReceipt] = useState<string | null>(null);
+  const [previewReceipt, setPreviewReceipt] = useState<string>("");
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -131,20 +131,30 @@ export default function AdminPage() {
     }
   };
 
-  const toggleInventory = (productId: string) => {
-    setCatalog((current) =>
-      current.map((product) => {
-        if (product.id !== productId) return product;
+  const handleUpdateInventory = async (productId: string) => {
+    const product = catalog.find(p => p.id === productId);
+    if (!product) return;
 
-        const nextIndex =
-          (inventoryCycle.indexOf(product.inventory) + 1) % inventoryCycle.length;
+    const nextIndex = (inventoryCycle.indexOf(product.inventory) + 1) % inventoryCycle.length;
+    const nextInventory = inventoryCycle[nextIndex];
 
-        return {
-          ...product,
-          inventory: inventoryCycle[nextIndex],
-        };
-      }),
-    );
+    try {
+      const res = await fetch(`/api/products?id=${productId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inventory: nextInventory }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        setCatalog(current =>
+          current.map(p =>
+            p.id === productId ? { ...p, inventory: nextInventory } : p,
+          ),
+        );
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   if (!isAuthenticated) {
@@ -246,45 +256,45 @@ export default function AdminPage() {
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-black text-white">
                   <tr>
-                    <th className="px-4 py-3 font-black uppercase tracking-wider">Order</th>
-                    <th className="px-4 py-3 font-black uppercase tracking-wider">Customer</th>
-                    <th className="px-4 py-3 font-black uppercase tracking-wider">Zone</th>
-                    <th className="px-4 py-3 font-black uppercase tracking-wider">Delivery Pin</th>
-                    <th className="px-4 py-3 font-black uppercase tracking-wider">Details</th>
-                    <th className="px-4 py-3 font-black uppercase tracking-wider">Status</th>
-                    <th className="px-4 py-3 font-black uppercase tracking-wider">Action</th>
+                    <th className="px-2 sm:px-4 py-3 font-black uppercase tracking-wider text-xs sm:text-sm">Order</th>
+                    <th className="px-2 sm:px-4 py-3 font-black uppercase tracking-wider text-xs sm:text-sm">Customer</th>
+                    <th className="px-2 sm:px-4 py-3 font-black uppercase tracking-wider text-xs sm:text-sm">Zone</th>
+                    <th className="px-2 sm:px-4 py-3 font-black uppercase tracking-wider text-xs sm:text-sm">Delivery Pin</th>
+                    <th className="px-2 sm:px-4 py-3 font-black uppercase tracking-wider text-xs sm:text-sm">Details</th>
+                    <th className="px-2 sm:px-4 py-3 font-black uppercase tracking-wider text-xs sm:text-sm">Status</th>
+                    <th className="px-2 sm:px-4 py-3 font-black uppercase tracking-wider text-xs sm:text-sm">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {orders.map((order, idx) => (
                     <tr key={order._id || order.id} className={`border-b-2 border-black ${idx % 2 === 0 ? 'bg-yellow-50' : 'bg-white'}`}>
-                      <td className="px-4 py-3 font-black text-black">{(order._id || order.id).slice(-5)}</td>
-                      <td className="px-4 py-3">
-                        <div className="font-bold text-black">{order.customer}</div>
-                        <div className="text-xs font-semibold text-slate-600">{order.address}</div>
-                        <div className="text-xs font-black text-blue-600">{order.userId}</div>
+                      <td className="px-2 sm:px-4 py-3 font-black text-black text-xs sm:text-sm">{(order._id || order.id).slice(-5)}</td>
+                      <td className="px-2 sm:px-4 py-3">
+                        <div className="font-bold text-black text-xs sm:text-sm">{order.customer}</div>
+                        <div className="text-xs font-semibold text-slate-600 hidden sm:block">{order.address}</div>
+                        <div className="text-xs font-black text-blue-600 hidden sm:block">{order.userId}</div>
                       </td>
-                      <td className="px-4 py-3 font-bold text-black">{order.zone}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-2 sm:px-4 py-3 font-bold text-black text-xs sm:text-sm">{order.zone}</td>
+                      <td className="px-2 sm:px-4 py-3">
                         <div className="text-xs font-bold text-black">{order.latitude}, {order.longitude}</div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-2 sm:px-4 py-3">
                         <div className="text-xs font-bold text-black">₱{order.total}</div>
-                        <div className="text-[10px] text-slate-500">{order.items.join(', ')}</div>
+                        <div className="text-[10px] text-slate-500 hidden sm:block">{order.items.join(', ')}</div>
                         {order.gcashScreenshotUrl && (
                           <button
-                            onClick={() => setPreviewReceipt(order.gcashScreenshotUrl || null)}
+                            onClick={() => setPreviewReceipt(order.gcashScreenshotUrl || "")}
                             className="text-xs font-black text-rose-500 underline"
                           >
                             View Receipt
                           </button>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-2 sm:px-4 py-3">
                         <select
                           value={order.status}
                           onChange={(event) => handleStatusUpdate(order._id || order.id, event.target.value)}
-                          className="mario-input rounded-lg px-3 py-2 text-xs font-black uppercase tracking-wider"
+                          className="mario-input rounded-lg px-2 sm:px-3 py-2 text-xs font-black uppercase tracking-wider"
                         >
                           {statusOptions.map((status) => (
                             <option key={status} value={status}>
@@ -293,10 +303,10 @@ export default function AdminPage() {
                           ))}
                         </select>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-2 sm:px-4 py-3">
                         <button
                           onClick={() => handleDeleteOrder(order._id || order.id)}
-                          className="rounded bg-rose-400 p-2 text-white font-black hover:bg-rose-500"
+                          className="rounded bg-rose-400 p-2 text-white font-black hover:bg-rose-500 text-xs"
                         >
                           Delete
                         </button>
@@ -308,13 +318,13 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div className="mario-card p-6 shadow-xl">
-            <h2 className="text-2xl font-black text-black uppercase tracking-wider">Inventory Control</h2>
-            <div className="mt-6 space-y-3">
+          <div className="mario-card p-4 sm:p-6 shadow-xl">
+            <h2 className="text-xl sm:text-2xl font-black text-black uppercase tracking-wider">Inventory Control</h2>
+            <div className="mt-4 sm:mt-6 space-y-3">
               {catalog.map((product) => (
                 <div
                   key={product.id}
-                  className="flex items-center justify-between rounded-lg border-4 border-black bg-yellow-50 p-4"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between rounded-lg border-4 border-black bg-yellow-50 p-4 gap-3"
                 >
                   <div>
                     <p className="font-black text-black text-lg">{product.name}</p>
@@ -322,8 +332,8 @@ export default function AdminPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => toggleInventory(product.id)}
-                    className="mario-btn mario-btn-black border-black hover:bg-slate-900 uppercase font-black"
+                    onClick={() => handleUpdateInventory(product.id)}
+                    className="mario-btn mario-btn-black border-black hover:bg-slate-900 uppercase font-black w-full sm:w-auto"
                   >
                     Update
                   </button>
@@ -335,23 +345,23 @@ export default function AdminPage() {
       </div>
 
       {previewReceipt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setPreviewReceipt(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setPreviewReceipt("")}>
           <div className="mario-card max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
             <div className="bg-black p-4 border-b-4 border-black flex items-center justify-between">
               <h3 className="text-xl font-black text-yellow-300 uppercase">Payment Receipt</h3>
               <button
-                onClick={() => setPreviewReceipt(null)}
+                onClick={() => setPreviewReceipt("")}
                 className="text-white text-2xl font-black hover:text-rose-400"
               >
-                ×
+                x
               </button>
             </div>
             <div className="p-4 bg-white">
-              <img
-                src={previewReceipt}
-                alt="Payment Receipt"
-                className="w-full h-auto rounded-lg border-4 border-black"
-              />
+              {previewReceipt.startsWith('data:') ? (
+                <img src={previewReceipt} alt="Payment Receipt" className="w-full h-auto rounded-lg border-4 border-black" />
+              ) : (
+                <img src={previewReceipt} alt="Payment Receipt" className="w-full h-auto rounded-lg border-4 border-black" />
+              )}
             </div>
           </div>
         </div>
