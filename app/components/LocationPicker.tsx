@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -13,19 +13,21 @@ interface LocationPickerProps {
 export default function LocationPicker({ onLocationSelect, initialLat = 13.1550, initialLng = 123.7450 }: LocationPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    if (!containerRef.current) return;
 
-    const daragaLegazpiBounds = [
-      [13.1400, 123.7200],
-      [13.1800, 123.7800],
-    ] as [[number, number], [number, number]];
+    let map: L.Map | null = null;
+    let marker: L.Marker | null = null;
 
-    const timeout = setTimeout(() => {
-      if (!containerRef.current) return;
+    try {
+      const daragaLegazpiBounds = [
+        [13.1400, 123.7200],
+        [13.1800, 123.7800],
+      ] as [[number, number], [number, number]];
 
-      const map = L.map(containerRef.current, {
+      map = L.map(containerRef.current, {
         center: [initialLat, initialLng],
         zoom: 14,
         maxBounds: daragaLegazpiBounds,
@@ -63,9 +65,10 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
         iconAnchor: [22, 44],
       });
 
-      const marker = L.marker([initialLat, initialLng], { icon: pinIcon, draggable: true }).addTo(map);
+      marker = L.marker([initialLat, initialLng], { icon: pinIcon, draggable: true }).addTo(map);
 
       const updateMarker = (lat: number, lng: number) => {
+        if (!marker || !map) return;
         marker.setLatLng([lat, lng]);
         map.setView([lat, lng], 15, { animate: false });
         if (onLocationSelect) {
@@ -78,21 +81,37 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
       });
 
       marker.on('dragend', () => {
+        if (!marker) return;
         const pos = marker.getLatLng();
         updateMarker(pos.lat, pos.lng);
       });
 
       mapRef.current = map;
-    }, 100);
+      setReady(true);
+    } catch (err) {
+      console.error('Map initialization failed:', err);
+      if (containerRef.current) {
+        containerRef.current.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;background:#fee;color:#900;font-weight:bold;padding:20px;text-align:center;">Map failed to load. Please refresh the page.</div>';
+      }
+    }
 
     return () => {
-      clearTimeout(timeout);
-      if (mapRef.current) {
-        mapRef.current.remove();
+      if (map) {
+        map.remove();
         mapRef.current = null;
       }
+      setReady(false);
     };
   }, [initialLat, initialLng, onLocationSelect]);
+
+  if (!ready) {
+    return (
+      <div
+        ref={containerRef}
+        style={{ height: '400px', width: '100%', borderRadius: '12px', border: '4px solid #000', background: '#f3f4f6' }}
+      />
+    );
+  }
 
   return (
     <div

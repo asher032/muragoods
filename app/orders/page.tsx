@@ -19,6 +19,7 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<(Order & { _id?: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const userStr = localStorage.getItem("user");
@@ -32,14 +33,20 @@ export default function OrdersPage() {
       try {
         const res = await fetch(`/api/orders?userId=${encodeURIComponent(user.email)}`);
         const result = await res.json();
-        if (result.success) {
-          setOrders(result.data.map((o: Order & { _id?: string }) => ({
-            ...o,
-            id: o._id || o.id,
-          })));
+        if (result.success && Array.isArray(result.data)) {
+          const safeOrders = result.data.map((o: Record<string, unknown>) => {
+            const order = o as Order & { _id?: string };
+            return {
+              ...order,
+              id: order._id || order.id || String(order._id || ''),
+            };
+          });
+          setOrders(safeOrders);
+        } else {
+          setOrders([]);
         }
-      } catch (fetchError) {
-        console.error("Failed to fetch orders:", fetchError);
+      } catch {
+        setOrders([]);
       } finally {
         setLoading(false);
       }
@@ -107,6 +114,12 @@ export default function OrdersPage() {
             <h1 className="text-5xl font-black text-white uppercase tracking-tighter" style={{ textShadow: '6px 6px 0px #000' }}>Track Your Quest</h1>
             <p className="mt-2 text-lg font-black text-yellow-300" style={{ textShadow: '2px 2px 0px #000' }}>Your food is currently being prepped in Bowser&apos;s Castle Kitchen!</p>
           </div>
+
+          {error && (
+            <div className="mb-6 rounded-lg border-4 border-rose-400 bg-rose-50 p-4 text-sm font-black text-rose-600 uppercase">
+              {error}
+            </div>
+          )}
 
           {orders.length === 0 ? (
             <div className="rounded-lg border-4 border-black bg-white p-12 text-center shadow-2xl">
