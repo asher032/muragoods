@@ -19,31 +19,6 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState("");
 
-  const fetchPlaceName = async (lat: number, lng: number) => {
-    setLoading(true);
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=en`, {
-        headers: { 'User-Agent': 'Muragoods/1.0' },
-      });
-      if (!res.ok) throw new Error('Geocoding failed');
-      const data = await res.json();
-      const placeName = data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-      const address = `DELIVERY PIN: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-      setSelected({ lat, lng, address, placeName });
-      if (onLocationSelect) {
-        onLocationSelect(lat, lng, placeName);
-      }
-    } catch {
-      const address = `DELIVERY PIN: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-      setSelected({ lat, lng, address });
-      if (onLocationSelect) {
-        onLocationSelect(lat, lng, address);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
@@ -89,6 +64,31 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
       autoPan: false,
     }).addTo(map);
 
+    const fetchPlaceName = async (lat: number, lng: number) => {
+      setLoading(true);
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=en`, {
+          headers: { 'User-Agent': 'Muragoods/1.0' },
+        });
+        if (!res.ok) throw new Error('Geocoding failed');
+        const data = await res.json();
+        const placeName = data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        const address = `DELIVERY PIN: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        setSelected({ lat, lng, address, placeName });
+        if (onLocationSelect) {
+          onLocationSelect(lat, lng, placeName);
+        }
+      } catch {
+        const address = `DELIVERY PIN: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        setSelected({ lat, lng, address });
+        if (onLocationSelect) {
+          onLocationSelect(lat, lng, address);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
     const updateSelection = (lat: number, lng: number) => {
       marker.setLatLng([lat, lng]);
       fetchPlaceName(lat, lng);
@@ -112,7 +112,7 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
       mapRef.current = null;
       markerRef.current = null;
     };
-  }, [initialLat, initialLng, onLocationSelect, fetchPlaceName]);
+  }, [initialLat, initialLng, onLocationSelect]);
 
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) {
@@ -130,6 +130,30 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
           markerRef.current.setLatLng([latitude, longitude]);
           mapRef.current.setView([latitude, longitude], 14);
         }
+        const fetchPlaceName = async (lat: number, lng: number) => {
+          setLoading(true);
+          try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=en`, {
+              headers: { 'User-Agent': 'Muragoods/1.0' },
+            });
+            if (!res.ok) throw new Error('Geocoding failed');
+            const data = await res.json();
+            const placeName = data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+            const address = `DELIVERY PIN: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+            setSelected({ lat, lng, address, placeName });
+            if (onLocationSelect) {
+              onLocationSelect(lat, lng, placeName);
+            }
+          } catch {
+            const address = `DELIVERY PIN: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+            setSelected({ lat, lng, address });
+            if (onLocationSelect) {
+              onLocationSelect(lat, lng, address);
+            }
+          } finally {
+            setLoading(false);
+          }
+        };
         await fetchPlaceName(latitude, longitude);
         setGeoLoading(false);
       },
