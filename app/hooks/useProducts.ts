@@ -29,7 +29,11 @@ export function useProducts() {
     }
 
     load();
-    return () => { cancelled = true; };
+    const interval = setInterval(load, 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
   return { products };
