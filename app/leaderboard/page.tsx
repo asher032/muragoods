@@ -315,7 +315,6 @@ export default function LeaderboardPage() {
             <PixelDivider variant="ziggurat" />
             <div className="mt-6 flex flex-wrap gap-4 justify-center">
               <Link href="/menu" className="deco-btn deco-btn-gold rounded-xl">🛒 Place an Order</Link>
-              <Link href="/play/spin" className="deco-btn deco-btn-crimson rounded-xl">🎰 Spin to Earn</Link>
               <Link href="/play/refer" className="deco-btn rounded-xl">👥 Refer Friends</Link>
             </div>
             <p className="mt-6 text-[8px] text-[var(--pewter)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>
