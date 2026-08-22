@@ -19,9 +19,6 @@ const rewards: Reward[] = [
   // Free Food
   { id: 'free_musubi', name: 'Free Regular Musubi', description: 'Claim a free Regular Musubi on your next visit to DWCL.', cost: 5000, icon: '🍙', category: 'Free Food' },
   { id: 'free_churros', name: 'Free Churros (Option 1)', description: 'Claim free Mini Churros (Option 1, ₱70 value) at DWCL.', cost: 7500, icon: '🍩', category: 'Free Food' },
-  { id: 'free_coffee_jelly', name: 'Free Coffee Jelly', description: 'Get a free Coffee Jelly (Option 1, ₱15 value) on your next pickup.', cost: 3000, icon: '☕', category: 'Free Food' },
-  { id: 'free_cookies', name: 'Free Cookies', description: 'Claim free Cookies (Regular, ₱25 value) at DWCL.', cost: 4000, icon: '🍪', category: 'Free Food' },
-
   // Discount Vouchers
   { id: 'voucher_50', name: '₱50 Off Voucher', description: 'Get ₱50 off your next order. Minimum order ₱100.', cost: 8000, icon: '🏷️', category: 'Vouchers' },
   { id: 'voucher_100', name: '₱100 Off Voucher', description: 'Get ₱100 off your next order. Minimum order ₱200.', cost: 15000, icon: '🏷️', category: 'Vouchers' },
