@@ -247,6 +247,9 @@ export default function OrderDetailPage() {
                   <div className="flex justify-between"><span className="text-[var(--pewter)]">Address</span><span className="text-[var(--cream)] text-right max-w-[60%] break-all">{order.address}</span></div>
                   <div className="flex justify-between"><span className="text-[var(--pewter)]">Date</span><span className="text-[var(--cream)]">{order.deliveryDate}</span></div>
                   <div className="flex justify-between"><span className="text-[var(--pewter)]">Service</span><span className="text-[var(--cream)]">{order.deliveryType}</span></div>
+                  {'deliveryTimeSlot' in order && (order as { deliveryTimeSlot?: string }).deliveryTimeSlot && (
+                    <div className="flex justify-between"><span className="text-[var(--pewter)]">Time Slot</span><span className="text-[var(--cream)]">{((order as { deliveryTimeSlot?: string }).deliveryTimeSlot === 'morning') ? '🌅 Morning (9AM-12PM)' : ((order as { deliveryTimeSlot?: string }).deliveryTimeSlot === 'afternoon') ? '☀️ Afternoon (12PM-5PM)' : '🌙 Evening (5PM-8PM)'}</span></div>
+                  )}
                 </div>
               </div>
 

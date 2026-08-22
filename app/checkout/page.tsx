@@ -15,6 +15,12 @@ const LocationPicker = dynamic(() => import('@/app/components/LocationPicker'), 
 
 const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
+const timeSlotOptions = [
+  { value: 'morning', label: 'Morning', time: '9:00 AM – 12:00 PM', icon: '🌅' },
+  { value: 'afternoon', label: 'Afternoon', time: '12:00 PM – 5:00 PM', icon: '☀️' },
+  { value: 'evening', label: 'Evening', time: '5:00 PM – 8:00 PM', icon: '🌙' },
+];
+
 type PaymentMethod = 'GCash' | 'Cash on Delivery';
 
 export default function CheckoutPage() {
@@ -25,6 +31,7 @@ export default function CheckoutPage() {
   const [phone, setPhone] = useState('');
   const [deliveryService, setDeliveryService] = useState('DWCL Pickup — Free');
   const [customOrderDate, setCustomOrderDate] = useState('');
+  const [timeSlot, setTimeSlot] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('GCash');
   const [gcashRef, setGcashRef] = useState('');
   const [gcashFile, setGcashFile] = useState<File | null>(null);
@@ -189,6 +196,7 @@ export default function CheckoutPage() {
     formData.append('total', String(total));
     formData.append('items', JSON.stringify(cartItems.map(item => `${item.name} (${item.selectedVariant?.name}) x ${item.quantity}`)));
     formData.append('deliveryType', deliveryService);
+    formData.append('deliveryTimeSlot', timeSlot || '');
     formData.append('userId', user.email);
     formData.append('pointsEarned', String(pointsEarned));
     if (discountApplied) {
@@ -353,6 +361,31 @@ export default function CheckoutPage() {
                     <input type="date" value={customOrderDate} onChange={(e) => setCustomOrderDate(e.target.value)} required min={tomorrow} className="deco-input rounded-xl" />
                   </div>
 
+                  {/* Time Slot */}
+                  {!isDwcl && (
+                    <div>
+                      <label className="block text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>Preferred Time Slot</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {timeSlotOptions.map(slot => (
+                          <button
+                            key={slot.value}
+                            type="button"
+                            onClick={() => setTimeSlot(slot.value)}
+                            className={`p-3 border-2 rounded-xl text-center transition-all ${
+                              timeSlot === slot.value
+                                ? 'border-[var(--gold)] bg-[rgba(212,175,55,0.1)]'
+                                : 'border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] hover:border-[var(--gold)]'
+                            }`}
+                          >
+                            <span className="text-lg">{slot.icon}</span>
+                            <p className="text-[9px] text-[var(--cream)] mt-1 uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>{slot.label}</p>
+                            <p className="text-[7px] text-[var(--pewter)] mt-0.5">{slot.time}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Delivery Service */}
                   <div>
                     <label className="block text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>Delivery Service</label>
@@ -516,6 +549,9 @@ export default function CheckoutPage() {
                       <p>Zone: <span className="text-[var(--cream-muted)]">{location}</span></p>
                       <p>Payment: <span className="text-[var(--cream-muted)]">{paymentMethod}</span></p>
                       <p>Service: <span className="text-[var(--cream-muted)]">{deliveryService}</span></p>
+                      {timeSlot && (
+                        <p>Time: <span className="text-[var(--cream-muted)]">{timeSlotOptions.find(s => s.value === timeSlot)?.label} ({timeSlotOptions.find(s => s.value === timeSlot)?.time})</span></p>
+                      )}
                     </div>
                     {pointsEarned > 0 && (
                       <div className="mt-3 pt-3 border-t border-[rgba(242,240,228,0.1)]">
