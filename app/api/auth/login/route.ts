@@ -12,7 +12,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Invalid email or password' }, { status: 401 });
     }
 
-    return NextResponse.json({ success: true, data: { name: user.name, email: user.email } });
+    // Generate userId for users who signed up before the field existed
+    let userId = user.userId;
+    if (!userId) {
+      userId = 'MG-' + email.split('@')[0].toUpperCase().slice(0, 6) + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+      user.userId = userId;
+      await user.save();
+    }
+
+    return NextResponse.json({ success: true, data: { name: user.name, email: user.email, userId } });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'An error occurred';
     return NextResponse.json({ success: false, error: message }, { status: 400 });

@@ -42,6 +42,8 @@ export default function AccountProfilePage() {
     setUser(userData);
     const savedAvatar = localStorage.getItem('muragoods_avatar');
     if (savedAvatar) setAvatar(savedAvatar);
+    // Read userId from localStorage (set on login/signup)
+    if (userData.userId) setUserId(userData.userId);
 
     async function fetchOrders() {
       try {
@@ -59,7 +61,15 @@ export default function AccountProfilePage() {
         const res = await fetch(`/api/perks?email=${encodeURIComponent(userData.email)}`);
         const result = await res.json();
         if (result.success && result.data) {
-          setUserId(result.data.userId || '');
+          if (result.data.userId) {
+            setUserId(result.data.userId);
+            // Also store in localStorage for future use
+            const stored = JSON.parse(localStorage.getItem('user') || '{}');
+            if (!stored.userId) {
+              stored.userId = result.data.userId;
+              localStorage.setItem('user', JSON.stringify(stored));
+            }
+          }
           setPerks(result.data.perks || []);
         }
       } catch { /* empty */ }
@@ -108,6 +118,12 @@ export default function AccountProfilePage() {
     }
     return new Date().toLocaleDateString('en', { month: 'short', year: 'numeric' });
   })();
+
+  const displayIdRef = useRef('');
+  if (!userId && user?.email && !displayIdRef.current) {
+    displayIdRef.current = 'MG-' + user.email.split('@')[0].toUpperCase().slice(0, 6) + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+  }
+  const displayId = userId || displayIdRef.current;
 
   return (
     <main className="min-h-screen">
@@ -164,9 +180,9 @@ export default function AccountProfilePage() {
                   )}
                 </div>
                 <p className="text-sm text-[var(--pewter)] mt-1">{user.email}</p>
-                {userId && (
-                  <p className="text-[9px] text-[var(--gold)] mt-1" style={{ fontFamily: 'var(--font-arcade)' }}>ID: {userId}</p>
-                )}
+                <p className="text-[9px] text-[var(--gold)] mt-1 font-arcade">
+                  🪪 ID: {userId || displayId}
+                </p>
                 <div className="mt-3 flex items-center justify-center sm:justify-start gap-3">
                   <CoinBalance size="md" />
                   <span className="text-[8px] text-[var(--pewter)]" style={{ fontFamily: 'var(--font-arcade)' }}>Member since {memberSince}</span>
