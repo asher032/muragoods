@@ -49,9 +49,9 @@ export default function CheckoutPage() {
     if (savedCart) { try { setCart(JSON.parse(savedCart)); } catch { setCart({}); } }
   }, [router]);
 
-  // Reset payment to GCash if zone changes to non-DWCL
+  // Reset payment to GCash if zone changes to non-DWCL and non-Daraga
   useEffect(() => {
-    if (location !== 'DWCL' && paymentMethod === 'Cash on Delivery') {
+    if (location !== 'DWCL' && location !== 'Daraga' && paymentMethod === 'Cash on Delivery') {
       setPaymentMethod('GCash');
     }
   }, [location, paymentMethod]);
@@ -76,12 +76,15 @@ export default function CheckoutPage() {
 
   const isDwcl = location === 'DWCL';
   const isCustom = location === 'Custom';
+  const isDaraga = location === 'Daraga';
   const isGcash = paymentMethod === 'GCash';
-  const restrictedItems = cartItems.filter(item => dwclOnlyProducts.includes(item.id) && !isDwcl);
+  const restrictedItems = cartItems.filter(item => dwclOnlyProducts.includes(item.id) && !isDwcl && !isDaraga);
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = cartItems.reduce((sum, item) => sum + (item.selectedVariant?.price || 0) * item.quantity, 0);
   const zoneData = deliveryZones.find(z => z.code === location);
-  const shippingFee = isCustom ? 0 : (zoneData?.fee || 0);
+  // Daraga: free shipping on orders ₱200+
+  const baseFee = isCustom ? 0 : (zoneData?.fee || 0);
+  const shippingFee = isDaraga && subtotal >= 200 ? 0 : baseFee;
   const discountAmount = discountApplied ? (discountApplied.type === 'free_musubi' ? 40 : Math.round(subtotal * discountApplied.value / 100)) : 0;
   const total = Math.max(0, subtotal + shippingFee - discountAmount);
   const pointsEarned = calculatePoints(total);
@@ -124,7 +127,8 @@ export default function CheckoutPage() {
     setError('');
 
     if (cartItems.length === 0) { setError('Your cart is empty!'); return; }
-    if (!isDwcl && totalItems < 2) { setError('Minimum 2 items required for delivery outside DWCL.'); return; }                    const phoneDigits = phone.replace(/[\s\-()+]/g, '');
+    if (!isDwcl && !isDaraga && totalItems < 2) { setError('Minimum 2 items required for custom delivery.'); return; }
+    const phoneDigits = phone.replace(/[\s\-()+]/g, '');
     if (!phoneDigits || phoneDigits.length < 10 || phoneDigits.length > 15) { setError('Please enter a valid contact number (10-15 digits).'); return; }
     if (!isDwcl && !isCustom && !mapAddress) { setError('Please select your delivery location on the map'); return; }
     if (!customOrderDate) { setError('Please enter your preferred order date'); return; }
@@ -262,6 +266,15 @@ export default function CheckoutPage() {
                   {restrictedItems.length > 0 && (
                     <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-3 text-xs text-[var(--crimson)] rounded-xl">⚠ Coffee Jelly & Cookies are only for DWCL pickup!</div>
                   )}
+                  {isDaraga && (
+                    <div className="border-2 border-[var(--emerald-bright)] bg-[rgba(30,61,47,0.15)] p-4 rounded-xl space-y-3">
+                      <p className="text-[10px] text-[var(--emerald-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>📍 Daraga / Legazpi Delivery</p>
+                      <p className="text-xs text-[var(--cream-muted)]">Fixed ₱30 delivery fee. <span className="text-[var(--emerald-bright)]">Free shipping on orders ₱200+!</span></p>
+                      {subtotal >= 200 && (
+                        <p className="text-[9px] text-[var(--emerald-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>✨ FREE SHIPPING UNLOCKED!</p>
+                      )}
+                    </div>
+                  )}
                   {isCustom && (
                     <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.1)] p-4 rounded-xl space-y-3">
                       <p className="text-[10px] text-[var(--gold-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>📬 Custom Delivery</p>
@@ -316,6 +329,12 @@ export default function CheckoutPage() {
                       <p className="text-xs text-[var(--pewter)] mt-1">No map needed for campus pickup.</p>
                     </div>
                   )}
+                  {isDaraga && (
+                    <div>
+                      <label className="block text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>Delivery Location — Pin & Confirm</label>
+                      <LocationPicker initialLat={13.1550} initialLng={123.7450} onLocationSelect={(lat, lng, address) => { setMapAddress(address); setLatitude(String(lat)); setLongitude(String(lng)); }} />
+                    </div>
+                  )}
                   {isCustom && (
                     <div className="border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-4 rounded-xl">
                       <p className="text-[10px] text-[var(--pewter)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>📍 Delivery Address</p>
@@ -342,10 +361,10 @@ export default function CheckoutPage() {
                         <p className="text-[10px] text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>GCash</p>
                         <p className="text-[9px] text-[var(--pewter)] mt-1">Ref + proof required</p>
                       </button>
-                      <button type="button" onClick={() => isDwcl && setPaymentMethod('Cash on Delivery')} disabled={!isDwcl} className={`p-4 border-2 rounded-xl text-center transition-all ${!isDwcl ? 'border-[rgba(242,240,228,0.06)] bg-[var(--charcoal-light)] opacity-40 cursor-not-allowed' : paymentMethod === 'Cash on Delivery' ? 'border-[var(--emerald-bright)] bg-[rgba(30,61,47,0.2)]' : 'border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] hover:border-[var(--emerald-bright)]'}`}>
+                      <button type="button" onClick={() => (isDwcl || isDaraga) && setPaymentMethod('Cash on Delivery')} disabled={!isDwcl && !isDaraga} className={`p-4 border-2 rounded-xl text-center transition-all ${!isDwcl && !isDaraga ? 'border-[rgba(242,240,228,0.06)] bg-[var(--charcoal-light)] opacity-40 cursor-not-allowed' : paymentMethod === 'Cash on Delivery' ? 'border-[var(--emerald-bright)] bg-[rgba(30,61,47,0.2)]' : 'border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] hover:border-[var(--emerald-bright)]'}`}>
                         <div className="text-lg mb-1">💵</div>
                         <p className="text-[10px] text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Cash on Delivery</p>
-                        <p className="text-[9px] text-[var(--pewter)] mt-1">{isDwcl ? 'DWCL pickup only' : 'DWCL only'}</p>
+                        <p className="text-[9px] text-[var(--pewter)] mt-1">{isDwcl ? 'DWCL pickup' : isDaraga ? 'Daraga/Legazpi' : 'Unavailable'}</p>
                       </button>
                     </div>
                   </div>
@@ -370,7 +389,7 @@ export default function CheckoutPage() {
                   {!isGcash && (
                     <div className="border-2 border-[var(--emerald-bright)] bg-[rgba(30,61,47,0.15)] rounded-xl p-5">
                       <p className="text-[10px] text-[var(--emerald-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Cash on Delivery</p>
-                      <p className="text-sm text-[var(--cream)] mt-2">Pay in cash when you pick up your order at the DWCL campus. No payment proof needed!</p>
+                      <p className="text-sm text-[var(--cream)] mt-2">{isDwcl ? 'Pay in cash when you pick up your order at the DWCL campus. No payment proof needed!' : 'Pay in cash when your order is delivered. No payment proof needed!'}</p>
                     </div>
                   )}
 
@@ -410,7 +429,10 @@ export default function CheckoutPage() {
                     <h2 className="text-sm text-[var(--gold-bright)] uppercase mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>Order Summary</h2>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between text-[var(--cream-muted)]"><span>Subtotal</span><span className="coin-price">₱{subtotal}</span></div>
-                      <div className="flex justify-between text-[var(--cream-muted)]"><span>Shipping ({location})</span><span className="coin-price">{isCustom ? 'TBD via DM' : shippingFee === 0 ? 'FREE' : `₱${shippingFee}`}</span></div>
+                      <div className="flex justify-between text-[var(--cream-muted)]"><span>Shipping ({location})</span><span className="coin-price">{isCustom ? 'TBD via DM' : shippingFee === 0 ? (isDaraga && subtotal >= 200 ? 'FREE ✨' : 'FREE') : `₱${shippingFee}`}</span></div>
+                      {isDaraga && subtotal < 200 && subtotal > 0 && (
+                        <p className="text-[8px] text-[var(--pewter)]">Add ₱{200 - subtotal} more for free shipping!</p>
+                      )}
                       {discountApplied && (
                         <div className="flex justify-between text-[var(--emerald-bright)]"><span>Discount ({discountApplied.code})</span><span>-₱{discountAmount}</span></div>
                       )}

@@ -181,17 +181,22 @@ export default function MenuPage() {
 
           <PixelDivider variant="questionBlocks" />
 
-          {/* Custom Delivery Notice */}
-          <div className="mb-6 border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.08)] rounded-2xl p-5 flex items-start gap-4">
-            <span className="text-3xl shrink-0">📬</span>
-            <div>
-              <p className="text-[10px] text-[var(--gold-bright)] uppercase mb-1" style={{ fontFamily: 'var(--font-arcade)' }}>Custom Delivery Available</p>
-              <p className="text-sm text-[var(--cream-muted)] leading-relaxed">
-                Need delivery <strong className="text-[var(--cream)]">within the day</strong>, <strong className="text-[var(--cream)]">Monday–Friday</strong>, or <strong className="text-[var(--cream)]">Sunday</strong>? Message us on Instagram to arrange a custom delivery!
-              </p>
-              <a href="https://www.instagram.com/muragoods_/" target="_blank" rel="noopener noreferrer" className="deco-btn deco-btn-sm deco-btn-gold rounded-xl mt-3 inline-flex">
-                💬 Message @muragoods_
-              </a>
+          {/* Delivery Options Notice */}
+          <div className="mb-6 grid gap-3 sm:grid-cols-3">
+            <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.08)] rounded-xl p-4 text-center">
+              <span className="text-xl">🎓</span>
+              <p className="text-[9px] text-[var(--gold-bright)] uppercase mt-2" style={{ fontFamily: 'var(--font-arcade)' }}>DWCL Pickup</p>
+              <p className="text-[8px] text-[var(--pewter)] mt-1">Free · All items</p>
+            </div>
+            <div className="border-2 border-[var(--emerald-bright)] bg-[rgba(30,61,47,0.1)] rounded-xl p-4 text-center">
+              <span className="text-xl">📍</span>
+              <p className="text-[9px] text-[var(--emerald-bright)] uppercase mt-2" style={{ fontFamily: 'var(--font-arcade)' }}>Daraga / Legazpi</p>
+              <p className="text-[8px] text-[var(--pewter)] mt-1">₱30 delivery · Free 200+</p>
+            </div>
+            <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.08)] rounded-xl p-4 text-center">
+              <span className="text-xl">📬</span>
+              <p className="text-[9px] text-[var(--gold-bright)] uppercase mt-2" style={{ fontFamily: 'var(--font-arcade)' }}>Custom Delivery</p>
+              <p className="text-[8px] text-[var(--pewter)] mt-1">Within the day · Mon-Fri · Sun</p>
             </div>
           </div>
 

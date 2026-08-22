@@ -1,4 +1,4 @@
-export type ZoneKey = "DWCL" | "Custom";
+export type ZoneKey = "DWCL" | "Daraga" | "Custom";
 export type InventoryStatus = "In Stock" | "Out of Stock" | "Pre-Order Only";
 export type OrderStatus =
   | "Pending Payment"
@@ -72,7 +72,7 @@ export const products: Product[] = [
     category: "Coffee Jelly & Cookies",
     badge: "Order Now",
     color: "from-pink-200 via-red-100 to-yellow-100",
-    availability: ["DWCL"],
+    availability: ["DWCL", "Daraga"],
     inventory: "In Stock",
     icon: "COOKIES",
     image: "/images/product-cookies.png",
@@ -88,7 +88,7 @@ export const products: Product[] = [
     category: "Coffee Jelly & Cookies",
     badge: "Order Now",
     color: "from-rose-200 via-violet-100 to-fuchsia-200",
-    availability: ["DWCL"],
+    availability: ["DWCL", "Daraga"],
     inventory: "In Stock",
     icon: "COFFEE",
     image: "/images/product-coffee-jelly.png",
@@ -104,7 +104,7 @@ export const products: Product[] = [
     category: "Musubi & Churros",
     badge: "Order Now",
     color: "from-amber-200 via-yellow-100 to-orange-200",
-    availability: ["DWCL", "Custom"],
+    availability: ["DWCL", "Daraga", "Custom"],
     inventory: "In Stock",
     icon: "MUSUBI",
     image: "/images/product-musubi.png",
@@ -121,7 +121,7 @@ export const products: Product[] = [
     category: "Musubi & Churros",
     badge: "Pre-Order Now",
     color: "from-orange-200 via-amber-100 to-yellow-200",
-    availability: ["DWCL", "Custom"],
+    availability: ["DWCL", "Daraga", "Custom"],
     inventory: "Pre-Order Only",
     icon: "CHURROS",
     image: "/images/product-churros.png",
@@ -139,17 +139,24 @@ export const products: Product[] = [
     eligible: ["cookies", "coffee-jelly", "musubi", "churros"],
   },
   {
+    code: "Daraga",
+    label: "Daraga / Legazpi Delivery",
+    fee: 30,
+    note: "Fixed ₱30 delivery fee within Daraga and Legazpi areas. Free shipping on orders ₱200+.",
+    eligible: ["musubi", "churros"],
+  },
+  {
     code: "Custom",
-    label: "Delivery Outside DWCL (Custom)",
+    label: "Custom Delivery (Outside DWCL)",
     fee: 0,
-    note: "Delivery fee & details discussed via Instagram DM. Message @muragoods_ to arrange.",
+    note: "Delivery fee & schedule discussed via Instagram DM. Within the day, Mon-Fri, or Sunday.",
     eligible: ["musubi", "churros"],
   },
 ] as const;
 
 export const mockOrders: Order[] = [];
 
-export const dwclOnlyProducts = ["cookies", "coffee-jelly"];
+export const dwclOnlyProducts: string[] = [];
 
 /** Points earned per peso spent */
 export const POINTS_PER_PESO = 0.5;
@@ -162,5 +169,6 @@ export function calculatePoints(total: number): number {
 /** Delivery service options per zone */
 export const deliveryServiceOptions: Record<string, string[]> = {
   DWCL: ["DWCL Pickup — Free"],
+  Daraga: ["Daraga/Legazpi — ₱30", "Grab Express", "Same-Day Delivery"],
   Custom: ["Custom Delivery — Message @muragoods_"],
 };
