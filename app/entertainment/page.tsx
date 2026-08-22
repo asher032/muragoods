@@ -41,6 +41,22 @@ const features = [
     tagColor: 'var(--gold)',
   },
   {
+    icon: '🛒',
+    title: 'Group Order',
+    desc: 'Order together with classmates! Create a shared cart, add items, and split the bill.',
+    link: '/group-order',
+    tag: 'NEW',
+    tagColor: 'var(--emerald-bright)',
+  },
+  {
+    icon: '🏆',
+    title: 'Achievements',
+    desc: 'Unlock badges for milestones like First Order, Big Spender, and Trivia Master!',
+    link: '/achievements',
+    tag: 'BADGES',
+    tagColor: 'var(--gold-bright)',
+  },
+  {
     icon: '🏆',
     title: 'Leaderboard',
     desc: 'See who\'s the top spender on campus! Climb the ranks by placing more orders.',
