@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { CoinBalance } from '@/app/components/CoinBalance';
 
 interface NavBarProps {
   /** Text shown next to "Muragoods" in the brand area */
@@ -53,6 +54,8 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
           <Link href="/menu" className="deco-btn deco-btn-sm">
             Menu
           </Link>
+
+          {isLoggedIn && <CoinBalance size="sm" />}
 
           {isLoggedIn ? (
             <>
@@ -108,6 +111,11 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
           <Link href="/menu" className="deco-btn deco-btn-sm w-full" onClick={() => setMobileOpen(false)}>
             Menu
           </Link>
+          {isLoggedIn && (
+            <div className="flex justify-center">
+              <CoinBalance size="sm" />
+            </div>
+          )}
           {isLoggedIn ? (
             <>
               <Link href="/orders" className="deco-btn deco-btn-sm deco-btn-gold w-full" onClick={() => setMobileOpen(false)}>
