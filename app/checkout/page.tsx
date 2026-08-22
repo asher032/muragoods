@@ -38,6 +38,9 @@ export default function CheckoutPage() {
   const [discountCode, setDiscountCode] = useState('');
   const [discountApplied, setDiscountApplied] = useState<{ code: string; type: string; value: number; label: string } | null>(null);
   const [discountError, setDiscountError] = useState('');
+  const [promoCode, setPromoCode] = useState('');
+  const [promoApplied, setPromoApplied] = useState<{ code: string; type: string; value: number; description: string; minOrder: number } | null>(null);
+  const [promoError, setPromoError] = useState('');
   const { products } = useProducts();
   const { addCoins } = useCoins();
 
@@ -86,7 +89,8 @@ export default function CheckoutPage() {
   const baseFee = isCustom ? 0 : (zoneData?.fee || 0);
   const shippingFee = isDaraga && subtotal >= 200 ? 0 : baseFee;
   const discountAmount = discountApplied ? (discountApplied.type === 'free_musubi' ? 40 : Math.round(subtotal * discountApplied.value / 100)) : 0;
-  const total = Math.max(0, subtotal + shippingFee - discountAmount);
+  const promoDiscountAmount = promoApplied ? (promoApplied.type === 'fixed' ? Math.min(promoApplied.value, subtotal) : Math.round(subtotal * promoApplied.value / 100)) : 0;
+  const total = Math.max(0, subtotal + shippingFee - discountAmount - promoDiscountAmount);
   const pointsEarned = calculatePoints(total);
 
   const currentDeliveryOptions = deliveryServiceOptions[location] || deliveryServiceOptions.DWCL;
@@ -120,6 +124,37 @@ export default function CheckoutPage() {
   const handleRemoveCode = () => {
     setDiscountApplied(null);
     setDiscountError('');
+  };
+
+  const handleApplyPromo = async () => {
+    setPromoError('');
+    const code = promoCode.trim().toUpperCase();
+    if (!code) { setPromoError('Please enter a promo code.'); return; }
+    if (promoApplied) { setPromoError('A promo code is already applied. Remove it first.'); return; }
+    if (discountApplied) { setPromoError('Remove the discount code first.'); return; }
+
+    try {
+      const res = await fetch(`/api/promo-codes?code=${encodeURIComponent(code)}`);
+      const result = await res.json();
+      if (!result.success) {
+        setPromoError(result.error || 'Invalid promo code');
+        return;
+      }
+      const data = result.data;
+      if (data.minOrder && subtotal < data.minOrder) {
+        setPromoError(`Minimum order of ₱${data.minOrder} required for this code`);
+        return;
+      }
+      setPromoApplied(data);
+      setPromoCode('');
+    } catch {
+      setPromoError('Failed to validate promo code');
+    }
+  };
+
+  const handleRemovePromo = () => {
+    setPromoApplied(null);
+    setPromoError('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -159,6 +194,10 @@ export default function CheckoutPage() {
     if (discountApplied) {
       formData.append('discountCode', discountApplied.code);
       formData.append('discountAmount', String(discountAmount));
+    }
+    if (promoApplied) {
+      formData.append('promoCode', promoApplied.code);
+      formData.append('promoDiscount', String(promoDiscountAmount));
     }
     if (isGcash) {
       formData.append('gcashRefNumber', gcashRef);
@@ -424,6 +463,37 @@ export default function CheckoutPage() {
                     )}
                   </div>
 
+                  {/* Promo Code */}
+                  <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-xl p-5">
+                    <h2 className="text-sm text-[var(--gold-bright)] uppercase mb-3" style={{ fontFamily: 'var(--font-arcade)' }}>🏷️ Promo Code</h2>
+                    {promoApplied ? (
+                      <div className="flex items-center justify-between bg-[rgba(30,61,47,0.2)] border border-[var(--emerald-bright)] rounded-xl p-3">
+                        <div>
+                          <p className="text-[9px] text-[var(--emerald-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>✓ Promo Applied</p>
+                          <p className="text-sm text-[var(--cream)] mt-1" style={{ fontFamily: 'var(--font-arcade)' }}>{promoApplied.code}</p>
+                          <p className="text-xs text-[var(--gold-bright)]">{promoApplied.type === 'percent' ? `${promoApplied.value}% OFF` : `₱${promoApplied.value} OFF`} — You save ₱{promoDiscountAmount}!</p>
+                        </div>
+                        <button onClick={handleRemovePromo} className="deco-btn deco-btn-sm deco-btn-crimson rounded-lg" style={{ minHeight: '32px', padding: '6px 12px', fontSize: '8px' }}>Remove</button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={promoCode}
+                            onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                            placeholder="Enter promo code"
+                            className="deco-input rounded-xl flex-1"
+                            style={{ fontSize: '12px', fontFamily: 'var(--font-arcade)' }}
+                          />
+                          <button onClick={handleApplyPromo} className="deco-btn deco-btn-sm deco-btn-gold rounded-xl" style={{ minHeight: '44px' }}>Apply</button>
+                        </div>
+                        {promoError && <p className="text-[9px] text-[var(--crimson)] mt-2" style={{ fontFamily: 'var(--font-arcade)' }}>⚠ {promoError}</p>}
+                        <p className="text-[8px] text-[var(--pewter)] mt-2">Have a promo code from our team? Enter it here!</p>
+                      </>
+                    )}
+                  </div>
+
                   {/* Order Summary */}
                   <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-xl p-5">
                     <h2 className="text-sm text-[var(--gold-bright)] uppercase mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>Order Summary</h2>
@@ -435,6 +505,9 @@ export default function CheckoutPage() {
                       )}
                       {discountApplied && (
                         <div className="flex justify-between text-[var(--emerald-bright)]"><span>Discount ({discountApplied.code})</span><span>-₱{discountAmount}</span></div>
+                      )}
+                      {promoApplied && (
+                        <div className="flex justify-between text-[var(--emerald-bright)]"><span>Promo ({promoApplied.code})</span><span>-₱{promoDiscountAmount}</span></div>
                       )}
                       <div className="flex justify-between text-[var(--gold-bright)] border-t-2 border-[var(--gold)] pt-3 mt-3" style={{ fontFamily: 'var(--font-arcade)', fontSize: '12px' }}><span>TOTAL</span><span>₱{total}</span></div>
                     </div>
