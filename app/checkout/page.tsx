@@ -35,6 +35,9 @@ export default function CheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState('');
+  const [discountCode, setDiscountCode] = useState('');
+  const [discountApplied, setDiscountApplied] = useState<{ code: string; type: string; value: number; label: string } | null>(null);
+  const [discountError, setDiscountError] = useState('');
   const { products } = useProducts();
   const { addCoins } = useCoins();
 
@@ -79,10 +82,42 @@ export default function CheckoutPage() {
   const subtotal = cartItems.reduce((sum, item) => sum + (item.selectedVariant?.price || 0) * item.quantity, 0);
   const zoneData = deliveryZones.find(z => z.code === location);
   const shippingFee = isCustom ? 0 : (zoneData?.fee || 0);
-  const total = subtotal + shippingFee;
+  const discountAmount = discountApplied ? (discountApplied.type === 'free_musubi' ? 40 : Math.round(subtotal * discountApplied.value / 100)) : 0;
+  const total = Math.max(0, subtotal + shippingFee - discountAmount);
   const pointsEarned = calculatePoints(total);
 
   const currentDeliveryOptions = deliveryServiceOptions[location] || deliveryServiceOptions.DWCL;
+
+  const validCodes: Record<string, { type: string; value: number; label: string }> = {
+    MYSTERY10: { type: 'percent', value: 10, label: '10% OFF' },
+    MYSTERY15: { type: 'percent', value: 15, label: '15% OFF' },
+    MYSTERY20: { type: 'percent', value: 20, label: '20% OFF' },
+    FREEMUSUBI: { type: 'free_musubi', value: 40, label: 'Free Musubi' },
+  };
+
+  const handleApplyCode = () => {
+    setDiscountError('');
+    const code = discountCode.trim().toUpperCase();
+    if (!code) { setDiscountError('Please enter a code.'); return; }
+    if (discountApplied) { setDiscountError('A code is already applied. Remove it first.'); return; }
+
+    // Check if code is valid
+    const codeData = validCodes[code];
+    if (!codeData) { setDiscountError('Invalid discount code.'); return; }
+
+    // Check if user has won this code
+    const savedCodes = JSON.parse(localStorage.getItem('muragoods_discount_codes') || '[]') as { code: string; label: string; wonAt: string }[];
+    const hasCode = savedCodes.some((c) => c.code === code);
+    if (!hasCode) { setDiscountError('You haven\'t won this code yet. Open a Mystery Box to earn discount codes!'); return; }
+
+    setDiscountApplied({ code, type: codeData.type, value: codeData.value, label: codeData.label });
+    setDiscountCode('');
+  };
+
+  const handleRemoveCode = () => {
+    setDiscountApplied(null);
+    setDiscountError('');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,6 +152,10 @@ export default function CheckoutPage() {
     formData.append('deliveryType', deliveryService);
     formData.append('userId', user.email);
     formData.append('pointsEarned', String(pointsEarned));
+    if (discountApplied) {
+      formData.append('discountCode', discountApplied.code);
+      formData.append('discountAmount', String(discountAmount));
+    }
     if (isGcash) {
       formData.append('gcashRefNumber', gcashRef);
       formData.append('gcashScreenshot', gcashFile!);
@@ -330,12 +369,46 @@ export default function CheckoutPage() {
                     </div>
                   )}
 
+                  {/* Discount Code */}
+                  <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-xl p-5">
+                    <h2 className="text-sm text-[var(--gold-bright)] uppercase mb-3" style={{ fontFamily: 'var(--font-arcade)' }}>🎁 Discount Code</h2>
+                    {discountApplied ? (
+                      <div className="flex items-center justify-between bg-[rgba(30,61,47,0.2)] border border-[var(--emerald-bright)] rounded-xl p-3">
+                        <div>
+                          <p className="text-[9px] text-[var(--emerald-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>✓ Code Applied</p>
+                          <p className="text-sm text-[var(--cream)] mt-1" style={{ fontFamily: 'var(--font-arcade)' }}>{discountApplied.code}</p>
+                          <p className="text-xs text-[var(--gold-bright)]">{discountApplied.label} — You save ₱{discountAmount}!</p>
+                        </div>
+                        <button onClick={handleRemoveCode} className="deco-btn deco-btn-sm deco-btn-crimson rounded-lg" style={{ minHeight: '32px', padding: '6px 12px', fontSize: '8px' }}>Remove</button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={discountCode}
+                            onChange={(e) => setDiscountCode(e.target.value.toUpperCase())}
+                            placeholder="Enter code (e.g. MYSTERY10)"
+                            className="deco-input rounded-xl flex-1"
+                            style={{ fontSize: '12px', fontFamily: 'var(--font-arcade)' }}
+                          />
+                          <button onClick={handleApplyCode} className="deco-btn deco-btn-sm deco-btn-gold rounded-xl" style={{ minHeight: '44px' }}>Apply</button>
+                        </div>
+                        {discountError && <p className="text-[9px] text-[var(--crimson)] mt-2" style={{ fontFamily: 'var(--font-arcade)' }}>⚠ {discountError}</p>}
+                        <p className="text-[8px] text-[var(--pewter)] mt-2">Won a code from the Mystery Box? Enter it here!</p>
+                      </>
+                    )}
+                  </div>
+
                   {/* Order Summary */}
                   <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-xl p-5">
                     <h2 className="text-sm text-[var(--gold-bright)] uppercase mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>Order Summary</h2>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between text-[var(--cream-muted)]"><span>Subtotal</span><span className="coin-price">₱{subtotal}</span></div>
                       <div className="flex justify-between text-[var(--cream-muted)]"><span>Shipping ({location})</span><span className="coin-price">{isCustom ? 'TBD via DM' : shippingFee === 0 ? 'FREE' : `₱${shippingFee}`}</span></div>
+                      {discountApplied && (
+                        <div className="flex justify-between text-[var(--emerald-bright)]"><span>Discount ({discountApplied.code})</span><span>-₱{discountAmount}</span></div>
+                      )}
                       <div className="flex justify-between text-[var(--gold-bright)] border-t-2 border-[var(--gold)] pt-3 mt-3" style={{ fontFamily: 'var(--font-arcade)', fontSize: '12px' }}><span>TOTAL</span><span>₱{total}</span></div>
                     </div>
                     <div className="mt-4 space-y-1 text-xs text-[var(--pewter)]">

@@ -206,6 +206,21 @@ export default function MysteryBoxPage() {
       if (prize.type === 'coins' || prize.type === 'jackpot') {
         addCoins(prize.value, `Mystery Box: ${prize.label}`);
       }
+      // Save discount code to localStorage for checkout redemption
+      if (prize.type === 'discount') {
+        const codeMap: Record<string, string> = {
+          discount_10: 'MYSTERY10',
+          discount_15: 'MYSTERY15',
+          discount_20: 'MYSTERY20',
+          free_musubi: 'FREEMUSUBI',
+        };
+        const code = codeMap[prize.id];
+        if (code) {
+          const savedCodes = JSON.parse(localStorage.getItem('muragoods_discount_codes') || '[]');
+          savedCodes.push({ code, label: prize.label, wonAt: new Date().toISOString() });
+          localStorage.setItem('muragoods_discount_codes', JSON.stringify(savedCodes));
+        }
+      }
 
       // Save to history
       const entry = { ...prize, date: new Date().toISOString() };
