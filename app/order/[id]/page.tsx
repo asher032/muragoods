@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { type Order, type OrderStatus } from '@/app/lib/muragoods-data';
 import { NavBar } from '@/app/components/NavBar';
 import { PixelDivider } from '@/app/components/PixelDivider';
+import { MarioWalker } from '@/app/components/MarioWalker';
 
 const statusFlow: OrderStatus[] = [
   'Pending Payment',
@@ -113,6 +114,15 @@ export default function OrderDetailPage() {
               <Link href="/orders" className="deco-btn deco-btn-sm rounded-xl">← All Orders</Link>
               <Link href="/menu" className="deco-btn deco-btn-sm deco-btn-gold rounded-xl">+ New Order</Link>
             </div>
+          </div>
+
+          {/* Mario Walker — animated progress */}
+          <div className="mb-6">
+            <MarioWalker
+              currentStage={isCancelled ? -1 : currentIndex}
+              isCancelled={isCancelled}
+              stages={statusFlow}
+            />
           </div>
 
           {/* Status Steps */}

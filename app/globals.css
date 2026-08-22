@@ -623,3 +623,32 @@ h1, h2, h3, h4, h5, h6 {
 .pulse-badge {
   animation: goldPulse 2.5s ease-in-out infinite;
 }
+
+/* ─── Mario Walker Animations ────────────────────────────────── */
+@keyframes marioWalk {
+  0%, 100% { transform: translateY(0); }
+  25% { transform: translateY(-3px); }
+  50% { transform: translateY(0); }
+  75% { transform: translateY(-2px); }
+}
+
+@keyframes marioCelebrate {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-8px) rotate(-5deg); }
+  50% { transform: translateY(-4px) rotate(0deg); }
+  75% { transform: translateY(-10px) rotate(5deg); }
+}
+
+.mario-walk {
+  animation: marioWalk 0.4s ease-in-out infinite;
+}
+
+.mario-celebrate {
+  animation: marioCelebrate 0.6s ease-in-out infinite;
+}
+
+/* ─── Mario Walker Container ──────────────────────────────────── */
+.mario-walker-container {
+  background: var(--charcoal);
+  overflow: hidden;
+}
