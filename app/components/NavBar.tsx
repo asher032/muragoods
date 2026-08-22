@@ -60,6 +60,11 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
               🎮 Play
             </Link>
           )}
+          {isLoggedIn && (
+            <Link href="/letters/inbox" className="deco-btn deco-btn-sm">
+              💌 Letters
+            </Link>
+          )}
 
           {isLoggedIn && (
             <Link href="/points" className="no-underline">
@@ -129,6 +134,11 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
           {isLoggedIn && (
             <Link href="/entertainment" className="deco-btn deco-btn-sm deco-btn-crimson w-full" onClick={() => setMobileOpen(false)}>
               🎮 Play
+            </Link>
+          )}
+          {isLoggedIn && (
+            <Link href="/letters/inbox" className="deco-btn deco-btn-sm w-full" onClick={() => setMobileOpen(false)}>
+              💌 Letters
             </Link>
           )}
           {isLoggedIn && (
