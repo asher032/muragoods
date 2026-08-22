@@ -60,11 +60,9 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
               🎮 Play
             </Link>
           )}
-          {isLoggedIn && (
-            <Link href="/letters/inbox" className="deco-btn deco-btn-sm">
-              💌 Letters
-            </Link>
-          )}
+          <Link href="/unsent" className="deco-btn deco-btn-sm">
+            ✉️ Unsent
+          </Link>
 
           {isLoggedIn && (
             <Link href="/points" className="no-underline">
@@ -136,11 +134,9 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
               🎮 Play
             </Link>
           )}
-          {isLoggedIn && (
-            <Link href="/letters/inbox" className="deco-btn deco-btn-sm w-full" onClick={() => setMobileOpen(false)}>
-              💌 Letters
-            </Link>
-          )}
+          <Link href="/unsent" className="deco-btn deco-btn-sm w-full" onClick={() => setMobileOpen(false)}>
+            ✉️ Unsent
+          </Link>
           {isLoggedIn && (
             <Link href="/points" className="flex justify-center no-underline" onClick={() => setMobileOpen(false)}>
               <CoinBalance size="sm" />
