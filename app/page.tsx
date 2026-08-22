@@ -233,7 +233,7 @@ export default function Home() {
             </h2>
             <p className="text-sm text-[var(--pewter)] mt-2">Spin, play, and earn coins!</p>
           </div>
-          <div className="grid gap-6 md:grid-cols-4">
+          <div className="grid gap-6 md:grid-cols-3 xl:grid-cols-5">
             {/* Lucky Spin */}
             <Link href="/play/spin" className="power-card group p-8 text-center hover:border-[var(--gold-bright)] transition-all rounded-xl">
               <div className="text-4xl mb-4">🎰</div>
@@ -257,6 +257,12 @@ export default function Home() {
               <div className="text-4xl mb-4">🏆</div>
               <h3 className="text-xs text-[var(--gold-bright)] uppercase mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>Leaderboard</h3>
               <p className="text-sm text-[var(--pewter)]">See who&apos;s the top spender on campus!</p>
+            </Link>
+            {/* Mystery Box */}
+            <Link href="/play/mysterybox" className="power-card group p-8 text-center hover:border-[var(--gold-bright)] transition-all rounded-xl">
+              <div className="text-4xl mb-4">🎁</div>
+              <h3 className="text-xs text-[var(--gold-bright)] uppercase mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>Mystery Box</h3>
+              <p className="text-sm text-[var(--pewter)]">Spend 10 coins for a chance to win big!</p>
             </Link>
           </div>
         </div>
