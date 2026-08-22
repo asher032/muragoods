@@ -7,6 +7,7 @@ import { type Order, type OrderStatus } from '@/app/lib/muragoods-data';
 import { NavBar } from '@/app/components/NavBar';
 import { PixelDivider } from '@/app/components/PixelDivider';
 import { MarioWalker } from '@/app/components/MarioWalker';
+import { PixelArt } from '@/app/components/PixelArt';
 
 const statusFlow: OrderStatus[] = [
   'Pending Payment',
@@ -74,8 +75,9 @@ export default function OrderDetailPage() {
         <NavBar pageLabel="Order Not Found" />
         <section className="px-4 py-16 sm:px-8">
           <div className="deco-container text-center">
-            <h1 className="text-xl text-[var(--cream)] mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>ORDER NOT FOUND</h1>
-            <p className="text-[var(--pewter)] mb-6">{error || 'This order does not exist.'}</p>
+            <PixelArt variant="confused-mario" size={4} />
+            <h1 className="text-xl text-[var(--cream)] mb-2 mt-6" style={{ fontFamily: 'var(--font-arcade)' }}>ORDER NOT FOUND</h1>
+            <p className="text-[var(--pewter)] mb-6">{error || 'Mario can\'t find this order! It may have been deleted or the link is invalid.'}</p>
             <Link href="/orders" className="deco-btn deco-btn-gold rounded-xl">View All Orders</Link>
           </div>
         </section>

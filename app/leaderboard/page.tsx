@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { PixelDivider } from '@/app/components/PixelDivider';
+import { PixelArt } from '@/app/components/PixelArt';
 
 interface LeaderboardEntry {
   rank: number;
@@ -110,8 +111,8 @@ export default function LeaderboardPage() {
           {/* Error / Empty */}
           {!loading && (error || entries.length === 0) && (
             <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-12 text-center rounded-2xl">
-              <div className="text-4xl mb-4">🏆</div>
-              <p className="text-sm text-[var(--cream)] mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>
+              <PixelArt variant="question-block" size={4} />
+              <p className="text-sm text-[var(--cream)] mb-2 mt-6" style={{ fontFamily: 'var(--font-arcade)' }}>
                 {error || 'NO SCORES YET!'}
               </p>
               <p className="text-sm text-[var(--pewter)] mb-6">Be the first to place an order and claim the top spot!</p>

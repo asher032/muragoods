@@ -6,6 +6,7 @@ import { type Order, type OrderStatus } from '@/app/lib/muragoods-data';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { NavBar } from '@/app/components/NavBar';
+import { PixelArt } from '@/app/components/PixelArt';
 
 const statusFlow: OrderStatus[] = [
   'Pending Payment',
@@ -123,7 +124,9 @@ export default function AccountOrdersPage() {
           <section className="space-y-6">
             {orders.length === 0 ? (
               <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-12 text-center rounded-2xl">
-                <p className="text-sm text-[var(--cream)] mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>NO ORDERS FOUND!</p>
+                <PixelArt variant="empty-chest" size={4} />
+                <p className="text-sm text-[var(--cream)] mb-2 mt-6" style={{ fontFamily: 'var(--font-arcade)' }}>NO ORDERS FOUND!</p>
+                <p className="text-xs text-[var(--pewter)] mb-6">Your treasure chest is empty — time to go shopping!</p>
                 <Link href="/menu" className="deco-btn deco-btn-gold rounded-xl">Start Shopping</Link>
               </div>
             ) : orders.map(order => {

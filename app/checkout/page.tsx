@@ -9,6 +9,7 @@ import { useProducts } from '@/app/hooks/useProducts';
 import { useCoins } from '@/app/hooks/useCoins';
 import { NavBar } from '@/app/components/NavBar';
 import { PixelDivider } from '@/app/components/PixelDivider';
+import { PixelArt } from '@/app/components/PixelArt';
 
 const LocationPicker = dynamic(() => import('@/app/components/LocationPicker'), { ssr: false });
 
@@ -189,7 +190,11 @@ export default function CheckoutPage() {
               </div>
               <div className="p-5 space-y-3">
                 {cartItems.length === 0 ? (
-                  <p className="text-center text-[var(--pewter)] py-8" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>CART IS EMPTY</p>
+                  <div className="text-center py-8">
+                    <PixelArt variant="question-block" size={3} />
+                    <p className="text-sm text-[var(--cream)] mt-4" style={{ fontFamily: 'var(--font-arcade)' }}>CART IS EMPTY</p>
+                    <p className="text-xs text-[var(--pewter)] mt-1">Add some items from the menu to get started!</p>
+                  </div>
                 ) : cartItems.map((item) => {
                   const cartKey = `${item.id}__${item.selectedVariant?.id || item.variants[0]?.id || ''}`;
                   return (
