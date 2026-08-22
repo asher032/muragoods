@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useProducts } from '@/app/hooks/useProducts';
+import { PixelDivider } from '@/app/components/PixelDivider';
 import { NavBar } from '@/app/components/NavBar';
 
 const categories = ['All', 'Musubi & Churros', 'Coffee Jelly & Cookies'];
@@ -178,7 +179,7 @@ export default function MenuPage() {
             )}
           </div>
 
-          <hr className="deco-divider" />
+          <PixelDivider variant="questionBlocks" />
 
           {/* Product Grid */}
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -248,6 +249,13 @@ export default function MenuPage() {
           </div>
         </div>
       </section>
+
+      {/* ─── Divider: Brick Row ─────────────────────────────── */}
+      <div className="px-4 sm:px-8">
+        <div className="deco-container">
+          <PixelDivider variant="brickRow" />
+        </div>
+      </div>
 
       {/* ─── Variant Selection Modal ─────────────────────────── */}
       {selectedProduct && (

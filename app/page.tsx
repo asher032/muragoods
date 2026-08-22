@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { NavBar } from '@/app/components/NavBar';
+import { PixelDivider } from '@/app/components/PixelDivider';
 
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -152,6 +153,13 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ─── Divider: Coin Chain ────────────────────────────── */}
+      <div className="px-4 sm:px-8">
+        <div className="deco-container">
+          <PixelDivider variant="coinChain" />
+        </div>
+      </div>
+
       {/* ─── Featured Power-Ups ──────────────────────────────── */}
       <section className="px-4 py-12 sm:px-8">
         <div className="deco-container">
@@ -205,6 +213,13 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* ─── Divider: Ziggurat ─────────────────────────────── */}
+      <div className="px-4 sm:px-8">
+        <div className="deco-container">
+          <PixelDivider variant="ziggurat" />
+        </div>
+      </div>
 
       {/* ─── Footer Accent ───────────────────────────────────── */}
       <footer className="border-t border-[rgba(212,175,55,0.15)] py-8 text-center">

@@ -8,6 +8,7 @@ import dynamic from 'next/dynamic';
 import { products as staticProducts, type CartItem, deliveryZones, dwclOnlyProducts, type ZoneKey, type Product } from '@/app/lib/muragoods-data';
 import { useProducts } from '@/app/hooks/useProducts';
 import { NavBar } from '@/app/components/NavBar';
+import { PixelDivider } from '@/app/components/PixelDivider';
 
 const LocationPicker = dynamic(() => import('@/app/components/LocationPicker'), { ssr: false });
 
@@ -152,6 +153,8 @@ export default function CheckoutPage() {
 
       <section className="px-4 py-10 sm:px-8">
         <div className="deco-container">
+          <PixelDivider variant="pipeSegment" />
+
           {/* Header */}
           <div className="mb-8">
             <h1

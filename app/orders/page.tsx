@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { type Order, type OrderStatus } from '@/app/lib/muragoods-data';
 import { NavBar } from '@/app/components/NavBar';
+import { PixelDivider } from '@/app/components/PixelDivider';
 
 const statusFlow: OrderStatus[] = [
   'Pending Payment',
@@ -89,6 +90,8 @@ export default function OrdersPage() {
 
       <section className="px-4 py-10 sm:px-8">
         <div className="deco-container" style={{ maxWidth: '72rem' }}>
+          <PixelDivider variant="starBurst" />
+
           {/* Header */}
           <div className="mb-8">
             <h1
