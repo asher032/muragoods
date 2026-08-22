@@ -44,6 +44,7 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
         <div className="hidden lg:flex items-center gap-1">
           <Link href="/menu" className="mario-btn mario-btn-sm">📋 Menu</Link>
           <Link href="/rewards" className="mario-btn mario-btn-sm">🏪 Rewards</Link>
+          <Link href="/favorites" className="mario-btn mario-btn-sm">❤️ Favs</Link>
           <div className="w-px h-5 bg-mario-wood-light mx-1" />
           {isLoggedIn && (
             <Link href="/entertainment" className="mario-btn mario-btn-sm mario-btn-red">🎮 Play</Link>
@@ -90,6 +91,7 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
         <div className="lg:hidden border-t-4 border-mario-wood bg-mario-sky px-4 pb-4 pt-3 space-y-2">
           <Link href="/menu" className="mario-btn mario-btn-sm w-full" onClick={() => setMobileOpen(false)}>📋 Menu</Link>
           <Link href="/rewards" className="mario-btn mario-btn-sm w-full" onClick={() => setMobileOpen(false)}>🏪 Rewards</Link>
+          <Link href="/favorites" className="mario-btn mario-btn-sm w-full" onClick={() => setMobileOpen(false)}>❤️ Favorites</Link>
           {isLoggedIn && (
             <Link href="/entertainment" className="mario-btn mario-btn-sm mario-btn-red w-full" onClick={() => setMobileOpen(false)}>🎮 Play</Link>
           )}

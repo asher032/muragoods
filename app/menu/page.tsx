@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { products as staticProducts, type Product, type CartItem, deliveryZones, type ZoneKey } from '@/app/lib/muragoods-data';
 import { useProducts } from '@/app/hooks/useProducts';
 import { NavBar } from '@/app/components/NavBar';
+import { useFavorites, FavoriteButton } from '@/app/components/Favorites';
 
 const dwclOnlyProducts = ['cookies', 'coffee-jelly'];
 const categories = ['All', 'Musubi & Churros', 'Coffee Jelly & Cookies'];
@@ -22,6 +23,7 @@ export default function MenuPage() {
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [restrictionMessage, setRestrictionMessage] = useState('');
   const { products } = useProducts();
+  const { isFavorite, toggleFavorite } = useFavorites();
 
   useEffect(() => {
     const user = localStorage.getItem('user');
@@ -189,7 +191,14 @@ export default function MenuPage() {
 
                 {/* Info */}                  <div style={{ padding: '14px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <h3 style={{ color: 'var(--mario-text)', fontSize: '13px', fontWeight: 700 }}>{product.name}</h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <FavoriteButton
+                        item={{ id: product.id, name: product.name, image: product.image }}
+                        isFav={isFavorite(product.id)}
+                        onToggle={() => toggleFavorite({ id: product.id, name: product.name, image: product.image })}
+                      />
+                      <h3 style={{ color: 'var(--mario-text)', fontSize: '13px', fontWeight: 700 }}>{product.name}</h3>
+                    </div>
                     <span style={{
                       fontSize: '9px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px',
                       background: product.inventory === 'In Stock' ? 'rgba(6,214,160,0.1)' : 'rgba(251,133,0,0.1)',

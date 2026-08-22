@@ -8,6 +8,7 @@ import { NavBar } from '@/app/components/NavBar';
 import { PixelDivider } from '@/app/components/PixelDivider';
 import { MarioWalker } from '@/app/components/MarioWalker';
 import { PixelArt } from '@/app/components/PixelArt';
+import ShareOrder from '@/app/components/ShareOrder';
 
 const statusFlow: OrderStatus[] = [
   'Pending Payment',
@@ -112,9 +113,17 @@ export default function OrderDetailPage() {
                 </p>
               )}
             </div>
-            <div className="flex gap-3">
-              <Link href="/orders" className="deco-btn deco-btn-sm rounded-xl">← All Orders</Link>
-              <Link href="/menu" className="deco-btn deco-btn-sm deco-btn-gold rounded-xl">+ New Order</Link>
+            <div className="flex flex-col gap-3 items-end">
+              <div className="flex gap-3">
+                <Link href="/orders" className="deco-btn deco-btn-sm rounded-xl">← All Orders</Link>
+                <Link href="/menu" className="deco-btn deco-btn-sm deco-btn-gold rounded-xl">+ New Order</Link>
+              </div>
+              <ShareOrder
+                orderId={order._id || order.id}
+                customerName={order.customer}
+                total={order.total}
+                items={items}
+              />
             </div>
           </div>
 
