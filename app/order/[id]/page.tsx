@@ -260,6 +260,12 @@ export default function OrderDetailPage() {
                   {order.gcashRefNumber && <div className="flex justify-between"><span className="text-[var(--pewter)]">Ref #</span><span className="text-[var(--cream)]">{order.gcashRefNumber}</span></div>}
                   <div className="flex justify-between"><span className="text-[var(--pewter)]">Amount</span><span className="coin-price text-lg">₱{order.total}</span></div>
                 </div>
+                {/* Receipt Button */}
+                <div className="mt-4 pt-4 border-t border-[rgba(212,175,55,0.15)]">
+                  <Link href={`/receipt/${order._id || order.id}`} className="deco-btn deco-btn-sm deco-btn-gold rounded-lg w-full text-center block">
+                    🧾 View Receipt
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
