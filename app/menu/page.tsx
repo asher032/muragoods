@@ -6,40 +6,37 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useProducts } from '@/app/hooks/useProducts';
+import { NavBar } from '@/app/components/NavBar';
 
-const categories = ["All", "Musubi & Churros", "Coffee Jelly & Cookies"];
+const categories = ['All', 'Musubi & Churros', 'Coffee Jelly & Cookies'];
 
 export default function MenuPage() {
   const router = useRouter();
-  const [activeCategory, setActiveCategory] = useState("All");
-  const [location, setLocation] = useState<ZoneKey>("DWCL");
+  const [activeCategory, setActiveCategory] = useState('All');
+  const [location, setLocation] = useState<ZoneKey>('DWCL');
   const [cart, setCart] = useState<Record<string, { quantity: number; variantId?: string }>>({});
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [selectedVariantId, setSelectedVariantId] = useState<string>("");
+  const [selectedVariantId, setSelectedVariantId] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
-  const [restrictionMessage, setRestrictionMessage] = useState("");
+  const [restrictionMessage, setRestrictionMessage] = useState('');
   const { products } = useProducts();
 
   useEffect(() => {
     const user = localStorage.getItem('user');
-    if (user) {
-      setIsLoggedIn(true);
-    }
+    if (user) setIsLoggedIn(true);
 
     try {
       const savedCart = localStorage.getItem('cart');
-      if (savedCart) {
-        setCart(JSON.parse(savedCart));
-      }
+      if (savedCart) setCart(JSON.parse(savedCart));
     } catch {
       setCart({});
     }
   }, []);
 
   const filteredProducts = useMemo(() => {
-    if (activeCategory === "All") return products;
-    return products.filter(p => p.category === activeCategory);
+    if (activeCategory === 'All') return products;
+    return products.filter((p) => p.category === activeCategory);
   }, [activeCategory, products]);
 
   const cartItems = useMemo(() => {
@@ -47,76 +44,56 @@ export default function MenuPage() {
       .filter(([, data]) => data.quantity > 0)
       .map(([cartKey, data]) => {
         const productId = cartKey.split('__')[0];
-        const product = products.find(p => p.id === productId) || staticProducts.find(p => p.id === productId);
+        const product = products.find((p) => p.id === productId) || staticProducts.find((p) => p.id === productId);
         if (!product) return null;
         const variantId = cartKey.split('__')[1] || data.variantId || product.variants[0].id;
-        const variant = product.variants.find(v => v.id === variantId);
-        return {
-          ...product,
-          quantity: data.quantity,
-          selectedVariant: variant || product.variants[0],
-        } as CartItem;
+        const variant = product.variants.find((v) => v.id === variantId);
+        return { ...product, quantity: data.quantity, selectedVariant: variant || product.variants[0] } as CartItem;
       })
       .filter((item): item is CartItem => item !== null);
   }, [cart, products]);
 
-  const isDwcl = location === "DWCL";
+  const isDwcl = location === 'DWCL';
 
   const isProductAvailable = (product: Product) => {
-    if (product.inventory === "Out of Stock") {
-      return false;
-    }
-    if (!isDwcl && dwclOnlyProducts.includes(product.id)) {
-      return false;
-    }
+    if (product.inventory === 'Out of Stock') return false;
+    if (!isDwcl && dwclOnlyProducts.includes(product.id)) return false;
     return true;
   };
 
   const addToCart = (product: Product, variantId?: string) => {
     if (!isProductAvailable(product)) {
-      setRestrictionMessage("This item is only available for DWCL pickup.");
-      setTimeout(() => setRestrictionMessage(""), 3000);
+      setRestrictionMessage('This item is only available for DWCL pickup.');
+      setTimeout(() => setRestrictionMessage(''), 3000);
       return;
     }
 
     const actualVariantId = variantId || product.variants[0].id;
     const cartKey = `${product.id}__${actualVariantId}`;
 
-    setCart(prev => {
-      const next = {
-        ...prev,
-        [cartKey]: {
-          quantity: (prev[cartKey]?.quantity || 0) + 1,
-          variantId: actualVariantId,
-        }
-      };
+    setCart((prev) => {
+      const next = { ...prev, [cartKey]: { quantity: (prev[cartKey]?.quantity || 0) + 1, variantId: actualVariantId } };
       localStorage.setItem('cart', JSON.stringify(next));
       return next;
     });
     setSelectedProduct(null);
-    setSelectedVariantId("");
+    setSelectedVariantId('');
   };
 
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = cartItems.reduce((sum, item) => sum + (item.selectedVariant?.price || 0) * item.quantity, 0);
 
   const handleCheckout = () => {
-    if (!isLoggedIn) {
-      setShowLoginPrompt(true);
-      return;
-    }
+    if (!isLoggedIn) { setShowLoginPrompt(true); return; }
     if (cartItems.length === 0) return;
     router.push('/checkout');
   };
 
   const openVariantModal = (product: Product) => {
-    if (!isLoggedIn) {
-      setShowLoginPrompt(true);
-      return;
-    }
+    if (!isLoggedIn) { setShowLoginPrompt(true); return; }
     if (!isProductAvailable(product)) {
-      setRestrictionMessage("This item is only available for DWCL pickup.");
-      setTimeout(() => setRestrictionMessage(""), 3000);
+      setRestrictionMessage('This item is only available for DWCL pickup.');
+      setTimeout(() => setRestrictionMessage(''), 3000);
       return;
     }
     setSelectedProduct(product);
@@ -124,124 +101,133 @@ export default function MenuPage() {
   };
 
   const confirmVariant = () => {
-    if (selectedProduct) {
-      addToCart(selectedProduct, selectedVariantId);
+    if (selectedProduct) addToCart(selectedProduct, selectedVariantId);
+  };
+
+  const getInventoryBadgeClass = (status: string) => {
+    switch (status) {
+      case 'In Stock': return 'deco-badge-emerald';
+      case 'Pre-Order Only': return 'deco-badge-gold';
+      case 'Out of Stock': return 'deco-badge-crimson';
+      default: return 'deco-badge-cream';
     }
   };
 
   return (
-    <main className="min-h-screen" style={{ backgroundImage: 'url(/images/background3.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
-      <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b-4 border-black shadow-lg transition-all">
-        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-8 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="relative h-10 w-10 rounded-full border-4 border-black overflow-hidden shadow-[4px_4px_0px_0px_#000] transition-transform group-hover:scale-105">
-              <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
-            </div>
-            <div>
-              <p className="text-sm font-black uppercase tracking-widest text-rose-500">Muragoods</p>
-              <p className="text-xs font-bold uppercase tracking-widest text-black">Menu</p>
-            </div>
-          </Link>
+    <main className="min-h-screen">
+      <NavBar cartCount={totalItems} />
 
-          <div className="hidden md:flex items-center gap-3 text-xs font-black uppercase">
-            <Link href="/menu" className="mario-btn mario-btn-blue">Menu</Link>
-            <Link href="/orders" className="mario-btn mario-btn-yellow">Orders</Link>
-            <button
-              onClick={() => {
-                if (!isLoggedIn) {
-                  router.push('/login');
-                  return;
-                }
-                router.push('/checkout');
-              }}
-              className="mario-btn hover:scale-105 transition-transform"
-            >
-              Cart ({totalItems})
-            </button>
-            {isLoggedIn ? (
-              <button onClick={() => { localStorage.removeItem('user'); window.location.reload(); }} className="mario-btn bg-black text-white">Logout</button>
-            ) : (
-              <Link href="/login" className="mario-btn bg-black text-white">Login</Link>
-            )}
-          </div>
-        </div>
-      </nav>
-
-      <section className="px-4 py-12 sm:px-8">
-        <div className="mx-auto max-w-7xl">
+      <section className="px-4 py-10 sm:px-8">
+        <div className="deco-container">
+          {/* Header */}
           <div className="mb-8">
-            <h1 className="text-4xl sm:text-5xl font-black text-white uppercase tracking-tighter" style={{ textShadow: '5px 5px 0px #000' }}>Choose Your Power-Up</h1>
-            <p className="mt-2 text-lg font-black text-yellow-300" style={{ textShadow: '2px 2px 0px #000' }}>Pick your favorites from our legendary selection.</p>
+            <h1
+              className="text-2xl sm:text-3xl lg:text-4xl text-[var(--cream)] uppercase"
+              style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}
+            >
+              Choose Your Power-Up
+            </h1>
+            <p className="mt-3 text-base text-[var(--gold)]" style={{ fontFamily: 'var(--font-body)' }}>
+              Pick your favorites from our legendary selection.
+            </p>
           </div>
 
+          {/* Restriction Alert */}
           {restrictionMessage && (
-            <div className="mb-6 rounded-xl border-4 border-rose-400 bg-rose-50 p-4 text-sm font-black text-rose-600 uppercase shadow-lg">
-              {restrictionMessage}
+            <div className="mb-6 border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-4 text-sm text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
+              ⚠ {restrictionMessage}
             </div>
           )}
 
+          {/* Category Tabs */}
           <div className="flex flex-wrap gap-3 mb-8">
-            {categories.map(cat => (
+            {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setActiveCategory(cat)}
-                className={`mario-btn ${activeCategory === cat ? 'mario-btn-yellow' : 'bg-white text-black hover:scale-105'} transition-all`}
+                className={`deco-btn deco-btn-sm ${activeCategory === cat ? 'deco-btn-gold' : 'deco-btn-ghost'}`}
               >
                 {cat}
               </button>
             ))}
           </div>
 
+          {/* Zone Selector */}
           <div className="mb-8">
-            <label className="block text-sm font-black text-white uppercase mb-2">Select Delivery / Pickup Zone</label>
+            <label
+              className="block text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-3"
+              style={{ fontFamily: 'var(--font-arcade)' }}
+            >
+              Select Delivery / Pickup Zone
+            </label>
             <select
               value={location}
               onChange={(e) => setLocation(e.target.value as ZoneKey)}
-              className="w-full max-w-md rounded-xl border-4 border-black bg-white px-4 py-3 font-black text-black outline-none focus:border-yellow-300 focus:ring-4 focus:ring-yellow-200 transition-all shadow-md"
+              className="deco-select max-w-md"
             >
-              {deliveryZones.map(zone => (
-                <option key={zone.code} value={zone.code}>{zone.label}</option>
+              {deliveryZones.map((zone) => (
+                <option key={zone.code} value={zone.code}>
+                  {zone.label}
+                </option>
               ))}
             </select>
             {!isDwcl && (
-              <p className="mt-2 text-sm font-black text-yellow-300">Notice: Coffee Jelly and Cookies are available exclusively for DWCL pickup.</p>
+              <p className="mt-2 text-sm text-[var(--gold-bright)]">
+                Notice: Coffee Jelly and Cookies are available exclusively for DWCL pickup.
+              </p>
             )}
           </div>
 
+          <hr className="deco-divider" />
+
+          {/* Product Grid */}
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {filteredProducts.map((product) => {
               const available = isProductAvailable(product);
               return (
-                <div
-                  key={product.id}
-                  className={`menu-card group ${!available ? 'opacity-60' : ''}`}
-                >
-                  <div className="h-48 bg-gradient-to-br from-blue-400 to-blue-500 p-4 border-b-4 border-black group-hover:from-blue-300 group-hover:to-blue-400 transition-all relative overflow-hidden">
-                    <Image src={product.image} alt={product.name} fill className="object-contain p-2 transition-transform group-hover:scale-110 duration-300" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+                <div key={product.id} className={`power-card group ${!available ? 'opacity-50' : ''}`}>
+                  {/* Image Area */}
+                  <div className="relative h-48 bg-[var(--charcoal-light)] border-b-2 border-[rgba(212,175,55,0.2)] overflow-hidden">
+                    <Image src={product.image} alt={product.name} fill className="object-contain p-3 transition-transform group-hover:scale-110 duration-300" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[var(--obsidian)] via-transparent to-transparent opacity-40" />
+
+                    {/* Inventory overlay */}
                     {!available && (
-                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20">
-                        <span className="bg-gradient-to-r from-yellow-300 to-yellow-400 text-black px-4 py-2 font-black text-sm uppercase border-4 border-black rotate-[-3deg] shadow-lg">
-                          {product.inventory === "Out of Stock" ? 'Out of Stock' : 'DWCL Only'}
+                      <div className="absolute inset-0 bg-[rgba(10,10,10,0.8)] flex items-center justify-center z-20">
+                        <span
+                          className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.2)] text-[var(--crimson)] px-4 py-2 uppercase"
+                          style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px' }}
+                        >
+                          {product.inventory === 'Out of Stock' ? 'OUT OF STOCK' : 'DWCL ONLY'}
                         </span>
                       </div>
                     )}
                   </div>
 
-                  <div className="p-6 bg-white">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-2xl font-black text-black uppercase">{product.name}</h3>
-                      <span className="text-xs font-black uppercase tracking-wider text-rose-500 bg-rose-100 px-2 py-1 border-2 border-black shadow-sm">
+                  {/* Card Body */}
+                  <div className="p-5">
+                    <div className="flex items-center justify-between mb-3 gap-2">
+                      <h3
+                        className="text-[11px] text-[var(--cream)] uppercase leading-tight"
+                        style={{ fontFamily: 'var(--font-arcade)' }}
+                      >
+                        {product.name}
+                      </h3>
+                      <span className={`deco-badge ${getInventoryBadgeClass(product.inventory)} shrink-0`} style={{ fontSize: '7px', padding: '3px 8px' }}>
                         {product.inventory}
                       </span>
                     </div>
-                    <p className="text-sm font-bold text-slate-700 h-12 overflow-hidden mb-4">{product.description}</p>
 
-                    <div className="space-y-2 mb-4">
-                      {product.variants.map(variant => (
+                    <p className="text-sm text-[var(--pewter)] mb-4 leading-relaxed line-clamp-2">
+                      {product.description}
+                    </p>
+
+                    {/* Variants & Prices */}
+                    <div className="space-y-2 mb-5">
+                      {product.variants.map((variant) => (
                         <div key={variant.id} className="flex items-center justify-between text-sm">
-                          <span className="font-bold text-black">{variant.name}</span>
-                          <span className="font-black text-rose-500">₱{variant.price}</span>
+                          <span className="text-[var(--cream-muted)]">{variant.name}</span>
+                          <span className="coin-price text-xs">₱{variant.price}</span>
                         </div>
                       ))}
                     </div>
@@ -250,7 +236,8 @@ export default function MenuPage() {
                       type="button"
                       onClick={() => openVariantModal(product)}
                       disabled={!available}
-                      className={`w-full mario-btn ${available ? 'mario-btn-yellow hover:scale-105' : 'bg-gray-300 text-gray-500 cursor-not-allowed'} transition-all`}
+                      className={`w-full deco-btn ${available ? 'deco-btn-gold' : 'deco-btn-dark opacity-50 cursor-not-allowed'}`}
+                      style={{ minHeight: '48px' }}
                     >
                       {available ? '+ ADD TO CART' : 'NOT AVAILABLE'}
                     </button>
@@ -262,19 +249,28 @@ export default function MenuPage() {
         </div>
       </section>
 
+      {/* ─── Variant Selection Modal ─────────────────────────── */}
       {selectedProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedProduct(null)}>
-          <div className="mario-card max-w-md w-full animate-bounce-in" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-rose-400 to-rose-500 p-6 border-b-4 border-black">
-              <h2 className="text-2xl font-black text-white uppercase">Select Variant</h2>
-              <p className="text-sm font-bold text-yellow-300">{selectedProduct.name}</p>
+        <div className="deco-overlay" onClick={() => setSelectedProduct(null)}>
+          <div className="deco-modal bounce-in" onClick={(e) => e.stopPropagation()}>
+            <div className="deco-modal-header">
+              <h2
+                className="text-sm text-[var(--gold-bright)] uppercase"
+                style={{ fontFamily: 'var(--font-arcade)' }}
+              >
+                Select Variant
+              </h2>
+              <p className="mt-1 text-sm text-[var(--pewter)]">{selectedProduct.name}</p>
             </div>
-            <div className="p-6 bg-white space-y-4">
-              {selectedProduct.variants.map(variant => (
+
+            <div className="deco-modal-body space-y-3">
+              {selectedProduct.variants.map((variant) => (
                 <label
                   key={variant.id}
-                  className={`flex items-center justify-between p-4 border-4 border-black rounded-xl cursor-pointer transition-all hover:shadow-md ${
-                    selectedVariantId === variant.id ? 'bg-gradient-to-r from-yellow-300 to-yellow-400 shadow-lg' : 'bg-yellow-50 hover:bg-yellow-100'
+                  className={`flex items-center justify-between p-4 border-2 cursor-pointer transition-all ${
+                    selectedVariantId === variant.id
+                      ? 'border-[var(--gold)] bg-[rgba(212,175,55,0.1)]'
+                      : 'border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] hover:border-[rgba(242,240,228,0.25)]'
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -284,47 +280,48 @@ export default function MenuPage() {
                       value={variant.id}
                       checked={selectedVariantId === variant.id}
                       onChange={(e) => setSelectedVariantId(e.target.value)}
-                      className="w-5 h-5 accent-yellow-500"
+                      className="accent-[var(--gold)]"
                     />
-                    <span className="font-black text-black">{variant.name}</span>
+                    <span className="text-sm text-[var(--cream)]">{variant.name}</span>
                   </div>
-                  <span className="font-black text-rose-500 text-lg">₱{variant.price}</span>
+                  <span className="coin-price text-sm">₱{variant.price}</span>
                 </label>
               ))}
-              <div className="flex gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setSelectedProduct(null)}
-                  className="flex-1 mario-btn bg-white text-black border-black hover:scale-105 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmVariant}
-                  className="flex-1 mario-btn mario-btn-yellow hover:scale-105 transition-all"
-                >
-                  Add to Cart
-                </button>
-              </div>
+            </div>
+
+            <div className="deco-modal-footer flex gap-3">
+              <button type="button" onClick={() => setSelectedProduct(null)} className="deco-btn flex-1">
+                Cancel
+              </button>
+              <button type="button" onClick={confirmVariant} className="deco-btn deco-btn-gold flex-1">
+                Add to Cart
+              </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* ─── Login Prompt Modal ──────────────────────────────── */}
       {showLoginPrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowLoginPrompt(false)}>
-          <div className="mario-card max-w-md w-full animate-bounce-in" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-black to-gray-900 p-6 border-b-4 border-black">
-              <h2 className="text-2xl font-black text-yellow-300 uppercase">Login Required</h2>
+        <div className="deco-overlay" onClick={() => setShowLoginPrompt(false)}>
+          <div className="deco-modal bounce-in" onClick={(e) => e.stopPropagation()}>
+            <div className="deco-modal-header">
+              <h2
+                className="text-sm text-[var(--gold-bright)] uppercase"
+                style={{ fontFamily: 'var(--font-arcade)' }}
+              >
+                Login Required
+              </h2>
             </div>
-            <div className="p-6 bg-white text-center">
-              <p className="text-lg font-black text-black mb-6">You must sign in to add items to cart!</p>
+            <div className="deco-modal-body text-center">
+              <p className="text-sm text-[var(--cream)] mb-6" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>
+                You must sign in to add items to cart!
+              </p>
               <div className="space-y-3">
-                <Link href="/login" className="mario-btn w-full bg-rose-400 text-white hover:scale-105 transition-all">
+                <Link href="/login" className="deco-btn deco-btn-crimson w-full" onClick={() => setShowLoginPrompt(false)}>
                   LOG IN
                 </Link>
-                <Link href="/signup" className="mario-btn w-full mario-btn-yellow hover:scale-105 transition-all">
+                <Link href="/signup" className="deco-btn deco-btn-gold w-full" onClick={() => setShowLoginPrompt(false)}>
                   CREATE ACCOUNT
                 </Link>
               </div>
@@ -333,14 +330,14 @@ export default function MenuPage() {
         </div>
       )}
 
+      {/* ─── Floating Cart Button ────────────────────────────── */}
       {cartItems.length > 0 && (
-        <div className="fixed bottom-4 right-4 z-40">
+        <div className="fixed bottom-6 right-6 z-40">
           <button
             onClick={handleCheckout}
-            className="mario-btn mario-btn-yellow text-lg shadow-2xl hover:scale-105 transition-all"
-            style={{ borderRadius: '16px', padding: '16px 32px' }}
+            className="deco-btn deco-btn-gold deco-btn-lg pulse-glow"
           >
-            View Cart ({totalItems}) - ₱{totalPrice}
+            🪙 Cart ({totalItems}) — ₱{totalPrice}
           </button>
         </div>
       )}

@@ -1,17 +1,18 @@
 'use client';
 
-import Link from "next/link";
-import Image from "next/image";
-import { type Order, type OrderStatus } from "@/app/lib/muragoods-data";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import Link from 'next/link';
+import Image from 'next/image';
+import { type Order, type OrderStatus } from '@/app/lib/muragoods-data';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { NavBar } from '@/app/components/NavBar';
 
 const statusFlow: OrderStatus[] = [
-  "Pending Payment",
-  "Payment Verified",
-  "Preparing",
-  "Out for Delivery",
-  "Delivered",
+  'Pending Payment',
+  'Payment Verified',
+  'Preparing',
+  'Out for Delivery',
+  'Delivered',
 ];
 
 export default function AccountOrdersPage() {
@@ -20,11 +21,8 @@ export default function AccountOrdersPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const userStr = localStorage.getItem("user");
-    if (!userStr) {
-      router.push("/login");
-      return;
-    }
+    const userStr = localStorage.getItem('user');
+    if (!userStr) { router.push('/login'); return; }
     const user = JSON.parse(userStr);
 
     async function fetchOrders() {
@@ -32,13 +30,10 @@ export default function AccountOrdersPage() {
         const res = await fetch(`/api/orders?userId=${encodeURIComponent(user.email)}`);
         const result = await res.json();
         if (result.success) {
-          setOrders(result.data.map((o: Order & { _id?: string }) => ({
-            ...o,
-            id: o._id || o.id,
-          })));
+          setOrders(result.data.map((o: Order & { _id?: string }) => ({ ...o, id: o._id || o.id })));
         }
       } catch (fetchError) {
-        console.error("Failed to fetch orders:", fetchError);
+        console.error('Failed to fetch orders:', fetchError);
       } finally {
         setLoading(false);
       }
@@ -47,179 +42,144 @@ export default function AccountOrdersPage() {
   }, [router]);
 
   const logout = () => {
-    localStorage.removeItem("user");
-    router.push("/login");
+    localStorage.removeItem('user');
+    router.push('/login');
   };
 
   const handleDeleteOrder = async (orderId: string) => {
     const order = orders.find(o => (o._id || o.id) === orderId);
-    if (!order || order.status !== "Pending Payment") {
-      alert("You can only cancel orders that are still pending.");
+    if (!order || order.status !== 'Pending Payment') {
+      alert('You can only cancel orders that are still pending.');
       return;
     }
-
-    if (!confirm("Are you sure you want to cancel this order?")) return;
+    if (!confirm('Are you sure you want to cancel this order?')) return;
     try {
-      const res = await fetch(`/api/orders?id=${orderId}`, { method: "DELETE" });
+      const res = await fetch(`/api/orders?id=${orderId}`, { method: 'DELETE' });
       const result = await res.json();
       if (result.success) {
-        setOrders((current) => current.filter((o) => (o._id || o.id) !== orderId));
+        setOrders(current => current.filter(o => (o._id || o.id) !== orderId));
       } else {
-        alert(result.error || "Failed to delete order");
+        alert(result.error || 'Failed to delete order');
       }
     } catch {
-      alert("Failed to delete order");
+      alert('Failed to delete order');
     }
   };
 
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center" style={{ backgroundImage: 'url(/images/background4.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
-        <div className="text-white text-2xl font-black animate-bounce uppercase">Loading Orders...</div>
+      <main className="min-h-screen flex items-center justify-center bg-[var(--obsidian)]">
+        <p className="text-2xl animate-bounce text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>
+          LOADING ORDERS...
+        </p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen px-4 py-8 text-black sm:px-8" style={{ backgroundImage: 'url(/images/background4.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
-      <div className="mx-auto max-w-6xl">
-        <header className="mb-8 flex flex-col gap-4 rounded-2xl border-4 border-black bg-white p-6 shadow-2xl sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="relative h-12 w-12 rounded-full border-4 border-black overflow-hidden shadow-[4px_4px_0px_0px_#000] transition-transform hover:scale-105">
-              <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
-            </div>
+    <main className="min-h-screen">
+      <NavBar pageLabel="My Orders" />
+
+      <section className="px-4 py-10 sm:px-8">
+        <div className="deco-container" style={{ maxWidth: '72rem' }}>
+          {/* Header */}
+          <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-black uppercase tracking-widest text-rose-500">Muragoods</p>
-              <h1 className="mt-2 text-4xl font-black text-black uppercase tracking-wider">My Orders</h1>
-            </div>
-          </div>
-          <div className="flex gap-4">
-            <button
-              onClick={logout}
-              className="mario-btn bg-rose-400 text-white hover:bg-rose-500 uppercase font-black border-black hover:scale-105 transition-all shadow-lg"
-            >
-              Logout
-            </button>
-            <Link
-              href="/"
-              className="mario-btn bg-black text-yellow-300 hover:bg-slate-900 uppercase font-black border-black hover:scale-105 transition-all shadow-lg"
-            >
-              ← Back to Shop
-            </Link>
-          </div>
-        </header>
-
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-2xl border-4 border-black bg-white p-4 sm:p-6 shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all">
-            <p className="text-sm font-black uppercase tracking-widest text-rose-500">Total Orders</p>
-            <p className="mt-3 text-3xl sm:text-4xl font-black text-black">{orders.length}</p>
-          </div>
-          <div className="rounded-2xl border-4 border-black bg-white p-4 sm:p-6 shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all">
-            <p className="text-sm font-black uppercase tracking-widest text-rose-500">Preparing</p>
-            <p className="mt-3 text-3xl sm:text-4xl font-black text-black">
-              {orders.filter((order) => order.status === "Preparing").length}
-            </p>
-          </div>
-          <div className="rounded-2xl border-4 border-black bg-white p-4 sm:p-6 shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all">
-            <p className="text-sm font-black uppercase tracking-widest text-rose-500">Out for Delivery</p>
-            <p className="mt-3 text-3xl sm:text-4xl font-black text-black">
-              {orders.filter((order) => order.status === "Out for Delivery").length}
-            </p>
-          </div>
-        </section>
-
-        <section className="mt-6 sm:mt-8 space-y-4 sm:space-y-6">
-          {orders.length === 0 ? (
-            <div className="rounded-2xl border-4 border-black bg-white p-8 sm:p-12 text-center shadow-2xl">
-              <p className="text-xl sm:text-2xl font-black text-black uppercase mb-4">No orders found!</p>
-              <Link href="/" className="mario-btn inline-block bg-yellow-400 text-black">Start Shopping</Link>
-            </div>
-          ) : orders.map((order) => {
-            const currentIndex = statusFlow.indexOf(order.status);
-
-            return (
-              <article
-                key={order.id}
-                className="rounded-2xl border-4 border-black bg-white p-4 sm:p-6 shadow-2xl slide-in hover:shadow-[20px_20px_0px_0px_rgba(0,0,0,0.3)] transition-all"
+              <h1
+                className="text-2xl sm:text-3xl lg:text-4xl text-[var(--cream)] uppercase"
+                style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}
               >
-                <div className="flex flex-col gap-4 sm:gap-5 border-b-4 border-black pb-4 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="text-xs sm:text-sm font-black uppercase tracking-widest text-rose-500">
-                      {order.id}
-                    </p>
-                    <h2 className="mt-2 text-2xl sm:text-3xl font-black text-black uppercase">
-                      {order.customer}
-                    </h2>
+                My Orders
+              </h1>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={logout} className="deco-btn deco-btn-sm deco-btn-crimson">Logout</button>
+              <Link href="/" className="deco-btn deco-btn-sm">← Back to Shop</Link>
+            </div>
+          </div>
+
+          {/* Summary Cards */}
+          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-8">
+            {[
+              { label: 'Total Orders', value: String(orders.length) },
+              { label: 'Preparing', value: String(orders.filter(o => o.status === 'Preparing').length) },
+              { label: 'Out for Delivery', value: String(orders.filter(o => o.status === 'Out for Delivery').length) },
+            ].map(card => (
+              <div key={card.label} className="power-card p-5">
+                <p className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>{card.label}</p>
+                <p className="mt-3 text-2xl text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)' }}>{card.value}</p>
+              </div>
+            ))}
+          </section>
+
+          {/* Order Cards */}
+          <section className="space-y-6">
+            {orders.length === 0 ? (
+              <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-12 text-center">
+                <p className="text-sm text-[var(--cream)] mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>NO ORDERS FOUND!</p>
+                <Link href="/menu" className="deco-btn deco-btn-gold">Start Shopping</Link>
+              </div>
+            ) : orders.map(order => {
+              const currentIndex = statusFlow.indexOf(order.status);
+              return (
+                <article key={order.id} className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-5 sm:p-6 slide-in hover:shadow-[0_0_30px_rgba(212,175,55,0.15)] transition-all">
+                  {/* Order Header */}
+                  <div className="flex flex-col gap-4 border-b-2 border-[rgba(212,175,55,0.2)] pb-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>{order.id}</p>
+                      <h2 className="mt-2 text-sm text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>{order.customer}</h2>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="deco-badge deco-badge-gold">{order.zone}</span>
+                      <span className="deco-badge deco-badge-cream">{order.payment}</span>
+                      {order.status === 'Pending Payment' ? (
+                        <button onClick={() => handleDeleteOrder(order._id || order.id)} className="deco-btn deco-btn-sm deco-btn-crimson" style={{ minHeight: '28px', padding: '4px 12px' }}>Cancel</button>
+                      ) : (
+                        <span className="deco-badge deco-badge-cream opacity-50">Locked</span>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                    <span className="rounded-lg border-2 border-black bg-yellow-300 px-3 py-2 text-xs font-black uppercase tracking-widest text-black pulse-badge shadow-sm">
-                      {order.zone}
-                    </span>
-                    <span className="rounded-lg border-2 border-black bg-black px-3 py-2 text-xs font-black uppercase tracking-widest text-yellow-300">
-                      {order.payment}
-                    </span>
-                    {order.status === "Pending Payment" ? (
-                      <button
-                        onClick={() => handleDeleteOrder(order._id || order.id)}
-                        className="rounded bg-rose-400 px-3 py-2 text-xs font-black text-white hover:bg-rose-500 hover:scale-105 transition-all shadow-md border-2 border-black"
-                      >
-                        Cancel
-                      </button>
-                    ) : (
-                      <span className="rounded bg-gray-300 px-3 py-2 text-xs font-black text-gray-500 border-2 border-black">
-                        Locked
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-4 sm:mt-6 grid gap-4 sm:gap-6 lg:grid-cols-[1.4fr_0.8fr]">
-                  <div>
-                    <div className="mb-6 grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-                      {statusFlow.map((step, index) => {
-                        const active = index <= currentIndex;
-                        return (
-                          <div key={step} className="relative">
-                            <div
-                              className={`flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-4 text-xs font-black transition-all ${
-                                active
-                                  ? "border-black bg-rose-400 text-white shadow-lg pulse-badge scale-110"
-                                  : "border-black bg-white text-black"
-                              }`}
-                            >
-                              {index + 1}
+                  {/* Order Body */}
+                  <div className="mt-5 grid gap-5 lg:grid-cols-[1.4fr_0.8fr]">
+                    <div>
+                      {/* Status Steps */}
+                      <div className="mb-6 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+                        {statusFlow.map((step, index) => {
+                          const active = index <= currentIndex;
+                          return (
+                            <div key={step} className="relative">
+                              <div className={`flex h-10 w-10 items-center justify-center border-2 text-[8px] transition-all ${active ? 'border-[var(--gold)] bg-[var(--gold)] text-[var(--obsidian)] pulse-badge' : 'border-[rgba(242,240,228,0.2)] bg-[var(--charcoal-light)] text-[var(--pewter)]'}`} style={{ fontFamily: 'var(--font-arcade)' }}>
+                                {active && index > 0 ? '✓' : index + 1}
+                              </div>
+                              <p className="mt-2 text-[7px] text-[var(--pewter)] uppercase tracking-wider leading-tight" style={{ fontFamily: 'var(--font-arcade)' }}>{step}</p>
                             </div>
-                            <p className="mt-2 text-[10px] sm:text-xs font-black uppercase tracking-widest text-white drop-shadow-lg">
-                              {step}
-                            </p>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
+                      <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.05)] p-5">
+                        <p className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>Current Status</p>
+                        <p className="mt-3 text-sm text-[var(--gold-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>{order.status}</p>
+                      </div>
                     </div>
 
-                    <div className="rounded-xl border-4 border-black bg-yellow-100 p-4 sm:p-5 shadow-md">
-                      <p className="text-sm font-black uppercase tracking-widest text-black">Current Status</p>
-                      <p className="mt-3 text-xl sm:text-2xl font-black text-rose-500 uppercase">{order.status}</p>
+                    <div className="border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-5">
+                      <p className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>Delivery Info</p>
+                      <ul className="mt-4 space-y-3 text-sm">
+                        <li className="text-[var(--cream-muted)]"><span className="text-[var(--gold)]">Address: </span>{order.address}</li>
+                        <li className="text-[var(--cream-muted)]"><span className="text-[var(--gold)]">Phone: </span>{order.phone}</li>
+                        <li className="text-[var(--cream-muted)]"><span className="text-[var(--gold)]">Service: </span>{order.deliveryType}</li>
+                        <li className="text-[var(--cream-muted)]"><span className="text-[var(--gold)]">Date: </span>{order.deliveryDate}</li>
+                        <li className="pt-2 border-t border-[rgba(242,240,228,0.1)]"><span className="coin-price text-base">₱{order.total}</span></li>
+                      </ul>
                     </div>
                   </div>
-
-                  <div className="rounded-xl border-4 border-black bg-white p-4 sm:p-5 shadow-md">
-                    <p className="text-sm font-black uppercase tracking-widest text-rose-500">Delivery Info</p>
-                    <ul className="mt-4 space-y-2 sm:space-y-3 text-sm">
-                      <li className="font-bold text-black"><span className="font-black text-rose-500">{order.address}</span></li>
-                      <li className="font-bold text-black"><span className="font-black text-rose-500">{order.phone}</span></li>
-                      <li className="font-bold text-black"><span className="font-black text-rose-500">{order.deliveryType}</span></li>
-                      <li className="font-bold text-black"><span className="font-black text-rose-500">{order.deliveryDate}</span></li>
-                      <li className="font-bold text-black text-lg"><span className="font-black text-rose-500">₱{order.total}</span></li>
-                    </ul>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </section>
-      </div>
+                </article>
+              );
+            })}
+          </section>
+        </div>
+      </section>
     </main>
   );
 }

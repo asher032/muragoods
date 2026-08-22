@@ -5,13 +5,14 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { type Order, type OrderStatus } from '@/app/lib/muragoods-data';
+import { NavBar } from '@/app/components/NavBar';
 
 const statusFlow: OrderStatus[] = [
-  "Pending Payment",
-  "Payment Verified",
-  "Preparing",
-  "Out for Delivery",
-  "Delivered",
+  'Pending Payment',
+  'Payment Verified',
+  'Preparing',
+  'Out for Delivery',
+  'Delivered',
 ];
 
 export default function OrdersPage() {
@@ -19,14 +20,11 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<(Order & { _id?: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const userStr = localStorage.getItem("user");
-    if (!userStr) {
-      router.push("/login");
-      return;
-    }
+    const userStr = localStorage.getItem('user');
+    if (!userStr) { router.push('/login'); return; }
     const user = JSON.parse(userStr);
 
     async function fetchOrders() {
@@ -36,10 +34,7 @@ export default function OrdersPage() {
         if (result.success && Array.isArray(result.data)) {
           const safeOrders = result.data.map((o: Record<string, unknown>) => {
             const order = o as Order & { _id?: string };
-            return {
-              ...order,
-              id: order._id || order.id || String(order._id || ''),
-            };
+            return { ...order, id: order._id || order.id || String(order._id || '') };
           });
           setOrders(safeOrders);
         } else {
@@ -56,24 +51,23 @@ export default function OrdersPage() {
 
   const handleCancelOrder = async (orderId: string) => {
     const order = orders.find(o => (o._id || o.id) === orderId);
-    if (!order || order.status !== "Pending Payment") {
-      alert("You can only cancel orders that are still pending.");
+    if (!order || order.status !== 'Pending Payment') {
+      alert('You can only cancel orders that are still pending.');
       return;
     }
-
-    if (!confirm("Are you sure you want to cancel this order?")) return;
+    if (!confirm('Are you sure you want to cancel this order?')) return;
     setCancellingId(orderId);
 
     try {
-      const res = await fetch(`/api/orders?id=${orderId}`, { method: "DELETE" });
+      const res = await fetch(`/api/orders?id=${orderId}`, { method: 'DELETE' });
       const result = await res.json();
       if (result.success) {
         setOrders((current) => current.filter((o) => (o._id || o.id) !== orderId));
       } else {
-        alert(result.error || "Failed to delete order");
+        alert(result.error || 'Failed to delete order');
       }
     } catch {
-      alert("Failed to delete order");
+      alert('Failed to delete order');
     } finally {
       setCancellingId(null);
     }
@@ -81,112 +75,122 @@ export default function OrdersPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center" style={{ backgroundImage: 'url(/images/background3.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
-        <div className="text-white text-2xl font-black animate-bounce uppercase">Loading Orders...</div>
+      <main className="min-h-screen flex items-center justify-center bg-[var(--obsidian)]">
+        <p className="text-2xl animate-bounce text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>
+          LOADING ORDERS...
+        </p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen" style={{ backgroundImage: 'url(/images/background3.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
-      <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b-4 border-black shadow-lg transition-all">
-        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-8 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="relative h-10 w-10 rounded-full border-4 border-black overflow-hidden shadow-[4px_4px_0px_0px_#000] transition-transform group-hover:scale-105">
-              <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
-            </div>
-            <div>
-              <p className="text-sm font-black uppercase tracking-widest text-rose-500">Muragoods</p>
-              <p className="text-xs font-bold uppercase tracking-widest text-black">Track Your Quest</p>
-            </div>
-          </Link>
+    <main className="min-h-screen">
+      <NavBar pageLabel="Track Your Quest" />
 
-          <div className="hidden md:flex items-center gap-3 text-xs font-black uppercase">
-            <Link href="/menu" className="mario-btn mario-btn-blue">Menu</Link>
-            <Link href="/checkout" className="mario-btn">Cart</Link>
-          </div>
-        </div>
-      </nav>
-
-      <section className="px-4 py-12 sm:px-8">
-        <div className="mx-auto max-w-6xl">
+      <section className="px-4 py-10 sm:px-8">
+        <div className="deco-container" style={{ maxWidth: '72rem' }}>
+          {/* Header */}
           <div className="mb-8">
-            <h1 className="text-4xl sm:text-5xl font-black text-white uppercase tracking-tighter" style={{ textShadow: '5px 5px 0px #000' }}>Track Your Quest</h1>
-            <p className="mt-2 text-lg font-black text-yellow-300" style={{ textShadow: '2px 2px 0px #000' }}>Your food is currently being prepped in Bowser&apos;s Castle Kitchen!</p>
+            <h1
+              className="text-2xl sm:text-3xl lg:text-4xl text-[var(--cream)] uppercase"
+              style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}
+            >
+              Track Your Quest
+            </h1>
+            <p className="mt-3 text-base text-[var(--gold)]">
+              Your food is being prepped in Bowser&apos;s Castle Kitchen!
+            </p>
           </div>
 
+          {/* Error */}
           {error && (
-            <div className="mb-6 rounded-xl border-4 border-rose-400 bg-rose-50 p-4 text-sm font-black text-rose-600 uppercase shadow-lg">
-              {error}
+            <div className="mb-6 border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-4 text-sm text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
+              ⚠ {error}
             </div>
           )}
 
+          {/* Empty State */}
           {orders.length === 0 ? (
-            <div className="rounded-2xl border-4 border-black bg-white p-12 text-center shadow-2xl">
-              <p className="text-2xl font-black text-black uppercase mb-4">No orders found!</p>
-              <Link href="/menu" className="mario-btn inline-block bg-yellow-400 text-black">Start Shopping</Link>
+            <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-12 text-center">
+              <p
+                className="text-sm text-[var(--cream)] mb-4"
+                style={{ fontFamily: 'var(--font-arcade)' }}
+              >
+                NO ORDERS FOUND!
+              </p>
+              <Link href="/menu" className="deco-btn deco-btn-gold">
+                Start Shopping
+              </Link>
             </div>
           ) : (
             <div className="space-y-6">
               {orders.map((order) => {
                 const currentIndex = statusFlow.indexOf(order.status);
-                const canCancel = order.status === "Pending Payment";
+                const canCancel = order.status === 'Pending Payment';
 
                 return (
                   <article
                     key={order.id}
-                    className="rounded-2xl border-4 border-black bg-white p-6 shadow-2xl slide-in hover:shadow-[20px_20px_0px_0px_rgba(0,0,0,0.3)] transition-all"
+                    className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-6 slide-in hover:shadow-[0_0_30px_rgba(212,175,55,0.15)] transition-all"
                   >
-                    <div className="flex flex-col gap-5 border-b-4 border-black pb-4 md:flex-row md:items-center md:justify-between">
+                    {/* Order Header */}
+                    <div className="flex flex-col gap-4 border-b-2 border-[rgba(212,175,55,0.2)] pb-4 md:flex-row md:items-center md:justify-between">
                       <div>
-                        <p className="text-sm font-black uppercase tracking-widest text-rose-500">
+                        <p
+                          className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em]"
+                          style={{ fontFamily: 'var(--font-arcade)' }}
+                        >
                           {order.id}
                         </p>
-                        <h2 className="mt-2 text-2xl sm:text-3xl font-black text-black uppercase">
+                        <h2
+                          className="mt-2 text-sm text-[var(--cream)] uppercase"
+                          style={{ fontFamily: 'var(--font-arcade)' }}
+                        >
                           {order.customer}
                         </h2>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                        <span className="rounded-lg border-2 border-black bg-yellow-300 px-3 py-2 text-xs font-black uppercase tracking-widest text-black pulse-badge shadow-sm">
-                          {order.zone}
-                        </span>
-                        <span className="rounded-lg border-2 border-black bg-black px-3 py-2 text-xs font-black uppercase tracking-widest text-yellow-300">
-                          {order.payment}
-                        </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="deco-badge deco-badge-gold">{order.zone}</span>
+                        <span className="deco-badge deco-badge-cream">{order.payment}</span>
                         {canCancel ? (
                           <button
                             onClick={() => handleCancelOrder(order._id || order.id)}
                             disabled={cancellingId === (order._id || order.id)}
-                            className="rounded bg-rose-400 px-3 py-2 text-xs font-black text-white hover:bg-rose-500 disabled:opacity-50 hover:scale-105 transition-all shadow-md border-2 border-black"
+                            className="deco-btn deco-btn-sm deco-btn-crimson disabled:opacity-50"
+                            style={{ minHeight: '32px', padding: '6px 12px' }}
                           >
-                            {cancellingId === (order._id || order.id) ? "Cancelling..." : "Cancel"}
+                            {cancellingId === (order._id || order.id) ? 'Cancelling...' : 'Cancel'}
                           </button>
                         ) : (
-                          <span className="rounded bg-gray-300 px-3 py-2 text-xs font-black text-gray-500 border-2 border-black">
-                            Locked
-                          </span>
+                          <span className="deco-badge deco-badge-cream opacity-50">Locked</span>
                         )}
                       </div>
                     </div>
 
+                    {/* Order Body */}
                     <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_0.8fr]">
                       <div>
-                        <div className="mb-6 grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+                        {/* Status Steps */}
+                        <div className="mb-6 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
                           {statusFlow.map((step, index) => {
                             const active = index <= currentIndex;
                             return (
                               <div key={step} className="relative">
                                 <div
-                                  className={`flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-4 text-xs font-black transition-all ${
+                                  className={`flex h-10 w-10 items-center justify-center border-2 text-[8px] transition-all ${
                                     active
-                                      ? "border-black bg-rose-400 text-white shadow-lg pulse-badge scale-110"
-                                      : "border-black bg-white text-black"
+                                      ? 'border-[var(--gold)] bg-[var(--gold)] text-[var(--obsidian)] pulse-badge'
+                                      : 'border-[rgba(242,240,228,0.2)] bg-[var(--charcoal-light)] text-[var(--pewter)]'
                                   }`}
+                                  style={{ fontFamily: 'var(--font-arcade)' }}
                                 >
-                                  {active && index > 0 ? 'OK' : index + 1}
+                                  {active && index > 0 ? '✓' : index + 1}
                                 </div>
-                                <p className="mt-2 text-[10px] sm:text-xs font-black uppercase tracking-widest text-white drop-shadow-lg">
+                                <p
+                                  className="mt-2 text-[7px] text-[var(--pewter)] uppercase tracking-wider leading-tight"
+                                  style={{ fontFamily: 'var(--font-arcade)' }}
+                                >
                                   {step}
                                 </p>
                               </div>
@@ -194,20 +198,51 @@ export default function OrdersPage() {
                           })}
                         </div>
 
-                        <div className="rounded-xl border-4 border-black bg-yellow-100 p-5 shadow-md">
-                          <p className="text-sm font-black uppercase tracking-widest text-black">Current Status</p>
-                          <p className="mt-3 text-2xl font-black text-rose-500 uppercase">{order.status}</p>
+                        {/* Current Status */}
+                        <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.05)] p-5">
+                          <p
+                            className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em]"
+                            style={{ fontFamily: 'var(--font-arcade)' }}
+                          >
+                            Current Status
+                          </p>
+                          <p
+                            className="mt-3 text-sm text-[var(--gold-bright)] uppercase"
+                            style={{ fontFamily: 'var(--font-arcade)' }}
+                          >
+                            {order.status}
+                          </p>
                         </div>
                       </div>
 
-                      <div className="rounded-xl border-4 border-black bg-white p-5 shadow-md">
-                        <p className="text-sm font-black uppercase tracking-widest text-rose-500">Delivery Info</p>
+                      {/* Delivery Info */}
+                      <div className="border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-5">
+                        <p
+                          className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em]"
+                          style={{ fontFamily: 'var(--font-arcade)' }}
+                        >
+                          Delivery Info
+                        </p>
                         <ul className="mt-4 space-y-3 text-sm">
-                          <li className="font-bold text-black"><span className="font-black text-rose-500">{order.address}</span></li>
-                          <li className="font-bold text-black"><span className="font-black text-rose-500">{order.phone}</span></li>
-                          <li className="font-bold text-black"><span className="font-black text-rose-500">{order.deliveryType}</span></li>
-                          <li className="font-bold text-black"><span className="font-black text-rose-500">{order.deliveryDate}</span></li>
-                          <li className="font-bold text-black text-lg"><span className="font-black text-rose-500">₱{order.total}</span></li>
+                          <li className="text-[var(--cream-muted)]">
+                            <span className="text-[var(--gold)]">Address: </span>
+                            {order.address}
+                          </li>
+                          <li className="text-[var(--cream-muted)]">
+                            <span className="text-[var(--gold)]">Phone: </span>
+                            {order.phone}
+                          </li>
+                          <li className="text-[var(--cream-muted)]">
+                            <span className="text-[var(--gold)]">Service: </span>
+                            {order.deliveryType}
+                          </li>
+                          <li className="text-[var(--cream-muted)]">
+                            <span className="text-[var(--gold)]">Date: </span>
+                            {order.deliveryDate}
+                          </li>
+                          <li className="pt-2 border-t border-[rgba(242,240,228,0.1)]">
+                            <span className="coin-price text-base">₱{order.total}</span>
+                          </li>
                         </ul>
                       </div>
                     </div>

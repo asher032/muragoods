@@ -1,7 +1,7 @@
 'use client';
 
-import Link from "next/link";
-import Image from "next/image";
+import Link from 'next/link';
+import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminCredentials } from '@/app/lib/muragoods-data';
@@ -14,9 +14,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     const user = localStorage.getItem('user');
-    if (user) {
-      router.push('/');
-    }
+    if (user) router.push('/');
   }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -34,12 +32,11 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-
       const result = await res.json();
 
       if (result.success) {
         localStorage.setItem('user', JSON.stringify(result.data));
-        if (email === adminCredentials.email || email === 'mhaxthedog@gmail.com') {
+        if (email === adminCredentials.email) {
           router.push('/admin');
         } else {
           router.push('/');
@@ -53,69 +50,99 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-4" style={{ backgroundImage: 'url(/images/background2.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
+    <main className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
-        <div className="rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
+        {/* Card */}
+        <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-8">
+          {/* Logo + Brand */}
           <div className="flex flex-col items-center gap-4 mb-8">
-            <div className="relative w-20 h-20 rounded-full border-4 border-yellow-300 overflow-hidden shadow-lg ring-4 ring-black/10">
+            <div className="relative w-20 h-20 border-2 border-[var(--gold)] overflow-hidden">
               <Image src="/images/login-side.png" alt="Muragoods Login" fill className="object-cover" />
             </div>
             <div className="text-center">
-              <p className="text-sm font-black uppercase tracking-widest text-rose-500">Muragoods</p>
-              <p className="text-xs font-bold uppercase tracking-widest text-slate-600">Player Login</p>
+              <p
+                className="text-[10px] uppercase tracking-[0.2em] text-[var(--gold-bright)]"
+                style={{ fontFamily: 'var(--font-arcade)' }}
+              >
+                Muragoods
+              </p>
+              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-[var(--pewter)]">
+                Player Login
+              </p>
             </div>
           </div>
 
-          <h1 className="text-3xl font-black text-black mb-2 text-center uppercase">Sign In</h1>
-          <p className="text-sm font-bold text-slate-700 mb-6 text-center">Access your orders and favorites</p>
+          {/* Title */}
+          <h1
+            className="text-xl mb-2 text-center text-[var(--cream)]"
+            style={{ fontFamily: 'var(--font-arcade)' }}
+          >
+            SIGN IN
+          </h1>
+          <p className="text-sm text-[var(--pewter)] mb-8 text-center">
+            Access your orders and favorites
+          </p>
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <label className="block text-sm font-black text-black uppercase">
-              Email
+          {/* Form */}
+          <form onSubmit={handleLogin} className="space-y-5">
+            <label className="block">
+              <span
+                className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2 block"
+                style={{ fontFamily: 'var(--font-arcade)' }}
+              >
+                Email
+              </span>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mario-input mt-2 bg-yellow-50 focus:bg-white focus:ring-4 focus:ring-rose-200"
+                className="deco-input"
                 placeholder="your@email.com"
               />
             </label>
 
-            <label className="block text-sm font-black text-black uppercase">
-              Password
+            <label className="block">
+              <span
+                className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2 block"
+                style={{ fontFamily: 'var(--font-arcade)' }}
+              >
+                Password
+              </span>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mario-input mt-2 bg-yellow-50 focus:bg-white focus:ring-4 focus:ring-rose-200"
+                className="deco-input"
                 placeholder="••••••••"
               />
             </label>
 
             {error && (
-              <div className="rounded-xl border-4 border-rose-400 bg-rose-50 p-3 text-sm font-black text-rose-600 uppercase shadow-lg">
-                {error}
+              <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-3 text-sm text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
+                ⚠ {error}
               </div>
             )}
 
-            <button
-              type="submit"
-              className="mario-btn mario-btn-black w-full uppercase font-black text-lg tracking-widest mt-6 hover:scale-105 transition-all shadow-xl"
-            >
+            <button type="submit" className="deco-btn deco-btn-crimson w-full deco-btn-lg mt-6">
               SIGN IN
             </button>
           </form>
 
-          <div className="mt-8 border-t-4 border-black pt-6">
-            <p className="text-center text-sm font-black text-black uppercase">
-              No account yet?{' '}
-              <Link href="/signup" className="text-rose-500 hover:text-rose-600 underline transition-colors">
-                Sign up!
-              </Link>
-            </p>
+          {/* Divider */}
+          <div className="my-8">
+            <hr className="deco-divider" />
           </div>
 
-          <Link href="/" className="mario-btn mt-4 block text-center bg-rose-400 text-white border-black hover:bg-rose-500 uppercase font-black w-full md:w-auto hover:scale-105 transition-all shadow-lg">
+          {/* Sign Up Link */}
+          <p className="text-center text-sm text-[var(--cream-muted)]">
+            No account yet?{' '}
+            <Link href="/signup" className="text-[var(--gold)] hover:text-[var(--gold-bright)] underline transition-colors">
+              Sign up!
+            </Link>
+          </p>
+
+          {/* Back Button */}
+          <Link href="/" className="deco-btn w-full mt-6 text-center">
             ← Back to Shop
           </Link>
         </div>

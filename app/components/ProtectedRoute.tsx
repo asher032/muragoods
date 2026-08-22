@@ -50,18 +50,23 @@ export function ProtectedRoute({ children, redirectTo = '/login' }: ProtectedRou
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-gradient-to-b from-rose-300 to-rose-400 flex items-center justify-center">
+      <main className="min-h-screen bg-[var(--obsidian)] flex items-center justify-center">
         <div className="text-center">
-          <div className="text-6xl mb-4">LOADING</div>
-          <p className="text-white text-2xl font-black uppercase tracking-widest">Loading Muragoods...</p>
+          <p
+            className="text-sm text-[var(--gold-bright)] animate-bounce uppercase mb-4"
+            style={{ fontFamily: 'var(--font-arcade)' }}
+          >
+            LOADING...
+          </p>
+          <p className="text-sm text-[var(--pewter)] uppercase tracking-widest">
+            Entering Muragoods...
+          </p>
         </div>
       </main>
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   return <>{children}</>;
 }

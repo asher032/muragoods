@@ -7,6 +7,7 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { products as staticProducts, type CartItem, deliveryZones, dwclOnlyProducts, type ZoneKey, type Product } from '@/app/lib/muragoods-data';
 import { useProducts } from '@/app/hooks/useProducts';
+import { NavBar } from '@/app/components/NavBar';
 
 const LocationPicker = dynamic(() => import('@/app/components/LocationPicker'), { ssr: false });
 
@@ -16,35 +17,28 @@ export default function CheckoutPage() {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [cart, setCart] = useState<Record<string, { quantity: number; variantId?: string }>>({});
-  const [location, setLocation] = useState<ZoneKey>("DWCL");
-  const [phone, setPhone] = useState("");
-  const [deliveryService, setDeliveryService] = useState("Free Shipping");
-  const [customOrderDate, setCustomOrderDate] = useState("");
-  const [gcashRef, setGcashRef] = useState("");
+  const [location, setLocation] = useState<ZoneKey>('DWCL');
+  const [phone, setPhone] = useState('');
+  const [deliveryService, setDeliveryService] = useState('Free Shipping');
+  const [customOrderDate, setCustomOrderDate] = useState('');
+  const [gcashRef, setGcashRef] = useState('');
   const [gcashFile, setGcashFile] = useState<File | null>(null);
-  const [mapAddress, setMapAddress] = useState("");
-  const [latitude, setLatitude] = useState("13.1550");
-  const [longitude, setLongitude] = useState("123.7450");
-  const [error, setError] = useState("");
+  const [mapAddress, setMapAddress] = useState('');
+  const [latitude, setLatitude] = useState('13.1550');
+  const [longitude, setLongitude] = useState('123.7450');
+  const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showInstagramModal, setShowInstagramModal] = useState(false);
   const { products } = useProducts();
 
   useEffect(() => {
-    const userStr = localStorage.getItem("user");
-    if (!userStr) {
-      router.push("/login");
-      return;
-    }
+    const userStr = localStorage.getItem('user');
+    if (!userStr) { router.push('/login'); return; }
     setIsLoggedIn(true);
 
-    const savedCart = localStorage.getItem("cart");
+    const savedCart = localStorage.getItem('cart');
     if (savedCart) {
-      try {
-        setCart(JSON.parse(savedCart));
-      } catch {
-        setCart({});
-      }
+      try { setCart(JSON.parse(savedCart)); } catch { setCart({}); }
     }
   }, [router]);
 
@@ -56,97 +50,62 @@ export default function CheckoutPage() {
       if (!product) return null;
       const variantId = cartKey.split('__')[1] || data.variantId || product.variants[0].id;
       const variant = product.variants.find(v => v.id === variantId);
-      return {
-        ...product,
-        quantity: data.quantity,
-        selectedVariant: variant || product.variants[0],
-      } as CartItem;
+      return { ...product, quantity: data.quantity, selectedVariant: variant || product.variants[0] } as CartItem;
     })
     .filter((item): item is CartItem => item !== null);
 
-  const isDwcl = location === "DWCL";
+  const isDwcl = location === 'DWCL';
   const restrictedItems = cartItems.filter(item => dwclOnlyProducts.includes(item.id) && !isDwcl);
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = cartItems.reduce((sum, item) => sum + (item.selectedVariant?.price || 0) * item.quantity, 0);
-  const shippingFee = location === "DWCL" ? 0 : 30;
+  const shippingFee = location === 'DWCL' ? 0 : 30;
   const total = subtotal + shippingFee;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
+    setError('');
 
-    if (cartItems.length === 0) {
-      setError("Your cart is empty!");
-      return;
-    }
-
-    if (!isDwcl && totalItems < 2) {
-      setError("Minimum 2 items required for delivery outside DWCL.");
-      return;
-    }
-
-    const phoneDigits = phone.replace(/[\s-()+]/g, '');
-    if (!phoneDigits || phoneDigits.length < 10 || phoneDigits.length > 15) {
-      setError("Please enter a valid contact number (10-15 digits).");
-      return;
-    }
-
-    if (!isDwcl && !mapAddress) {
-      setError("Please select your delivery location on the map");
-      return;
-    }
-
-    if (!customOrderDate) {
-      setError("Please enter your preferred order date");
-      return;
-    }
-
-    if (!gcashRef.trim() || gcashRef.trim().length < 5) {
-      setError("Please enter a valid GCash reference number.");
-      return;
-    }
-    if (!gcashFile) {
-      setError("Payment proof is required. Please upload your GCash receipt.");
-      return;
-    }
+    if (cartItems.length === 0) { setError('Your cart is empty!'); return; }
+    if (!isDwcl && totalItems < 2) { setError('Minimum 2 items required for delivery outside DWCL.'); return; }
+    const phoneDigits = phone.replace(/[\s\-()+]/g, '');
+    if (!phoneDigits || phoneDigits.length < 10 || phoneDigits.length > 15) { setError('Please enter a valid contact number (10-15 digits).'); return; }
+    if (!isDwcl && !mapAddress) { setError('Please select your delivery location on the map'); return; }
+    if (!customOrderDate) { setError('Please enter your preferred order date'); return; }
+    if (!gcashRef.trim() || gcashRef.trim().length < 5) { setError('Please enter a valid GCash reference number.'); return; }
+    if (!gcashFile) { setError('Payment proof is required. Please upload your GCash receipt.'); return; }
 
     setIsSubmitting(true);
-    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
 
     const formData = new FormData();
-    formData.append("customer", user.name || user.email);
-    formData.append("phone", phone);
-    formData.append("zone", location);
-    formData.append("address", mapAddress || "DWCL Pickup");
-    formData.append("latitude", latitude);
-    formData.append("longitude", longitude);
-    formData.append("payment", "GCash");
-    formData.append("deliveryDate", customOrderDate);
-    formData.append("status", "Pending Payment");
-    formData.append("total", String(total));
-    formData.append("items", JSON.stringify(cartItems.map(item => `${item.name} (${item.selectedVariant?.name}) x ${item.quantity}`)));
-    formData.append("deliveryType", deliveryService);
-    formData.append("userId", user.email);
-    formData.append("gcashRefNumber", gcashRef);
-    formData.append("gcashScreenshot", gcashFile);
+    formData.append('customer', user.name || user.email);
+    formData.append('phone', phone);
+    formData.append('zone', location);
+    formData.append('address', mapAddress || 'DWCL Pickup');
+    formData.append('latitude', latitude);
+    formData.append('longitude', longitude);
+    formData.append('payment', 'GCash');
+    formData.append('deliveryDate', customOrderDate);
+    formData.append('status', 'Pending Payment');
+    formData.append('total', String(total));
+    formData.append('items', JSON.stringify(cartItems.map(item => `${item.name} (${item.selectedVariant?.name}) x ${item.quantity}`)));
+    formData.append('deliveryType', deliveryService);
+    formData.append('userId', user.email);
+    formData.append('gcashRefNumber', gcashRef);
+    formData.append('gcashScreenshot', gcashFile);
 
     try {
-      const res = await fetch("/api/orders", {
-        method: "POST",
-        body: formData,
-      });
-
+      const res = await fetch('/api/orders', { method: 'POST', body: formData });
       const result = await res.json();
-
       if (result.success) {
-        localStorage.removeItem("cart");
+        localStorage.removeItem('cart');
         setCart({});
         setShowInstagramModal(true);
       } else {
-        setError(result.error || "Failed to place order. Please try again.");
+        setError(result.error || 'Failed to place order. Please try again.');
       }
     } catch {
-      setError("Failed to place order. Please try again.");
+      setError('Failed to place order. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -161,7 +120,7 @@ export default function CheckoutPage() {
           quantity: (prev[cartKey]?.quantity || 0) + 1,
         }
       };
-      localStorage.setItem("cart", JSON.stringify(next));
+      localStorage.setItem('cart', JSON.stringify(next));
       return next;
     });
   };
@@ -170,106 +129,119 @@ export default function CheckoutPage() {
     setCart(prev => {
       const next = { ...prev };
       if (!next[cartKey]) return prev;
-      if (next[cartKey].quantity <= 1) {
-        delete next[cartKey];
-      } else {
-        next[cartKey] = { ...next[cartKey], quantity: next[cartKey].quantity - 1 };
-      }
-      localStorage.setItem("cart", JSON.stringify(next));
+      if (next[cartKey].quantity <= 1) { delete next[cartKey]; }
+      else { next[cartKey] = { ...next[cartKey], quantity: next[cartKey].quantity - 1 }; }
+      localStorage.setItem('cart', JSON.stringify(next));
       return next;
     });
   };
 
   if (!isLoggedIn) {
     return (
-      <main className="min-h-screen bg-blue-500 flex flex-col items-center justify-center font-black text-white">
-        <div className="text-4xl animate-bounce mb-4"></div>
-        <div className="text-3xl uppercase tracking-tighter">Warping to World 1-1...</div>
+      <main className="min-h-screen flex flex-col items-center justify-center bg-[var(--obsidian)]">
+        <p className="text-3xl animate-bounce text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>
+          WARPING...
+        </p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen" style={{ backgroundImage: 'url(/images/background4.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
-      <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b-4 border-black shadow-lg transition-all">
-        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-8 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="relative h-10 w-10 rounded-full border-4 border-black overflow-hidden shadow-[4px_4px_0px_0px_#000] transition-transform group-hover:scale-105">
-              <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
-            </div>
-            <div>
-              <p className="text-sm font-black uppercase tracking-widest text-rose-500">Muragoods</p>
-              <p className="text-xs font-bold uppercase tracking-widest text-black">Checkout</p>
-            </div>
-          </Link>
+    <main className="min-h-screen">
+      <NavBar pageLabel="Checkout" />
 
-          <div className="hidden md:flex items-center gap-3 text-xs font-black uppercase">
-            <Link href="/menu" className="mario-btn mario-btn-blue">Menu</Link>
-            <Link href="/orders" className="mario-btn mario-btn-yellow">Orders</Link>
-          </div>
-        </div>
-      </nav>
-
-      <section className="px-4 py-12 sm:px-8">
-        <div className="mx-auto max-w-7xl">
+      <section className="px-4 py-10 sm:px-8">
+        <div className="deco-container">
+          {/* Header */}
           <div className="mb-8">
-            <h1 className="text-4xl sm:text-5xl font-black text-white uppercase tracking-tighter" style={{ textShadow: '5px 5px 0px #000' }}>Final Stage: Checkout</h1>
-            <p className="mt-2 text-lg font-black text-yellow-300" style={{ textShadow: '2px 2px 0px #000' }}>Review your items and complete your order.</p>
+            <h1
+              className="text-2xl sm:text-3xl lg:text-4xl text-[var(--cream)] uppercase"
+              style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}
+            >
+              Final Stage: Checkout
+            </h1>
+            <p className="mt-3 text-base text-[var(--gold)]">
+              Review your items and complete your order.
+            </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-1 xl:grid-cols-[1.2fr_0.8fr]">
-            <div className="mario-card">
-              <div className="bg-gradient-to-r from-rose-400 to-rose-500 p-4 sm:p-6 border-b-4 border-black">
-                <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-widest">Your Cart</h2>
+          <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+            {/* ─── Cart & Form Panel ────────────────────────── */}
+            <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)]">
+              {/* Panel Header */}
+              <div className="border-b-2 border-[var(--gold)] bg-[var(--charcoal-light)] p-5 sm:p-6">
+                <h2
+                  className="text-sm text-[var(--gold-bright)] uppercase"
+                  style={{ fontFamily: 'var(--font-arcade)' }}
+                >
+                  Your Cart
+                </h2>
               </div>
 
-              <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+              <div className="p-5 sm:p-6 space-y-5">
+                {/* Error */}
                 {error && (
-                  <div className="rounded-xl border-4 border-rose-400 bg-rose-50 p-4 text-sm font-black text-rose-600 uppercase shadow-lg">
-                    {error}
+                  <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-4 text-sm text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
+                    ⚠ {error}
                   </div>
                 )}
 
                 {restrictedItems.length > 0 && (
-                  <div className="rounded-xl border-4 border-rose-400 bg-rose-50 p-4 text-sm font-black text-rose-600 uppercase shadow-lg">
-                    Coffee Jelly & Cookies are only available for DWCL pickup!
+                  <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-4 text-sm text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
+                    ⚠ Coffee Jelly & Cookies are only available for DWCL pickup!
                   </div>
                 )}
 
                 {!isDwcl && totalItems < 2 && (
-                  <div className="rounded-xl border-4 border-yellow-400 bg-yellow-50 p-4 text-sm font-black text-black uppercase shadow-lg">
-                    Minimum 2 items required for delivery outside DWCL.
+                  <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.08)] p-4 text-sm text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
+                    ⚠ Minimum 2 items required for delivery outside DWCL.
                   </div>
                 )}
 
                 {cartItems.length === 0 ? (
-                  <div className="rounded-xl bg-yellow-100 p-8 text-center font-black text-slate-700 border-4 border-black shadow-lg">
-                    Cart is empty. Add delicious items!
+                  <div className="border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-10 text-center">
+                    <p className="text-sm text-[var(--pewter)]" style={{ fontFamily: 'var(--font-arcade)' }}>
+                      CART IS EMPTY
+                    </p>
+                    <p className="mt-2 text-sm text-[var(--pewter-light)]">Add some legendary items!</p>
                   </div>
                 ) : (
                   <>
-                    <div className="space-y-4">
+                    {/* Cart Items */}
+                    <div className="space-y-3">
                       {cartItems.map((item) => {
                         const cartKey = `${item.id}__${item.selectedVariant?.id || item.variants[0]?.id || ''}`;
                         return (
-                          <div key={cartKey} className="flex items-center justify-between rounded-xl border-4 border-black p-4 bg-gradient-to-r from-yellow-50 to-white shadow-md hover:shadow-lg transition-all">
+                          <div
+                            key={cartKey}
+                            className="flex items-center justify-between border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-4 transition-all hover:border-[var(--gold)]"
+                          >
                             <div>
-                              <p className="text-lg font-black text-black">{item.name}</p>
-                              <p className="text-sm font-bold text-slate-700">{item.selectedVariant?.name} • ₱{item.selectedVariant?.price || 0} each</p>
+                              <p className="text-sm text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>
+                                {item.name}
+                              </p>
+                              <p className="text-xs text-[var(--pewter)] mt-1">
+                                {item.selectedVariant?.name} · ₱{item.selectedVariant?.price || 0} each
+                              </p>
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
                               <button
                                 type="button"
                                 onClick={() => removeFromCart(cartKey)}
-                                className="flex h-10 w-10 items-center justify-center rounded-full border-4 border-black bg-rose-400 text-lg font-black text-white hover:bg-rose-300 hover:scale-110 transition-all shadow-md"
+                                className="flex h-8 w-8 items-center justify-center border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.15)] text-[var(--crimson)] hover:bg-[var(--crimson)] hover:text-white transition-all"
                               >
                                 −
                               </button>
-                              <span className="w-8 text-center font-black text-black text-lg">{item.quantity}</span>
+                              <span
+                                className="w-6 text-center text-[var(--cream)]"
+                                style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}
+                              >
+                                {item.quantity}
+                              </span>
                               <button
                                 type="button"
                                 onClick={() => addToCartFromCheckout(cartKey)}
-                                className="flex h-10 w-10 items-center justify-center rounded-full border-4 border-black bg-black text-lg font-black text-yellow-300 hover:bg-slate-900 hover:scale-110 transition-all shadow-md"
+                                className="flex h-8 w-8 items-center justify-center border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.15)] text-[var(--gold)] hover:bg-[var(--gold)] hover:text-[var(--obsidian)] transition-all"
                               >
                                 +
                               </button>
@@ -279,49 +251,57 @@ export default function CheckoutPage() {
                       })}
                     </div>
 
+                    {/* Zone */}
                     <div>
-                      <label className="block text-sm font-black text-black uppercase mb-2">Delivery Zone</label>
-                      <select
-                        value={location}
-                        onChange={(e) => setLocation(e.target.value as ZoneKey)}
-                        className="w-full rounded-xl border-4 border-black bg-gradient-to-r from-yellow-50 to-white px-4 py-3 font-black text-black outline-none focus:border-rose-400 focus:ring-4 focus:ring-rose-200 transition-all shadow-md text-sm sm:text-base"
-                      >
+                      <label className="block text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>
+                        Delivery Zone
+                      </label>
+                      <select value={location} onChange={(e) => setLocation(e.target.value as ZoneKey)} className="deco-select">
                         {deliveryZones.map(zone => (
                           <option key={zone.code} value={zone.code}>{zone.label}</option>
                         ))}
                       </select>
-                      <p className="text-xs text-gray-600 mt-2">{deliveryZones.find(z => z.code === location)?.note}</p>
+                      <p className="text-xs text-[var(--pewter)] mt-2">{deliveryZones.find(z => z.code === location)?.note}</p>
                     </div>
 
+                    {/* Phone */}
                     <div>
-                      <label className="block text-sm font-black text-black uppercase mb-2">Contact Number *</label>
+                      <label className="block text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>
+                        Contact Number *
+                      </label>
                       <input
                         type="tel"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         placeholder="Enter valid contact number"
-                        className="w-full rounded-xl border-4 border-black bg-gradient-to-r from-yellow-50 to-white px-4 py-3 font-semibold text-black outline-none focus:border-rose-400 focus:ring-4 focus:ring-rose-200 transition-all shadow-md text-sm sm:text-base"
+                        className="deco-input"
                         required
                       />
-                      <p className="text-xs text-gray-600 mt-1">Required for delivery confirmation calls</p>
+                      <p className="text-xs text-[var(--pewter)] mt-1">Required for delivery confirmation calls</p>
                     </div>
 
+                    {/* Order Date */}
                     <div>
-                      <label className="block text-sm font-black text-black uppercase mb-2">Preferred Order Date</label>
+                      <label className="block text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>
+                        Preferred Order Date
+                      </label>
                       <input
                         type="date"
                         value={customOrderDate}
                         onChange={(e) => setCustomOrderDate(e.target.value)}
                         required
                         min={tomorrow}
-                        className="w-full rounded-xl border-4 border-black bg-gradient-to-r from-yellow-50 to-white px-4 py-3 font-black text-black outline-none focus:border-rose-400 focus:ring-4 focus:ring-rose-200 transition-all shadow-md text-sm sm:text-base"
+                        className="deco-input"
                       />
-                      <p className="text-xs text-gray-600 mt-1">Select a valid future date</p>
+                      <p className="text-xs text-[var(--pewter)] mt-1">Select a valid future date</p>
                     </div>
 
+                    {/* Map (non-DWCL) */}
                     {!isDwcl && (
                       <div>
-                        <label className="block text-sm font-black text-black uppercase mb-2">Delivery Location</label>
+                        <label className="block text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>
+                          Delivery Location
+                        </label>
                         <LocationPicker
                           initialLat={13.1550}
                           initialLng={123.7450}
@@ -331,106 +311,138 @@ export default function CheckoutPage() {
                             setLongitude(String(lng));
                           }}
                         />
-                        <p className="text-xs text-gray-600 mt-2">Tap the map to set your delivery location. Tap Change to update it.</p>
+                        <p className="text-xs text-[var(--pewter)] mt-2">Tap the map to set your delivery location.</p>
                       </div>
                     )}
 
                     {isDwcl && (
-                      <div className="rounded-xl border-4 border-black bg-yellow-100 p-4 shadow-md">
-                        <p className="text-sm font-black text-black uppercase">DWCL Pickup</p>
-                        <p className="text-xs text-gray-700 mt-1">No map needed for DWCL pickup. Please proceed to the next steps.</p>
+                      <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.05)] p-4">
+                        <p className="text-[10px] text-[var(--gold-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>
+                          DWCL Pickup
+                        </p>
+                        <p className="text-xs text-[var(--pewter)] mt-1">No map needed. Proceed to next steps.</p>
                       </div>
                     )}
 
+                    {/* Order Type */}
                     <div>
-                      <label className="block text-sm font-black text-black uppercase mb-2">Order Type</label>
-                      <select
-                        value={deliveryService}
-                        onChange={(e) => setDeliveryService(e.target.value)}
-                        className="w-full rounded-xl border-4 border-black bg-gradient-to-r from-yellow-50 to-white px-4 py-3 font-black text-black outline-none focus:border-rose-400 focus:ring-4 focus:ring-rose-200 transition-all shadow-md"
-                      >
-                        <option value="Free Shipping">DWCL Pickup - Free</option>
-                        <option value="Saturday Delivery">Saturday Delivery - Legazpi/Daraga</option>
+                      <label className="block text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>
+                        Order Type
+                      </label>
+                      <select value={deliveryService} onChange={(e) => setDeliveryService(e.target.value)} className="deco-select">
+                        <option value="Free Shipping">DWCL Pickup — Free</option>
+                        <option value="Saturday Delivery">Saturday Delivery — Legazpi/Daraga</option>
                       </select>
                     </div>
 
+                    {/* Payment */}
                     <div>
-                      <label className="block text-sm font-black text-black uppercase mb-2">Payment Method</label>
-                      <div className="rounded-xl border-4 border-black bg-yellow-50 p-4 shadow-md">
-                        <p className="text-sm font-black text-black">GCash</p>
-                        <p className="text-xs text-gray-700 mt-1">Proof of payment required upon checkout.</p>
+                      <label className="block text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>
+                        Payment Method
+                      </label>
+                      <div className="border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-4">
+                        <p className="text-sm text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>GCash</p>
+                        <p className="text-xs text-[var(--pewter)] mt-1">Proof of payment required upon checkout.</p>
                       </div>
-                      <p className="text-xs text-gray-600 mt-1">For other payment arrangements, message us on Instagram @muragoods_.</p>
                     </div>
 
-                    <div className="rounded-xl border-4 border-rose-400 bg-rose-50 p-4 space-y-3 shadow-lg">
-                      <p className="text-xs font-black text-rose-600 uppercase">GCash Payment Details</p>
-                      <p className="text-sm font-bold text-black">Send amount to: <span className="text-rose-500 font-black">639466472599</span> (Muragoods)</p>
+                    {/* GCash Details */}
+                    <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.06)] p-5 space-y-4">
+                      <p className="text-[9px] text-[var(--crimson)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>
+                        GCash Payment Details
+                      </p>
+                      <p className="text-sm text-[var(--cream)]">
+                        Send amount to: <span className="text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>639466472599</span> (Muragoods)
+                      </p>
 
                       <div>
-                        <label className="block text-xs font-black text-black uppercase mb-1">GCash Reference Number *</label>
+                        <label className="block text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-1" style={{ fontFamily: 'var(--font-arcade)' }}>
+                          GCash Reference Number *
+                        </label>
                         <input
                           type="text"
                           value={gcashRef}
                           onChange={(e) => setGcashRef(e.target.value)}
                           placeholder="Enter valid GCash reference number"
-                          className="w-full rounded-lg border-2 border-black bg-white px-3 py-2 text-sm font-semibold text-black outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-200 transition-all"
+                          className="deco-input"
                           required
                         />
                       </div>
 
                       <div>
-                        <label className="block text-xs font-black text-black uppercase mb-1">Upload Payment Receipt *</label>
+                        <label className="block text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-1" style={{ fontFamily: 'var(--font-arcade)' }}>
+                          Upload Payment Receipt *
+                        </label>
                         <input
                           type="file"
                           accept="image/*"
                           onChange={(e) => setGcashFile(e.target.files?.[0] || null)}
-                          className="w-full text-xs font-semibold text-black rounded-lg border-2 border-black p-2 focus:border-rose-400 transition-all"
+                          className="w-full text-xs text-[var(--cream)] border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-3 file:mr-3 file:border-0 file:border-r-2 file:border-[rgba(242,240,228,0.12)] file:bg-transparent file:text-[var(--gold)] file:font-bold file:uppercase file:text-xs file:px-3 file:py-1 file:cursor-pointer hover:file:text-[var(--gold-bright)]"
                           required
                         />
-                        <p className="text-xs text-gray-600 mt-1">Proof is required. Without proof, order may be delayed or rejected.</p>
+                        <p className="text-xs text-[var(--pewter)] mt-1">Required. Without proof, order may be delayed.</p>
                       </div>
                     </div>
 
-                    <div className="rounded-xl border-4 border-black bg-blue-100 p-4 shadow-md">
-                      <p className="text-xs font-black text-black uppercase">Custom Order / Inquiries</p>
-                      <p className="text-xs text-gray-700 mt-1">For custom orders, bulk orders, or special requests, please message us directly:</p>
-                      <p className="text-sm font-black text-black mt-1">Instagram: @muragoods_</p>
-                      <p className="text-sm font-black text-black">Contact: 639466472599</p>
+                    {/* Custom Orders */}
+                    <div className="border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-4">
+                      <p className="text-[9px] text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>
+                        Custom Order / Inquiries
+                      </p>
+                      <p className="text-xs text-[var(--pewter)] mt-1">For bulk or special requests, message us directly:</p>
+                      <p className="text-sm text-[var(--cream)] mt-1">Instagram: @muragoods_</p>
+                      <p className="text-sm text-[var(--cream)]">Contact: 639466472599</p>
                     </div>
                   </>
                 )}
               </div>
             </div>
 
-            <aside className="checkout-summary">
-              <div className="bg-gradient-to-r from-black to-gray-900 p-4 sm:p-6 border-b-4 border-black rounded-t-2xl">
-                <h3 className="text-xl sm:text-2xl font-black text-yellow-300 uppercase tracking-widest">Order Summary</h3>
+            {/* ─── Order Summary Panel ──────────────────────── */}
+            <aside className="border-2 border-[var(--gold)] bg-[var(--charcoal)]">
+              {/* Panel Header */}
+              <div className="border-b-2 border-[var(--gold)] bg-[var(--charcoal-light)] p-5 sm:p-6">
+                <h3
+                  className="text-sm text-[var(--gold-bright)] uppercase"
+                  style={{ fontFamily: 'var(--font-arcade)' }}
+                >
+                  Order Summary
+                </h3>
               </div>
 
-              <div className="p-4 sm:p-6 flex flex-col h-full">
-                <div className="space-y-3 sm:space-y-4 text-base font-black text-black border-b-4 border-black pb-4 mb-4">
-                  <div className="flex justify-between text-sm sm:text-base"><span>Subtotal:</span><span className="text-rose-500">₱{subtotal}</span></div>
-                  <div className="flex justify-between text-sm sm:text-base"><span>Shipping:</span><span className="text-rose-500">₱{shippingFee}</span></div>
-                  <div className="flex justify-between text-xl sm:text-2xl bg-gradient-to-r from-yellow-300 to-yellow-400 p-3 border-4 border-black rounded-xl shadow-md"><span>TOTAL:</span><span>₱{total}</span></div>
+              <div className="p-5 sm:p-6 flex flex-col h-full">
+                {/* Totals */}
+                <div className="space-y-3 text-sm border-b-2 border-[rgba(242,240,228,0.12)] pb-5 mb-5">
+                  <div className="flex justify-between text-[var(--cream-muted)]">
+                    <span>Subtotal:</span>
+                    <span className="coin-price">₱{subtotal}</span>
+                  </div>
+                  <div className="flex justify-between text-[var(--cream-muted)]">
+                    <span>Shipping:</span>
+                    <span className="coin-price">₱{shippingFee}</span>
+                  </div>
+                  <div className="flex justify-between text-lg border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.1)] p-3 text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px' }}>
+                    <span>TOTAL:</span>
+                    <span>₱{total}</span>
+                  </div>
                 </div>
 
-                <div className="space-y-2 text-xs font-bold text-black mb-4">
-                  <p>Order Date: {customOrderDate || "Not selected"}</p>
-                  <p>Service: {deliveryService}</p>
-                  {!isDwcl && (
-                    <p>Location: {mapAddress ? mapAddress : "Not selected"}</p>
-                  )}
-                  <p>Payment: GCash</p>
-                  <p>Phone: {phone || "Not provided"}</p>
+                {/* Order Details */}
+                <div className="space-y-2 text-xs text-[var(--pewter)] mb-6">
+                  <p>Order Date: <span className="text-[var(--cream-muted)]">{customOrderDate || 'Not selected'}</span></p>
+                  <p>Service: <span className="text-[var(--cream-muted)]">{deliveryService}</span></p>
+                  {!isDwcl && <p>Location: <span className="text-[var(--cream-muted)]">{mapAddress || 'Not selected'}</span></p>}
+                  <p>Payment: <span className="text-[var(--cream-muted)]">GCash</span></p>
+                  <p>Phone: <span className="text-[var(--cream-muted)]">{phone || 'Not provided'}</span></p>
                 </div>
 
+                {/* Place Order Button */}
                 <button
                   type="submit"
                   disabled={cartItems.length === 0 || isSubmitting}
-                  className="mario-btn mt-auto w-full bg-black text-yellow-300 hover:bg-slate-900 uppercase font-black text-lg tracking-widest disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] transition-all shadow-xl"
+                  className="deco-btn deco-btn-crimson deco-btn-lg w-full mt-auto disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSubmitting ? "PLACING ORDER..." : "PLACE ORDER"}
+                  {isSubmitting ? 'PLACING ORDER...' : 'PLACE ORDER'}
                 </button>
               </div>
             </aside>
@@ -438,32 +450,40 @@ export default function CheckoutPage() {
         </div>
       </section>
 
+      {/* ─── Instagram Success Modal ─────────────────────────── */}
       {showInstagramModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setShowInstagramModal(false)}>
-          <div className="mario-card max-w-lg w-full animate-bounce-in" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-purple-600 to-pink-500 p-6 border-b-4 border-black text-center">
-              <h2 className="text-3xl font-black text-white uppercase">Order Placed!</h2>
+        <div className="deco-overlay" onClick={() => setShowInstagramModal(false)}>
+          <div className="deco-modal bounce-in" onClick={(e) => e.stopPropagation()}>
+            <div className="deco-modal-header text-center" style={{ background: 'linear-gradient(135deg, #6c3483, var(--crimson))' }}>
+              <h2
+                className="text-sm text-[var(--gold-bright)] uppercase"
+                style={{ fontFamily: 'var(--font-arcade)' }}
+              >
+                ORDER PLACED!
+              </h2>
             </div>
-            <div className="p-8 bg-white text-center space-y-4">
-              <div className="w-20 h-20 mx-auto bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-3xl font-black shadow-lg ring-4 ring-black">
+            <div className="deco-modal-body text-center space-y-4">
+              <div className="w-16 h-16 mx-auto bg-gradient-to-br from-[#6c3483] to-[var(--crimson)] flex items-center justify-center text-white text-lg border-2 border-[var(--gold)]" style={{ fontFamily: 'var(--font-arcade)' }}>
                 IG
               </div>
-              <h3 className="text-2xl font-black text-black">Please message @muragoods_ on Instagram</h3>
-              <p className="text-sm font-bold text-slate-700">Confirm your order and get updates!</p>
+              <h3
+                className="text-sm text-[var(--cream)]"
+                style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}
+              >
+                Message @muragoods_ on Instagram
+              </h3>
+              <p className="text-sm text-[var(--pewter)]">Confirm your order and get updates!</p>
               <a
                 href="https://www.instagram.com/muragoods_/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mario-btn mario-btn-yellow w-full hover:scale-105 transition-all"
+                className="deco-btn deco-btn-gold w-full"
               >
                 Open Instagram @muragoods_
               </a>
               <button
-                onClick={() => {
-                  setShowInstagramModal(false);
-                  router.push('/orders');
-                }}
-                className="mario-btn bg-black text-yellow-300 w-full hover:scale-105 transition-all"
+                onClick={() => { setShowInstagramModal(false); router.push('/orders'); }}
+                className="deco-btn w-full"
               >
                 View My Orders
               </button>

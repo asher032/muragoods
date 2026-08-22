@@ -1,32 +1,28 @@
 'use client';
 
-import Image from "next/image";
-import { adminCredentials, adminEmails, products, type InventoryStatus, type Order, type OrderStatus, type Product } from "@/app/lib/muragoods-data";
-import { useMemo, useState, useEffect, useCallback } from "react";
+import Image from 'next/image';
+import { adminCredentials, adminEmails, products, type InventoryStatus, type Order, type OrderStatus, type Product } from '@/app/lib/muragoods-data';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 
 const statusOptions = [
-  "Pending Payment",
-  "Payment Verified",
-  "Preparing",
-  "Out for Delivery",
-  "Delivered",
+  'Pending Payment',
+  'Payment Verified',
+  'Preparing',
+  'Out for Delivery',
+  'Delivered',
 ] as const;
 
-const inventoryCycle: InventoryStatus[] = [
-  "In Stock",
-  "Out of Stock",
-  "Pre-Order Only",
-];
+const inventoryCycle: InventoryStatus[] = ['In Stock', 'Out of Stock', 'Pre-Order Only'];
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [orders, setOrders] = useState<(Order & { userId: string; _id?: string })[]>([]);
   const [catalog, setCatalog] = useState<(Product & { dbInventory?: InventoryStatus })[]>(products);
-  const [alert, setAlert] = useState<{ show: boolean; message: string; orderId?: string }>({ show: false, message: "" });
-  const [previewReceipt, setPreviewReceipt] = useState<string>("");
+  const [alert, setAlert] = useState<{ show: boolean; message: string; orderId?: string }>({ show: false, message: '' });
+  const [previewReceipt, setPreviewReceipt] = useState('');
   const [loadingCatalog, setLoadingCatalog] = useState(false);
 
   const syncCatalog = useCallback(async () => {
@@ -36,12 +32,7 @@ export default function AdminPage() {
       const result = await res.json();
       if (result.success && Array.isArray(result.data)) {
         const dbMap = new Map<string, InventoryStatus>(result.data.map((p: { id: string; inventory: InventoryStatus }) => [p.id, p.inventory]));
-        setCatalog(
-          products.map(p => ({
-            ...p,
-            inventory: (dbMap.get(p.id) as InventoryStatus) || p.inventory,
-          })),
-        );
+        setCatalog(products.map(p => ({ ...p, inventory: (dbMap.get(p.id) as InventoryStatus) || p.inventory })));
       } else {
         setCatalog(products);
       }
@@ -56,17 +47,14 @@ export default function AdminPage() {
     try {
       const res = await fetch('/api/orders?isAdmin=true');
       const result = await res.json();
-      if (result.success) {
-        setOrders(result.data);
-      }
+      if (result.success) setOrders(result.data);
     } catch (err) {
-      console.error("Failed to fetch orders:", err);
+      console.error('Failed to fetch orders:', err);
     }
   }, []);
 
   useEffect(() => {
     if (!isAuthenticated) return;
-
     syncCatalog();
     fetchOrders();
 
@@ -74,268 +62,183 @@ export default function AdminPage() {
       try {
         const res = await fetch('/api/orders?isAdmin=true');
         const result = await res.json();
-        if (result.success) {
-          if (result.data.length > orders.length) {
-            const newOrder = result.data[0];
-            setAlert({ show: true, message: `NEW ORDER! ${newOrder.customer} - ₱${newOrder.total}`, orderId: newOrder._id || newOrder.id });
-            setOrders(result.data);
-            setTimeout(() => setAlert({ show: false, message: "" }), 5000);
-          }
+        if (result.success && result.data.length > orders.length) {
+          const newOrder = result.data[0];
+          setAlert({ show: true, message: `NEW ORDER! ${newOrder.customer} - ₱${newOrder.total}`, orderId: newOrder._id || newOrder.id });
+          setOrders(result.data);
+          setTimeout(() => setAlert({ show: false, message: '' }), 5000);
         }
       } catch (err) {
         console.error(err);
       }
     }, 5000);
-
     return () => clearInterval(interval);
   }, [isAuthenticated, orders.length, fetchOrders, syncCatalog]);
 
   const summary = useMemo(() => {
     const totalSales = orders.reduce((sum, order) => sum + order.total, 0);
-    const pending = orders.filter((order) => order.status === "Pending Payment").length;
-    const preparing = orders.filter((order) => order.status === "Preparing").length;
+    const pending = orders.filter(o => o.status === 'Pending Payment').length;
+    const preparing = orders.filter(o => o.status === 'Preparing').length;
     return { totalSales, pending, preparing };
   }, [orders]);
 
-  const handleLogin = (event: React.FormEvent) => {
-    event.preventDefault();
-
-    if (!adminEmails.includes(email)) {
-      setError("UNAUTHORIZED! Only authorized admin accounts have access.");
-      return;
-    }
-
-    if (email === adminCredentials.email && password === adminCredentials.password) {
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminEmails.includes(email)) { setError('UNAUTHORIZED! Only authorized admin accounts have access.'); return; }
+    if ((email === adminCredentials.email && password === adminCredentials.password) || (email === 'mhaxthedog@gmail.com' && password === 'Jesusmaryosepcasiram')) {
       setIsAuthenticated(true);
-      setError("");
+      setError('');
       fetchOrders();
-      return;
+    } else {
+      setError('Invalid Password.');
     }
-
-    if (email === "mhaxthedog@gmail.com" && password === "Jesusmaryosepcasiram") {
-      setIsAuthenticated(true);
-      setError("");
-      fetchOrders();
-      return;
-    }
-
-    setError("Invalid Password.");
   };
 
   const handleStatusUpdate = async (orderId: string, nextStatus: string) => {
     try {
-      const res = await fetch(`/api/orders?id=${orderId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextStatus }),
-      });
+      const res = await fetch(`/api/orders?id=${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: nextStatus }) });
       const result = await res.json();
       if (result.success) {
-        setOrders((current) =>
-          current.map((order) =>
-            (order._id || order.id) === orderId ? { ...order, status: nextStatus as OrderStatus } : order,
-          ),
-        );
+        setOrders(current => current.map(order => (order._id || order.id) === orderId ? { ...order, status: nextStatus as OrderStatus } : order));
       }
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   const handleDeleteOrder = async (orderId: string) => {
-    if (confirm("Are you sure you want to remove this order?")) {
-      try {
-        const res = await fetch(`/api/orders?id=${orderId}`, {
-          method: 'DELETE',
-        });
-        const result = await res.json();
-        if (result.success) {
-          setOrders(orders.filter(o => (o._id || o.id) !== orderId));
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    }
+    if (!confirm('Are you sure you want to remove this order?')) return;
+    try {
+      const res = await fetch(`/api/orders?id=${orderId}`, { method: 'DELETE' });
+      const result = await res.json();
+      if (result.success) setOrders(orders.filter(o => (o._id || o.id) !== orderId));
+    } catch (err) { console.error(err); }
   };
 
   const handleUpdateInventory = async (productId: string) => {
     const product = catalog.find(p => p.id === productId);
     if (!product) return;
-
     const nextIndex = (inventoryCycle.indexOf(product.inventory) + 1) % inventoryCycle.length;
     const nextInventory = inventoryCycle[nextIndex];
-
     try {
-      const res = await fetch(`/api/products?id=${productId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inventory: nextInventory }),
-      });
+      const res = await fetch(`/api/products?id=${productId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inventory: nextInventory }) });
       const result = await res.json();
       if (result.success) {
-        setCatalog(current =>
-          current.map(p =>
-            p.id === productId ? { ...p, inventory: nextInventory } : p,
-          ),
-        );
+        setCatalog(current => current.map(p => p.id === productId ? { ...p, inventory: nextInventory } : p));
         setTimeout(syncCatalog, 500);
       }
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
+  // ─── Login Screen ──────────────────────────────────────────
   if (!isAuthenticated) {
     return (
-      <main className="min-h-screen flex items-center justify-center px-4" style={{ backgroundImage: 'url(/images/background.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
-        <div className="w-full max-w-md rounded-2xl border-4 border-black bg-white p-8 shadow-2xl">
+      <main className="min-h-screen flex items-center justify-center px-4">
+        <div className="w-full max-w-md border-2 border-[var(--gold)] bg-[var(--charcoal)] p-8">
           <div className="flex flex-col items-center gap-4 mb-8">
-            <div className="relative flex h-16 w-16 items-center justify-center rounded-full border-4 border-yellow-300 overflow-hidden shadow-lg ring-4 ring-black/10">
+            <div className="relative h-16 w-16 border-2 border-[var(--gold)] overflow-hidden">
               <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
             </div>
-            <p className="text-sm font-black uppercase tracking-widest text-yellow-300">Admin Portal</p>
+            <p className="text-[10px] text-[var(--gold-bright)] uppercase tracking-[0.2em]" style={{ fontFamily: 'var(--font-arcade)' }}>
+              Admin Portal
+            </p>
           </div>
-
-          <h1 className="text-3xl font-black text-black text-center uppercase mb-2">Admin Login</h1>
-          <p className="text-sm font-bold text-slate-700 text-center mb-6">Muragoods Secure Access</p>
-
+          <h1 className="text-xl text-center text-[var(--cream)] mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>ADMIN LOGIN</h1>
+          <p className="text-sm text-[var(--pewter)] text-center mb-6">Muragoods Secure Access</p>
           <form onSubmit={handleLogin} className="space-y-4">
-            <label className="block text-sm font-black text-black uppercase">
-              Admin Email
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                className="mario-input mt-2 bg-yellow-50 focus:bg-white focus:ring-4 focus:ring-rose-200"
-              />
+            <label className="block">
+              <span className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2 block" style={{ fontFamily: 'var(--font-arcade)' }}>Admin Email</span>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="deco-input" />
             </label>
-
-            <label className="block text-sm font-black text-black uppercase">
-              Password
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="mario-input mt-2 bg-yellow-50 focus:bg-white focus:ring-4 focus:ring-rose-200"
-              />
+            <label className="block">
+              <span className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2 block" style={{ fontFamily: 'var(--font-arcade)' }}>Password</span>
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="deco-input" />
             </label>
-
-            {error ? (
-              <div className="rounded-xl border-4 border-rose-400 bg-rose-50 p-3 text-sm font-black text-rose-600 uppercase shadow-lg">
-                {error}
+            {error && (
+              <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-3 text-sm text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
+                ⚠ {error}
               </div>
-            ) : null}
-
-            <button
-              type="submit"
-              className="mario-btn mario-btn-black w-full uppercase font-black text-lg tracking-widest mt-6 hover:scale-105 transition-all shadow-xl"
-            >
-              ENTER DASHBOARD
-            </button>
+            )}
+            <button type="submit" className="deco-btn deco-btn-crimson w-full deco-btn-lg mt-6">ENTER DASHBOARD</button>
           </form>
         </div>
       </main>
     );
   }
 
+  // ─── Dashboard ─────────────────────────────────────────────
   return (
-    <main className="min-h-screen px-4 py-8 sm:px-8" style={{ backgroundImage: 'url(/images/background.png)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
-      <div className="mx-auto max-w-7xl">
+    <main className="min-h-screen px-4 py-8 sm:px-8">
+      <div className="deco-container">
+        {/* Alert Banner */}
         {alert.show && (
-          <div className="mb-8 rounded-xl border-4 border-yellow-300 bg-gradient-to-r from-yellow-300 to-yellow-400 p-4 text-lg font-black text-black shadow-2xl animate-pulse">
-            {alert.message}
+          <div className="mb-8 border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.1)] p-4 text-sm text-[var(--gold-bright)] animate-pulse" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>
+            📢 {alert.message}
           </div>
         )}
 
-        <header className="mb-8 flex flex-col gap-4 rounded-2xl bg-gradient-to-r from-black to-gray-900 border-4 border-yellow-300 p-6 text-white shadow-2xl md:flex-row md:items-center md:justify-between">
+        {/* Header */}
+        <header className="mb-8 flex flex-col gap-4 border-2 border-[var(--gold)] bg-[var(--charcoal)] p-6 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm font-black uppercase tracking-widest text-yellow-300">Admin</p>
-            <h1 className="mt-2 text-4xl font-black text-white uppercase tracking-wide">Muragoods Dashboard</h1>
+            <p className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>Admin</p>
+            <h1 className="mt-2 text-xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Muragoods Dashboard</h1>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsAuthenticated(false)}
-            className="mario-btn bg-rose-400 text-yellow-300 border-yellow-300 hover:bg-rose-500 uppercase font-black hover:scale-105 transition-all shadow-lg"
-          >
-            LOG OUT
-          </button>
+          <button type="button" onClick={() => setIsAuthenticated(false)} className="deco-btn deco-btn-crimson">LOG OUT</button>
         </header>
 
+        {/* Summary Cards */}
         <section className="grid gap-4 md:grid-cols-3">
-          <div className="mario-card p-6 shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all">
-            <p className="text-sm font-black uppercase tracking-widest text-rose-500">Today&apos;s Sales</p>
-            <p className="mt-3 text-4xl font-black text-black">₱{summary.totalSales}</p>
-          </div>
-          <div className="mario-card p-6 shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all">
-            <p className="text-sm font-black uppercase tracking-widest text-rose-500">Pending</p>
-            <p className="mt-3 text-4xl font-black text-black">{summary.pending}</p>
-          </div>
-          <div className="mario-card p-6 shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all">
-            <p className="text-sm font-black uppercase tracking-widest text-rose-500">Preparing</p>
-            <p className="mt-3 text-4xl font-black text-black">{summary.preparing}</p>
-          </div>
+          {[
+            { label: "Today's Sales", value: `₱${summary.totalSales}` },
+            { label: 'Pending', value: String(summary.pending) },
+            { label: 'Preparing', value: String(summary.preparing) },
+          ].map(card => (
+            <div key={card.label} className="power-card p-6">
+              <p className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>{card.label}</p>
+              <p className="mt-3 text-2xl text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)' }}>{card.value}</p>
+            </div>
+          ))}
         </section>
 
+        {/* Main Content */}
         <section className="mt-8 grid gap-8 xl:grid-cols-[1.4fr_0.8fr]">
-          <div className="mario-card p-6 shadow-xl">
-            <h2 className="text-2xl font-black text-black uppercase tracking-wider">Live Order Feed</h2>
-
-            <div className="mt-6 overflow-x-auto rounded-xl border-4 border-black">
+          {/* Orders Table */}
+          <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-6">
+            <h2 className="text-sm text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Live Order Feed</h2>
+            <div className="mt-6 overflow-x-auto border border-[rgba(242,240,228,0.12)]">
               <table className="min-w-full text-left text-sm">
-                <thead className="bg-black text-white">
+                <thead className="bg-[var(--obsidian)]">
                   <tr>
-                    <th className="px-2 sm:px-4 py-3 font-black uppercase tracking-wider text-xs sm:text-sm">Order</th>
-                    <th className="px-2 sm:px-4 py-3 font-black uppercase tracking-wider text-xs sm:text-sm">Customer</th>
-                    <th className="px-2 sm:px-4 py-3 font-black uppercase tracking-wider text-xs sm:text-sm">Zone</th>
-                    <th className="px-2 sm:px-4 py-3 font-black uppercase tracking-wider text-xs sm:text-sm">Delivery Pin</th>
-                    <th className="px-2 sm:px-4 py-3 font-black uppercase tracking-wider text-xs sm:text-sm">Details</th>
-                    <th className="px-2 sm:px-4 py-3 font-black uppercase tracking-wider text-xs sm:text-sm">Status</th>
-                    <th className="px-2 sm:px-4 py-3 font-black uppercase tracking-wider text-xs sm:text-sm">Action</th>
+                    {['Order', 'Customer', 'Zone', 'Pin', 'Details', 'Status', 'Action'].map(h => (
+                      <th key={h} className="px-3 py-3 text-[8px] text-[var(--gold)] uppercase tracking-wider" style={{ fontFamily: 'var(--font-arcade)' }}>{h}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {orders.map((order, idx) => (
-                    <tr key={order._id || order.id} className={`border-b-2 border-black transition-colors hover:bg-yellow-50 ${idx % 2 === 0 ? 'bg-yellow-50/50' : 'bg-white'}`}>
-                      <td className="px-2 sm:px-4 py-3 font-black text-black text-xs sm:text-sm">{(order._id || order.id).slice(-5)}</td>
-                      <td className="px-2 sm:px-4 py-3">
-                        <div className="font-bold text-black text-xs sm:text-sm">{order.customer}</div>
-                        <div className="text-xs font-semibold text-slate-600 hidden sm:block">{order.address}</div>
-                        <div className="text-xs font-black text-blue-600 hidden sm:block">{order.userId}</div>
+                    <tr key={order._id || order.id} className={`border-t border-[rgba(242,240,228,0.08)] transition-colors hover:bg-[var(--charcoal-light)] ${idx % 2 === 0 ? '' : 'bg-[rgba(212,175,55,0.02)]'}`}>
+                      <td className="px-3 py-3 text-xs text-[var(--cream-muted)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px' }}>{(order._id || order.id).slice(-5)}</td>
+                      <td className="px-3 py-3">
+                        <div className="text-xs text-[var(--cream)]">{order.customer}</div>
+                        <div className="text-[10px] text-[var(--pewter)] hidden sm:block">{order.address}</div>
+                        <div className="text-[10px] text-[var(--gold)] hidden sm:block">{order.userId}</div>
                       </td>
-                      <td className="px-2 sm:px-4 py-3 font-bold text-black text-xs sm:text-sm">{order.zone}</td>
-                      <td className="px-2 sm:px-4 py-3">
-                        <div className="text-xs font-bold text-black">{order.latitude}, {order.longitude}</div>
-                      </td>
-                      <td className="px-2 sm:px-4 py-3">
-                        <div className="text-xs font-bold text-black">₱{order.total}</div>
-                        <div className="text-[10px] text-slate-500 hidden sm:block">{order.items.join(', ')}</div>
+                      <td className="px-3 py-3 text-xs text-[var(--cream-muted)]">{order.zone}</td>
+                      <td className="px-3 py-3 text-[10px] text-[var(--pewter)]">{order.latitude}, {order.longitude}</td>
+                      <td className="px-3 py-3">
+                        <div className="text-xs text-[var(--gold-bright)]">₱{order.total}</div>
+                        <div className="text-[10px] text-[var(--pewter)] hidden sm:block">{order.items.join(', ')}</div>
                         {order.gcashScreenshotUrl && (
-                          <button
-                            onClick={() => setPreviewReceipt(order.gcashScreenshotUrl || "")}
-                            className="text-xs font-black text-rose-500 underline hover:text-rose-600 transition-colors"
-                          >
+                          <button onClick={() => setPreviewReceipt(order.gcashScreenshotUrl || '')} className="text-[10px] text-[var(--crimson)] underline hover:text-[var(--gold-bright)] transition-colors">
                             View Receipt
                           </button>
                         )}
                       </td>
-                      <td className="px-2 sm:px-4 py-3">
-                        <select
-                          value={order.status}
-                          onChange={(event) => handleStatusUpdate(order._id || order.id, event.target.value)}
-                          className="mario-input rounded-lg px-2 sm:px-3 py-2 text-xs font-black uppercase tracking-wider"
-                        >
-                          {statusOptions.map((status) => (
-                            <option key={status} value={status}>
-                              {status}
-                            </option>
-                          ))}
+                      <td className="px-3 py-3">
+                        <select value={order.status} onChange={(e) => handleStatusUpdate(order._id || order.id, e.target.value)} className="deco-select text-[10px] py-1 px-2">
+                          {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                       </td>
-                      <td className="px-2 sm:px-4 py-3">
-                        <button
-                          onClick={() => handleDeleteOrder(order._id || order.id)}
-                          className="rounded bg-rose-400 p-2 text-white font-black hover:bg-rose-500 text-xs hover:scale-105 transition-all shadow-md border-2 border-black"
-                        >
+                      <td className="px-3 py-3">
+                        <button onClick={() => handleDeleteOrder(order._id || order.id)} className="deco-btn deco-btn-sm deco-btn-crimson" style={{ minHeight: '28px', padding: '4px 10px', fontSize: '8px' }}>
                           Delete
                         </button>
                       </td>
@@ -346,23 +249,17 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div className="mario-card p-4 sm:p-6 shadow-xl">
-            <h2 className="text-xl sm:text-2xl font-black text-black uppercase tracking-wider">Inventory Control</h2>
-            <div className="mt-4 sm:mt-6 space-y-3">
-              {catalog.map((product) => (
-                <div
-                  key={product.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between rounded-xl border-4 border-black bg-yellow-50 p-4 gap-3 shadow-md hover:shadow-lg transition-all"
-                >
+          {/* Inventory Control */}
+          <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-6">
+            <h2 className="text-sm text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Inventory Control</h2>
+            <div className="mt-6 space-y-3">
+              {catalog.map(product => (
+                <div key={product.id} className="flex flex-col sm:flex-row sm:items-center justify-between border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-4 gap-3 transition-all hover:border-[var(--gold)]">
                   <div>
-                    <p className="font-black text-black text-lg">{product.name}</p>
-                    <p className="text-xs font-black uppercase tracking-wider text-rose-500">{product.inventory}</p>
+                    <p className="text-sm text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>{product.name}</p>
+                    <p className="text-[10px] text-[var(--gold)] uppercase mt-1">{product.inventory}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateInventory(product.id)}
-                    className="mario-btn mario-btn-black border-black hover:bg-slate-900 uppercase font-black w-full sm:w-auto hover:scale-105 transition-all"
-                  >
+                  <button type="button" onClick={() => handleUpdateInventory(product.id)} className="deco-btn deco-btn-sm deco-btn-dark w-full sm:w-auto">
                     Update
                   </button>
                 </div>
@@ -372,24 +269,16 @@ export default function AdminPage() {
         </section>
       </div>
 
+      {/* Receipt Preview Modal */}
       {previewReceipt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setPreviewReceipt("")}>
-          <div className="mario-card max-w-2xl w-full animate-bounce-in" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-black to-gray-900 p-4 border-b-4 border-black flex items-center justify-between">
-              <h3 className="text-xl font-black text-yellow-300 uppercase">Payment Receipt</h3>
-              <button
-                onClick={() => setPreviewReceipt("")}
-                className="text-white text-2xl font-black hover:text-rose-400 transition-colors"
-              >
-                x
-              </button>
+        <div className="deco-overlay" onClick={() => setPreviewReceipt('')}>
+          <div className="deco-modal max-w-2xl bounce-in" onClick={(e) => e.stopPropagation()}>
+            <div className="deco-modal-header flex items-center justify-between">
+              <h3 className="text-sm text-[var(--gold-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Payment Receipt</h3>
+              <button onClick={() => setPreviewReceipt('')} className="text-[var(--pewter)] text-lg hover:text-[var(--crimson)] transition-colors">✕</button>
             </div>
-            <div className="p-4 bg-white">
-              {previewReceipt.startsWith('data:') ? (
-                <img src={previewReceipt} alt="Payment Receipt" className="w-full h-auto rounded-xl border-4 border-black shadow-lg" />
-              ) : (
-                <img src={previewReceipt} alt="Payment Receipt" className="w-full h-auto rounded-xl border-4 border-black shadow-lg" />
-              )}
+            <div className="p-4 bg-[var(--charcoal-light)]">
+              <img src={previewReceipt} alt="Payment Receipt" className="w-full h-auto border-2 border-[var(--gold)]" />
             </div>
           </div>
         </div>

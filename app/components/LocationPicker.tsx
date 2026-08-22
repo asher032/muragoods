@@ -17,7 +17,7 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
   const [selected, setSelected] = useState<{ lat: number; lng: number; address: string; placeName?: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
-  const [geoError, setGeoError] = useState("");
+  const [geoError, setGeoError] = useState('');
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -37,21 +37,21 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
       html: `<div style="
         width: 44px;
         height: 44px;
-        background: #E60012;
-        border: 4px solid #000;
-        border-radius: 50% 50% 50% 0;
+        background: #E52521;
+        border: 3px solid #D4AF37;
+        border-radius: 0;
         transform: rotate(-45deg);
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4);
       ">
         <div style="
           width: 18px;
           height: 18px;
-          background: #FFD700;
-          border: 2px solid #000;
-          border-radius: 50%;
+          background: #D4AF37;
+          border: 2px solid #B8960F;
+          border-radius: 0;
         "></div>
       </div>`,
       iconSize: [44, 44],
@@ -116,12 +116,12 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
 
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) {
-      setGeoError("Geolocation is not supported by your browser");
+      setGeoError('Geolocation is not supported by your browser');
       return;
     }
 
     setGeoLoading(true);
-    setGeoError("");
+    setGeoError('');
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -157,8 +157,8 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
         await fetchPlaceName(latitude, longitude);
         setGeoLoading(false);
       },
-      (error) => {
-        setGeoError("Unable to retrieve your location. Please tap the map instead.");
+      () => {
+        setGeoError('Unable to retrieve your location. Please tap the map instead.');
         setGeoLoading(false);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -167,7 +167,7 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
 
   const handleReset = () => {
     setSelected(null);
-    setGeoError("");
+    setGeoError('');
     if (onLocationSelect) {
       onLocationSelect(initialLat, initialLng, '');
     }
@@ -184,38 +184,47 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
           <div
             ref={containerRef}
             className="w-full"
-            style={{ height: 'clamp(260px, 50vh, 420px)', borderRadius: '12px', border: '4px solid #000' }}
+            style={{ height: 'clamp(260px, 50vh, 420px)', border: '2px solid var(--gold)' }}
           />
           <div className="mt-3 flex flex-col gap-2">
             <button
               type="button"
               onClick={handleUseMyLocation}
               disabled={geoLoading}
-              className="w-full rounded-lg border-4 border-black bg-black px-4 py-3 text-sm font-black text-yellow-300 hover:bg-slate-900 disabled:opacity-50 active:scale-95 transition-transform"
+              className="deco-btn w-full disabled:opacity-50"
             >
               {geoLoading ? 'Getting your location...' : '📍 Use my current location'}
             </button>
             {geoError && (
-              <p className="text-xs font-bold text-rose-600 bg-rose-50 border-2 border-rose-400 rounded px-3 py-2">
+              <p className="text-xs text-[var(--crimson)] border border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-2">
                 {geoError}
               </p>
             )}
-            <p className="text-xs text-gray-600 text-center">Or tap the map to place a pin</p>
+            <p className="text-xs text-[var(--pewter)] text-center">Or tap the map to place a pin</p>
           </div>
         </div>
       ) : (
-        <div className="rounded-lg border-4 border-black bg-white p-4 sm:p-6 shadow-xl">
+        <div className="border-2 border-[var(--gold)] bg-[var(--charcoal-light)] p-4 sm:p-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-black uppercase tracking-widest text-rose-500 mb-1">Selected Location</p>
+              <p
+                className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-1"
+                style={{ fontFamily: 'var(--font-arcade)' }}
+              >
+                Selected Location
+              </p>
               {loading ? (
-                <p className="text-base sm:text-lg font-black text-black">Finding place name...</p>
+                <p className="text-base text-[var(--cream)]">Finding place name...</p>
               ) : (
                 <>
-                  <p className="text-base sm:text-lg font-black text-black break-all">{selected.placeName || selected.address}</p>
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-slate-700">
-                    <span className="rounded border-2 border-black bg-yellow-100 px-2 py-1">LAT: {selected.lat.toFixed(4)}</span>
-                    <span className="rounded border-2 border-black bg-yellow-100 px-2 py-1">LNG: {selected.lng.toFixed(4)}</span>
+                  <p className="text-base text-[var(--cream)] break-all">{selected.placeName || selected.address}</p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                    <span className="deco-badge deco-badge-gold" style={{ fontSize: '7px' }}>
+                      LAT: {selected.lat.toFixed(4)}
+                    </span>
+                    <span className="deco-badge deco-badge-gold" style={{ fontSize: '7px' }}>
+                      LNG: {selected.lng.toFixed(4)}
+                    </span>
                   </div>
                 </>
               )}
@@ -223,7 +232,8 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
             <button
               type="button"
               onClick={handleReset}
-              className="shrink-0 rounded-lg border-4 border-black bg-rose-400 px-3 py-2 text-xs font-black text-white hover:bg-rose-500 active:scale-95 transition-transform"
+              className="deco-btn deco-btn-sm deco-btn-crimson shrink-0"
+              style={{ minHeight: '36px', padding: '6px 12px' }}
             >
               Change
             </button>
