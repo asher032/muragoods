@@ -16,63 +16,156 @@ interface Reward {
 }
 
 const rewards: Reward[] = [
-  // Free Food
-  { id: 'free_musubi', name: 'Free Regular Musubi', description: 'Claim a free Regular Musubi on your next visit to DWCL.', cost: 5000, icon: '🍙', category: 'Free Food' },
-  { id: 'free_churros', name: 'Free Churros (Option 1)', description: 'Claim free Mini Churros (Option 1, ₱70 value) at DWCL.', cost: 7500, icon: '🍩', category: 'Free Food' },
   // Discount Vouchers
-  { id: 'voucher_50', name: '₱50 Off Voucher', description: 'Get ₱50 off your next order. Minimum order ₱100.', cost: 8000, icon: '🏷️', category: 'Vouchers' },
-  { id: 'voucher_100', name: '₱100 Off Voucher', description: 'Get ₱100 off your next order. Minimum order ₱200.', cost: 15000, icon: '🏷️', category: 'Vouchers' },
   { id: 'free_shipping', name: 'Free Shipping Voucher', description: 'Free delivery for your next order outside DWCL.', cost: 6000, icon: '🚚', category: 'Vouchers' },
+  { id: 'voucher_50', name: '₱50 Off Voucher', description: 'Get ₱50 off your next order. Minimum order ₱100.', cost: 8000, icon: '🏷️', category: 'Vouchers' },
   { id: 'double_points', name: '2x Points (Next Order)', description: 'Earn double coins on your next order for 24 hours.', cost: 10000, icon: '✨', category: 'Vouchers' },
+  { id: 'voucher_100', name: '₱100 Off Voucher', description: 'Get ₱100 off your next order. Minimum order ₱200.', cost: 15000, icon: '🏷️', category: 'Vouchers' },
 
   // Special Perks
   { id: 'priority_order', name: 'Priority Order', description: 'Skip the queue — your order gets prepared first.', cost: 12000, icon: '⚡', category: 'Perks' },
   { id: 'mystery_upgrade', name: 'Mystery Box Upgrade', description: 'Your next mystery box is guaranteed Rare or above.', cost: 20000, icon: '🎁', category: 'Perks' },
   { id: 'custom_shoutout', name: 'Shoutout on Instagram', description: 'Get a personalized shoutout on the Muragoods Instagram page.', cost: 25000, icon: '📱', category: 'Perks' },
-  { id: 'gold_member', name: 'Gold Member Badge', description: 'Permanent gold badge on your profile — shows you\'re a top supporter.', cost: 50000, icon: '👑', category: 'Perks' },
+  { id: 'gold_member', name: 'Gold Member Badge', description: 'Permanent gold badge on your profile — shows you\'re a top supporter. Perks: priority support, exclusive early access to new items, and a special gold border on your profile.', cost: 50000, icon: '👑', category: 'Perks' },
 ];
 
 const categoryEmojis: Record<string, string> = {
-  'Free Food': '🍽️',
   Vouchers: '🏷️',
   Perks: '⭐',
 };
 
-const rewardCategories = ['All', 'Free Food', 'Vouchers', 'Perks'];
+const rewardCategories = ['All', 'Vouchers', 'Perks'];
 
 export default function RewardsPage() {
   const router = useRouter();
   const { coins, removeCoins } = useCoins();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
+  const [userId, setUserId] = useState('');
+  const [userName, setUserName] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [purchased, setPurchased] = useState<Record<string, { date: string; redeemed: boolean }>>({});
+  const [purchased, setPurchased] = useState<Record<string, { date: string; redeemed: boolean; code: string }>>({});
+  const [userPerks, setUserPerks] = useState<{ perkId: string; perkName: string; redeemed: boolean }[]>([]);
   const [showConfirm, setShowConfirm] = useState<Reward | null>(null);
   const [showSuccess, setShowSuccess] = useState<Reward | null>(null);
+  const [successCode, setSuccessCode] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Admin search state
+  const [adminSearch, setAdminSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<{ name: string; email: string; userId: string; perks: { perkId: string; perkName: string; redeemed: boolean }[] }[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<{ name: string; email: string; userId: string; perks: { perkId: string; perkName: string; redeemed: boolean }[] } | null>(null);
+  const [addingPerk, setAddingPerk] = useState(false);
+
+  const adminEmails = ['muragoods0@gmail.com', 'mhaxthedog@gmail.com'];
 
   useEffect(() => {
-    const user = localStorage.getItem('user');
-    if (!user) { router.push('/login'); return; }
+    const userStr = localStorage.getItem('user');
+    if (!userStr) { router.push('/login'); return; }
+    const u = JSON.parse(userStr);
+    setUserEmail(u.email);
+    setUserName(u.name);
     setIsLoggedIn(true);
+    if (adminEmails.includes(u.email)) setIsAdmin(true);
 
+    // Load saved purchases
     const saved = localStorage.getItem('muragoods_rewards_purchased');
     if (saved) {
       try { setPurchased(JSON.parse(saved)); } catch { /* empty */ }
     }
+
+    // Fetch user ID and perks from API
+    async function fetchUser() {
+      try {
+        const res = await fetch(`/api/perks?email=${encodeURIComponent(u.email)}`);
+        const result = await res.json();
+        if (result.success && result.data) {
+          setUserId(result.data.userId || '');
+          setUserPerks(result.data.perks || []);
+        }
+      } catch { /* empty */ }
+    }
+    fetchUser();
   }, [router]);
 
+  const generateCode = () => {
+    return `${showConfirm?.id.toUpperCase().slice(0, 6)}-${Date.now().toString(36).slice(-4).toUpperCase()}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+  };
+
   const handleBuy = (reward: Reward) => {
-    if (coins < reward.cost || purchased[reward.id]) return;
+    if (coins < reward.cost || purchased[reward.id] || userPerks.some(p => p.perkId === reward.id)) return;
     setShowConfirm(reward);
   };
 
-  const confirmBuy = () => {
+  const confirmBuy = async () => {
     if (!showConfirm) return;
+    const code = generateCode();
     removeCoins(showConfirm.cost, `Rewards: ${showConfirm.name}`);
-    const newPurchased = { ...purchased, [showConfirm.id]: { date: new Date().toISOString(), redeemed: false } };
+
+    // Save locally
+    const newPurchased = { ...purchased, [showConfirm.id]: { date: new Date().toISOString(), redeemed: false, code } };
     setPurchased(newPurchased);
     localStorage.setItem('muragoods_rewards_purchased', JSON.stringify(newPurchased));
+
+    // Save to API
+    try {
+      await fetch('/api/perks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: userEmail,
+          perkId: showConfirm.id,
+          perkName: showConfirm.name,
+          perkDescription: showConfirm.description,
+          addedBy: 'Self-purchase',
+        }),
+      });
+      setUserPerks(prev => [...prev, { perkId: showConfirm.id, perkName: showConfirm.name, redeemed: false }]);
+    } catch { /* empty */ }
+
+    setSuccessCode(code);
     setShowSuccess(showConfirm);
     setShowConfirm(null);
+  };
+
+  const handleAdminAddPerk = async (userEmail: string, perkId: string, perkName: string, perkDescription: string) => {
+    setAddingPerk(true);
+    try {
+      const res = await fetch('/api/perks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: userEmail,
+          perkId,
+          perkName,
+          perkDescription,
+          addedBy: userName,
+        }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        // Refresh search results
+        handleAdminSearch();
+      } else {
+        alert(result.error || 'Failed to add perk');
+      }
+    } catch {
+      alert('Failed to add perk');
+    } finally {
+      setAddingPerk(false);
+    }
+  };
+
+  const handleAdminSearch = async () => {
+    if (!adminSearch.trim()) return;
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/perks?query=${encodeURIComponent(adminSearch.trim())}`);
+      const result = await res.json();
+      if (result.success) setSearchResults(result.data);
+    } catch { /* empty */ }
+    setSearching(false);
   };
 
   const filteredRewards = selectedCategory === 'All' ? rewards : rewards.filter(r => r.category === selectedCategory);
@@ -92,10 +185,20 @@ export default function RewardsPage() {
               🏪 Rewards Shop
             </h1>
             <p className="mt-3 text-base text-[var(--gold)]">Spend your coins on real rewards!</p>
-            <div className="mt-4 inline-flex items-center gap-2 border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.1)] px-5 py-2 rounded-xl">
-              <span className="coin-float">🪙</span>
-              <span className="text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '14px' }}>{coins.toLocaleString()}</span>
-              <span className="text-[var(--pewter)] text-sm">coins</span>
+
+            {/* User ID + Balance */}
+            <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+              {userId && (
+                <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.08)] px-4 py-2 rounded-xl">
+                  <p className="text-[8px] text-[var(--pewter)]" style={{ fontFamily: 'var(--font-arcade)' }}>Your ID</p>
+                  <p className="text-[11px] text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>{userId}</p>
+                </div>
+              )}
+              <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.1)] px-5 py-2 rounded-xl">
+                <span className="coin-float inline-block">🪙</span>
+                <span className="text-[var(--gold-bright)] ml-2" style={{ fontFamily: 'var(--font-arcade)', fontSize: '14px' }}>{coins.toLocaleString()}</span>
+                <span className="text-[var(--pewter)] text-sm ml-1">coins</span>
+              </div>
             </div>
           </div>
 
@@ -114,46 +217,30 @@ export default function RewardsPage() {
           </div>
 
           {/* Rewards Grid */}
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-2">
             {filteredRewards.map(reward => {
-              const isPurchased = !!purchased[reward.id];
+              const isPurchased = !!purchased[reward.id] || userPerks.some(p => p.perkId === reward.id);
               const canAfford = coins >= reward.cost;
               return (
                 <div
                   key={reward.id}
-                  className={`power-card p-5 rounded-2xl transition-all ${isPurchased ? 'opacity-60' : canAfford ? 'hover:border-[var(--gold-bright)]' : 'opacity-50'}`}
+                  className={`power-card p-5 rounded-2xl transition-all ${isPurchased ? 'opacity-70' : canAfford ? 'hover:border-[var(--gold-bright)]' : 'opacity-50'}`}
                 >
-                  {/* Icon + Cost */}
                   <div className="flex items-start justify-between mb-4">
                     <span className="text-3xl">{reward.icon}</span>
                     <span className={`text-[9px] px-3 py-1 rounded-lg border ${isPurchased ? 'border-[var(--emerald-bright)] bg-[rgba(30,61,47,0.2)] text-[var(--emerald-bright)]' : 'border-[var(--gold)] bg-[rgba(212,175,55,0.1)] text-[var(--gold-bright)]'}`} style={{ fontFamily: 'var(--font-arcade)' }}>
                       {isPurchased ? '✓ OWNED' : `🪙 ${reward.cost.toLocaleString()}`}
                     </span>
                   </div>
-
-                  {/* Name */}
-                  <h3 className="text-[10px] text-[var(--cream)] uppercase mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>
-                    {reward.name}
-                  </h3>
-
-                  {/* Description */}
-                  <p className="text-sm text-[var(--pewter)] leading-relaxed mb-4">
-                    {reward.description}
-                  </p>
-
-                  {/* Category */}
+                  <h3 className="text-[10px] text-[var(--cream)] uppercase mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>{reward.name}</h3>
+                  <p className="text-sm text-[var(--pewter)] leading-relaxed mb-3">{reward.description}</p>
                   <p className="text-[8px] text-[var(--gold)] uppercase mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>
                     {categoryEmojis[reward.category]} {reward.category}
                   </p>
-
-                  {/* Buy Button */}
                   {isPurchased ? (
                     <div className="border-2 border-[var(--emerald-bright)] bg-[rgba(30,61,47,0.1)] rounded-xl p-3 text-center">
                       <p className="text-[9px] text-[var(--emerald-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>
-                        ✓ Purchased — Show this to claim at DWCL
-                      </p>
-                      <p className="text-[8px] text-[var(--pewter)] mt-1">
-                        {new Date(purchased[reward.id].date).toLocaleDateString()}
+                        ✓ Owned — Show this at DWCL
                       </p>
                     </div>
                   ) : (
@@ -170,6 +257,81 @@ export default function RewardsPage() {
               );
             })}
           </div>
+
+          {/* Admin Panel */}
+          {isAdmin && (
+            <div className="mt-10 border-2 border-[var(--crimson)] bg-[var(--charcoal)] rounded-2xl p-6">
+              <h2 className="text-sm text-[var(--crimson)] uppercase mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>🔧 Admin: Manage User Perks</h2>
+              <div className="flex gap-2 mb-4">
+                <input
+                  type="text"
+                  value={adminSearch}
+                  onChange={(e) => setAdminSearch(e.target.value)}
+                  placeholder="Search user by name, email, or ID..."
+                  className="deco-input rounded-xl flex-1"
+                />
+                <button onClick={handleAdminSearch} disabled={searching} className="deco-btn deco-btn-crimson rounded-xl">
+                  {searching ? '...' : '🔍'}
+                </button>
+              </div>
+
+              {searchResults.length > 0 && (
+                <div className="space-y-3">
+                  {searchResults.map(user => (
+                    <div key={user.email} className="border border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] rounded-xl p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-sm text-[var(--cream)]">{user.name}</p>
+                          <p className="text-[9px] text-[var(--pewter)]">{user.email}</p>
+                          <p className="text-[9px] text-[var(--gold)]" style={{ fontFamily: 'var(--font-arcade)' }}>ID: {user.userId || 'N/A'}</p>
+                          {user.perks && user.perks.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {user.perks.map((p: { perkId: string; perkName: string }) => (
+                                <span key={p.perkId} className="text-[7px] px-2 py-0.5 border border-[var(--gold)] bg-[rgba(212,175,55,0.1)] text-[var(--gold)] rounded-lg" style={{ fontFamily: 'var(--font-arcade)' }}>
+                                  {p.perkName}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => setSelectedUser(selectedUser?.email === user.email ? null : user)}
+                          className="deco-btn deco-btn-sm deco-btn-crimson rounded-lg shrink-0"
+                          style={{ fontSize: '8px' }}
+                        >
+                          {selectedUser?.email === user.email ? 'Close' : 'Add Perk'}
+                        </button>
+                      </div>
+
+                      {/* Add Perk Panel */}
+                      {selectedUser?.email === user.email && (
+                        <div className="mt-3 pt-3 border-t border-[rgba(242,240,228,0.08)]">
+                          <p className="text-[8px] text-[var(--pewter)] uppercase mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>Add Perk</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {rewards.map(reward => {
+                              const hasPerk = user.perks?.some((p: { perkId: string }) => p.perkId === reward.id);
+                              return (
+                                <button
+                                  key={reward.id}
+                                  onClick={() => handleAdminAddPerk(user.email, reward.id, reward.name, reward.description)}
+                                  disabled={hasPerk || addingPerk}
+                                  className={`p-2 border rounded-lg text-left transition-all ${hasPerk ? 'border-[var(--emerald-bright)] opacity-50 cursor-not-allowed' : 'border-[rgba(242,240,228,0.12)] hover:border-[var(--gold)]'}`}
+                                >
+                                  <span className="text-sm">{reward.icon}</span>
+                                  <p className="text-[8px] text-[var(--cream)] mt-1" style={{ fontFamily: 'var(--font-arcade)' }}>{reward.name}</p>
+                                  <p className="text-[7px] text-[var(--pewter)]">{hasPerk ? '✓ Already has' : 'Click to add'}</p>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* How to earn */}
           <div className="mt-10 border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal)] rounded-2xl p-6 text-center">
@@ -196,6 +358,9 @@ export default function RewardsPage() {
               <span className="text-4xl">{showConfirm.icon}</span>
               <h3 className="text-sm text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)' }}>{showConfirm.name}</h3>
               <p className="text-xs text-[var(--pewter)]">{showConfirm.description}</p>
+              {userId && (
+                <p className="text-[8px] text-[var(--pewter)]">Your ID: <span className="text-[var(--gold)]" style={{ fontFamily: 'var(--font-arcade)' }}>{userId}</span></p>
+              )}
               <div className="border border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] rounded-xl p-3">
                 <p className="text-[9px] text-[var(--pewter)]" style={{ fontFamily: 'var(--font-arcade)' }}>Cost</p>
                 <p className="coin-price text-lg">🪙 {showConfirm.cost.toLocaleString()}</p>
@@ -221,11 +386,15 @@ export default function RewardsPage() {
               <span className="text-5xl">{showSuccess.icon}</span>
               <h3 className="text-sm text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)' }}>{showSuccess.name}</h3>
               <p className="text-xs text-[var(--pewter)]">Show this screen at DWCL to claim your reward!</p>
+              {userId && (
+                <div className="border border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] rounded-xl p-2">
+                  <p className="text-[7px] text-[var(--pewter)]" style={{ fontFamily: 'var(--font-arcade)' }}>Your ID</p>
+                  <p className="text-[10px] text-[var(--gold)]" style={{ fontFamily: 'var(--font-arcade)' }}>{userId}</p>
+                </div>
+              )}
               <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.08)] rounded-xl p-3">
                 <p className="text-[8px] text-[var(--gold)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Reward Code</p>
-                <p className="text-lg text-[var(--gold-bright)] mt-1" style={{ fontFamily: 'var(--font-arcade)' }}>
-                  {showSuccess.id.toUpperCase().slice(0, 8)}-{Math.random().toString(36).slice(2, 6).toUpperCase()}
-                </p>
+                <p className="text-lg text-[var(--gold-bright)] mt-1" style={{ fontFamily: 'var(--font-arcade)' }}>{successCode}</p>
               </div>
               <button onClick={() => setShowSuccess(null)} className="deco-btn deco-btn-gold w-full rounded-xl">Done</button>
             </div>

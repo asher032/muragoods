@@ -15,6 +15,15 @@ interface UserData {
   avatar?: string;
 }
 
+interface Perk {
+  perkId: string;
+  perkName: string;
+  perkDescription: string;
+  addedBy: string;
+  addedAt: string;
+  redeemed: boolean;
+}
+
 export default function AccountProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
@@ -23,6 +32,8 @@ export default function AccountProfilePage() {
   const [avatar, setAvatar] = useState<string>('');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [userId, setUserId] = useState('');
+  const [perks, setPerks] = useState<Perk[]>([]);
   const { coins } = useCoins();
 
   useEffect(() => {
@@ -32,9 +43,7 @@ export default function AccountProfilePage() {
     setUser(userData);
     // Load saved avatar
     const savedAvatar = localStorage.getItem('muragoods_avatar');
-    if (savedAvatar) setAvatar(savedAvatar);
-
-    async function fetchOrders() {
+    if (savedAvatar) setAvatar(savedAvatar);    async function fetchOrders() {
       try {
         const res = await fetch(`/api/orders?userId=${encodeURIComponent(userData.email)}`);
         const result = await res.json();
@@ -44,7 +53,20 @@ export default function AccountProfilePage() {
       } catch { /* empty */ }
       setLoading(false);
     }
+
+    async function fetchPerks() {
+      try {
+        const res = await fetch(`/api/perks?email=${encodeURIComponent(userData.email)}`);
+        const result = await res.json();
+        if (result.success && result.data) {
+          setUserId(result.data.userId || '');
+          setPerks(result.data.perks || []);
+        }
+      } catch { /* empty */ }
+    }
+
     fetchOrders();
+    fetchPerks();
   }, [router]);
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -117,13 +139,33 @@ export default function AccountProfilePage() {
               <div className="text-center sm:text-left">
                 <h1 className="text-lg text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>
                   {user.name || 'Player'}
+                  {perks.some(p => p.perkId === 'gold_member') && (
+                    <span className="ml-2 text-lg">👑</span>
+                  )}
                 </h1>
                 <p className="text-sm text-[var(--pewter)] mt-1">{user.email}</p>
+                {userId && (
+                  <p className="text-[9px] text-[var(--gold)] mt-1" style={{ fontFamily: 'var(--font-arcade)' }}>ID: {userId}</p>
+                )}
                 <div className="mt-3">
                   <CoinBalance size="md" />
                 </div>
               </div>
             </div>
+
+            {/* Perks */}
+            {perks.length > 0 && (
+              <div className="mt-6 pt-4 border-t-2 border-[rgba(212,175,55,0.15)]">
+                <p className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-3" style={{ fontFamily: 'var(--font-arcade)' }}>Your Perks</p>
+                <div className="flex flex-wrap gap-2">
+                  {perks.map((perk, i) => (
+                    <span key={i} className={`text-[8px] px-3 py-1.5 rounded-lg border ${perk.redeemed ? 'border-[var(--pewter)] text-[var(--pewter)] opacity-60' : 'border-[var(--gold)] bg-[rgba(212,175,55,0.1)] text-[var(--gold-bright)]'}`} style={{ fontFamily: 'var(--font-arcade)' }}>
+                      {perk.perkId === 'gold_member' ? '👑 ' : perk.perkId === 'priority_order' ? '⚡ ' : perk.perkId === 'mystery_upgrade' ? '🎁 ' : perk.perkId === 'custom_shoutout' ? '📱 ' : '🏷️ '}{perk.perkName} {perk.redeemed ? '(Used)' : ''}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Stats Grid */}
