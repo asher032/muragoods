@@ -4,6 +4,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { NavBar } from '@/app/components/NavBar';
+import dynamic from 'next/dynamic';
+
+const LightBloom = dynamic(() => import('@/app/components/ui/LightBloom'), { ssr: false });
+const MaskedHeading = dynamic(() => import('@/app/components/ui/MaskedHeading'), { ssr: false });
+const MagicBento = dynamic(() => import('@/app/components/ui/MagicBento'), { ssr: false });
+const AnimatedButton = dynamic(() => import('@/app/components/ui/AnimatedButton'), { ssr: false });
 
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -20,34 +26,60 @@ export default function Home() {
     { name: 'Cookies', image: '/images/product-cookies.png', price: '₱25', desc: 'Regular / Cookies & Cream' },
   ];
 
-  const features = [
-    { icon: '📅', title: 'Daily Check-In', desc: 'Log in daily to earn bonus coins!', link: '/play/checkin' },
-    { icon: '👥', title: 'Refer a Friend', desc: 'Invite friends and earn 50 coins each!', link: '/play/refer' },
-    { icon: '🏆', title: 'Leaderboard', desc: "See who's the top spender on campus!", link: '/leaderboard' },
-    { icon: '🎁', title: 'Mystery Box', desc: 'Spend 10 coins for a chance to win big!', link: '/play/mysterybox' },
-    { icon: '🧠', title: 'Trivia Challenge', desc: 'Test your knowledge and earn coins!', link: '/play/trivia' },
-    { icon: '💌', title: 'Honey, If Only', desc: 'Write unsent letters to anyone!', link: '/honey' },
-  ];
-
   return (
     <main className="mario-bg min-h-screen">
       <NavBar />
 
-      {/* ─── Hero Section ────────────────────────────────────── */}
-      <section className="px-4 pb-16 pt-12 sm:px-8">
-        <div className="mario-container">
-          <div className="mario-card p-8 sm:p-10 lg:p-12 text-center relative overflow-hidden">
+      {/* ─── Hero Section with LightBloom ──────────────────── */}
+      <section className="relative overflow-hidden" style={{ minHeight: '70vh' }}>
+        {/* LightBloom Background */}
+        <div className="absolute inset-0 z-0">
+          <LightBloom
+            variant="shafts"
+            direction="bottom"
+            background="#0a0a18"
+            baseColor="#ffd60a"
+            accentColor="#ffe066"
+            speed={80}
+            hover={120}
+            light={{ rise: 65, spread: 80 }}
+            shafts={{ count: 20, amount: 60, drift: 70 }}
+            finish={{ grain: 8, vignette: 30 }}
+          />
+        </div>
+
+        {/* Hero Content */}
+        <div className="relative z-10 px-4 pt-20 pb-16 sm:px-8">
+          <div className="mario-container text-center">
             {/* Coin badge */}
-            <div className="mb-6 inline-flex items-center gap-2 mario-badge mario-badge-gold">
+            <div className="mb-8 inline-flex items-center gap-2 mario-badge mario-badge-gold">
               <span className="coin-float">🪙</span>
               <span>EARN 2X COINS ON TODAY&apos;S ORDERS!</span>
             </div>
 
-            {/* Title */}
-            <h1 className="mario-title text-3xl sm:text-4xl md:text-5xl lg:text-6xl mb-4">
-              WELCOME TO<br />
-              <span className="text-mario-yellow">MURAGOODS</span>
-            </h1>
+            {/* Masked Heading */}
+            <div className="mb-6">
+              <MaskedHeading
+                text="WELCOME TO MURAGOODS"
+                tag="h1"
+                mediaType="image"
+                src="/images/hero-musubi.png"
+                fillScale={1.3}
+                parallax={30}
+                drift={15}
+                brightness={1.2}
+                saturation={1.1}
+                reveal="rise"
+                trigger="view"
+                duration={1.2}
+                stagger={0.08}
+                align="center"
+                weight={900}
+                tracking={-0.02}
+                textScale={0.08}
+                style={{ color: 'transparent' }}
+              />
+            </div>
 
             {/* Subtitle */}
             <p className="text-mario-yellow font-arcade text-sm sm:text-base mb-3">
@@ -57,18 +89,33 @@ export default function Home() {
               Fuel your adventure with iconic campus treats and power-ups delivered straight to your door!
             </p>
 
-            {/* CTA Buttons */}
-            <div className="flex flex-wrap justify-center gap-4 mb-8">
-              <Link href="/menu" className="mario-btn mario-btn-primary mario-btn-lg">
-                🍕 ORDER NOW
+            {/* Animated Buttons */}
+            <div className="flex flex-wrap justify-center gap-4 mb-12">
+              <Link href="/menu">
+                <AnimatedButton
+                  className="px-8 py-3 font-arcade text-sm"
+                  style={{ background: 'rgba(6,214,160,0.15)', borderColor: 'rgba(6,214,160,0.3)', color: '#06d6a0' }}
+                >
+                  🍕 ORDER NOW
+                </AnimatedButton>
               </Link>
               {isLoggedIn ? (
-                <Link href="/orders" className="mario-btn mario-btn-yellow mario-btn-lg">
-                  📦 VIEW ORDERS
+                <Link href="/orders">
+                  <AnimatedButton
+                    className="px-8 py-3 font-arcade text-sm"
+                    style={{ background: 'rgba(255,214,10,0.15)', borderColor: 'rgba(255,214,10,0.3)', color: '#ffd60a' }}
+                  >
+                    📦 VIEW ORDERS
+                  </AnimatedButton>
                 </Link>
               ) : (
-                <Link href="/login" className="mario-btn mario-btn-lg">
-                  🎮 PLAY NOW
+                <Link href="/login">
+                  <AnimatedButton
+                    className="px-8 py-3 font-arcade text-sm"
+                    style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: '#e8e8f0' }}
+                  >
+                    🎮 PLAY NOW
+                  </AnimatedButton>
                 </Link>
               )}
             </div>
@@ -102,7 +149,14 @@ export default function Home() {
                   <p className="text-xs text-mario-text-muted mb-4">{item.desc}</p>
                   <div className="flex items-center justify-between">
                     <span className="coin-price">{item.price}</span>
-                    <Link href="/menu" className="mario-btn mario-btn-sm mario-btn-primary">+ ADD</Link>
+                    <Link href="/menu">
+                      <AnimatedButton
+                        className="px-4 py-2 font-arcade text-[9px]"
+                        style={{ background: 'rgba(6,214,160,0.15)', borderColor: 'rgba(6,214,160,0.3)', color: '#06d6a0' }}
+                      >
+                        + ADD
+                      </AnimatedButton>
+                    </Link>
                   </div>
                 </div>
               </div>
@@ -111,7 +165,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── Power-Up Zone ──────────────────────────────────── */}
+      {/* ─── Power-Up Zone (MagicBento) ─────────────────────── */}
       <section className="px-4 py-12 sm:px-8">
         <div className="mario-container">
           <div className="text-center mb-8">
@@ -119,15 +173,18 @@ export default function Home() {
             <p className="text-mario-text-muted text-sm mt-2">Play, earn coins, and climb the ranks!</p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            {features.map((feat) => (
-              <Link key={feat.title} href={feat.link} className="mario-card p-6 text-center hover:border-mario-yellow/30 transition-all group">
-                <div className="text-3xl mb-3 group-hover:scale-110 transition-transform">{feat.icon}</div>
-                <h3 className="font-arcade text-xs text-mario-yellow mb-2">{feat.title}</h3>
-                <p className="text-xs text-mario-text-muted">{feat.desc}</p>
-              </Link>
-            ))}
-          </div>
+          <MagicBento
+            textAutoHide={true}
+            enableStars={true}
+            enableSpotlight={true}
+            enableBorderGlow={true}
+            enableTilt={true}
+            enableMagnetism={true}
+            clickEffect={true}
+            spotlightRadius={300}
+            particleCount={12}
+            glowColor="255, 214, 10"
+          />
         </div>
       </section>
 
