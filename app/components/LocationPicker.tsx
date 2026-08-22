@@ -20,7 +20,6 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState('');
   const [mapReady, setMapReady] = useState(false);
-  const [mapVisible, setMapVisible] = useState(true);
 
   const createPinIcon = useCallback(() => {
     return L.divIcon({
@@ -50,9 +49,9 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
     }
   }, []);
 
-  // Initialize map
+  // Initialize map only when not confirmed
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    if (confirmed || !containerRef.current || mapRef.current) return;
 
     const map = L.map(containerRef.current, {
       center: [initialLat, initialLng],
@@ -102,7 +101,7 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
       mapRef.current = null;
       markerRef.current = null;
     };
-  }, [initialLat, initialLng, createPinIcon, fetchPlaceName]);
+  }, [confirmed, initialLat, initialLng, createPinIcon, fetchPlaceName]);
 
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) {
@@ -132,26 +131,17 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
   const handleConfirmAddress = () => {
     if (!pending) return;
     setConfirmed(pending);
-    setMapVisible(false);
     onLocationSelect?.(pending.lat, pending.lng, pending.placeName || pending.address);
   };
 
   const handleChange = () => {
     setConfirmed(null);
     setPending(null);
-    setMapVisible(true);
+    setMapReady(false);
     onLocationSelect?.(0, 0, '');
-    if (mapRef.current && markerRef.current) {
-      mapRef.current.setView([initialLat, initialLng], 15);
-      markerRef.current.setLatLng([initialLat, initialLng]);
-    }
-    // Re-invalidate map size after showing
-    setTimeout(() => {
-      if (mapRef.current) mapRef.current.invalidateSize();
-    }, 100);
   };
 
-  // ─── Confirmed State — only show the card, no map ──────
+  // ─── Confirmed State — clean card, NO map at all ──────
   if (confirmed) {
     return (
       <div className="border-2 border-[var(--gold)] bg-[var(--charcoal-light)] p-5 rounded-xl">
@@ -175,19 +165,17 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
   // ─── Map + Confirmation Flow ────────────────────────────
   return (
     <div className="w-full relative">
-      {/* Map Container — hidden when confirmed */}
-      <div style={{ display: mapVisible ? 'block' : 'none' }}>
-        <div
-          ref={containerRef}
-          className="w-full rounded-xl border-2 border-[var(--gold)] overflow-hidden"
-          style={{ height: '380px', minHeight: '300px', background: '#1a1a1a' }}
-        />
-        {!mapReady && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[var(--charcoal)] rounded-xl border-2 border-[var(--gold)]" style={{ height: '380px', zIndex: 10 }}>
-            <p className="text-[var(--gold-bright)] animate-pulse" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>LOADING MAP...</p>
-          </div>
-        )}
-      </div>
+      {/* Map Container — only rendered when not confirmed */}
+      <div
+        ref={containerRef}
+        className="w-full rounded-xl border-2 border-[var(--gold)] overflow-hidden"
+        style={{ height: '380px', minHeight: '300px', background: '#1a1a1a' }}
+      />
+      {!mapReady && (
+        <div className="absolute top-0 left-0 right-0 flex items-center justify-center bg-[var(--charcoal)] rounded-xl border-2 border-[var(--gold)]" style={{ height: '380px', zIndex: 10 }}>
+          <p className="text-[var(--gold-bright)] animate-pulse" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>LOADING MAP...</p>
+        </div>
+      )}
 
       {/* Pending Address Preview — must confirm */}
       {pending && (
