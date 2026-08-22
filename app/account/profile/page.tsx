@@ -92,7 +92,22 @@ export default function AccountProfilePage() {
   const totalSpent = orders.reduce((sum, o) => sum + o.total, 0);
   const deliveredCount = orders.filter(o => o.status === 'Delivered').length;
   const activeCount = orders.filter(o => !['Cancelled', 'Delivered'].includes(o.status)).length;
-  const memberSince = orders.length > 0 ? new Date(orders[orders.length - 1].createdAt).toLocaleDateString('en', { month: 'short', year: 'numeric' }) : 'New';
+  const memberSince = (() => {
+    if (orders.length === 0) return new Date().toLocaleDateString('en', { month: 'short', year: 'numeric' });
+    // Try to find a valid date from orders (oldest order = when they joined)
+    for (let i = orders.length - 1; i >= 0; i--) {
+      const raw = orders[i].createdAt || (orders[i] as Record<string, unknown>)._id;
+      if (!raw) continue;
+      // Handle MongoDB serialized dates (could be string, Date, or {$date: ...} object)
+      let d: Date;
+      if (raw instanceof Date) d = raw;
+      else if (typeof raw === 'string') d = new Date(raw);
+      else if (typeof raw === 'object' && raw !== null && '$date' in (raw as Record<string, unknown>)) d = new Date((raw as Record<string, string>).$date);
+      else d = new Date(String(raw));
+      if (!isNaN(d.getTime())) return d.toLocaleDateString('en', { month: 'short', year: 'numeric' });
+    }
+    return new Date().toLocaleDateString('en', { month: 'short', year: 'numeric' });
+  })();
 
   return (
     <main className="min-h-screen">
