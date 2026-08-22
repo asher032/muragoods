@@ -150,6 +150,69 @@ export default function OrderDetailPage() {
             </div>
           </div>
 
+          {/* Status Timeline */}
+          <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-2xl p-6 mb-6">
+            <h2 className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>📋 Status Timeline</h2>
+            <div className="relative">
+              {/* Vertical line */}
+              <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-[rgba(212,175,55,0.2)]" />
+              <div className="space-y-4">
+                {/* Order placed */}
+                <div className="flex items-start gap-4 relative">
+                  <div className="w-10 h-10 rounded-full bg-[var(--gold)] border-2 border-[var(--gold-bright)] flex items-center justify-center z-10">
+                    <span className="text-sm">📦</span>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[10px] text-[var(--gold-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Order Placed</p>
+                    <p className="text-xs text-[var(--pewter)] mt-1">{order.createdAt ? new Date(order.createdAt).toLocaleString() : '—'}</p>
+                  </div>
+                </div>
+
+                {/* Status history entries */}
+                {(order as Record<string, unknown>).statusHistory && Array.isArray((order as Record<string, unknown>).statusHistory) ?
+                  ((order as Record<string, unknown>).statusHistory as Array<{ status: string; timestamp: string }>).map((entry, i) => {
+                    const statusIndex = statusFlow.indexOf(entry.status as OrderStatus);
+                    const isCurrentStatus = entry.status === order.status;
+                    return (
+                      <div key={i} className="flex items-start gap-4 relative">
+                        <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center z-10 ${
+                          entry.status === 'Cancelled' ? 'bg-[var(--crimson)] border-[var(--crimson)]' :
+                          isCurrentStatus ? 'bg-[var(--gold)] border-[var(--gold-bright)]' :
+                          'bg-[var(--charcoal-light)] border-[rgba(242,240,228,0.2)]'
+                        }`}>
+                          <span className="text-sm">{statusEmojis[entry.status] || '✓'}</span>
+                        </div>
+                        <div className="flex-1">
+                          <p className={`text-[10px] uppercase ${isCurrentStatus ? 'text-[var(--gold-bright)]' : 'text-[var(--cream)]'}`} style={{ fontFamily: 'var(--font-arcade)' }}>
+                            {entry.status} {isCurrentStatus && '← Current'}
+                          </p>
+                          <p className="text-xs text-[var(--pewter)] mt-1">{new Date(entry.timestamp).toLocaleString()}</p>
+                        </div>
+                      </div>
+                    );
+                  })
+                : (
+                  /* Fallback: show status steps without timestamps */
+                  statusFlow.slice(0, currentIndex + 1).map((step, i) => (
+                    <div key={i} className="flex items-start gap-4 relative">
+                      <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center z-10 ${
+                        step === order.status ? 'bg-[var(--gold)] border-[var(--gold-bright)]' :
+                        'bg-[var(--charcoal-light)] border-[rgba(242,240,228,0.2)]'
+                      }`}>
+                        <span className="text-sm">{statusEmojis[step]}</span>
+                      </div>
+                      <div className="flex-1">
+                        <p className={`text-[10px] uppercase ${step === order.status ? 'text-[var(--gold-bright)]' : 'text-[var(--cream)]'}`} style={{ fontFamily: 'var(--font-arcade)' }}>
+                          {step} {step === order.status && '← Current'}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="grid gap-6 lg:grid-cols-2">
             {/* Order Items */}
             <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-2xl p-6">

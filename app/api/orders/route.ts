@@ -21,6 +21,11 @@ export async function POST(req: Request) {
       body = await req.json();
     }
 
+    // Add initial status to history
+    if (!body.statusHistory) {
+      body.statusHistory = [{ status: body.status || 'Pending Payment', timestamp: new Date() }];
+    }
+
     const order = await Order.create(body);
 
     return NextResponse.json({ success: true, data: order }, { status: 201 });
@@ -65,7 +70,16 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ success: false, error: 'Order ID is required' }, { status: 400 });
     }
 
-    const order = await Order.findByIdAndUpdate(orderId, body, { new: true });
+    // Handle $push operations for statusHistory
+    const updateOps: Record<string, unknown> = {};
+    if (body.$push) {
+      updateOps.$push = body.$push;
+      delete body.$push;
+    }
+    // Merge remaining fields
+    Object.assign(updateOps, body);
+
+    const order = await Order.findByIdAndUpdate(orderId, updateOps, { new: true });
     if (!order) {
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
     }

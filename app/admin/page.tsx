@@ -100,7 +100,12 @@ export default function AdminPage() {
 
   const handleStatusUpdate = async (orderId: string, nextStatus: string) => {
     try {
-      const res = await fetch(`/api/orders?id=${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: nextStatus }) });
+      const historyEntry = { status: nextStatus, timestamp: new Date().toISOString() };
+      const res = await fetch(`/api/orders?id=${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus, $push: { statusHistory: historyEntry } }),
+      });
       const result = await res.json();
       if (result.success) {
         setOrders(current => current.map(order => (order._id || order.id) === orderId ? { ...order, status: nextStatus as OrderStatus } : order));
