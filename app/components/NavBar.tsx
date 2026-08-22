@@ -52,6 +52,9 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
           <Link href="/menu" className="deco-btn deco-btn-sm">
             Menu
           </Link>
+          <Link href="/leaderboard" className="deco-btn deco-btn-sm">
+            🏆 Scores
+          </Link>
 
           {isLoggedIn && <CoinBalance size="sm" />}
 
@@ -106,11 +109,13 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
         </button>
       </div>
 
-      {/* Mobile Dropdown */}
-      {mobileOpen && (
+      {/* Mobile Dropdown */}        {mobileOpen && (
         <div className="md:hidden border-t border-[rgba(212,175,55,0.15)] bg-[var(--obsidian)] px-4 pb-4 pt-2 space-y-2">
           <Link href="/menu" className="deco-btn deco-btn-sm w-full" onClick={() => setMobileOpen(false)}>
             Menu
+          </Link>
+          <Link href="/leaderboard" className="deco-btn deco-btn-sm w-full" onClick={() => setMobileOpen(false)}>
+            🏆 Scores
           </Link>
           {isLoggedIn && (
             <div className="flex justify-center">
