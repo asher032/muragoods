@@ -10,10 +10,19 @@ import { PixelDivider } from '@/app/components/PixelDivider';
 import { NavBar } from '@/app/components/NavBar';
 
 const categories = ['All', 'Musubi & Churros', 'Coffee Jelly & Cookies'];
+const sortOptions = [
+  { value: 'default', label: 'Default' },
+  { value: 'price-low', label: 'Price: Low → High' },
+  { value: 'price-high', label: 'Price: High → Low' },
+  { value: 'name', label: 'Name A-Z' },
+];
 
 export default function MenuPage() {
   const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
+  const [sortBy, setSortBy] = useState('default');
+  const [stockFilter, setStockFilter] = useState<'all' | 'in-stock' | 'pre-order'>('all');
   const [location, setLocation] = useState<ZoneKey>('DWCL');
   const [cart, setCart] = useState<Record<string, { quantity: number; variantId?: string }>>({});
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -36,9 +45,31 @@ export default function MenuPage() {
   }, []);
 
   const filteredProducts = useMemo(() => {
-    if (activeCategory === 'All') return products;
-    return products.filter((p) => p.category === activeCategory);
-  }, [activeCategory, products]);
+    let result = activeCategory === 'All' ? [...products] : products.filter((p) => p.category === activeCategory);
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        p.description.toLowerCase().includes(q) ||
+        p.category.toLowerCase().includes(q)
+      );
+    }
+
+    // Stock filter
+    if (stockFilter === 'in-stock') result = result.filter(p => p.inventory === 'In Stock');
+    if (stockFilter === 'pre-order') result = result.filter(p => p.inventory === 'Pre-Order Only');
+
+    // Sort
+    switch (sortBy) {
+      case 'price-low': result.sort((a, b) => Math.min(...a.variants.map(v => v.price)) - Math.min(...b.variants.map(v => v.price))); break;
+      case 'price-high': result.sort((a, b) => Math.max(...b.variants.map(v => v.price)) - Math.max(...a.variants.map(v => v.price))); break;
+      case 'name': result.sort((a, b) => a.name.localeCompare(b.name)); break;
+    }
+
+    return result;
+  }, [activeCategory, products, searchQuery, sortBy, stockFilter]);
 
   const cartItems = useMemo(() => {
     return Object.entries(cart)
@@ -140,17 +171,83 @@ export default function MenuPage() {
             </div>
           )}
 
-          {/* Category Tabs */}
-          <div className="flex flex-wrap gap-3 mb-8">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`deco-btn deco-btn-sm ${activeCategory === cat ? 'deco-btn-gold' : 'deco-btn-ghost'}`}
+          {/* Search & Filters */}
+          <div className="mb-6 space-y-4">
+            {/* Search Bar */}
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="🔍 Search menu items..."
+                className="deco-input rounded-xl w-full pl-10"
+              />
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--gold)] text-sm">🔍</span>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--pewter)] hover:text-[var(--crimson)] transition-colors"
+                >
+                  ✖
+                </button>
+              )}
+            </div>
+
+            {/* Filter Row */}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Category Tabs */}
+              <div className="flex flex-wrap gap-2 flex-1">
+                {categories.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setActiveCategory(cat)}
+                    className={`deco-btn deco-btn-sm text-[9px] ${activeCategory === cat ? 'deco-btn-gold' : 'deco-btn-ghost'}`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              {/* Stock Filter */}
+              <div className="flex gap-1">
+                {[
+                  { value: 'all' as const, label: 'All' },
+                  { value: 'in-stock' as const, label: '✅ In Stock' },
+                  { value: 'pre-order' as const, label: '📦 Pre-Order' },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setStockFilter(opt.value)}
+                    className={`text-[8px] px-2 py-1 rounded-lg border transition-all ${
+                      stockFilter === opt.value
+                        ? 'border-[var(--gold)] bg-[rgba(212,175,55,0.1)] text-[var(--gold-bright)]'
+                        : 'border-[rgba(242,240,228,0.12)] text-[var(--pewter)] hover:border-[var(--gold)]'
+                    }`}
+                    style={{ fontFamily: 'var(--font-arcade)' }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Sort */}
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="deco-select text-[9px] rounded-lg"
+                style={{ fontFamily: 'var(--font-arcade)' }}
               >
-                {cat}
-              </button>
-            ))}
+                {sortOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Results Count */}
+            <p className="text-[9px] text-[var(--pewter)]" style={{ fontFamily: 'var(--font-arcade)' }}>
+              {filteredProducts.length} item{filteredProducts.length !== 1 ? 's' : ''} found
+              {searchQuery && <span> for &quot;{searchQuery}&quot;</span>}
+            </p>
           </div>
 
           {/* Zone Selector */}
