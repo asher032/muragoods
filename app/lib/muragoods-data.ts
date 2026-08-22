@@ -1,4 +1,4 @@
-export type ZoneKey = "DWCL" | "Legazpi" | "Daraga" | "Naga" | "Sorsogon" | "Outside Bicol";
+export type ZoneKey = "DWCL" | "Custom";
 export type InventoryStatus = "In Stock" | "Out of Stock" | "Pre-Order Only";
 export type OrderStatus =
   | "Pending Payment"
@@ -104,7 +104,7 @@ export const products: Product[] = [
     category: "Musubi & Churros",
     badge: "Order Now",
     color: "from-amber-200 via-yellow-100 to-orange-200",
-    availability: ["DWCL", "Legazpi", "Daraga", "Naga", "Sorsogon", "Outside Bicol"],
+    availability: ["DWCL", "Custom"],
     inventory: "In Stock",
     icon: "MUSUBI",
     image: "/images/product-musubi.png",
@@ -121,7 +121,7 @@ export const products: Product[] = [
     category: "Musubi & Churros",
     badge: "Pre-Order Now",
     color: "from-orange-200 via-amber-100 to-yellow-200",
-    availability: ["DWCL", "Legazpi", "Daraga", "Naga", "Sorsogon", "Outside Bicol"],
+    availability: ["DWCL", "Custom"],
     inventory: "Pre-Order Only",
     icon: "CHURROS",
     image: "/images/product-churros.png",
@@ -130,9 +130,7 @@ export const products: Product[] = [
       { id: "option2", name: "Option 2", price: 100 },
     ],
   },
-];
-
-export const deliveryZones = [
+];export const deliveryZones = [
   {
     code: "DWCL",
     label: "DWCL Campus Pickup",
@@ -141,38 +139,10 @@ export const deliveryZones = [
     eligible: ["cookies", "coffee-jelly", "musubi", "churros"],
   },
   {
-    code: "Legazpi",
-    label: "Legazpi City Delivery",
-    fee: 30,
-    note: "Musubi & Churros only. Minimum 2 items required.",
-    eligible: ["musubi", "churros"],
-  },
-  {
-    code: "Daraga",
-    label: "Daraga Delivery",
-    fee: 30,
-    note: "Musubi & Churros only. Minimum 2 items required.",
-    eligible: ["musubi", "churros"],
-  },
-  {
-    code: "Naga",
-    label: "Naga City Delivery",
-    fee: 80,
-    note: "Musubi & Churros only. Minimum 2 items. Shipping via LBC/Grab.",
-    eligible: ["musubi", "churros"],
-  },
-  {
-    code: "Sorsogon",
-    label: "Sorsogon Province",
-    fee: 100,
-    note: "Musubi & Churros only. Minimum 2 items. Nationwide shipping.",
-    eligible: ["musubi", "churros"],
-  },
-  {
-    code: "Outside Bicol",
-    label: "Outside Bicol Region",
-    fee: 150,
-    note: "Musubi & Churros only. Minimum 2 items. LBC/J&T Express shipping.",
+    code: "Custom",
+    label: "Delivery Outside DWCL (Custom)",
+    fee: 0,
+    note: "Delivery fee & details discussed via Instagram DM. Message @muragoods_ to arrange.",
     eligible: ["musubi", "churros"],
   },
 ] as const;
@@ -192,9 +162,5 @@ export function calculatePoints(total: number): number {
 /** Delivery service options per zone */
 export const deliveryServiceOptions: Record<string, string[]> = {
   DWCL: ["DWCL Pickup — Free"],
-  Legazpi: ["Saturday Delivery — Legazpi"],
-  Daraga: ["Saturday Delivery — Daraga"],
-  Naga: ["Grab Express — Naga", "LBC Shipping — Naga"],
-  Sorsogon: ["LBC Shipping — Sorsogon", "J&T Express — Sorsogon"],
-  "Outside Bicol": ["LBC Shipping — Nationwide", "J&T Express — Nationwide"],
+  Custom: ["Custom Delivery — Message @muragoods_"],
 };
