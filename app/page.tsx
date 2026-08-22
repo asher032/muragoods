@@ -264,6 +264,12 @@ export default function Home() {
               <h3 className="text-xs text-[var(--gold-bright)] uppercase mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>Mystery Box</h3>
               <p className="text-sm text-[var(--pewter)]">Spend 10 coins for a chance to win big!</p>
             </Link>
+            {/* Trivia */}
+            <Link href="/play/trivia" className="power-card group p-8 text-center hover:border-[var(--gold-bright)] transition-all rounded-xl">
+              <div className="text-4xl mb-4">🧠</div>
+              <h3 className="text-xs text-[var(--gold-bright)] uppercase mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>Trivia Challenge</h3>
+              <p className="text-sm text-[var(--pewter)]">Test your knowledge and earn coins!</p>
+            </Link>
           </div>
         </div>
       </section>
