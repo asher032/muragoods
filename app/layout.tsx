@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { NotificationSetup } from "@/app/components/NotificationSetup";
+import { AppLoader } from "@/app/components/AppLoader";
 
 const pressStart = Press_Start_2P({
   subsets: ["latin"],
@@ -42,7 +43,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body className={`${pressStart.variable} ${josefin.variable}`} style={{ fontFamily: "var(--font-body)" }}>
-        {children}
+        <AppLoader>
+          {children}
+        </AppLoader>
         <NotificationSetup />
         <Analytics />
         <SpeedInsights />
