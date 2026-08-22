@@ -211,6 +211,8 @@ export default function AccountProfilePage() {
                 { href: '/points', icon: '🪙', label: 'My Points' },
                 { href: '/rewards', icon: '🏪', label: 'Rewards Shop' },
                 { href: '/orders', icon: '📋', label: 'Order History' },
+                { href: '/achievements', icon: '🏆', label: 'Achievements' },
+                { href: '/support', icon: '💬', label: 'Support' },
               ].map(action => (
                 <Link key={action.href} href={action.href} className="border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal)] p-4 rounded-xl text-center hover:border-[var(--gold)] hover:bg-[rgba(212,175,55,0.05)] transition-all">
                   <span className="text-xl">{action.icon}</span>

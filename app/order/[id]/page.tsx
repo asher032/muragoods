@@ -263,8 +263,141 @@ export default function OrderDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* Review Section — only for delivered orders */}
+          {order.status === 'Delivered' && (
+            <ReviewSection orderId={order._id || order.id} items={items} userName={order.customer} userId={order.userId || ''} />
+          )}
         </div>
       </section>
     </main>
+  );
+}
+
+// Review Section Component
+function ReviewSection({ orderId, items, userName, userId }: { orderId: string; items: string[]; userName: string; userId: string }) {
+  const [reviews, setReviews] = useState<Array<{ _id: string; productName: string; rating: number; comment: string; adminReply: string; userName: string; createdAt: string }>>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [selectedItem, setSelectedItem] = useState('');
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/reviews?orderId=${orderId}`)
+      .then(r => r.json())
+      .then(result => { if (result.success) setReviews(result.data); })
+      .catch(() => {});
+  }, [orderId]);
+
+  const handleSubmit = async () => {
+    if (!selectedItem || submitting) return;
+    setSubmitting(true);
+    try {
+      const productName = selectedItem.split(' (')[0].trim();
+      const res = await fetch('/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, userId, userName, productName, rating, comment }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        setReviews(prev => [result.data, ...prev]);
+        setSuccess(true);
+        setShowForm(false);
+        setSelectedItem('');
+        setRating(5);
+        setComment('');
+        setTimeout(() => setSuccess(false), 3000);
+      } else {
+        alert(result.error || 'Failed to submit review');
+      }
+    } catch {
+      alert('Failed to submit review');
+    }
+    setSubmitting(false);
+  };
+
+  const reviewedProducts = reviews.map(r => r.productName);
+  const unreviewedItems = items.filter(item => !reviewedProducts.includes(item.split(' (')[0].trim()));
+
+  return (
+    <div className="mt-6 border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-2xl p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>⭐ Rate Your Order</h2>
+        {unreviewedItems.length > 0 && !showForm && (
+          <button onClick={() => { setShowForm(true); setSelectedItem(unreviewedItems[0]); }} className="deco-btn deco-btn-sm deco-btn-gold rounded-lg">
+            + Write Review
+          </button>
+        )}
+      </div>
+
+      {success && (
+        <div className="mb-4 border-2 border-[var(--emerald-bright)] bg-[rgba(30,61,47,0.2)] p-3 rounded-xl text-center">
+          <p className="text-[10px] text-[var(--emerald-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>✓ Review submitted!</p>
+        </div>
+      )}
+
+      {/* Review Form */}
+      {showForm && (
+        <div className="mb-4 border-2 border-[var(--gold)] bg-[var(--charcoal-light)] rounded-xl p-4 space-y-3">
+          <div>
+            <label className="text-[9px] text-[var(--gold)] uppercase block mb-1" style={{ fontFamily: 'var(--font-arcade)' }}>Which item?</label>
+            <select value={selectedItem} onChange={e => setSelectedItem(e.target.value)} className="deco-select rounded-lg w-full">
+              {unreviewedItems.map(item => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-[9px] text-[var(--gold)] uppercase block mb-1" style={{ fontFamily: 'var(--font-arcade)' }}>Rating</label>
+            <div className="flex gap-1">
+              {[1, 2, 3, 4, 5].map(star => (
+                <button key={star} onClick={() => setRating(star)} className="text-2xl transition-transform hover:scale-110">
+                  <span className={star <= rating ? 'text-[var(--gold-bright)]' : 'text-[var(--pewter)]'}>★</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-[9px] text-[var(--gold)] uppercase block mb-1" style={{ fontFamily: 'var(--font-arcade)' }}>Comment (optional)</label>
+            <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="How was the food?" className="deco-input rounded-lg w-full h-20 resize-none" maxLength={500} />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleSubmit} disabled={!selectedItem || submitting} className="deco-btn deco-btn-sm deco-btn-gold rounded-lg disabled:opacity-50">
+              {submitting ? 'Submitting...' : 'Submit Review'}
+            </button>
+            <button onClick={() => setShowForm(false)} className="deco-btn deco-btn-sm deco-btn-dark rounded-lg">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Existing Reviews */}
+      {reviews.length > 0 ? (
+        <div className="space-y-3">
+          {reviews.map(review => (
+            <div key={review._id} className="border border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] rounded-xl p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)' }}>{review.productName}</p>
+                <div className="flex gap-0.5">
+                  {[1, 2, 3, 4, 5].map(s => (
+                    <span key={s} className={s <= review.rating ? 'text-[var(--gold-bright)]' : 'text-[var(--pewter)]'} style={{ fontSize: '10px' }}>★</span>
+                  ))}
+                </div>
+              </div>
+              {review.comment && <p className="text-xs text-[var(--cream-muted)] mt-2">{review.comment}</p>}
+              <p className="text-[8px] text-[var(--pewter)] mt-2">by {review.userName} · {new Date(review.createdAt).toLocaleDateString()}</p>
+              {review.adminReply && (
+                <div className="mt-3 border-t border-[rgba(212,175,55,0.15)] pt-3">
+                  <p className="text-[8px] text-[var(--gold)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>🔧 Muragoods Reply</p>
+                  <p className="text-xs text-[var(--cream-muted)] mt-1">{review.adminReply}</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : !showForm ? (
+        <p className="text-xs text-[var(--pewter)] text-center py-4">No reviews yet. Be the first to rate this order!</p>
+      ) : null}
+    </div>
   );
 }
