@@ -263,9 +263,14 @@ export default function CheckoutPage() {
                     <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-3 text-xs text-[var(--crimson)] rounded-xl">⚠ Coffee Jelly & Cookies are only for DWCL pickup!</div>
                   )}
                   {isCustom && (
-                    <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.1)] p-4 rounded-xl">
-                      <p className="text-[10px] text-[var(--gold-bright)] uppercase mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>📬 Custom Delivery</p>
-                      <p className="text-xs text-[var(--cream-muted)] mb-3">Delivery fee and details will be discussed via Instagram DM after placing your order.</p>
+                    <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.1)] p-4 rounded-xl space-y-3">
+                      <p className="text-[10px] text-[var(--gold-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>📬 Custom Delivery</p>
+                      <p className="text-xs text-[var(--cream-muted)]">Delivery fee and schedule will be discussed via Instagram DM.</p>
+                      <div className="flex flex-wrap gap-2">
+                        <span className="text-[8px] px-2 py-1 border border-[var(--gold)] bg-[rgba(212,175,55,0.1)] rounded-lg text-[var(--gold)]" style={{ fontFamily: 'var(--font-arcade)' }}>Within the Day</span>
+                        <span className="text-[8px] px-2 py-1 border border-[var(--gold)] bg-[rgba(212,175,55,0.1)] rounded-lg text-[var(--gold)]" style={{ fontFamily: 'var(--font-arcade)' }}>Mon–Fri</span>
+                        <span className="text-[8px] px-2 py-1 border border-[var(--gold)] bg-[rgba(212,175,55,0.1)] rounded-lg text-[var(--gold)]" style={{ fontFamily: 'var(--font-arcade)' }}>Sunday</span>
+                      </div>
                       <a href="https://www.instagram.com/muragoods_/" target="_blank" rel="noopener noreferrer" className="deco-btn deco-btn-sm deco-btn-gold w-full rounded-xl text-center">
                         💬 Message @muragoods_ on Instagram
                       </a>

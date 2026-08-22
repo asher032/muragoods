@@ -181,6 +181,20 @@ export default function MenuPage() {
 
           <PixelDivider variant="questionBlocks" />
 
+          {/* Custom Delivery Notice */}
+          <div className="mb-6 border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.08)] rounded-2xl p-5 flex items-start gap-4">
+            <span className="text-3xl shrink-0">📬</span>
+            <div>
+              <p className="text-[10px] text-[var(--gold-bright)] uppercase mb-1" style={{ fontFamily: 'var(--font-arcade)' }}>Custom Delivery Available</p>
+              <p className="text-sm text-[var(--cream-muted)] leading-relaxed">
+                Need delivery <strong className="text-[var(--cream)]">within the day</strong>, <strong className="text-[var(--cream)]">Monday–Friday</strong>, or <strong className="text-[var(--cream)]">Sunday</strong>? Message us on Instagram to arrange a custom delivery!
+              </p>
+              <a href="https://www.instagram.com/muragoods_/" target="_blank" rel="noopener noreferrer" className="deco-btn deco-btn-sm deco-btn-gold rounded-xl mt-3 inline-flex">
+                💬 Message @muragoods_
+              </a>
+            </div>
+          </div>
+
           {/* Product Grid */}
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {filteredProducts.map((product) => {
