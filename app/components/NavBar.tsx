@@ -62,6 +62,9 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
               <Link href="/orders" className="deco-btn deco-btn-sm deco-btn-gold">
                 Orders
               </Link>
+              <Link href="/account/profile" className="deco-btn deco-btn-sm">
+                Profile
+              </Link>
               {cartCount !== undefined && cartCount > 0 && (
                 <Link
                   href="/checkout"
@@ -120,6 +123,9 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
             <>
               <Link href="/orders" className="deco-btn deco-btn-sm deco-btn-gold w-full" onClick={() => setMobileOpen(false)}>
                 Orders
+              </Link>
+              <Link href="/account/profile" className="deco-btn deco-btn-sm w-full" onClick={() => setMobileOpen(false)}>
+                Profile
               </Link>
               {cartCount !== undefined && cartCount > 0 && (
                 <Link href="/checkout" className="deco-btn deco-btn-sm deco-btn-crimson w-full" onClick={() => setMobileOpen(false)}>
