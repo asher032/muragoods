@@ -152,7 +152,7 @@ export const mockOrders: Order[] = [];
 export const dwclOnlyProducts = ["cookies", "coffee-jelly"];
 
 /** Points earned per peso spent */
-export const POINTS_PER_PESO = 1;
+export const POINTS_PER_PESO = 0.5;
 
 /** Calculate points earned for an order total */
 export function calculatePoints(total: number): number {
