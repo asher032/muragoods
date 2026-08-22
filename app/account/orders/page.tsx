@@ -46,23 +46,33 @@ export default function AccountOrdersPage() {
     router.push('/login');
   };
 
-  const handleDeleteOrder = async (orderId: string) => {
+  const handleCancelOrder = async (orderId: string) => {
     const order = orders.find(o => (o._id || o.id) === orderId);
-    if (!order || order.status !== 'Pending Payment') {
-      alert('You can only cancel orders that are still pending.');
+    if (!order) return;
+    const cancellableStatuses: OrderStatus[] = ['Pending Payment', 'Payment Verified'];
+    if (!cancellableStatuses.includes(order.status)) {
+      alert('You cannot cancel this order anymore.');
       return;
     }
-    if (!confirm('Are you sure you want to cancel this order?')) return;
+    if (!confirm(`Are you sure you want to cancel this order?`)) return;
     try {
-      const res = await fetch(`/api/orders?id=${orderId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/orders?id=${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'Cancelled' }),
+      });
       const result = await res.json();
       if (result.success) {
-        setOrders(current => current.filter(o => (o._id || o.id) !== orderId));
+        setOrders(current => current.map(o =>
+          (o._id || o.id) === orderId
+            ? { ...o, status: 'Cancelled' as OrderStatus }
+            : o
+        ));
       } else {
-        alert(result.error || 'Failed to delete order');
+        alert(result.error || 'Failed to cancel order');
       }
     } catch {
-      alert('Failed to delete order');
+      alert('Failed to cancel order');
     }
   };
 
@@ -92,21 +102,18 @@ export default function AccountOrdersPage() {
                 My Orders
               </h1>
             </div>
-            <div className="flex gap-3">
-              <button onClick={logout} className="deco-btn deco-btn-sm deco-btn-crimson">Logout</button>
-              <Link href="/" className="deco-btn deco-btn-sm">← Back to Shop</Link>
-            </div>
           </div>
 
           {/* Summary Cards */}
-          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-8">
+          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
             {[
               { label: 'Total Orders', value: String(orders.length) },
               { label: 'Preparing', value: String(orders.filter(o => o.status === 'Preparing').length) },
-              { label: 'Out for Delivery', value: String(orders.filter(o => o.status === 'Out for Delivery').length) },
+              { label: 'Delivered', value: String(orders.filter(o => o.status === 'Delivered').length) },
+              { label: 'Cancelled', value: String(orders.filter(o => o.status === 'Cancelled').length) },
             ].map(card => (
-              <div key={card.label} className="power-card p-5">
-                <p className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>{card.label}</p>
+              <div key={card.label} className="power-card p-5 rounded-xl">
+                <p className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>{card.label}</p>
                 <p className="mt-3 text-2xl text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)' }}>{card.value}</p>
               </div>
             ))}
@@ -115,27 +122,37 @@ export default function AccountOrdersPage() {
           {/* Order Cards */}
           <section className="space-y-6">
             {orders.length === 0 ? (
-              <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-12 text-center">
+              <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-12 text-center rounded-2xl">
                 <p className="text-sm text-[var(--cream)] mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>NO ORDERS FOUND!</p>
-                <Link href="/menu" className="deco-btn deco-btn-gold">Start Shopping</Link>
+                <Link href="/menu" className="deco-btn deco-btn-gold rounded-xl">Start Shopping</Link>
               </div>
             ) : orders.map(order => {
               const currentIndex = statusFlow.indexOf(order.status);
+              const isCancelled = order.status === 'Cancelled';
+              const cancellableStatuses: OrderStatus[] = ['Pending Payment', 'Payment Verified'];
+              const canCancel = cancellableStatuses.includes(order.status);
+
               return (
-                <article key={order.id} className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-5 sm:p-6 slide-in hover:shadow-[0_0_30px_rgba(212,175,55,0.15)] transition-all">
+                <article key={order.id} className={`border-2 bg-[var(--charcoal)] p-5 sm:p-6 rounded-2xl slide-in transition-all ${isCancelled ? 'border-[rgba(242,240,228,0.15)] opacity-70' : 'border-[var(--gold)] hover:shadow-[0_0_30px_rgba(212,175,55,0.15)]'}`}>
                   {/* Order Header */}
                   <div className="flex flex-col gap-4 border-b-2 border-[rgba(212,175,55,0.2)] pb-4 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <p className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>{order.id}</p>
-                      <h2 className="mt-2 text-sm text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>{order.customer}</h2>
+                      <Link href={`/order/${order.id}`} className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] hover:text-[var(--gold-bright)] transition-colors" style={{ fontFamily: 'var(--font-arcade)' }}>
+                        Order #{String(order.id).slice(-8).toUpperCase()}
+                      </Link>
+                      <h2 className="mt-2 text-lg text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>{order.customer}</h2>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="deco-badge deco-badge-gold">{order.zone}</span>
-                      <span className="deco-badge deco-badge-cream">{order.payment}</span>
-                      {order.status === 'Pending Payment' ? (
-                        <button onClick={() => handleDeleteOrder(order._id || order.id)} className="deco-btn deco-btn-sm deco-btn-crimson" style={{ minHeight: '28px', padding: '4px 12px' }}>Cancel</button>
-                      ) : (
-                        <span className="deco-badge deco-badge-cream opacity-50">Locked</span>
+                      <span className="deco-badge deco-badge-gold rounded-lg">{order.zone}</span>
+                      <span className="deco-badge deco-badge-cream rounded-lg">{order.payment}</span>
+                      {isCancelled && <span className="deco-badge deco-badge-crimson rounded-lg">CANCELLED</span>}
+                      {canCancel && (
+                        <button onClick={() => handleCancelOrder(order._id || order.id)} className="deco-btn deco-btn-sm deco-btn-crimson rounded-xl" style={{ minHeight: '36px', padding: '8px 16px' }}>
+                          ✖ Cancel
+                        </button>
+                      )}
+                      {!canCancel && !isCancelled && (
+                        <span className="deco-badge deco-badge-cream rounded-lg opacity-60">🔒 Locked</span>
                       )}
                     </div>
                   </div>
@@ -146,25 +163,27 @@ export default function AccountOrdersPage() {
                       {/* Status Steps */}
                       <div className="mb-6 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
                         {statusFlow.map((step, index) => {
-                          const active = index <= currentIndex;
+                          const active = !isCancelled && index <= currentIndex;
                           return (
                             <div key={step} className="relative">
-                              <div className={`flex h-10 w-10 items-center justify-center border-2 text-[8px] transition-all ${active ? 'border-[var(--gold)] bg-[var(--gold)] text-[var(--obsidian)] pulse-badge' : 'border-[rgba(242,240,228,0.2)] bg-[var(--charcoal-light)] text-[var(--pewter)]'}`} style={{ fontFamily: 'var(--font-arcade)' }}>
+                              <div className={`flex h-12 w-12 items-center justify-center border-2 text-sm transition-all ${active ? 'border-[var(--gold)] bg-[var(--gold)] text-[var(--obsidian)] pulse-badge' : 'border-[rgba(242,240,228,0.2)] bg-[var(--charcoal-light)] text-[var(--pewter)]'}`} style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px' }}>
                                 {active && index > 0 ? '✓' : index + 1}
                               </div>
-                              <p className="mt-2 text-[7px] text-[var(--pewter)] uppercase tracking-wider leading-tight" style={{ fontFamily: 'var(--font-arcade)' }}>{step}</p>
+                              <p className="mt-2 text-[9px] text-[var(--pewter)] uppercase tracking-wider leading-tight" style={{ fontFamily: 'var(--font-arcade)' }}>{step}</p>
                             </div>
                           );
                         })}
                       </div>
-                      <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.05)] p-5">
-                        <p className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>Current Status</p>
-                        <p className="mt-3 text-sm text-[var(--gold-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>{order.status}</p>
+                      <div className={`border-2 p-5 rounded-xl ${isCancelled ? 'border-[var(--crimson)] bg-[rgba(229,37,33,0.05)]' : 'border-[var(--gold)] bg-[rgba(212,175,55,0.05)]'}`}>
+                        <p className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>Current Status</p>
+                        <p className={`mt-3 text-base uppercase ${isCancelled ? 'text-[var(--crimson)]' : 'text-[var(--gold-bright)]'}`} style={{ fontFamily: 'var(--font-arcade)' }}>
+                          {isCancelled ? '✖ CANCELLED' : order.status}
+                        </p>
                       </div>
                     </div>
 
-                    <div className="border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-5">
-                      <p className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>Delivery Info</p>
+                    <div className="border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-5 rounded-xl">
+                      <p className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>Delivery Info</p>
                       <ul className="mt-4 space-y-3 text-sm">
                         <li className="text-[var(--cream-muted)]"><span className="text-[var(--gold)]">Address: </span>{order.address}</li>
                         <li className="text-[var(--cream-muted)]"><span className="text-[var(--gold)]">Phone: </span>{order.phone}</li>

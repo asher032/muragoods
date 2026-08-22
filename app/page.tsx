@@ -30,11 +30,12 @@ export default function Home() {
       {/* ─── Hero Section ────────────────────────────────────── */}
       <section className="px-4 pb-16 pt-10 sm:px-8">
         <div className="deco-container">
-          <div className="deco-hero deco-noise relative p-6 sm:p-8 lg:p-10">
-            {/* Top ziggurat accent */}
+          <div className="deco-hero deco-noise relative p-6 sm:p-8 lg:p-10 overflow-hidden">
+            {/* Top ziggurat accent — positioned at very top of hero */}
             <div className="deco-zig-top" />
 
-            <div className="relative grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+            {/* Hero content grid — properly aligned */}
+            <div className="relative z-10 grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
               {/* Left: Copy */}
               <div>
                 {/* Coin Bonus Badge */}
@@ -90,19 +91,19 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Right: Featured Item Card */}
+              {/* Right: Featured Item Card — aligned to grid */}
               <div className="flex min-h-[340px] sm:min-h-[400px] items-center justify-center">
-                <div className="relative w-full max-w-sm border-2 border-[var(--gold)] bg-[var(--charcoal)] overflow-hidden transition-all hover:shadow-[0_0_30px_rgba(212,175,55,0.3)]">
+                <div className="relative w-full max-w-sm border-2 border-[var(--gold)] bg-[var(--charcoal)] overflow-hidden transition-all hover:shadow-[0_0_30px_rgba(212,175,55,0.3)] rounded-xl">
                   {/* Top bar */}
                   <div className="flex justify-between items-center border-b-2 border-[var(--gold)] bg-[var(--charcoal-light)] px-5 py-3">
                     <span
-                      className="text-[var(--gold-bright)] text-[9px] uppercase tracking-wider"
+                      className="text-[var(--gold-bright)] text-[10px] uppercase tracking-wider"
                       style={{ fontFamily: 'var(--font-arcade)' }}
                     >
                       HIGH SCORE: ₱55
                     </span>
                     <span
-                      className="pulse-glow text-[var(--gold-bright)] text-[8px] border border-[var(--gold)] px-2 py-1"
+                      className="pulse-glow text-[var(--gold-bright)] text-[9px] border border-[var(--gold)] px-2 py-1"
                       style={{ fontFamily: 'var(--font-arcade)' }}
                     >
                       NEW!
@@ -123,7 +124,7 @@ export default function Home() {
 
                     {/* Floating Coin */}
                     <div className="absolute top-4 right-4 w-14 h-14 coin-float z-10">
-                      <div className="w-14 h-14 bg-gradient-to-br from-[var(--gold)] to-[var(--gold-dark)] border-2 border-[var(--gold-bright)] flex items-center justify-center shadow-[0_0_15px_rgba(212,175,55,0.4)]">
+                      <div className="w-14 h-14 bg-gradient-to-br from-[var(--gold)] to-[var(--gold-dark)] border-2 border-[var(--gold-bright)] flex items-center justify-center shadow-[0_0_15px_rgba(212,175,55,0.4)] rounded-full">
                         <span
                           className="text-lg text-[var(--obsidian)]"
                           style={{ fontFamily: 'var(--font-arcade)' }}
@@ -147,7 +148,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Bottom ziggurat accent */}
+            {/* Bottom ziggurat accent — positioned at very bottom */}
             <div className="deco-zig-bottom" />
           </div>
         </div>
@@ -186,7 +187,6 @@ export default function Home() {
                     fill
                     className="object-contain p-3 transition-transform group-hover:scale-110 duration-300"
                   />
-                  {/* Gold top-line accent on hover */}
                   <div className="absolute inset-0 bg-gradient-to-t from-[var(--obsidian)] via-transparent to-transparent opacity-60" />
                 </div>
 
@@ -210,6 +210,48 @@ export default function Home() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Divider: Ziggurat ─────────────────────────────── */}
+      <div className="px-4 sm:px-8">
+        <div className="deco-container">
+          <PixelDivider variant="ziggurat" />
+        </div>
+      </div>
+
+      {/* ─── Entertainment Section ──────────────────────────── */}
+      <section className="px-4 py-12 sm:px-8">
+        <div className="deco-container">
+          <div className="text-center mb-8">
+            <h2
+              className="text-xl sm:text-2xl lg:text-3xl text-[var(--cream)] uppercase"
+              style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}
+            >
+              Power-Up Zone
+            </h2>
+            <p className="text-sm text-[var(--pewter)] mt-2">Spin, play, and earn coins!</p>
+          </div>
+          <div className="grid gap-6 md:grid-cols-3">
+            {/* Lucky Spin */}
+            <Link href="/play/spin" className="power-card group p-8 text-center hover:border-[var(--gold-bright)] transition-all rounded-xl">
+              <div className="text-4xl mb-4">🎰</div>
+              <h3 className="text-xs text-[var(--gold-bright)] uppercase mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>Lucky Spin</h3>
+              <p className="text-sm text-[var(--pewter)]">Spin the wheel to win coins and discounts!</p>
+            </Link>
+            {/* Daily Check-In */}
+            <Link href="/play/checkin" className="power-card group p-8 text-center hover:border-[var(--gold-bright)] transition-all rounded-xl">
+              <div className="text-4xl mb-4">📅</div>
+              <h3 className="text-xs text-[var(--gold-bright)] uppercase mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>Daily Check-In</h3>
+              <p className="text-sm text-[var(--pewter)]">Log in daily to earn bonus coins!</p>
+            </Link>
+            {/* Referral Quest */}
+            <Link href="/play/refer" className="power-card group p-8 text-center hover:border-[var(--gold-bright)] transition-all rounded-xl">
+              <div className="text-4xl mb-4">👥</div>
+              <h3 className="text-xs text-[var(--gold-bright)] uppercase mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>Refer a Friend</h3>
+              <p className="text-sm text-[var(--pewter)]">Invite friends and earn 50 coins each!</p>
+            </Link>
           </div>
         </div>
       </section>

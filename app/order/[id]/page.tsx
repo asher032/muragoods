@@ -83,6 +83,7 @@ export default function OrderDetailPage() {
   }
 
   const currentIndex = statusFlow.indexOf(order.status);
+  const isCancelled = order.status === 'Cancelled';
   const items: string[] = (() => { try { return JSON.parse(String(order.items)); } catch { return []; } })();
 
   return (
@@ -99,9 +100,14 @@ export default function OrderDetailPage() {
               <h1 className="text-2xl sm:text-3xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}>
                 Order Summary
               </h1>
-              <p className="text-[9px] text-[var(--gold)] mt-2 uppercase tracking-wider" style={{ fontFamily: 'var(--font-arcade)' }}>
+              <p className="text-[10px] text-[var(--gold)] mt-2 uppercase tracking-wider" style={{ fontFamily: 'var(--font-arcade)' }}>
                 ID: {(order._id || order.id).slice(-12).toUpperCase()}
               </p>
+              {isCancelled && (
+                <p className="text-[11px] text-[var(--crimson)] mt-1" style={{ fontFamily: 'var(--font-arcade)' }}>
+                  ✖ This order has been cancelled
+                </p>
+              )}
             </div>
             <div className="flex gap-3">
               <Link href="/orders" className="deco-btn deco-btn-sm rounded-xl">← All Orders</Link>
@@ -110,49 +116,55 @@ export default function OrderDetailPage() {
           </div>
 
           {/* Status Steps */}
-          <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-xl p-6 mb-6">
-            <h2 className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>Order Progress</h2>
+          <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-2xl p-6 mb-6">
+            <h2 className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>Order Progress</h2>
             <div className="flex items-center justify-between gap-1 overflow-x-auto pb-2">
               {statusFlow.map((step, index) => {
-                const active = index <= currentIndex;
+                const active = !isCancelled && index <= currentIndex;
                 const current = index === currentIndex;
                 return (
-                  <div key={step} className="flex flex-col items-center min-w-[60px]">
-                    <div className={`flex h-10 w-10 items-center justify-center border-2 text-[8px] transition-all rounded-full ${current ? 'border-[var(--gold-bright)] bg-[var(--gold)] text-[var(--obsidian)] pulse-badge scale-110' : active ? 'border-[var(--gold)] bg-[rgba(212,175,55,0.2)] text-[var(--gold-bright)]' : 'border-[rgba(242,240,228,0.2)] bg-[var(--charcoal-light)] text-[var(--pewter)]'}`} style={{ fontFamily: 'var(--font-arcade)' }}>
+                  <div key={step} className="flex flex-col items-center min-w-[70px]">
+                    <div className={`flex h-12 w-12 items-center justify-center border-2 text-sm transition-all rounded-full ${current && !isCancelled ? 'border-[var(--gold-bright)] bg-[var(--gold)] text-[var(--obsidian)] pulse-badge scale-110' : active ? 'border-[var(--gold)] bg-[rgba(212,175,55,0.2)] text-[var(--gold-bright)]' : 'border-[rgba(242,240,228,0.2)] bg-[var(--charcoal-light)] text-[var(--pewter)]'}`} style={{ fontFamily: 'var(--font-arcade)', fontSize: '12px' }}>
                       {active && index > 0 ? '✓' : statusEmojis[step] || (index + 1)}
                     </div>
-                    <p className="mt-2 text-[7px] text-[var(--pewter)] uppercase tracking-wider leading-tight text-center" style={{ fontFamily: 'var(--font-arcade)' }}>{step}</p>
+                    <p className="mt-2 text-[9px] text-[var(--pewter)] uppercase tracking-wider leading-tight text-center" style={{ fontFamily: 'var(--font-arcade)' }}>{step}</p>
                   </div>
                 );
               })}
             </div>
-            <div className="mt-6 border-t-2 border-[rgba(212,175,55,0.15)] pt-4 flex items-center gap-3">
-              <span className="text-[9px] text-[var(--pewter)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Current:</span>
-              <span className="text-sm text-[var(--gold-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>{order.status}</span>
+            <div className={`mt-6 border-t-2 pt-4 flex items-center gap-3 ${isCancelled ? 'border-[var(--crimson)]' : 'border-[rgba(212,175,55,0.15)]'}`}>
+              <span className="text-[10px] text-[var(--pewter)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Current:</span>
+              <span className={`text-base uppercase ${isCancelled ? 'text-[var(--crimson)]' : 'text-[var(--gold-bright)]'}`} style={{ fontFamily: 'var(--font-arcade)' }}>{order.status}</span>
             </div>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
             {/* Order Items */}
-            <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-xl p-6">
-              <h2 className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>Items Ordered</h2>
+            <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-2xl p-6">
+              <h2 className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>Items Ordered</h2>
               <div className="space-y-2">
                 {items.length > 0 ? items.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 bg-[var(--charcoal-light)] rounded-lg border border-[rgba(242,240,228,0.08)]">
+                  <div key={i} className="flex items-center justify-between p-3 bg-[var(--charcoal-light)] rounded-xl border border-[rgba(242,240,228,0.08)]">
                     <span className="text-sm text-[var(--cream)]">{item}</span>
                   </div>
                 )) : <p className="text-sm text-[var(--pewter)]">No item details available</p>}
               </div>
-              <div className="mt-4 pt-4 border-t-2 border-[rgba(212,175,55,0.15)] flex justify-between">
-                <span className="text-[9px] text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Total</span>
-                <span className="coin-price text-lg">₱{order.total}</span>
+              <div className="mt-4 pt-4 border-t-2 border-[rgba(212,175,55,0.15)] flex justify-between items-center">
+                <span className="text-[10px] text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Total</span>
+                <span className="coin-price text-xl">₱{order.total}</span>
               </div>
+              {order.pointsEarned !== undefined && order.pointsEarned > 0 && (
+                <div className="mt-3 flex justify-between items-center">
+                  <span className="text-[10px] text-[var(--pewter)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Coins Earned</span>
+                  <span className="text-sm text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>🪙 +{order.pointsEarned}</span>
+                </div>
+              )}
             </div>
 
             {/* Delivery & Payment Info */}
             <div className="space-y-5">
-              <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-xl p-6">
-                <h2 className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>Delivery Info</h2>
+              <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-2xl p-6">
+                <h2 className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>Delivery Info</h2>
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between"><span className="text-[var(--pewter)]">Customer</span><span className="text-[var(--cream)]">{order.customer}</span></div>
                   <div className="flex justify-between"><span className="text-[var(--pewter)]">Phone</span><span className="text-[var(--cream)]">{order.phone}</span></div>
@@ -163,12 +175,12 @@ export default function OrderDetailPage() {
                 </div>
               </div>
 
-              <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-xl p-6">
-                <h2 className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>Payment Info</h2>
+              <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-2xl p-6">
+                <h2 className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>Payment Info</h2>
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between"><span className="text-[var(--pewter)]">Method</span><span className="text-[var(--cream)]">{order.payment}</span></div>
                   {order.gcashRefNumber && <div className="flex justify-between"><span className="text-[var(--pewter)]">Ref #</span><span className="text-[var(--cream)]">{order.gcashRefNumber}</span></div>}
-                  <div className="flex justify-between"><span className="text-[var(--pewter)]">Amount</span><span className="coin-price">₱{order.total}</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--pewter)]">Amount</span><span className="coin-price text-lg">₱{order.total}</span></div>
                 </div>
               </div>
             </div>

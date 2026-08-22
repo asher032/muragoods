@@ -7,9 +7,7 @@ import { useEffect, useState } from 'react';
 import { CoinBalance } from '@/app/components/CoinBalance';
 
 interface NavBarProps {
-  /** Text shown next to "Muragoods" in the brand area */
   pageLabel?: string;
-  /** Number of items in cart — shows badge when > 0 */
   cartCount?: number;
 }
 
@@ -33,7 +31,7 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
       <div className="deco-nav-inner">
         {/* Brand */}
         <Link href="/" className="flex items-center gap-3 group no-underline">
-          <div className="relative h-10 w-10 border-2 border-[var(--gold)] overflow-hidden transition-transform group-hover:scale-105">
+          <div className="relative h-10 w-10 border-2 border-[var(--gold)] overflow-hidden rounded-full transition-transform group-hover:scale-105 shadow-[0_0_12px_rgba(212,175,55,0.3)]">
             <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
           </div>
           <div>

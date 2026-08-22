@@ -10,6 +10,7 @@ const statusOptions = [
   'Preparing',
   'Out for Delivery',
   'Delivered',
+  'Cancelled',
 ] as const;
 
 const inventoryCycle: InventoryStatus[] = ['In Stock', 'Out of Stock', 'Pre-Order Only'];
@@ -79,7 +80,9 @@ export default function AdminPage() {
     const totalSales = orders.reduce((sum, order) => sum + order.total, 0);
     const pending = orders.filter(o => o.status === 'Pending Payment').length;
     const preparing = orders.filter(o => o.status === 'Preparing').length;
-    return { totalSales, pending, preparing };
+    const delivered = orders.filter(o => o.status === 'Delivered').length;
+    const cancelled = orders.filter(o => o.status === 'Cancelled').length;
+    return { totalSales, pending, preparing, delivered, cancelled };
   }, [orders]);
 
   const handleLogin = (e: React.FormEvent) => {
@@ -132,12 +135,12 @@ export default function AdminPage() {
   if (!isAuthenticated) {
     return (
       <main className="min-h-screen flex items-center justify-center px-4">
-        <div className="w-full max-w-md border-2 border-[var(--gold)] bg-[var(--charcoal)] p-8">
+        <div className="w-full max-w-md border-2 border-[var(--gold)] bg-[var(--charcoal)] p-8 rounded-2xl">
           <div className="flex flex-col items-center gap-4 mb-8">
-            <div className="relative h-16 w-16 border-2 border-[var(--gold)] overflow-hidden">
+            <div className="relative h-16 w-16 border-2 border-[var(--gold)] overflow-hidden rounded-full">
               <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
             </div>
-            <p className="text-[10px] text-[var(--gold-bright)] uppercase tracking-[0.2em]" style={{ fontFamily: 'var(--font-arcade)' }}>
+            <p className="text-[11px] text-[var(--gold-bright)] uppercase tracking-[0.2em]" style={{ fontFamily: 'var(--font-arcade)' }}>
               Admin Portal
             </p>
           </div>
@@ -145,19 +148,19 @@ export default function AdminPage() {
           <p className="text-sm text-[var(--pewter)] text-center mb-6">Muragoods Secure Access</p>
           <form onSubmit={handleLogin} className="space-y-4">
             <label className="block">
-              <span className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2 block" style={{ fontFamily: 'var(--font-arcade)' }}>Admin Email</span>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="deco-input" />
+              <span className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2 block" style={{ fontFamily: 'var(--font-arcade)' }}>Admin Email</span>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="deco-input rounded-xl" />
             </label>
             <label className="block">
-              <span className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2 block" style={{ fontFamily: 'var(--font-arcade)' }}>Password</span>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="deco-input" />
+              <span className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2 block" style={{ fontFamily: 'var(--font-arcade)' }}>Password</span>
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="deco-input rounded-xl" />
             </label>
             {error && (
-              <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-3 text-sm text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
+              <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-3 text-sm text-[var(--crimson)] rounded-xl" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>
                 ⚠ {error}
               </div>
             )}
-            <button type="submit" className="deco-btn deco-btn-crimson w-full deco-btn-lg mt-6">ENTER DASHBOARD</button>
+            <button type="submit" className="deco-btn deco-btn-crimson w-full deco-btn-lg mt-6 rounded-xl">ENTER DASHBOARD</button>
           </form>
         </div>
       </main>
@@ -170,30 +173,35 @@ export default function AdminPage() {
       <div className="deco-container">
         {/* Alert Banner */}
         {alert.show && (
-          <div className="mb-8 border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.1)] p-4 text-sm text-[var(--gold-bright)] animate-pulse" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>
+          <div className="mb-8 border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.1)] p-4 text-sm text-[var(--gold-bright)] animate-pulse rounded-xl" style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px' }}>
             📢 {alert.message}
           </div>
         )}
 
         {/* Header */}
-        <header className="mb-8 flex flex-col gap-4 border-2 border-[var(--gold)] bg-[var(--charcoal)] p-6 md:flex-row md:items-center md:justify-between">
+        <header className="mb-8 flex flex-col gap-4 border-2 border-[var(--gold)] bg-[var(--charcoal)] p-6 md:flex-row md:items-center md:justify-between rounded-2xl">
           <div>
-            <p className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>Admin</p>
+            <p className="text-[11px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>Admin</p>
             <h1 className="mt-2 text-xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Muragoods Dashboard</h1>
           </div>
-          <button type="button" onClick={() => setIsAuthenticated(false)} className="deco-btn deco-btn-crimson">LOG OUT</button>
+          <div className="flex gap-3">
+            <a href="/" className="deco-btn deco-btn-sm">Back to Shop</a>
+            <button type="button" onClick={() => setIsAuthenticated(false)} className="deco-btn deco-btn-crimson">LOG OUT</button>
+          </div>
         </header>
 
         {/* Summary Cards */}
-        <section className="grid gap-4 md:grid-cols-3">
+        <section className="grid gap-4 md:grid-cols-5">
           {[
-            { label: "Today's Sales", value: `₱${summary.totalSales}` },
-            { label: 'Pending', value: String(summary.pending) },
-            { label: 'Preparing', value: String(summary.preparing) },
+            { label: "Today's Sales", value: `₱${summary.totalSales}`, color: 'var(--gold-bright)' },
+            { label: 'Pending', value: String(summary.pending), color: 'var(--gold)' },
+            { label: 'Preparing', value: String(summary.preparing), color: 'var(--gold)' },
+            { label: 'Delivered', value: String(summary.delivered), color: 'var(--emerald-bright)' },
+            { label: 'Cancelled', value: String(summary.cancelled), color: 'var(--crimson)' },
           ].map(card => (
-            <div key={card.label} className="power-card p-6">
-              <p className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>{card.label}</p>
-              <p className="mt-3 text-2xl text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)' }}>{card.value}</p>
+            <div key={card.label} className="power-card p-5 rounded-xl">
+              <p className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>{card.label}</p>
+              <p className="mt-3 text-xl" style={{ fontFamily: 'var(--font-arcade)', color: card.color }}>{card.value}</p>
             </div>
           ))}
         </section>
@@ -201,44 +209,47 @@ export default function AdminPage() {
         {/* Main Content */}
         <section className="mt-8 grid gap-8 xl:grid-cols-[1.4fr_0.8fr]">
           {/* Orders Table */}
-          <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-6">
+          <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-6 rounded-2xl">
             <h2 className="text-sm text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Live Order Feed</h2>
-            <div className="mt-6 overflow-x-auto border border-[rgba(242,240,228,0.12)]">
+            <div className="mt-6 overflow-x-auto border border-[rgba(242,240,228,0.12)] rounded-xl">
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-[var(--obsidian)]">
                   <tr>
                     {['Order', 'Customer', 'Zone', 'Pin', 'Details', 'Status', 'Action'].map(h => (
-                      <th key={h} className="px-3 py-3 text-[8px] text-[var(--gold)] uppercase tracking-wider" style={{ fontFamily: 'var(--font-arcade)' }}>{h}</th>
+                      <th key={h} className="px-3 py-3 text-[9px] text-[var(--gold)] uppercase tracking-wider" style={{ fontFamily: 'var(--font-arcade)' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {orders.map((order, idx) => (
                     <tr key={order._id || order.id} className={`border-t border-[rgba(242,240,228,0.08)] transition-colors hover:bg-[var(--charcoal-light)] ${idx % 2 === 0 ? '' : 'bg-[rgba(212,175,55,0.02)]'}`}>
-                      <td className="px-3 py-3 text-xs text-[var(--cream-muted)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px' }}>{(order._id || order.id).slice(-5)}</td>
+                      <td className="px-3 py-3 text-xs text-[var(--cream-muted)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>{(order._id || order.id).slice(-5)}</td>
                       <td className="px-3 py-3">
                         <div className="text-xs text-[var(--cream)]">{order.customer}</div>
-                        <div className="text-[10px] text-[var(--pewter)] hidden sm:block">{order.address}</div>
-                        <div className="text-[10px] text-[var(--gold)] hidden sm:block">{order.userId}</div>
+                        <div className="text-[11px] text-[var(--pewter)] hidden sm:block">{order.address}</div>
+                        <div className="text-[11px] text-[var(--gold)] hidden sm:block">{order.userId}</div>
                       </td>
                       <td className="px-3 py-3 text-xs text-[var(--cream-muted)]">{order.zone}</td>
-                      <td className="px-3 py-3 text-[10px] text-[var(--pewter)]">{order.latitude}, {order.longitude}</td>
+                      <td className="px-3 py-3 text-[11px] text-[var(--pewter)]">{order.latitude}, {order.longitude}</td>
                       <td className="px-3 py-3">
                         <div className="text-xs text-[var(--gold-bright)]">₱{order.total}</div>
-                        <div className="text-[10px] text-[var(--pewter)] hidden sm:block">{order.items.join(', ')}</div>
+                        <div className="text-[11px] text-[var(--pewter)] hidden sm:block">{order.items.join(', ')}</div>
                         {order.gcashScreenshotUrl && (
-                          <button onClick={() => setPreviewReceipt(order.gcashScreenshotUrl || '')} className="text-[10px] text-[var(--crimson)] underline hover:text-[var(--gold-bright)] transition-colors">
+                          <button onClick={() => setPreviewReceipt(order.gcashScreenshotUrl || '')} className="text-[11px] text-[var(--crimson)] underline hover:text-[var(--gold-bright)] transition-colors">
                             View Receipt
                           </button>
                         )}
+                        {order.pointsEarned !== undefined && order.pointsEarned > 0 && (
+                          <div className="text-[9px] text-[var(--gold-bright)]">🪙 +{order.pointsEarned} pts</div>
+                        )}
                       </td>
                       <td className="px-3 py-3">
-                        <select value={order.status} onChange={(e) => handleStatusUpdate(order._id || order.id, e.target.value)} className="deco-select text-[10px] py-1 px-2">
+                        <select value={order.status} onChange={(e) => handleStatusUpdate(order._id || order.id, e.target.value)} className="deco-select text-[10px] py-1 px-2 rounded-lg">
                           {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                       </td>
                       <td className="px-3 py-3">
-                        <button onClick={() => handleDeleteOrder(order._id || order.id)} className="deco-btn deco-btn-sm deco-btn-crimson" style={{ minHeight: '28px', padding: '4px 10px', fontSize: '8px' }}>
+                        <button onClick={() => handleDeleteOrder(order._id || order.id)} className="deco-btn deco-btn-sm deco-btn-crimson" style={{ minHeight: '28px', padding: '4px 10px', fontSize: '9px' }}>
                           Delete
                         </button>
                       </td>
@@ -250,16 +261,16 @@ export default function AdminPage() {
           </div>
 
           {/* Inventory Control */}
-          <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-6">
+          <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-6 rounded-2xl">
             <h2 className="text-sm text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Inventory Control</h2>
             <div className="mt-6 space-y-3">
               {catalog.map(product => (
-                <div key={product.id} className="flex flex-col sm:flex-row sm:items-center justify-between border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-4 gap-3 transition-all hover:border-[var(--gold)]">
+                <div key={product.id} className="flex flex-col sm:flex-row sm:items-center justify-between border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-4 gap-3 transition-all hover:border-[var(--gold)] rounded-xl">
                   <div>
-                    <p className="text-sm text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>{product.name}</p>
-                    <p className="text-[10px] text-[var(--gold)] uppercase mt-1">{product.inventory}</p>
+                    <p className="text-sm text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px' }}>{product.name}</p>
+                    <p className="text-[11px] text-[var(--gold)] uppercase mt-1">{product.inventory}</p>
                   </div>
-                  <button type="button" onClick={() => handleUpdateInventory(product.id)} className="deco-btn deco-btn-sm deco-btn-dark w-full sm:w-auto">
+                  <button type="button" onClick={() => handleUpdateInventory(product.id)} className="deco-btn deco-btn-sm deco-btn-dark w-full sm:w-auto rounded-lg">
                     Update
                   </button>
                 </div>
@@ -272,13 +283,13 @@ export default function AdminPage() {
       {/* Receipt Preview Modal */}
       {previewReceipt && (
         <div className="deco-overlay" onClick={() => setPreviewReceipt('')}>
-          <div className="deco-modal max-w-2xl bounce-in" onClick={(e) => e.stopPropagation()}>
-            <div className="deco-modal-header flex items-center justify-between">
+          <div className="deco-modal max-w-2xl bounce-in rounded-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="deco-modal-header flex items-center justify-between rounded-t-2xl">
               <h3 className="text-sm text-[var(--gold-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Payment Receipt</h3>
               <button onClick={() => setPreviewReceipt('')} className="text-[var(--pewter)] text-lg hover:text-[var(--crimson)] transition-colors">✕</button>
             </div>
-            <div className="p-4 bg-[var(--charcoal-light)]">
-              <img src={previewReceipt} alt="Payment Receipt" className="w-full h-auto border-2 border-[var(--gold)]" />
+            <div className="p-4 bg-[var(--charcoal-light)] rounded-b-2xl">
+              <img src={previewReceipt} alt="Payment Receipt" className="w-full h-auto border-2 border-[var(--gold)] rounded-xl" />
             </div>
           </div>
         </div>

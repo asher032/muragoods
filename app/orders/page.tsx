@@ -52,23 +52,39 @@ export default function OrdersPage() {
 
   const handleCancelOrder = async (orderId: string) => {
     const order = orders.find(o => (o._id || o.id) === orderId);
-    if (!order || order.status !== 'Pending Payment') {
-      alert('You can only cancel orders that are still pending.');
+    if (!order) return;
+
+    // Can cancel if Pending Payment or Payment Verified
+    const cancellableStatuses: OrderStatus[] = ['Pending Payment', 'Payment Verified'];
+    if (!cancellableStatuses.includes(order.status)) {
+      alert('You cannot cancel this order anymore. It has already been processed.');
       return;
     }
-    if (!confirm('Are you sure you want to cancel this order?')) return;
+
+    if (!confirm(`Are you sure you want to cancel this order? Status: ${order.status}`)) return;
     setCancellingId(orderId);
 
     try {
-      const res = await fetch(`/api/orders?id=${orderId}`, { method: 'DELETE' });
+      // PATCH to set status to Cancelled instead of deleting
+      const res = await fetch(`/api/orders?id=${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'Cancelled' }),
+      });
       const result = await res.json();
       if (result.success) {
-        setOrders((current) => current.filter((o) => (o._id || o.id) !== orderId));
+        setOrders((current) =>
+          current.map((o) =>
+            (o._id || o.id) === orderId
+              ? { ...o, status: 'Cancelled' as OrderStatus }
+              : o
+          )
+        );
       } else {
-        alert(result.error || 'Failed to delete order');
+        alert(result.error || 'Failed to cancel order');
       }
     } catch {
-      alert('Failed to delete order');
+      alert('Failed to cancel order');
     } finally {
       setCancellingId(null);
     }
@@ -107,21 +123,21 @@ export default function OrdersPage() {
 
           {/* Error */}
           {error && (
-            <div className="mb-6 border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-4 text-sm text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
+            <div className="mb-6 border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-4 text-sm text-[var(--crimson)] rounded-xl" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>
               ⚠ {error}
             </div>
           )}
 
           {/* Empty State */}
           {orders.length === 0 ? (
-            <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-12 text-center">
+            <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-12 text-center rounded-xl">
               <p
                 className="text-sm text-[var(--cream)] mb-4"
                 style={{ fontFamily: 'var(--font-arcade)' }}
               >
                 NO ORDERS FOUND!
               </p>
-              <Link href="/menu" className="deco-btn deco-btn-gold">
+              <Link href="/menu" className="deco-btn deco-btn-gold rounded-xl">
                 Start Shopping
               </Link>
             </div>
@@ -129,24 +145,31 @@ export default function OrdersPage() {
             <div className="space-y-6">
               {orders.map((order) => {
                 const currentIndex = statusFlow.indexOf(order.status);
-                const canCancel = order.status === 'Pending Payment';
+                const isCancelled = order.status === 'Cancelled';
+                const cancellableStatuses: OrderStatus[] = ['Pending Payment', 'Payment Verified'];
+                const canCancel = cancellableStatuses.includes(order.status);
 
                 return (
                   <article
                     key={order.id}
-                    className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-6 slide-in hover:shadow-[0_0_30px_rgba(212,175,55,0.15)] transition-all"
+                    className={`border-2 bg-[var(--charcoal)] p-6 rounded-xl slide-in transition-all ${
+                      isCancelled
+                        ? 'border-[rgba(242,240,228,0.15)] opacity-70'
+                        : 'border-[var(--gold)] hover:shadow-[0_0_30px_rgba(212,175,55,0.15)]'
+                    }`}
                   >
                     {/* Order Header */}
                     <div className="flex flex-col gap-4 border-b-2 border-[rgba(212,175,55,0.2)] pb-4 md:flex-row md:items-center md:justify-between">
                       <div>
-                        <p
-                          className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em]"
+                        <Link
+                          href={`/order/${order._id || order.id}`}
+                          className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] hover:text-[var(--gold-bright)] transition-colors"
                           style={{ fontFamily: 'var(--font-arcade)' }}
                         >
-                          {order.id}
-                        </p>
+                          Order #{String(order.id).slice(-8).toUpperCase()}
+                        </Link>
                         <h2
-                          className="mt-2 text-sm text-[var(--cream)] uppercase"
+                          className="mt-2 text-lg text-[var(--cream)] uppercase"
                           style={{ fontFamily: 'var(--font-arcade)' }}
                         >
                           {order.customer}
@@ -154,19 +177,23 @@ export default function OrdersPage() {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="deco-badge deco-badge-gold">{order.zone}</span>
-                        <span className="deco-badge deco-badge-cream">{order.payment}</span>
-                        {canCancel ? (
+                        <span className="deco-badge deco-badge-gold rounded-lg">{order.zone}</span>
+                        <span className="deco-badge deco-badge-cream rounded-lg">{order.payment}</span>
+                        {isCancelled && (
+                          <span className="deco-badge deco-badge-crimson rounded-lg">CANCELLED</span>
+                        )}
+                        {canCancel && (
                           <button
                             onClick={() => handleCancelOrder(order._id || order.id)}
                             disabled={cancellingId === (order._id || order.id)}
-                            className="deco-btn deco-btn-sm deco-btn-crimson disabled:opacity-50"
-                            style={{ minHeight: '32px', padding: '6px 12px' }}
+                            className="deco-btn deco-btn-sm deco-btn-crimson disabled:opacity-50 rounded-xl"
+                            style={{ minHeight: '36px', padding: '8px 16px' }}
                           >
-                            {cancellingId === (order._id || order.id) ? 'Cancelling...' : 'Cancel'}
+                            {cancellingId === (order._id || order.id) ? 'Cancelling...' : '✖ Cancel Order'}
                           </button>
-                        ) : (
-                          <span className="deco-badge deco-badge-cream opacity-50">Locked</span>
+                        )}
+                        {!canCancel && !isCancelled && (
+                          <span className="deco-badge deco-badge-cream rounded-lg opacity-60">🔒 Locked</span>
                         )}
                       </div>
                     </div>
@@ -177,21 +204,21 @@ export default function OrdersPage() {
                         {/* Status Steps */}
                         <div className="mb-6 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
                           {statusFlow.map((step, index) => {
-                            const active = index <= currentIndex;
+                            const active = !isCancelled && index <= currentIndex;
                             return (
                               <div key={step} className="relative">
                                 <div
-                                  className={`flex h-10 w-10 items-center justify-center border-2 text-[8px] transition-all ${
+                                  className={`flex h-12 w-12 items-center justify-center border-2 text-sm transition-all ${
                                     active
                                       ? 'border-[var(--gold)] bg-[var(--gold)] text-[var(--obsidian)] pulse-badge'
                                       : 'border-[rgba(242,240,228,0.2)] bg-[var(--charcoal-light)] text-[var(--pewter)]'
                                   }`}
-                                  style={{ fontFamily: 'var(--font-arcade)' }}
+                                  style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px' }}
                                 >
                                   {active && index > 0 ? '✓' : index + 1}
                                 </div>
                                 <p
-                                  className="mt-2 text-[7px] text-[var(--pewter)] uppercase tracking-wider leading-tight"
+                                  className="mt-2 text-[9px] text-[var(--pewter)] uppercase tracking-wider leading-tight"
                                   style={{ fontFamily: 'var(--font-arcade)' }}
                                 >
                                   {step}
@@ -202,26 +229,26 @@ export default function OrdersPage() {
                         </div>
 
                         {/* Current Status */}
-                        <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.05)] p-5">
+                        <div className={`border-2 p-5 rounded-xl ${isCancelled ? 'border-[var(--crimson)] bg-[rgba(229,37,33,0.05)]' : 'border-[var(--gold)] bg-[rgba(212,175,55,0.05)]'}`}>
                           <p
-                            className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em]"
+                            className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em]"
                             style={{ fontFamily: 'var(--font-arcade)' }}
                           >
                             Current Status
                           </p>
                           <p
-                            className="mt-3 text-sm text-[var(--gold-bright)] uppercase"
+                            className={`mt-3 text-base uppercase ${isCancelled ? 'text-[var(--crimson)]' : 'text-[var(--gold-bright)]'}`}
                             style={{ fontFamily: 'var(--font-arcade)' }}
                           >
-                            {order.status}
+                            {isCancelled ? '✖ CANCELLED' : order.status}
                           </p>
                         </div>
                       </div>
 
                       {/* Delivery Info */}
-                      <div className="border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-5">
+                      <div className="border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-5 rounded-xl">
                         <p
-                          className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em]"
+                          className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em]"
                           style={{ fontFamily: 'var(--font-arcade)' }}
                         >
                           Delivery Info
@@ -246,6 +273,13 @@ export default function OrdersPage() {
                           <li className="pt-2 border-t border-[rgba(242,240,228,0.1)]">
                             <span className="coin-price text-base">₱{order.total}</span>
                           </li>
+                          {order.pointsEarned !== undefined && order.pointsEarned > 0 && (
+                            <li className="pt-2 border-t border-[rgba(242,240,228,0.1)]">
+                              <span className="text-sm text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>
+                                🪙 +{order.pointsEarned} Coins Earned!
+                              </span>
+                            </li>
+                          )}
                         </ul>
                       </div>
                     </div>

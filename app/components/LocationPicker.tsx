@@ -14,7 +14,8 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
-  const [selected, setSelected] = useState<{ lat: number; lng: number; address: string; placeName?: string } | null>(null);
+  const [pending, setPending] = useState<{ lat: number; lng: number; address: string; placeName?: string } | null>(null);
+  const [confirmed, setConfirmed] = useState<{ lat: number; lng: number; address: string; placeName?: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState('');
@@ -39,20 +40,16 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
       });
       if (!res.ok) throw new Error('Geocoding failed');
       const data = await res.json();
-      const placeName = data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-      const address = `DELIVERY PIN: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-      setSelected({ lat, lng, address, placeName });
-      onLocationSelect?.(lat, lng, placeName);
+      const placeName = data.display_name || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      setPending({ lat, lng, address: placeName, placeName });
     } catch {
-      const address = `DELIVERY PIN: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-      setSelected({ lat, lng, address });
-      onLocationSelect?.(lat, lng, address);
+      setPending({ lat, lng, address: `${lat.toFixed(6)}, ${lng.toFixed(6)}` });
     } finally {
       setLoading(false);
     }
-  }, [onLocationSelect]);
+  }, []);
 
-  // Initialize map
+  // Initialize map with free panning — no zoom restrictions
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
@@ -61,6 +58,9 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
       zoom: 15,
       zoomControl: true,
       attributionControl: true,
+      minZoom: 3,
+      maxZoom: 19,
+      // No restriction on panning — user can go anywhere
     });
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -90,7 +90,6 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
     mapRef.current = map;
     markerRef.current = marker;
 
-    // Force a resize after a short delay to fix rendering
     setTimeout(() => {
       map.invalidateSize();
       setMapReady(true);
@@ -117,7 +116,7 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
         const { latitude, longitude } = position.coords;
         if (markerRef.current && mapRef.current) {
           markerRef.current.setLatLng([latitude, longitude]);
-          mapRef.current.setView([latitude, longitude], 16, { animate: true });
+          mapRef.current.setView([latitude, longitude], 17, { animate: true });
         }
         await fetchPlaceName(latitude, longitude);
         setGeoLoading(false);
@@ -130,60 +129,86 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
     );
   };
 
-  const handleReset = () => {
-    setSelected(null);
-    setGeoError('');
-    onLocationSelect?.(initialLat, initialLng, '');
+  const handleConfirmAddress = () => {
+    if (!pending) return;
+    setConfirmed(pending);
+    onLocationSelect?.(pending.lat, pending.lng, pending.placeName || pending.address);
+  };
+
+  const handleChange = () => {
+    setConfirmed(null);
+    setPending(null);
+    onLocationSelect?.(0, 0, '');
     if (mapRef.current && markerRef.current) {
       mapRef.current.setView([initialLat, initialLng], 15);
       markerRef.current.setLatLng([initialLat, initialLng]);
     }
   };
 
+  if (confirmed) {
+    return (
+      <div className="border-2 border-[var(--gold)] bg-[var(--charcoal-light)] p-4 rounded-xl">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] text-[var(--emerald-bright)] uppercase tracking-[0.15em] mb-1" style={{ fontFamily: 'var(--font-arcade)' }}>✓ Location Confirmed</p>
+            <p className="text-sm text-[var(--cream)] break-all leading-relaxed">{confirmed.placeName || confirmed.address}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <span className="deco-badge deco-badge-gold rounded-lg" style={{ fontSize: '8px' }}>LAT: {confirmed.lat.toFixed(6)}</span>
+              <span className="deco-badge deco-badge-gold rounded-lg" style={{ fontSize: '8px' }}>LNG: {confirmed.lng.toFixed(6)}</span>
+            </div>
+          </div>
+          <button type="button" onClick={handleChange} className="deco-btn deco-btn-sm deco-btn-crimson shrink-0 rounded-xl" style={{ minHeight: '36px', padding: '8px 16px' }}>Change</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full">
-      {!selected ? (
-        <div className="w-full">
-          {/* Map Container */}
-          <div
-            ref={containerRef}
-            className="w-full rounded-xl border-2 border-[var(--gold)] overflow-hidden"
-            style={{ height: '350px', minHeight: '280px', background: '#1a1a1a' }}
-          />
-          {!mapReady && (
-            <div className="absolute inset-0 flex items-center justify-center bg-[var(--charcoal)] rounded-xl border-2 border-[var(--gold)]" style={{ height: '350px' }}>
-              <p className="text-[var(--gold-bright)] animate-pulse" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>LOADING MAP...</p>
-            </div>
-          )}
-          <div className="mt-3 flex flex-col gap-2">
-            <button type="button" onClick={handleUseMyLocation} disabled={geoLoading} className="deco-btn w-full rounded-xl disabled:opacity-50">
-              {geoLoading ? '⏳ Getting location...' : '📍 Use my current location'}
-            </button>
-            {geoError && <p className="text-xs text-[var(--crimson)] border border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-2 rounded-lg">{geoError}</p>}
-            <p className="text-xs text-[var(--pewter)] text-center">Tap the map or drag the pin to set your delivery location</p>
+      <div className="w-full">
+        <div
+          ref={containerRef}
+          className="w-full rounded-xl border-2 border-[var(--gold)] overflow-hidden"
+          style={{ height: '380px', minHeight: '300px', background: '#1a1a1a' }}
+        />
+        {!mapReady && (
+          <div className="absolute inset-0 flex items-center justify-center bg-[var(--charcoal)] rounded-xl border-2 border-[var(--gold)]" style={{ height: '380px' }}>
+            <p className="text-[var(--gold-bright)] animate-pulse" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>LOADING MAP...</p>
           </div>
-        </div>
-      ) : (
-        <div className="border-2 border-[var(--gold)] bg-[var(--charcoal-light)] p-4 rounded-xl">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <p className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-1" style={{ fontFamily: 'var(--font-arcade)' }}>Selected Location</p>
-              {loading ? (
-                <p className="text-sm text-[var(--cream)]">Finding place name...</p>
-              ) : (
-                <>
-                  <p className="text-sm text-[var(--cream)] break-all leading-relaxed">{selected.placeName || selected.address}</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <span className="deco-badge deco-badge-gold rounded-md" style={{ fontSize: '7px' }}>LAT: {selected.lat.toFixed(4)}</span>
-                    <span className="deco-badge deco-badge-gold rounded-md" style={{ fontSize: '7px' }}>LNG: {selected.lng.toFixed(4)}</span>
-                  </div>
-                </>
-              )}
-            </div>
-            <button type="button" onClick={handleReset} className="deco-btn deco-btn-sm deco-btn-crimson shrink-0 rounded-lg" style={{ minHeight: '32px', padding: '6px 12px' }}>Change</button>
+        )}
+
+        {/* Pending Address Preview — must confirm */}
+        {pending && (
+          <div className="mt-3 border-2 border-[var(--gold-bright)] bg-[rgba(212,175,55,0.08)] p-4 rounded-xl">
+            <p className="text-[10px] text-[var(--gold)] uppercase mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>
+              📍 Confirm Your Address
+            </p>
+            {loading ? (
+              <p className="text-sm text-[var(--cream)] animate-pulse">Finding address...</p>
+            ) : (
+              <>
+                <p className="text-sm text-[var(--cream)] leading-relaxed break-all">{pending.placeName || pending.address}</p>
+                <div className="mt-3 flex gap-3">
+                  <button type="button" onClick={handleConfirmAddress} className="deco-btn deco-btn-sm deco-btn-gold rounded-xl flex-1">
+                    ✓ Confirm Address
+                  </button>
+                  <button type="button" onClick={() => setPending(null)} className="deco-btn deco-btn-sm deco-btn-dark rounded-xl flex-1">
+                    ✖ Cancel
+                  </button>
+                </div>
+              </>
+            )}
           </div>
+        )}
+
+        <div className="mt-3 flex flex-col gap-2">
+          <button type="button" onClick={handleUseMyLocation} disabled={geoLoading} className="deco-btn w-full rounded-xl disabled:opacity-50">
+            {geoLoading ? '⏳ Getting location...' : '📍 Use my current location'}
+          </button>
+          {geoError && <p className="text-xs text-[var(--crimson)] border border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-2 rounded-lg">{geoError}</p>}
+          <p className="text-xs text-[var(--pewter)] text-center">Tap the map or drag the pin to set your delivery location, then confirm the address above.</p>
         </div>
-      )}
+      </div>
     </div>
   );
 }
