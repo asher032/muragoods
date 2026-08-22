@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { adminCredentials, adminEmails, products, type InventoryStatus, type Order, type OrderStatus, type Product } from '@/app/lib/muragoods-data';
 import { useMemo, useState, useEffect, useCallback } from 'react';
+import { UsersCoinsPanel } from '@/app/components/UsersCoinsPanel';
 
 const statusOptions = [
   'Pending Payment',
@@ -278,6 +279,9 @@ export default function AdminPage() {
             </div>
           </div>
         </section>
+
+        {/* ─── Users & Coins Panel ──────────────────────────── */}
+        <UsersCoinsPanel userName={email} />
       </div>
 
       {/* Receipt Preview Modal */}
