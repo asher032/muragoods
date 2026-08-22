@@ -198,14 +198,14 @@ export default function CheckoutPage() {
 
   if (!isLoggedIn) {
     return (
-      <main className="min-h-screen flex items-center justify-center" style={{ background: '#1c1c1c' }}>
-        <p className="text-sm animate-pulse" style={{ fontFamily: 'var(--font-arcade)', color: '#fff' }}>LOADING...</p>
+      <main className="min-h-screen flex items-center justify-center" style={{ background: 'var(--mario-bg)' }}>
+        <p className="text-sm animate-pulse" style={{ fontFamily: 'var(--font-arcade)', color: 'var(--mario-yellow)' }}>LOADING...</p>
       </main>
     );
   }
 
   return (
-    <main style={{ minHeight: '100vh', background: '#1c1c1c' }}>
+    <main style={{ minHeight: '100vh', background: 'var(--mario-bg)' }}>
       <NavBar pageLabel="Checkout" />
 
       <div style={{ maxWidth: '900px', margin: '0 auto', padding: '20px 16px' }}>
@@ -222,9 +222,9 @@ export default function CheckoutPage() {
             <div style={{ padding: '20px' }}>
               {cartItems.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-                  <p style={{ color: '#fff', fontSize: '13px', fontWeight: 600 }}>Your cart is empty</p>
-                  <p style={{ color: '#bbb', fontSize: '11px', marginTop: '8px' }}>Add items from the menu to get started</p>
-                  <Link href="/menu" style={{ display: 'inline-block', marginTop: '16px', padding: '8px 20px', background: '#555', borderRadius: '5px', color: '#fff', fontSize: '11px', fontWeight: 600, textDecoration: 'none' }}>Go to Menu</Link>
+                  <p style={{ color: 'var(--mario-text)', fontSize: '13px', fontWeight: 600 }}>Your cart is empty</p>
+                  <p style={{ color: 'var(--mario-text-muted)', fontSize: '11px', marginTop: '8px' }}>Add items from the menu to get started</p>
+                  <Link href="/menu" style={{ display: 'inline-block', marginTop: '16px', padding: '8px 20px', background: 'rgba(255,214,10,0.15)', border: '1px solid rgba(255,214,10,0.3)', borderRadius: '5px', color: 'var(--mario-yellow)', fontSize: '11px', fontWeight: 600, textDecoration: 'none', fontFamily: 'var(--font-arcade)' }}>Go to Menu</Link>
                 </div>
               ) : (
                 <div className="cart-items">
@@ -505,10 +505,13 @@ export default function CheckoutPage() {
 
       <style jsx>{`
         .checkout-card {
-          background: #1c1c1c;
+          background: var(--mario-bg-card);
           border-radius: 19px;
           overflow: hidden;
-          box-shadow: 0px 187px 75px rgba(0,0,0,0.01), 0px 105px 63px rgba(0,0,0,0.05), 0px 47px 47px rgba(0,0,0,0.09), 0px 12px 26px rgba(0,0,0,0.1);
+          border: 1px solid rgba(255,255,255,0.08);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15), inset 0 -1px 0 rgba(255,255,255,0.05);
         }
         .checkout-title {
           width: 100%;
@@ -516,10 +519,10 @@ export default function CheckoutPage() {
           display: flex;
           align-items: center;
           padding-left: 20px;
-          border-bottom: 1px solid #2e2e2e;
+          border-bottom: 1px solid rgba(255,255,255,0.08);
           font-weight: 700;
           font-size: 11px;
-          color: #ffffff;
+          color: var(--mario-yellow);
           font-family: var(--font-arcade);
           letter-spacing: 0.5px;
         }
@@ -537,14 +540,14 @@ export default function CheckoutPage() {
         .step span {
           font-size: 13px;
           font-weight: 600;
-          color: #ffffff;
+          color: var(--mario-text);
           margin-bottom: 2px;
           display: block;
         }
         .step p {
           font-size: 11px;
           font-weight: 600;
-          color: #bbbbbb;
+          color: var(--mario-text-muted);
           margin: 0;
         }
         .input_field {
@@ -553,25 +556,26 @@ export default function CheckoutPage() {
           padding: 0 0 0 12px;
           border-radius: 5px;
           outline: none;
-          border: 1px solid #2e2e2e;
-          background-color: #333333;
-          color: #ffffff;
+          border: 1px solid rgba(255,255,255,0.1);
+          background-color: var(--mario-bg-input);
+          color: var(--mario-text);
           font-size: 12px;
           transition: all 0.3s cubic-bezier(0.15, 0.83, 0.66, 1);
           font-family: var(--font-body);
+          backdrop-filter: blur(8px);
         }
         .input_field:focus {
-          border: 1px solid transparent;
-          box-shadow: 0px 0px 0px 2px #555555;
-          background-color: #333333;
+          border: 1px solid var(--mario-yellow);
+          box-shadow: 0 0 0 3px rgba(255,214,10,0.15);
+          background-color: var(--mario-bg-input);
         }
         .input_file {
           width: 100%;
           padding: 8px 12px;
           border-radius: 5px;
-          border: 1px solid #2e2e2e;
-          background-color: #333333;
-          color: #fff;
+          border: 1px solid rgba(255,255,255,0.1);
+          background-color: var(--mario-bg-input);
+          color: var(--mario-text);
           font-size: 11px;
         }
         .cart-items {
@@ -584,9 +588,9 @@ export default function CheckoutPage() {
           align-items: center;
           justify-content: space-between;
           padding: 12px;
-          background: #222;
+          background: var(--mario-bg-input);
           border-radius: 8px;
-          border: 1px solid #2e2e2e;
+          border: 1px solid rgba(255,255,255,0.06);
         }
         .qty-controls {
           display: flex;
@@ -600,21 +604,21 @@ export default function CheckoutPage() {
           align-items: center;
           justify-content: center;
           border-radius: 5px;
-          border: 1px solid #2e2e2e;
-          background: #333;
-          color: #fff;
+          border: 1px solid rgba(255,255,255,0.1);
+          background: var(--mario-bg-input);
+          color: var(--mario-text);
           font-size: 14px;
           font-weight: 700;
           cursor: pointer;
           transition: all 0.15s;
         }
-        .qty-btn:hover { background: #555; }
-        .qty-btn-minus { color: #e63946; border-color: rgba(230,57,70,0.3); }
-        .qty-btn-plus { color: #06d6a0; border-color: rgba(6,214,160,0.3); }
+        .qty-btn:hover { background: rgba(255,255,255,0.1); }
+        .qty-btn-minus { color: var(--mario-red); border-color: rgba(230,57,70,0.3); }
+        .qty-btn-plus { color: var(--mario-green); border-color: rgba(6,214,160,0.3); }
         .qty-value {
           font-size: 12px;
           font-weight: 700;
-          color: #fff;
+          color: var(--mario-text);
           min-width: 20px;
           text-align: center;
         }
@@ -628,16 +632,17 @@ export default function CheckoutPage() {
           align-items: center;
           justify-content: center;
           height: 36px;
-          background: #555555;
+          background: rgba(255,214,10,0.15);
           border-radius: 5px;
-          border: 0;
+          border: 1px solid rgba(255,214,10,0.3);
           font-weight: 600;
           font-size: 11px;
-          color: #ffffff;
+          color: var(--mario-yellow);
           cursor: pointer;
           transition: all 0.3s cubic-bezier(0.15, 0.83, 0.66, 1);
+          font-family: var(--font-arcade);
         }
-        .promo-btn:hover { background: #777; }
+        .promo-btn:hover { background: rgba(255,214,10,0.25); }
         .payments .details {
           display: grid;
           grid-template-columns: 10fr 1fr;
@@ -646,17 +651,17 @@ export default function CheckoutPage() {
         .payments .details span:nth-child(odd) {
           font-size: 12px;
           font-weight: 600;
-          color: #ffffff;
+          color: var(--mario-text);
         }
         .payments .details span:nth-child(even) {
           font-size: 13px;
           font-weight: 600;
-          color: #bbbbbb;
+          color: var(--mario-text-muted);
           text-align: right;
         }
         .payments hr {
           height: 1px;
-          background-color: #2e2e2e;
+          background-color: rgba(255,255,255,0.08);
           border: none;
           margin: 8px 0;
           grid-column: 1 / -1;
@@ -666,13 +671,14 @@ export default function CheckoutPage() {
           align-items: center;
           justify-content: space-between;
           padding: 10px 10px 10px 20px;
-          background-color: #2e2e2e;
+          background-color: rgba(255,255,255,0.03);
           border-radius: 0 0 19px 19px;
           margin-top: -1px;
+          border-top: 1px solid rgba(255,255,255,0.08);
         }
         .price {
           font-size: 22px;
-          color: #ffffff;
+          color: var(--mario-yellow);
           font-weight: 900;
         }
         .checkout-btn {
@@ -681,17 +687,19 @@ export default function CheckoutPage() {
           justify-content: center;
           width: 150px;
           height: 36px;
-          background: #555555;
+          background: var(--mario-green);
           border-radius: 7px;
-          border: 1px solid #2e2e2e;
-          color: #ffffff;
+          border: 1px solid var(--mario-green-dark);
+          color: #0f0f1a;
           font-size: 13px;
           font-weight: 600;
           cursor: pointer;
           transition: all 0.3s cubic-bezier(0.15, 0.83, 0.66, 1);
           font-family: var(--font-arcade);
+          box-shadow: 0 3px 0 var(--mario-green-dark);
         }
-        .checkout-btn:hover { background-color: #777777; }
+        .checkout-btn:hover { background-color: #0cf0b0; transform: translateY(-1px); }
+        .checkout-btn:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--mario-green-dark); }
         .modal-overlay {
           position: fixed;
           inset: 0;
@@ -701,13 +709,16 @@ export default function CheckoutPage() {
           justify-content: center;
           z-index: 9999;
           padding: 16px;
+          backdrop-filter: blur(4px);
         }
         .modal-card {
-          background: #1c1c1c;
+          background: var(--mario-bg-card);
           border-radius: 19px;
           width: 100%;
           max-width: 400px;
-          box-shadow: 0px 187px 75px rgba(0,0,0,0.01), 0px 105px 63px rgba(0,0,0,0.05), 0px 47px 47px rgba(0,0,0,0.09), 0px 12px 26px rgba(0,0,0,0.1);
+          border: 1px solid rgba(255,255,255,0.1);
+          backdrop-filter: blur(16px);
+          box-shadow: 0 12px 40px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15);
           overflow: hidden;
         }
       `}</style>
