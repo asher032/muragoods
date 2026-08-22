@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { CoinBalance } from '@/app/components/CoinBalance';
+import { NotificationBell } from '@/app/components/NotificationBell';
 
 interface NavBarProps {
   pageLabel?: string;
@@ -59,7 +60,13 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
             <Link href="/entertainment" className="deco-btn deco-btn-sm deco-btn-crimson">
               🎮 Play
             </Link>
-          )}          <Link href="/unsent" className="deco-btn deco-btn-sm">
+          )}
+          {isLoggedIn && (
+            <Link href="/support" className="deco-btn deco-btn-sm deco-btn-dark">
+              💬 Support
+            </Link>
+          )}
+          <Link href="/unsent" className="deco-btn deco-btn-sm">
             ✉️ Unsent
           </Link>
           <Link href="/rewards" className="deco-btn deco-btn-sm">
@@ -71,6 +78,7 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
               <CoinBalance size="sm" />
             </Link>
           )}
+          {isLoggedIn && <NotificationBell />}
 
           {isLoggedIn ? (
             <>
@@ -134,6 +142,11 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
           {isLoggedIn && (
             <Link href="/entertainment" className="deco-btn deco-btn-sm deco-btn-crimson w-full" onClick={() => setMobileOpen(false)}>
               🎮 Play
+            </Link>
+          )}
+          {isLoggedIn && (
+            <Link href="/support" className="deco-btn deco-btn-sm deco-btn-dark w-full" onClick={() => setMobileOpen(false)}>
+              💬 Support
             </Link>
           )}
           <Link href="/unsent" className="deco-btn deco-btn-sm w-full" onClick={() => setMobileOpen(false)}>

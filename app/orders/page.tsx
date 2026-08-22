@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { type Order, type OrderStatus } from '@/app/lib/muragoods-data';
+import { type Order, type OrderStatus, products } from '@/app/lib/muragoods-data';
 import { NavBar } from '@/app/components/NavBar';
 import { PixelDivider } from '@/app/components/PixelDivider';
 import { PixelArt } from '@/app/components/PixelArt';
@@ -50,6 +50,41 @@ export default function OrdersPage() {
     }
     fetchOrders();
   }, [router]);
+
+  const handleReorder = (order: Order & { _id?: string }) => {
+    try {
+      const items: string[] = JSON.parse(String(order.items));
+      const cart: Record<string, { quantity: number; variantId?: string }> = {};
+
+      for (const itemStr of items) {
+        // Parse format: "Product Name (Variant) x 2"
+        const match = itemStr.match(/^(.+?)\s*\((.+?)\)\s*x\s*(\d+)$/);
+        if (match) {
+          const [, productName, variantName, qty] = match;
+          // Find product by name
+          const product = products.find(p => p.name === productName.trim());
+          if (product) {
+            const variant = product.variants.find(v => v.name === variantName.trim());
+            if (variant) {
+              const cartKey = `${product.id}__${variant.id}`;
+              cart[cartKey] = { quantity: parseInt(qty), variantId: variant.id };
+            }
+          }
+        }
+      }
+
+      if (Object.keys(cart).length === 0) {
+        alert('Could not parse items from this order. Some items may have been removed from the menu.');
+        return;
+      }
+
+      localStorage.setItem('cart', JSON.stringify(cart));
+      alert(`${Object.values(cart).reduce((s, c) => s + c.quantity, 0)} items added to your cart!`);
+      window.location.href = '/checkout';
+    } catch {
+      alert('Failed to parse order items for reorder.');
+    }
+  };
 
   const handleCancelOrder = async (orderId: string) => {
     const order = orders.find(o => (o._id || o.id) === orderId);
@@ -197,6 +232,15 @@ export default function OrdersPage() {
                         )}
                         {!canCancel && !isCancelled && (
                           <span className="deco-badge deco-badge-cream rounded-lg opacity-60">🔒 Locked</span>
+                        )}
+                        {order.status === 'Delivered' && (
+                          <button
+                            onClick={() => handleReorder(order)}
+                            className="deco-btn deco-btn-sm deco-btn-gold rounded-xl"
+                            style={{ minHeight: '36px', padding: '8px 16px' }}
+                          >
+                            🔄 Reorder
+                          </button>
                         )}
                       </div>
                     </div>

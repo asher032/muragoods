@@ -187,6 +187,7 @@ export default function AdminPage() {
           </div>
           <div className="flex gap-3">
             <a href="/" className="deco-btn deco-btn-sm">Back to Shop</a>
+            <a href="/admin/analytics" className="deco-btn deco-btn-sm deco-btn-gold">📊 Analytics</a>
             <button type="button" onClick={() => setIsAuthenticated(false)} className="deco-btn deco-btn-crimson">LOG OUT</button>
           </div>
         </header>
