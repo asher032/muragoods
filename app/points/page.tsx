@@ -24,6 +24,7 @@ const earnMethods = [
 
 const spendMethods = [
   { icon: '🎁', title: 'Mystery Box', desc: 'Spend 10 coins for a chance to win coins, discounts, or a free musubi', link: '/play/mysterybox', coins: '-10', color: 'var(--crimson)' },
+  { icon: '🏪', title: 'Rewards Shop', desc: 'Redeem coins for free food, vouchers, and special perks (3,000 - 50,000 coins)', link: '/rewards', coins: '3K-50K', color: 'var(--gold-bright)' },
 ];
 
 export default function PointsPage() {

@@ -59,9 +59,11 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
             <Link href="/entertainment" className="deco-btn deco-btn-sm deco-btn-crimson">
               🎮 Play
             </Link>
-          )}
-          <Link href="/unsent" className="deco-btn deco-btn-sm">
+          )}          <Link href="/unsent" className="deco-btn deco-btn-sm">
             ✉️ Unsent
+          </Link>
+          <Link href="/rewards" className="deco-btn deco-btn-sm">
+            🏪 Rewards
           </Link>
 
           {isLoggedIn && (
@@ -136,6 +138,9 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
           )}
           <Link href="/unsent" className="deco-btn deco-btn-sm w-full" onClick={() => setMobileOpen(false)}>
             ✉️ Unsent
+          </Link>
+          <Link href="/rewards" className="deco-btn deco-btn-sm w-full" onClick={() => setMobileOpen(false)}>
+            🏪 Rewards
           </Link>
           {isLoggedIn && (
             <Link href="/points" className="flex justify-center no-underline" onClick={() => setMobileOpen(false)}>
