@@ -33,11 +33,9 @@ export default function MenuPage() {
   }, []);
 
   const isDwcl = location === 'DWCL';
-  const isDaraga = location === 'Daraga';
 
   const filteredProducts = useMemo(() => {
-    let result = activeCategory === 'All' ? [...products] : products.filter((p) => p.category === activeCategory);
-    return result;
+    return activeCategory === 'All' ? [...products] : products.filter((p) => p.category === activeCategory);
   }, [activeCategory, products]);
 
   const cartItems = useMemo(() => {
@@ -102,182 +100,284 @@ export default function MenuPage() {
   };
 
   return (
-    <main className="mario-bg min-h-screen">
+    <main style={{ minHeight: '100vh', background: '#1c1c1c' }}>
       <NavBar cartCount={totalItems} />
-      <section className="px-4 py-10 sm:px-8">
-        <div className="mario-container">
-          <div className="mb-8">
-            <h1 className="mario-title text-2xl sm:text-3xl lg:text-4xl">
-              Choose Your Power-Up
-            </h1>
-            <p className="mario-subtitle mt-3">Pick your favorites from our legendary selection.</p>
+
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px 16px' }}>
+        {/* Header */}
+        <div style={{ marginBottom: '24px' }}>
+          <h1 style={{ color: '#fff', fontSize: '20px', fontWeight: 700, fontFamily: 'var(--font-arcade)', letterSpacing: '0.5px' }}>
+            MENU
+          </h1>
+          <p style={{ color: '#bbb', fontSize: '12px', marginTop: '6px' }}>Pick your favorites from our legendary selection.</p>
+        </div>
+
+        {/* Restriction Message */}
+        {restrictionMessage && (
+          <div style={{ background: 'rgba(230,57,70,0.08)', border: '1px solid rgba(230,57,70,0.25)', borderRadius: '6px', padding: '10px 14px', marginBottom: '16px', color: '#e63946', fontSize: '11px', fontWeight: 600 }}>
+            ⚠ {restrictionMessage}
           </div>
+        )}
 
-          {restrictionMessage && (
-            <div className="mb-6 mario-card border-mario-red bg-mario-red/10 p-4 text-sm text-mario-red font-arcade text-xs">
-              ⚠ {restrictionMessage}
-            </div>
-          )}
+        {/* Category Tabs */}
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '20px', flexWrap: 'wrap' }}>
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              style={{
+                padding: '8px 16px', borderRadius: '5px', border: activeCategory === cat ? '1px solid #ffd60a' : '1px solid #2e2e2e',
+                background: activeCategory === cat ? 'rgba(255,214,10,0.08)' : '#21262c', color: '#fff', fontSize: '11px', fontWeight: 600,
+                cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'var(--font-arcade)'
+              }}>
+              {cat}
+            </button>
+          ))}
+        </div>
 
-          {/* Category Tabs — no search bar */}
-          <div className="flex flex-wrap gap-3 mb-8">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`mario-btn text-xs ${activeCategory === cat ? 'mario-btn-primary' : 'mario-btn-secondary'}`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          {/* Zone Selector */}
-          <div className="mb-8">
-            <label className="mario-label">Select Delivery / Pickup Zone</label>
-            <select
-              value={location}
-              onChange={(e) => setLocation(e.target.value as ZoneKey)}
-              className="mario-select max-w-md"
-            >
+        {/* Zone Selector */}
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ fontSize: '11px', fontWeight: 600, color: '#fff', marginBottom: '6px', display: 'block' }}>Delivery / Pickup Zone</label>
+          <div className="select-wrapper">
+            <select value={location} onChange={(e) => setLocation(e.target.value as ZoneKey)} className="menu-select">
               {deliveryZones.map((zone) => (
                 <option key={zone.code} value={zone.code}>{zone.label}</option>
               ))}
             </select>
-            {!isDwcl && (
-              <div className="mt-3 mario-card border-mario-orange bg-mario-orange/10 p-3">
-                <p className="mario-text-sm text-mario-orange font-arcade">⚠ Cookies & Coffee Jelly are DWCL pickup only!</p>
-              </div>
-            )}
           </div>
+          {!isDwcl && (
+            <div style={{ marginTop: '8px', background: 'rgba(255,214,10,0.06)', border: '1px solid rgba(255,214,10,0.2)', borderRadius: '6px', padding: '8px 12px', fontSize: '11px', color: '#ffd60a', fontWeight: 600 }}>
+              ⚠ Cookies & Coffee Jelly are DWCL pickup only!
+            </div>
+          )}
+        </div>
 
-          {/* Delivery Info */}
-          <div className="mb-6 grid gap-3 sm:grid-cols-3">
-            <div className="mario-card border-mario-green p-4 text-center">
-              <span className="text-2xl">🎓</span>
-              <p className="mario-label text-mario-green mt-2">DWCL Pickup</p>
-              <p className="mario-text-xs text-mario-brown mt-1">Free · All items</p>
-            </div>
-            <div className="mario-card border-mario-blue p-4 text-center">
-              <span className="text-2xl">📍</span>
-              <p className="mario-label text-mario-blue mt-2">Daraga / Legazpi</p>
-              <p className="mario-text-xs text-mario-brown mt-1">₱30 delivery · Free 200+</p>
-            </div>
-            <div className="mario-card border-mario-orange p-4 text-center">
-              <span className="text-2xl">📬</span>
-              <p className="mario-label text-mario-orange mt-2">Custom Delivery</p>
-              <p className="mario-text-xs text-mario-brown mt-1">Within the day · Mon-Fri · Sun</p>
-            </div>
+        {/* Delivery Info Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', marginBottom: '24px' }}>
+          <div style={{ background: '#21262c', border: '1px solid #2e2e2e', borderRadius: '8px', padding: '14px', textAlign: 'center' }}>
+            <span style={{ fontSize: '20px' }}>🎓</span>
+            <p style={{ fontSize: '11px', fontWeight: 600, color: '#fff', marginTop: '6px' }}>DWCL Pickup</p>
+            <p style={{ fontSize: '10px', color: '#bbb', marginTop: '2px' }}>Free · All items</p>
           </div>
+          <div style={{ background: '#21262c', border: '1px solid #2e2e2e', borderRadius: '8px', padding: '14px', textAlign: 'center' }}>
+            <span style={{ fontSize: '20px' }}>📍</span>
+            <p style={{ fontSize: '11px', fontWeight: 600, color: '#fff', marginTop: '6px' }}>Daraga / Legazpi</p>
+            <p style={{ fontSize: '10px', color: '#bbb', marginTop: '2px' }}>₱30 delivery · Free 200+</p>
+          </div>
+          <div style={{ background: '#21262c', border: '1px solid #2e2e2e', borderRadius: '8px', padding: '14px', textAlign: 'center' }}>
+            <span style={{ fontSize: '20px' }}>📬</span>
+            <p style={{ fontSize: '11px', fontWeight: 600, color: '#fff', marginTop: '6px' }}>Custom Delivery</p>
+            <p style={{ fontSize: '10px', color: '#bbb', marginTop: '2px' }}>Within the day · Mon-Fri · Sun</p>
+          </div>
+        </div>
 
-          {/* Product Grid */}
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {filteredProducts.map((product) => {
-              const available = isProductAvailable(product);
-              return (
-                <div key={product.id} className={`mario-card group ${!available ? 'opacity-50' : ''}`}>
-                  <div className="relative h-48 bg-mario-sky-light border-b-4 border-mario-wood overflow-hidden rounded-t-lg">
-                    <Image src={product.image} alt={product.name} fill className="object-contain p-3 transition-transform group-hover:scale-110 duration-300" />
-                    {!available && (
-                      <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-20">
-                        <span className="mario-btn mario-btn-red text-xs">
-                          {product.inventory === 'Out of Stock' ? 'OUT OF STOCK' : 'DWCL ONLY'}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-5">
-                    <div className="flex items-center justify-between mb-3 gap-2">
-                      <h3 className="mario-text-sm font-arcade">{product.name}</h3>
-                      <span className={`mario-badge ${product.inventory === 'In Stock' ? 'mario-badge-green' : 'mario-badge-orange'}`}>
-                        {product.inventory}
+        {/* Product Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '14px' }}>
+          {filteredProducts.map((product) => {
+            const available = isProductAvailable(product);
+            return (
+              <div key={product.id} className="product-card" style={{ opacity: available ? 1 : 0.5 }}>
+                {/* Image */}
+                <div style={{ position: 'relative', height: '180px', background: '#0d1117', borderBottom: '1px solid #2e2e2e', overflow: 'hidden' }}>
+                  <Image src={product.image} alt={product.name} fill className="object-contain p-4" style={{ transition: 'transform 0.3s' }} />
+                  {!available && (
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span style={{ padding: '6px 14px', background: 'rgba(230,57,70,0.15)', border: '1px solid rgba(230,57,70,0.3)', borderRadius: '5px', color: '#e63946', fontSize: '10px', fontWeight: 600, fontFamily: 'var(--font-arcade)' }}>
+                        {product.inventory === 'Out of Stock' ? 'OUT OF STOCK' : 'DWCL ONLY'}
                       </span>
                     </div>
-                    <p className="mario-text-xs text-mario-brown mb-4">{product.description}</p>
-                    <div className="space-y-2 mb-5">
-                      {product.variants.map((variant) => (
-                        <div key={variant.id} className="flex items-center justify-between text-sm">
-                          <span className="mario-text-xs">{variant.name}</span>
-                          <span className="mario-price">₱{variant.price}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => openVariantModal(product)}
-                      disabled={!available}
-                      className={`w-full mario-btn ${available ? 'mario-btn-primary' : 'mario-btn-secondary opacity-50 cursor-not-allowed'}`}
-                    >
-                      {available ? '+ ADD TO CART' : 'NOT AVAILABLE'}
-                    </button>
-                  </div>
+                  )}
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
 
-      {/* Variant Modal */}
-      {selectedProduct && (
-        <div className="mario-overlay" onClick={() => setSelectedProduct(null)}>
-          <div className="mario-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="mario-modal-header">
-              <h2 className="mario-text-sm font-arcade">Select Variant</h2>
-              <p className="mario-text-xs text-mario-brown mt-1">{selectedProduct.name}</p>
-            </div>
-            <div className="mario-modal-body space-y-3">
-              {selectedProduct.variants.map((variant) => (
-                <label
-                  key={variant.id}
-                  className={`flex items-center justify-between p-4 mario-card cursor-pointer ${
-                    selectedVariantId === variant.id
-                      ? 'border-mario-yellow bg-mario-yellow/10'
-                      : 'border-mario-wood-light hover:border-mario-wood'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <input type="radio" name="variant" value={variant.id} checked={selectedVariantId === variant.id} onChange={(e) => setSelectedVariantId(e.target.value)} className="accent-mario-yellow" />
-                    <span className="mario-text-xs">{variant.name}</span>
+                {/* Info */}
+                <div style={{ padding: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <h3 style={{ color: '#fff', fontSize: '13px', fontWeight: 700 }}>{product.name}</h3>
+                    <span style={{
+                      fontSize: '9px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px',
+                      background: product.inventory === 'In Stock' ? 'rgba(6,214,160,0.1)' : 'rgba(251,133,0,0.1)',
+                      color: product.inventory === 'In Stock' ? '#06d6a0' : '#fb8500',
+                      border: `1px solid ${product.inventory === 'In Stock' ? 'rgba(6,214,160,0.25)' : 'rgba(251,133,0,0.25)'}`
+                    }}>
+                      {product.inventory}
+                    </span>
                   </div>
-                  <span className="mario-price">₱{variant.price}</span>
-                </label>
-              ))}
-            </div>
-            <div className="mario-modal-footer flex gap-3">
-              <button type="button" onClick={() => setSelectedProduct(null)} className="mario-btn mario-btn-secondary flex-1">Cancel</button>
-              <button type="button" onClick={confirmVariant} className="mario-btn mario-btn-primary flex-1">Add to Cart</button>
-            </div>
-          </div>
-        </div>
-      )}
+                  <p style={{ color: '#bbb', fontSize: '11px', marginBottom: '10px' }}>{product.description}</p>
 
-      {/* Login Prompt */}
-      {showLoginPrompt && (
-        <div className="mario-overlay" onClick={() => setShowLoginPrompt(false)}>
-          <div className="mario-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="mario-modal-header">
-              <h2 className="mario-text-sm font-arcade">Login Required</h2>
-            </div>
-            <div className="mario-modal-body text-center">
-              <p className="mario-text-xs text-mario-brown mb-6">You must sign in to add items to cart!</p>
-              <div className="space-y-3">
-                <Link href="/login" className="mario-btn mario-btn-red w-full" onClick={() => setShowLoginPrompt(false)}>LOG IN</Link>
-                <Link href="/signup" className="mario-btn mario-btn-primary w-full" onClick={() => setShowLoginPrompt(false)}>CREATE ACCOUNT</Link>
+                  {/* Variants */}
+                  <div style={{ marginBottom: '12px' }}>
+                    {product.variants.map((variant) => (
+                      <div key={variant.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '11px' }}>
+                        <span style={{ color: '#bbb' }}>{variant.name}</span>
+                        <span style={{ color: '#fff', fontWeight: 700 }}>₱{variant.price}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Add Button */}
+                  <button
+                    type="button"
+                    onClick={() => openVariantModal(product)}
+                    disabled={!available}
+                    style={{
+                      width: '100%', padding: '10px', borderRadius: '5px', border: '1px solid #2e2e2e',
+                      background: available ? '#555' : '#333', color: '#fff', fontSize: '11px', fontWeight: 600,
+                      cursor: available ? 'pointer' : 'not-allowed', transition: 'all 0.2s', fontFamily: 'var(--font-arcade)',
+                      opacity: available ? 1 : 0.4
+                    }}>
+                    {available ? '+ ADD TO CART' : 'NOT AVAILABLE'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ─── Variant Modal ─────────────────────────────── */}
+      {selectedProduct && (
+        <div className="modal-overlay" onClick={() => setSelectedProduct(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-title">SELECT VARIANT</div>
+            <div style={{ padding: '16px 20px' }}>
+              <p style={{ fontSize: '12px', color: '#bbb', marginBottom: '12px' }}>{selectedProduct.name}</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {selectedProduct.variants.map((variant) => (
+                  <label key={variant.id} className="variant-option" style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px',
+                    background: selectedVariantId === variant.id ? 'rgba(255,214,10,0.06)' : '#222',
+                    border: selectedVariantId === variant.id ? '1px solid #ffd60a' : '1px solid #2e2e2e',
+                    borderRadius: '6px', cursor: 'pointer', transition: 'all 0.2s'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <input type="radio" name="variant" value={variant.id} checked={selectedVariantId === variant.id} onChange={(e) => setSelectedVariantId(e.target.value)} style={{ accentColor: '#ffd60a' }} />
+                      <span style={{ fontSize: '12px', color: '#fff', fontWeight: 600 }}>{variant.name}</span>
+                    </div>
+                    <span style={{ fontSize: '12px', color: '#fff', fontWeight: 700 }}>₱{variant.price}</span>
+                  </label>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+                <button type="button" onClick={() => setSelectedProduct(null)} style={{ flex: 1, padding: '10px', background: '#333', border: '1px solid #2e2e2e', borderRadius: '5px', color: '#fff', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+                <button type="button" onClick={confirmVariant} style={{ flex: 1, padding: '10px', background: '#555', border: '1px solid #2e2e2e', borderRadius: '5px', color: '#fff', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>Add to Cart</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Floating Cart */}
+      {/* ─── Login Prompt ─────────────────────────────── */}
+      {showLoginPrompt && (
+        <div className="modal-overlay" onClick={() => setShowLoginPrompt(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-title">LOGIN REQUIRED</div>
+            <div style={{ padding: '20px', textAlign: 'center' }}>
+              <p style={{ fontSize: '12px', color: '#bbb', marginBottom: '16px' }}>Sign in to add items to your cart!</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <Link href="/login" style={{ display: 'block', padding: '10px', background: '#555', border: '1px solid #2e2e2e', borderRadius: '5px', color: '#fff', fontSize: '11px', fontWeight: 600, textDecoration: 'none', textAlign: 'center', fontFamily: 'var(--font-arcade)' }} onClick={() => setShowLoginPrompt(false)}>LOG IN</Link>
+                <Link href="/signup" style={{ display: 'block', padding: '10px', background: 'rgba(6,214,160,0.15)', border: '1px solid rgba(6,214,160,0.3)', borderRadius: '5px', color: '#06d6a0', fontSize: '11px', fontWeight: 600, textDecoration: 'none', textAlign: 'center', fontFamily: 'var(--font-arcade)' }} onClick={() => setShowLoginPrompt(false)}>CREATE ACCOUNT</Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Floating Cart Button ─────────────────────── */}
       {cartItems.length > 0 && (
-        <div className="fixed bottom-6 right-6 z-40">
-          <button onClick={handleCheckout} className="mario-btn mario-btn-primary mario-btn-lg mario-pulse">
+        <div style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 40 }}>
+          <button onClick={handleCheckout} style={{
+            padding: '12px 24px', borderRadius: '8px', border: '1px solid #2e2e2e',
+            background: '#555', color: '#fff', fontSize: '12px', fontWeight: 700,
+            cursor: 'pointer', boxShadow: '0 8px 32px rgba(0,0,0,0.3)', fontFamily: 'var(--font-arcade)',
+            transition: 'all 0.2s'
+          }}>
             🛒 Cart ({totalItems}) — ₱{totalPrice}
           </button>
         </div>
       )}
+
+      <style jsx>{`
+        .select-wrapper {
+          position: relative;
+          width: 200px;
+        }
+        .select-wrapper::after {
+          content: '▾';
+          position: absolute;
+          right: 12px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #bbb;
+          font-size: 12px;
+          pointer-events: none;
+        }
+        .menu-select {
+          width: 100%;
+          height: 36px;
+          padding: 0 30px 0 12px;
+          border-radius: 5px;
+          border: 1px solid #2e2e2e;
+          background-color: #0d1117;
+          color: #fff;
+          font-size: 12px;
+          font-family: var(--font-body);
+          appearance: none;
+          -webkit-appearance: none;
+          cursor: pointer;
+          outline: none;
+          transition: all 0.3s cubic-bezier(0.15, 0.83, 0.66, 1);
+        }
+        .menu-select:focus {
+          border: 1px solid transparent;
+          box-shadow: 0px 0px 0px 2px #555555;
+          background-color: #1a1f24;
+        }
+        .menu-select option {
+          background: #1c1c1c;
+          color: #fff;
+        }
+        .product-card {
+          background: #1c1c1c;
+          border-radius: 8px;
+          border: 1px solid #2e2e2e;
+          overflow: hidden;
+          transition: all 0.2s;
+        }
+        .product-card:hover {
+          border-color: #555;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+        }
+        .modal-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.7);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 9999;
+          padding: 16px;
+        }
+        .modal-card {
+          background: #1c1c1c;
+          border-radius: 12px;
+          width: 100%;
+          max-width: 400px;
+          box-shadow: 0px 187px 75px rgba(0,0,0,0.01), 0px 105px 63px rgba(0,0,0,0.05), 0px 47px 47px rgba(0,0,0,0.09), 0px 12px 26px rgba(0,0,0,0.1);
+          overflow: hidden;
+        }
+        .modal-title {
+          width: 100%;
+          height: 40px;
+          display: flex;
+          align-items: center;
+          padding-left: 20px;
+          border-bottom: 1px solid #2e2e2e;
+          font-weight: 700;
+          font-size: 11px;
+          color: #ffffff;
+          font-family: var(--font-arcade);
+        }
+      `}</style>
     </main>
   );
 }
