@@ -9,6 +9,8 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
     "leaflet": "^1.9.4",
     "mongodb": "^7.5.0",
     "mongoose": "^9.9.2",

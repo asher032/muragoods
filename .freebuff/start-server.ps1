@@ -1,0 +1,2 @@
+$proc = Start-Process -FilePath 'node.exe' -ArgumentList 'node_modules\next\dist\bin\next','dev','-p','3456' -RedirectStandardOutput 'C:\Users\marya\OneDrive\muragoods\.freebuff\preview-a0b80915-6380-4618-9e6a-655261705963.log' -RedirectStandardError 'C:\Users\marya\OneDrive\muragoods\.freebuff\preview-a0b80915-6380-4618-9e6a-655261705963.log.err' -WindowStyle Hidden -PassThru
+Write-Output $proc.Id

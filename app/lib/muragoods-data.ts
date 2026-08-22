@@ -72,7 +72,7 @@ export const products: Product[] = [
     category: "Coffee Jelly & Cookies",
     badge: "Order Now",
     color: "from-pink-200 via-red-100 to-yellow-100",
-    availability: ["DWCL", "Daraga"],
+    availability: ["DWCL"],
     inventory: "In Stock",
     icon: "COOKIES",
     image: "/images/product-cookies.png",
@@ -88,7 +88,7 @@ export const products: Product[] = [
     category: "Coffee Jelly & Cookies",
     badge: "Order Now",
     color: "from-rose-200 via-violet-100 to-fuchsia-200",
-    availability: ["DWCL", "Daraga"],
+    availability: ["DWCL"],
     inventory: "In Stock",
     icon: "COFFEE",
     image: "/images/product-coffee-jelly.png",
@@ -156,7 +156,7 @@ export const products: Product[] = [
 
 export const mockOrders: Order[] = [];
 
-export const dwclOnlyProducts: string[] = [];
+export const dwclOnlyProducts: string[] = ['cookies', 'coffee-jelly'];
 
 /** Points earned per peso spent */
 export const POINTS_PER_PESO = 0.5;

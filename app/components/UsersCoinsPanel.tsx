@@ -22,6 +22,9 @@ export function UsersCoinsPanel({ userName }: UsersCoinsPanelProps) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [deductingEmail, setDeductingEmail] = useState<string | null>(null);
+  const [addingEmail, setAddingEmail] = useState<string | null>(null);
+  const [addAmount, setAddAmount] = useState('');
+  const [addReason, setAddReason] = useState('');
   const [deductAmount, setDeductAmount] = useState('');
   const [deductReason, setDeductReason] = useState('');
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
@@ -36,6 +39,26 @@ export function UsersCoinsPanel({ userName }: UsersCoinsPanelProps) {
   }, []);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
+
+  const handleAddPoints = async (email: string) => {
+    const amount = parseInt(addAmount, 10);
+    if (!amount || amount <= 0) { alert('Enter a valid amount'); return; }
+    if (!confirm(`Add ${amount} coins to ${email}?`)) return;
+
+    const allCoins = JSON.parse(localStorage.getItem('admin_user_coins') || '{}');
+    allCoins[email] = (allCoins[email] || 0) + amount;
+    localStorage.setItem('admin_user_coins', JSON.stringify(allCoins));
+
+    const allHistory = JSON.parse(localStorage.getItem('admin_all_history') || '{}');
+    if (!allHistory[email]) allHistory[email] = [];
+    allHistory[email].unshift({ type: 'earn', amount, label: `Admin bonus: ${addReason || 'Reward'}`, date: new Date().toISOString() });
+    localStorage.setItem('admin_all_history', JSON.stringify(allHistory));
+
+    setAddingEmail(null);
+    setAddAmount('');
+    setAddReason('');
+    alert(`Added ${amount} coins to ${email}!`);
+  };
 
   const handleDeduct = async (email: string) => {
     const amount = parseInt(deductAmount, 10);
@@ -121,6 +144,9 @@ export function UsersCoinsPanel({ userName }: UsersCoinsPanelProps) {
                       <button onClick={() => setExpandedUser(expandedUser === user.email ? null : user.email)} className="deco-btn deco-btn-sm deco-btn-dark" style={{ minHeight: '28px', padding: '4px 8px', fontSize: '8px' }}>
                         {expandedUser === user.email ? 'Close' : 'View'}
                       </button>
+                      <button onClick={() => { setAddingEmail(addingEmail === user.email ? null : user.email); setAddAmount(''); setAddReason(''); }} className="deco-btn deco-btn-sm deco-btn-gold" style={{ minHeight: '28px', padding: '4px 8px', fontSize: '8px' }}>
+                        + Add
+                      </button>
                       <button onClick={() => { setDeductingEmail(deductingEmail === user.email ? null : user.email); setDeductAmount(''); setDeductReason(''); }} className="deco-btn deco-btn-sm deco-btn-crimson" style={{ minHeight: '28px', padding: '4px 8px', fontSize: '8px' }}>
                         Deduct
                       </button>
@@ -174,6 +200,21 @@ export function UsersCoinsPanel({ userName }: UsersCoinsPanelProps) {
             </div>
           );
         })()}
+
+        {/* Add Points Panel */}
+        {addingEmail && (
+          <div className="mt-4 border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.05)] rounded-xl p-4">
+            <p className="text-[10px] text-[var(--gold)] uppercase mb-3" style={{ fontFamily: 'var(--font-arcade)' }}>
+              Add Coins to {addingEmail}
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input type="number" value={addAmount} onChange={(e) => setAddAmount(e.target.value)} placeholder="Amount" min="1" className="deco-input rounded-xl w-full sm:w-32" />
+              <input type="text" value={addReason} onChange={(e) => setAddReason(e.target.value)} placeholder="Reason (optional)" className="deco-input rounded-xl flex-1" />
+              <button onClick={() => handleAddPoints(addingEmail)} className="deco-btn deco-btn-sm deco-btn-gold rounded-xl">Add Points</button>
+              <button onClick={() => setAddingEmail(null)} className="deco-btn deco-btn-sm rounded-xl">Cancel</button>
+            </div>
+          </div>
+        )}
 
         {/* Deduct Panel */}
         {deductingEmail && (

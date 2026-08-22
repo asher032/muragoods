@@ -87,9 +87,10 @@ export default function SupportPage() {
   useEffect(() => {
     if (!user) return;
     fetchMessages();
-    pollRef.current = setInterval(fetchMessages, 5000); // Poll every 5s
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(fetchMessages, 5000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [user, fetchMessages]);
+  }, [user, isAdmin]);
 
   useEffect(scrollToBottom, [messages, scrollToBottom]);
 

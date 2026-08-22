@@ -90,6 +90,7 @@ export default function AdminPage() {
     e.preventDefault();
     if (!adminEmails.includes(email)) { setError('UNAUTHORIZED! Only authorized admin accounts have access.'); return; }
     if ((email === adminCredentials.email && password === adminCredentials.password) || (email === 'mhaxthedog@gmail.com' && password === 'Jesusmaryosepcasiram')) {
+      localStorage.setItem('user', JSON.stringify({ email, name: email.split('@')[0] }));
       setIsAuthenticated(true);
       setError('');
       fetchOrders();
