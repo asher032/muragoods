@@ -71,7 +71,7 @@ export default function CheckInPage() {
     const dayInCycle = ((newStreak - 1) % 7);
     const reward = dayRewards[dayInCycle];
 
-    addCoins(reward.coins);
+    addCoins(reward.coins, `Daily Check-In Day ${newStreak}`);
     setTotalEarned(prev => prev + reward.coins);
     setCurrentStreak(newStreak);
     setCheckedInToday(true);

@@ -129,7 +129,7 @@ export default function CheckoutPage() {
         localStorage.removeItem('cart');
         setCart({});
         // Award coins
-        addCoins(pointsEarned);
+        addCoins(pointsEarned, `Order #${result.data?.id?.slice(-8) || 'placed'}`);
         setPlacedOrderId(result.data?.id || result.data?._id || '');
         setShowSuccessModal(true);
       } else {

@@ -144,10 +144,14 @@ export default function AccountProfilePage() {
           </div>
 
           {/* Quick Links */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             <Link href="/orders" className="power-card p-5 rounded-xl text-center hover:border-[var(--gold-bright)] transition-all">
               <span className="text-2xl">📋</span>
               <p className="text-[10px] text-[var(--cream)] mt-2 uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>My Orders</p>
+            </Link>
+            <Link href="/points" className="power-card p-5 rounded-xl text-center hover:border-[var(--gold-bright)] transition-all">
+              <span className="text-2xl">🪙</span>
+              <p className="text-[10px] text-[var(--cream)] mt-2 uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>My Points</p>
             </Link>
             <Link href="/menu" className="power-card p-5 rounded-xl text-center hover:border-[var(--gold-bright)] transition-all">
               <span className="text-2xl">🍕</span>

@@ -169,11 +169,11 @@ export default function TriviaPage() {
           setHighScore(finalScore);
           localStorage.setItem('muragoods_trivia_highscore', String(finalScore));
         }
-        if (coinsEarned > 0) addCoins(coinsEarned);
+        if (coinsEarned > 0) addCoins(coinsEarned, 'Trivia Challenge — Game Over');
         setPhase('gameover');
       } else if (currentIndex >= questions.length - 1) {
         // Completed all questions
-        if (coinsEarned > 0) addCoins(coinsEarned);
+        if (coinsEarned > 0) addCoins(coinsEarned, 'Trivia Challenge — Quest Complete');
         const finalScore = score;
         if (finalScore > highScore) {
           setHighScore(finalScore);

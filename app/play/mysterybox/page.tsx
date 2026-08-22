@@ -186,7 +186,7 @@ export default function MysteryBoxPage() {
     setBoxOpened(false);
 
     // Deduct coins
-    removeCoins(BOX_COST);
+    removeCoins(BOX_COST, 'Mystery Box opened');
     setTotalSpent(prev => {
       const next = prev + BOX_COST;
       localStorage.setItem('muragoods_mystery_spent', String(next));
@@ -204,7 +204,7 @@ export default function MysteryBoxPage() {
 
       // Award prize
       if (prize.type === 'coins' || prize.type === 'jackpot') {
-        addCoins(prize.value);
+        addCoins(prize.value, `Mystery Box: ${prize.label}`);
       }
 
       // Save to history

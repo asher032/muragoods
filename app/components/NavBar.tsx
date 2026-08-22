@@ -56,7 +56,11 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
             🏆 Scores
           </Link>
 
-          {isLoggedIn && <CoinBalance size="sm" />}
+          {isLoggedIn && (
+            <Link href="/points" className="no-underline">
+              <CoinBalance size="sm" />
+            </Link>
+          )}
 
           {isLoggedIn ? (
             <>
@@ -118,9 +122,9 @@ export function NavBar({ pageLabel = 'World 1-1 Food', cartCount }: NavBarProps)
             🏆 Scores
           </Link>
           {isLoggedIn && (
-            <div className="flex justify-center">
+            <Link href="/points" className="flex justify-center no-underline" onClick={() => setMobileOpen(false)}>
               <CoinBalance size="sm" />
-            </div>
+            </Link>
           )}
           {isLoggedIn ? (
             <>
