@@ -19,49 +19,54 @@ interface Question {
 
 const allQuestions: Question[] = [
   // ── Campus Knowledge ──
-  { id: 1, category: '🏫 Campus', question: 'What does DWCL stand for?', options: ['DWCL stands for Divine Word College of Legazpi', 'DWCL stands for Department of Worship and Campus Life', 'DWCL stands for Development Works in Community Learning', 'DWCL stands for Dynamic World of Creative Learning'], correct: 0, difficulty: 'easy', coinReward: 5 },
-  { id: 2, category: '🏫 Campus', question: 'What type of institution is DWCL?', options: ['A public university', 'A Catholic college run by the Divine Word missionaries', 'A private tech school', 'A government training center'], correct: 1, difficulty: 'easy', coinReward: 5 },
-  { id: 3, category: '🏫 Campus', question: 'In which city is DWCL located?', options: ['Naga City', 'Tabaco City', 'Legazpi City', 'Sorsogon City'], correct: 2, difficulty: 'easy', coinReward: 5 },
-  { id: 4, category: '🏫 Campus', question: 'DWCL is part of which larger university system?', options: ['Ateneo de Naga University System', 'University of Santo Tomas', 'Divine Word University System', 'Bicol University System'], correct: 2, difficulty: 'medium', coinReward: 10 },
-  { id: 5, category: '🏫 Campus', question: 'Which famous volcano is visible from Legazpi City?', options: ['Mount Mayon', 'Mount Apo', 'Mount Pinatubo', 'Mount Taal'], correct: 0, difficulty: 'easy', coinReward: 5 },
+  { id: 1, category: '🏫 Campus', question: 'What does DWCL stand for?', options: ['Divine Word College of Legazpi', 'Department of Worship and Campus Life', 'Development Works in Community Learning', 'Dynamic World of Creative Learning'], correct: 0, difficulty: 'easy', coinReward: 3 },
+  { id: 2, category: '🏫 Campus', question: 'What type of institution is DWCL?', options: ['A public university', 'A Catholic college run by the Divine Word missionaries', 'A private tech school', 'A government training center'], correct: 1, difficulty: 'easy', coinReward: 3 },
+  { id: 3, category: '🏫 Campus', question: 'In which city is DWCL located?', options: ['Naga City', 'Tabaco City', 'Legazpi City', 'Sorsogon City'], correct: 2, difficulty: 'easy', coinReward: 3 },
+  { id: 4, category: '🏫 Campus', question: 'DWCL is part of which larger university system?', options: ['Ateneo de Naga University System', 'University of Santo Tomas', 'Divine Word University System', 'Bicol University System'], correct: 2, difficulty: 'medium', coinReward: 5 },
+  { id: 5, category: '🏫 Campus', question: 'Which famous volcano is visible from Legazpi City?', options: ['Mount Mayon', 'Mount Apo', 'Mount Pinatubo', 'Mount Taal'], correct: 0, difficulty: 'easy', coinReward: 3 },
 
   // ── Bicol Culture ──
-  { id: 6, category: '🌶️ Bicol', question: 'What is Bicol known as the "spice capital" of the Philippines for?', options: ['Its abundance of black pepper', 'Its love for chili peppers (siling labuyo)', 'Its cinnamon production', 'Its ginger farms'], correct: 1, difficulty: 'easy', coinReward: 5 },
-  { id: 7, category: '🌶️ Bicol', question: 'What is the traditional Bicolano dish made with coconut milk and chili?', options: ['Adobo', 'Bicol Express', 'Sinigang', 'Kare-Kare'], correct: 1, difficulty: 'easy', coinReward: 5 },
-  { id: 8, category: '🌶️ Bicol', question: 'What is "laing" made from?', options: ['Taro leaves cooked in coconut milk', 'Dried fish and tomatoes', 'Rice wrapped in banana leaves', 'Grilled pork belly'], correct: 0, difficulty: 'medium', coinReward: 10 },
-  { id: 9, category: '🌶️ Bicol', question: 'What is the Bicolano word for "thank you" in the local dialect?', options: ['Salamat', 'Dios mabalos', 'Maraming salamat', 'Salamat po'], correct: 1, difficulty: 'hard', coinReward: 15 },
-  { id: 10, category: '🌶️ Bicol', question: 'Which province in Bicol is known for its whale shark (butanding) interaction?', options: ['Albay', 'Camarines Sur', 'Sorsogon', 'Camarines Norte'], correct: 2, difficulty: 'medium', coinReward: 10 },
+  { id: 6, category: '🌶️ Bicol', question: 'What is Bicol known as the "spice capital" of the Philippines for?', options: ['Its abundance of black pepper', 'Its love for chili peppers (siling labuyo)', 'Its cinnamon production', 'Its ginger farms'], correct: 1, difficulty: 'easy', coinReward: 3 },
+  { id: 7, category: '🌶️ Bicol', question: 'What is the traditional Bicolano dish made with coconut milk and chili?', options: ['Adobo', 'Bicol Express', 'Sinigang', 'Kare-Kare'], correct: 1, difficulty: 'easy', coinReward: 3 },
+  { id: 8, category: '🌶️ Bicol', question: 'What is "laing" made from?', options: ['Taro leaves cooked in coconut milk', 'Dried fish and tomatoes', 'Rice wrapped in banana leaves', 'Grilled pork belly'], correct: 0, difficulty: 'medium', coinReward: 5 },
+  { id: 9, category: '🌶️ Bicol', question: 'What is the Bicolano word for "thank you" in the local dialect?', options: ['Salamat', 'Dios mabalos', 'Maraming salamat', 'Salamat po'], correct: 1, difficulty: 'hard', coinReward: 8 },
+  { id: 10, category: '🌶️ Bicol', question: 'Which province in Bicol is known for its whale shark (butanding) interaction?', options: ['Albay', 'Camarines Sur', 'Sorsogon', 'Camarines Norte'], correct: 2, difficulty: 'medium', coinReward: 5 },
 
   // ── Food & Snacks ──
-  { id: 11, category: '🍕 Food', question: 'What is musubi primarily made of?', options: ['Bread and butter', 'Rice, meat, and nori seaweed', 'Pasta and cheese', 'Tortilla and beans'], correct: 1, difficulty: 'easy', coinReward: 5 },
-  { id: 12, category: '🍕 Food', question: 'What gives churros their classic ridged shape?', options: ['Being rolled by hand', 'Being piped through a star-shaped nozzle', 'Being cut with special scissors', 'Being pressed in a mold'], correct: 1, difficulty: 'medium', coinReward: 10 },
-  { id: 13, category: '🍕 Food', question: 'What is coffee jelly primarily made of?', options: ['Coffee-flavored gelatin with cream', 'Frozen coffee ice cream', 'Coffee beans and sugar', 'Espresso and milk foam'], correct: 0, difficulty: 'easy', coinReward: 5 },
-  { id: 14, category: '🍕 Food', question: 'What is the main ingredient in a classic Filipino ensaymada?', options: ['Rice flour', 'Enriched bread dough with butter and cheese', 'Corn meal', 'Cassava'], correct: 1, difficulty: 'medium', coinReward: 10 },
-  { id: 15, category: '🍕 Food', question: 'What does "bento" mean in Japanese?', options: ['Delicious meal', 'Packed lunch box', 'Rice ball', 'Street food'], correct: 1, difficulty: 'easy', coinReward: 5 },
+  { id: 11, category: '🍕 Food', question: 'What is musubi primarily made of?', options: ['Bread and butter', 'Rice, meat, and nori seaweed', 'Pasta and cheese', 'Tortilla and beans'], correct: 1, difficulty: 'easy', coinReward: 3 },
+  { id: 12, category: '🍕 Food', question: 'What gives churros their classic ridged shape?', options: ['Being rolled by hand', 'Being piped through a star-shaped nozzle', 'Being cut with special scissors', 'Being pressed in a mold'], correct: 1, difficulty: 'medium', coinReward: 5 },
+  { id: 13, category: '🍕 Food', question: 'What is coffee jelly primarily made of?', options: ['Coffee-flavored gelatin with cream', 'Frozen coffee ice cream', 'Coffee beans and sugar', 'Espresso and milk foam'], correct: 0, difficulty: 'easy', coinReward: 3 },
+  { id: 14, category: '🍕 Food', question: 'What is the main ingredient in a classic Filipino ensaymada?', options: ['Rice flour', 'Enriched bread dough with butter and cheese', 'Corn meal', 'Cassava'], correct: 1, difficulty: 'medium', coinReward: 5 },
+  { id: 15, category: '🍕 Food', question: 'What does "bento" mean in Japanese?', options: ['Delicious meal', 'Packed lunch box', 'Rice ball', 'Street food'], correct: 1, difficulty: 'easy', coinReward: 3 },
 
   // ── Mario & Gaming ──
-  { id: 16, category: '🍄 Mario', question: 'What is the name of Mario\'s brother?', options: ['Wario', 'Luigi', 'Toad', 'Yoshi'], correct: 1, difficulty: 'easy', coinReward: 5 },
-  { id: 17, category: '🍄 Mario', question: 'What does a Super Star do in Mario games?', options: ['Makes Mario invincible temporarily', 'Gives extra lives', 'Opens secret doors', 'Transforms Mario'], correct: 0, difficulty: 'easy', coinReward: 5 },
-  { id: 18, category: '🍄 Mario', question: 'What is the name of the princess Mario always rescues?', options: ['Princess Daisy', 'Princess Peach', 'Princess Rosalina', 'Princess Zelda'], correct: 1, difficulty: 'easy', coinReward: 5 },
-  { id: 19, category: '🍄 Mario', question: 'What power-up makes Mario grow bigger?', options: ['Super Star', 'Fire Flower', 'Super Mushroom', '1-Up Mushroom'], correct: 2, difficulty: 'easy', coinReward: 5 },
-  { id: 20, category: '🍄 Mario', question: 'In which year was the original Super Mario Bros. released?', options: ['1983', '1985', '1987', '1990'], correct: 1, difficulty: 'hard', coinReward: 15 },
+  { id: 16, category: '🍄 Mario', question: 'What is the name of Mario\'s brother?', options: ['Wario', 'Luigi', 'Toad', 'Yoshi'], correct: 1, difficulty: 'easy', coinReward: 3 },
+  { id: 17, category: '🍄 Mario', question: 'What does a Super Star do in Mario games?', options: ['Makes Mario invincible temporarily', 'Gives extra lives', 'Opens secret doors', 'Transforms Mario'], correct: 0, difficulty: 'easy', coinReward: 3 },
+  { id: 18, category: '🍄 Mario', question: 'What is the name of the princess Mario always rescues?', options: ['Princess Daisy', 'Princess Peach', 'Princess Rosalina', 'Princess Zelda'], correct: 1, difficulty: 'easy', coinReward: 3 },
+  { id: 19, category: '🍄 Mario', question: 'What power-up makes Mario grow bigger?', options: ['Super Star', 'Fire Flower', 'Super Mushroom', '1-Up Mushroom'], correct: 2, difficulty: 'easy', coinReward: 3 },
+  { id: 20, category: '🍄 Mario', question: 'In which year was the original Super Mario Bros. released?', options: ['1983', '1985', '1987', '1990'], correct: 1, difficulty: 'hard', coinReward: 8 },
 
   // ── General Knowledge ──
-  { id: 21, category: '🧠 General', question: 'What is the currency of the Philippines?', options: ['Dollar', 'Peso', 'Yuan', 'Euro'], correct: 1, difficulty: 'easy', coinReward: 5 },
-  { id: 22, category: '🧠 General', question: 'How many provinces are in the Bicol Region?', options: ['4', '5', '6', '7'], correct: 2, difficulty: 'medium', coinReward: 10 },
-  { id: 23, category: '🧠 General', question: 'What is the largest island in the Philippines?', options: ['Mindanao', 'Visayas', 'Luzon', 'Palawan'], correct: 2, difficulty: 'easy', coinReward: 5 },
-  { id: 24, category: '🧠 General', question: 'What year did the Philippines gain independence?', options: ['1896', '1898', '1946', '1986'], correct: 2, difficulty: 'medium', coinReward: 10 },
-  { id: 25, category: '🧠 General', question: 'What is the national bird of the Philippines?', options: ['Eagle', 'Maya bird', 'Parrot', 'Dove'], correct: 0, difficulty: 'medium', coinReward: 10 },
+  { id: 21, category: '🧠 General', question: 'What is the currency of the Philippines?', options: ['Dollar', 'Peso', 'Yuan', 'Euro'], correct: 1, difficulty: 'easy', coinReward: 3 },
+  { id: 22, category: '🧠 General', question: 'How many provinces are in the Bicol Region?', options: ['4', '5', '6', '7'], correct: 2, difficulty: 'medium', coinReward: 5 },
+  { id: 23, category: '🧠 General', question: 'What is the largest island in the Philippines?', options: ['Mindanao', 'Visayas', 'Luzon', 'Palawan'], correct: 2, difficulty: 'easy', coinReward: 3 },
+  { id: 24, category: '🧠 General', question: 'What year did the Philippines gain independence?', options: ['1896', '1898', '1946', '1986'], correct: 2, difficulty: 'medium', coinReward: 5 },
+  { id: 25, category: '🧠 General', question: 'What is the national bird of the Philippines?', options: ['Eagle', 'Maya bird', 'Parrot', 'Dove'], correct: 0, difficulty: 'medium', coinReward: 5 },
 ];
 
 // ─── Game Types ──────────────────────────────────────────────
 type GamePhase = 'menu' | 'playing' | 'feedback' | 'gameover' | 'complete';
 
-const QUESTION_TIME = 15; // seconds per question
-const MAX_LIVES = 3;
-const STREAK_BONUS = 5; // extra coins per streak
+const QUESTION_TIME = 10; // seconds per question (was 15)
+const QUESTION_TIME_LEGENDARY = 8; // legendary mode: 8 seconds
+const MAX_LIVES = 2; // was 3
+const MAX_LIVES_LEGENDARY = 1; // legendary mode: 1 life
+const STREAK_BONUS = 3; // extra coins per streak (was 5)
 const MAX_PLAYS_PER_DAY = 2;
 const TRIVIA_PLAYS_KEY = 'muragoods_trivia_plays';
+
+// Coin rewards are now smaller per question
+// easy: 3, medium: 5, hard: 8 (was 5/10/15)
 
 export default function TriviaPage() {
   const router = useRouter();
@@ -85,6 +90,8 @@ export default function TriviaPage() {
   const [highScore, setHighScore] = useState(0);
   const [playsToday, setPlaysToday] = useState(0);
   const [playsLeft, setPlaysLeft] = useState(MAX_PLAYS_PER_DAY);
+  const [isLegendaryMode, setIsLegendaryMode] = useState(false);
+  const [legendaryHighScore, setLegendaryHighScore] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -93,6 +100,8 @@ export default function TriviaPage() {
     setIsLoggedIn(true);
     const saved = parseInt(localStorage.getItem('muragoods_trivia_highscore') || '0', 10);
     setHighScore(saved);
+    const savedLegHS = parseInt(localStorage.getItem('muragoods_trivia_legendary_hs') || '0', 10);
+    setLegendaryHighScore(savedLegHS);
 
     // Load daily plays
     try {
@@ -116,7 +125,8 @@ export default function TriviaPage() {
   // Timer
   useEffect(() => {
     if (phase !== 'playing') return;
-    setTimer(QUESTION_TIME);
+    const qTime = isLegendaryMode ? QUESTION_TIME_LEGENDARY : QUESTION_TIME;
+    setTimer(qTime);
     timerRef.current = setInterval(() => {
       setTimer(prev => {
         if (prev <= 1) {
@@ -130,22 +140,27 @@ export default function TriviaPage() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [phase, currentIndex]);
 
-  const startGame = useCallback(() => {
+  const startGame = useCallback((legendary = false) => {
     // Check daily play limit
     if (playsLeft <= 0) {
       alert('You\'ve used all 2 plays for today! Come back tomorrow.');
       return;
     }
 
+    setIsLegendaryMode(legendary);
     let pool = [...allQuestions];
     if (selectedCategory !== 'all') {
       pool = pool.filter(q => q.category === selectedCategory);
+    }
+    // Legendary mode: only hard questions
+    if (legendary) {
+      pool = pool.filter(q => q.difficulty === 'hard' || q.difficulty === 'medium');
     }
     // Shuffle and pick 10
     const shuffled = pool.sort(() => Math.random() - 0.5).slice(0, 10);
     setQuestions(shuffled);
     setCurrentIndex(0);
-    setLives(MAX_LIVES);
+    setLives(legendary ? MAX_LIVES_LEGENDARY : MAX_LIVES);
     setScore(0);
     setStreak(0);
     setBestStreak(0);
@@ -176,9 +191,10 @@ export default function TriviaPage() {
     setIsCorrect(correct);
 
     if (correct) {
-      const timeBonus = timer > 10 ? 5 : timer > 5 ? 3 : 0;
+      const timeBonus = timer > 8 ? 3 : timer > 4 ? 2 : 0;
       const streakBonus = streak >= 2 ? STREAK_BONUS * Math.min(streak - 1, 5) : 0;
-      const total = q.coinReward + timeBonus + streakBonus;
+      const legendaryMultiplier = isLegendaryMode ? 3 : 1;
+      const total = (q.coinReward + timeBonus + streakBonus) * legendaryMultiplier;
       setScore(prev => prev + total);
       setCoinsEarned(prev => prev + total);
       setStreak(prev => {
@@ -204,15 +220,23 @@ export default function TriviaPage() {
           setHighScore(finalScore);
           localStorage.setItem('muragoods_trivia_highscore', String(finalScore));
         }
-        if (coinsEarned > 0) addCoins(coinsEarned, 'Trivia Challenge — Game Over');
+        if (isLegendaryMode && finalScore > legendaryHighScore) {
+          setLegendaryHighScore(finalScore);
+          localStorage.setItem('muragoods_trivia_legendary_hs', String(finalScore));
+        }
+        if (coinsEarned > 0) addCoins(coinsEarned, isLegendaryMode ? 'Legendary Mode — Game Over' : 'Trivia Challenge — Game Over');
         setPhase('gameover');
       } else if (currentIndex >= questions.length - 1) {
         // Completed all questions
-        if (coinsEarned > 0) addCoins(coinsEarned, 'Trivia Challenge — Quest Complete');
+        if (coinsEarned > 0) addCoins(coinsEarned, isLegendaryMode ? 'Legendary Mode — Quest Complete' : 'Trivia Challenge — Quest Complete');
         const finalScore = score;
         if (finalScore > highScore) {
           setHighScore(finalScore);
           localStorage.setItem('muragoods_trivia_highscore', String(finalScore));
+        }
+        if (isLegendaryMode && finalScore > legendaryHighScore) {
+          setLegendaryHighScore(finalScore);
+          localStorage.setItem('muragoods_trivia_legendary_hs', String(finalScore));
         }
         setPhase('complete');
       } else {
@@ -244,23 +268,32 @@ export default function TriviaPage() {
               <p className="mt-3 text-base text-[var(--gold)]">Test your knowledge and earn coins!</p>
             </div>
 
-            {/* High Score */}
-            {highScore > 0 && (
-              <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.1)] p-4 rounded-2xl text-center mb-6">
-                <p className="text-[9px] text-[var(--gold)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>High Score</p>
-                <p className="coin-price text-xl mt-1">{highScore} 🪙</p>
-              </div>
-            )}
+            {/* High Scores */}
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              {highScore > 0 && (
+                <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.1)] p-4 rounded-2xl text-center">
+                  <p className="text-[8px] text-[var(--gold)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Normal High Score</p>
+                  <p className="coin-price text-lg mt-1">{highScore} 🪙</p>
+                </div>
+              )}
+              {legendaryHighScore > 0 && (
+                <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-4 rounded-2xl text-center">
+                  <p className="text-[8px] text-[var(--crimson)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>🏆 Legendary High Score</p>
+                  <p className="text-lg mt-1" style={{ fontFamily: 'var(--font-arcade)', color: 'var(--crimson)' }}>{legendaryHighScore} 🪙</p>
+                </div>
+              )}
+            </div>
 
             {/* How It Works */}
             <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-2xl p-6 mb-6">
               <h2 className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] mb-4 text-center" style={{ fontFamily: 'var(--font-arcade)' }}>How It Works</h2>
               <div className="space-y-3">
                 {[
-                  { icon: '❤️', text: `You have ${MAX_LIVES} lives — lose all and it's game over!` },
-                  { icon: '⏱️', text: `${QUESTION_TIME} seconds per question — faster = more bonus coins!` },
+                  { icon: '❤️', text: `Normal: ${MAX_LIVES} lives · Legendary: ${MAX_LIVES_LEGENDARY} life` },
+                  { icon: '⏱️', text: `Normal: ${QUESTION_TIME}s per question · Legendary: ${QUESTION_TIME_LEGENDARY}s` },
                   { icon: '🔥', text: 'Build streaks for bonus coins (2+ correct in a row)' },
-                  { icon: '🪙', text: 'Earn 5-15 coins per correct answer + time & streak bonuses' },
+                  { icon: '🪙', text: 'Normal: 3-8 coins/question · Legendary: 3x multiplier!' },
+                  { icon: '💀', text: 'Legendary mode: only hard questions, 1 life, 8s timer' },
                 ].map(item => (
                   <div key={item.icon} className="flex items-center gap-3">
                     <span className="text-lg">{item.icon}</span>
@@ -302,16 +335,30 @@ export default function TriviaPage() {
               </p>
             </div>
 
-            {/* Start Button */}
-            <div className="text-center">
-              <button
-                onClick={startGame}
-                disabled={playsLeft <= 0}
-                className="deco-btn deco-btn-gold deco-btn-lg rounded-2xl pulse-glow disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ fontFamily: 'var(--font-arcade)', minWidth: '220px' }}
-              >
-                🎮 {playsLeft > 0 ? 'START GAME' : 'NO PLAYS LEFT'}
-              </button>
+            {/* Start Buttons */}
+            <div className="space-y-3">
+              <div className="text-center">
+                <button
+                  onClick={() => startGame(false)}
+                  disabled={playsLeft <= 0}
+                  className="deco-btn deco-btn-gold deco-btn-lg rounded-2xl pulse-glow disabled:opacity-40 disabled:cursor-not-allowed w-full"
+                  style={{ fontFamily: 'var(--font-arcade)', maxWidth: '320px' }}
+                >
+                  🎮 {playsLeft > 0 ? 'START NORMAL GAME' : 'NO PLAYS LEFT'}
+                </button>
+                <p className="text-[9px] text-[var(--pewter)] mt-2">{MAX_LIVES} lives · {QUESTION_TIME}s timer · 1x coins</p>
+              </div>
+              <div className="text-center">
+                <button
+                  onClick={() => startGame(true)}
+                  disabled={playsLeft <= 0}
+                  className="deco-btn deco-btn-crimson deco-btn-lg rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed w-full"
+                  style={{ fontFamily: 'var(--font-arcade)', maxWidth: '320px', boxShadow: '0 0 20px rgba(229,37,33,0.3)' }}
+                >
+                  💀 {playsLeft > 0 ? 'LEGENDARY MODE' : 'NO PLAYS LEFT'}
+                </button>
+                <p className="text-[9px] text-[var(--crimson)] mt-2">{MAX_LIVES_LEGENDARY} life · {QUESTION_TIME_LEGENDARY}s timer · 3x coins · HARD ONLY</p>
+              </div>
             </div>
           </div>
         </section>
@@ -352,7 +399,7 @@ export default function TriviaPage() {
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={startGame} className="deco-btn deco-btn-gold flex-1 rounded-xl" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
+                  <button onClick={() => startGame(isLegendaryMode)} className="deco-btn deco-btn-gold flex-1 rounded-xl" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
                     🔄 TRY AGAIN
                   </button>
                   <Link href="/" className="deco-btn flex-1 rounded-xl" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
@@ -403,7 +450,7 @@ export default function TriviaPage() {
                   <p className="text-[10px] text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>⭐ NEW HIGH SCORE! ⭐</p>
                 )}
                 <div className="flex gap-3">
-                  <button onClick={startGame} className="deco-btn deco-btn-gold flex-1 rounded-xl" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
+                  <button onClick={() => startGame(isLegendaryMode)} className="deco-btn deco-btn-gold flex-1 rounded-xl" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
                     🔄 PLAY AGAIN
                   </button>
                   <Link href="/" className="deco-btn flex-1 rounded-xl" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
@@ -421,8 +468,9 @@ export default function TriviaPage() {
   // ─── PLAYING / FEEDBACK ────────────────────────────────
   if (!currentQuestion) return null;
   const isFeedback = phase === 'feedback';
-  const timerPercent = (timer / QUESTION_TIME) * 100;
-  const timerColor = timer > 10 ? 'var(--emerald-bright)' : timer > 5 ? 'var(--gold-bright)' : 'var(--crimson)';
+  const maxTime = isLegendaryMode ? QUESTION_TIME_LEGENDARY : QUESTION_TIME;
+  const timerPercent = (timer / maxTime) * 100;
+  const timerColor = timer > maxTime * 0.6 ? 'var(--emerald-bright)' : timer > maxTime * 0.3 ? 'var(--gold-bright)' : 'var(--crimson)';
 
   return (
     <main className="min-h-screen">

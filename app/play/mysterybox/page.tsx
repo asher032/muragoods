@@ -122,9 +122,10 @@ const prizes: Prize[] = [
   },
 ];
 
-// Weighted random selection
+// Weighted random selection — LEGENDARIES ARE EXTREMELY RARE
+// Common: 66%, Rare: 31%, Legendary: ~1.3%
 function rollPrize(): Prize {
-  const weights = [25, 20, 18, 10, 8, 8, 5, 3, 1.5, 1.5]; // total ~100
+  const weights = [28, 22, 16, 10, 8, 8, 5, 0.5, 0.3, 2.2]; // total ~100
   const rand = Math.random() * 100;
   let cumulative = 0;
   for (let i = 0; i < prizes.length; i++) {
@@ -133,6 +134,13 @@ function rollPrize(): Prize {
   }
   return prizes[0];
 }
+
+// Legendary tier: ultra-rare drops that require extreme luck
+const LEGENDARY_TIERS = [
+  { id: 'mythic', label: '👑 MYTHIC DROP', description: '1 in 500 chance. The rarest thing in MuraGoods.', chance: '1/500', icon: '👑', color: '#ff6b35' },
+  { id: 'legendary', label: '★ LEGENDARY', description: '1 in 77 chance. Extremely lucky!', chance: '1/77', icon: '⭐', color: '#ffd60a' },
+  { id: 'epic', label: '💎 EPIC', description: '1 in 25 chance. Very fortunate!', chance: '1/25', icon: '💎', color: '#a855f7' },
+];
 
 const rarityLabels: Record<string, string> = {
   common: 'COMMON',
@@ -157,6 +165,11 @@ export default function MysteryBoxPage() {
   const [history, setHistory] = useState<(Prize & { date: string })[]>([]);
   const [totalOpened, setTotalOpened] = useState(0);
   const [totalSpent, setTotalSpent] = useState(0);
+  const [legendaryCount, setLegendaryCount] = useState(0);
+  const [mythicCount, setMythicCount] = useState(0);
+  const [showTierReveal, setShowTierReveal] = useState<string | null>(null);
+  const [maxStreak, setMaxStreak] = useState(0);
+  const [currentStreak, setCurrentStreak] = useState(0);
   const { coins, addCoins, removeCoins } = useCoins();
 
   useEffect(() => {
@@ -174,6 +187,12 @@ export default function MysteryBoxPage() {
     setTotalOpened(savedTotal);
     const savedSpent = parseInt(localStorage.getItem('muragoods_mystery_spent') || '0', 10);
     setTotalSpent(savedSpent);
+    const savedLeg = parseInt(localStorage.getItem('muragoods_mystery_legendary') || '0', 10);
+    setLegendaryCount(savedLeg);
+    const savedMythic = parseInt(localStorage.getItem('muragoods_mystery_mythic') || '0', 10);
+    setMythicCount(savedMythic);
+    const savedStreak = parseInt(localStorage.getItem('muragoods_mystery_maxstreak') || '0', 10);
+    setMaxStreak(savedStreak);
   }, [router]);
 
   const handleOpen = () => {
@@ -202,6 +221,45 @@ export default function MysteryBoxPage() {
       const prize = rollPrize();
       setRevealPrize(prize);
 
+      // Check for legendary tier drop (separate roll — much harder)
+      const tierRoll = Math.random();
+      let tierDrop: string | null = null;
+      if (tierRoll < 0.002) { // 1/500 — Mythic
+        tierDrop = 'mythic';
+        setMythicCount(prev => {
+          const next = prev + 1;
+          localStorage.setItem('muragoods_mystery_mythic', String(next));
+          return next;
+        });
+        addCoins(100, 'MYTHIC DROP BONUS!');
+      } else if (tierRoll < 0.015) { // 1/77 — Legendary
+        tierDrop = 'legendary';
+        setLegendaryCount(prev => {
+          const next = prev + 1;
+          localStorage.setItem('muragoods_mystery_legendary', String(next));
+          return next;
+        });
+        addCoins(50, 'LEGENDARY DROP BONUS!');
+      } else if (tierRoll < 0.055) { // 1/25 — Epic
+        tierDrop = 'epic';
+        addCoins(25, 'EPIC DROP BONUS!');
+      }
+
+      if (tierDrop) {
+        setTimeout(() => setShowTierReveal(tierDrop), 800);
+        setCurrentStreak(prev => {
+          const next = prev + 1;
+          setMaxStreak(m => {
+            const newMax = Math.max(m, next);
+            localStorage.setItem('muragoods_mystery_maxstreak', String(newMax));
+            return newMax;
+          });
+          return next;
+        });
+      } else {
+        setCurrentStreak(0);
+      }
+
       // Award prize
       if (prize.type === 'coins' || prize.type === 'jackpot') {
         addCoins(prize.value, `Mystery Box: ${prize.label}`);
@@ -223,7 +281,7 @@ export default function MysteryBoxPage() {
       }
 
       // Save to history
-      const entry = { ...prize, date: new Date().toISOString() };
+      const entry = { ...prize, date: new Date().toISOString(), tier: tierDrop };
       const newHistory = [entry, ...history].slice(0, 50);
       setHistory(newHistory);
       localStorage.setItem('muragoods_mystery_history', JSON.stringify(newHistory));
@@ -395,12 +453,38 @@ export default function MysteryBoxPage() {
             </div>
           )}
 
+          {/* Legendary Tier Progress */}
+          <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-2xl p-5 mb-6">
+            <h2 className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] mb-4 text-center" style={{ fontFamily: 'var(--font-arcade)' }}>
+              Drop Rarity Tiers
+            </h2>
+            <div className="space-y-3">
+              {LEGENDARY_TIERS.map(tier => (
+                <div key={tier.id} className="flex items-center gap-3 p-3 bg-[var(--charcoal-light)] rounded-xl border border-[rgba(242,240,228,0.08)]">
+                  <span className="text-2xl">{tier.icon}</span>
+                  <div className="flex-1">
+                    <p className="text-[10px] uppercase" style={{ fontFamily: 'var(--font-arcade)', color: tier.color }}>{tier.label}</p>
+                    <p className="text-[9px] text-[var(--pewter)]">{tier.description}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[9px] text-[var(--pewter)]" style={{ fontFamily: 'var(--font-arcade)' }}>{tier.chance}</p>
+                    <p className="text-[10px] mt-1" style={{ fontFamily: 'var(--font-arcade)', color: tier.color }}>
+                      {tier.id === 'mythic' ? mythicCount : tier.id === 'legendary' ? legendaryCount : '—'}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-3 mb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-8">
             {[
               { label: 'Opened', value: String(totalOpened), icon: '📦' },
               { label: 'Spent', value: `${totalSpent}`, icon: '🪙' },
               { label: 'Balance', value: String(coins), icon: '💰' },
+              { label: 'Legendaries', value: String(legendaryCount), icon: '⭐' },
+              { label: 'Best Streak', value: String(maxStreak), icon: '🔥' },
             ].map(stat => (
               <div key={stat.label} className="power-card p-4 text-center rounded-xl">
                 <span className="text-lg">{stat.icon}</span>
@@ -456,6 +540,26 @@ export default function MysteryBoxPage() {
           </div>
         </div>
       </section>
+
+      {/* ─── Tier Reveal Overlay ──────────────────────── */}
+      {showTierReveal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)' }} onClick={() => setShowTierReveal(null)}>
+          <div className="text-center" style={{ animation: 'bounceIn 0.5s ease' }}>
+            {(() => {
+              const tier = LEGENDARY_TIERS.find(t => t.id === showTierReveal);
+              if (!tier) return null;
+              return (
+                <>
+                  <div style={{ fontSize: '80px', marginBottom: '20px', animation: 'coinFloat 1s ease-in-out infinite' }}>{tier.icon}</div>
+                  <h2 style={{ fontFamily: 'var(--font-arcade)', fontSize: '24px', color: tier.color, textShadow: `0 0 40px ${tier.color}`, marginBottom: '8px' }}>{tier.label}</h2>
+                  <p style={{ fontSize: '14px', color: 'var(--mario-text-muted)', marginBottom: '20px' }}>{tier.description}</p>
+                  <p style={{ fontSize: '12px', color: 'var(--mario-text-muted)' }}>Tap anywhere to close</p>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </main>
   );
 }
