@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import User from '@/app/lib/models/User';
 import crypto from 'crypto';
+import { sendPasswordResetEmail } from '@/lib/email';
 
 export async function POST(req: Request) {
   try {
@@ -27,11 +28,19 @@ export async function POST(req: Request) {
     user.passwordResetExpires = expiresAt;
     await user.save();
 
+    // Send reset code via email
+    let emailSent = false;
+    try {
+      emailSent = await sendPasswordResetEmail(email, code, user.name);
+    } catch (e) {
+      console.error('[ForgotPassword] Email send failed:', e);
+    }
+
     return NextResponse.json({ 
       success: true, 
-      message: `Your verification code is: ${code}. This code expires in 15 minutes. Ask an admin for it.`,
-      // In production, this would be sent via email
-      _debug_code: code,
+      message: emailSent 
+        ? `A verification code has been sent to ${email}. Check your inbox!`
+        : `If an account exists, a code has been generated. Check your email or ask an admin.`,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'An error occurred';

@@ -14,6 +14,8 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [agreeToTos, setAgreeToTos] = useState(false);
   const [referralCode, setReferralCode] = useState('');
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
   const router = useRouter();
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -48,7 +50,8 @@ export default function SignupPage() {
 
       if (result.success) {
         localStorage.setItem('user', JSON.stringify(result.data));
-        router.push('/');
+        setEmailSent(result.data.emailSent);
+        setShowSuccess(true);
       } else {
         setError(result.error || 'Signup failed');
       }
@@ -230,6 +233,36 @@ export default function SignupPage() {
           </Link>
         </div>
       </div>
+      {/* ─── Success Modal ─────────────────────────────── */}
+      {showSuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
+          <div className="w-full max-w-md border-2 border-[var(--emerald)] bg-[var(--charcoal)] p-8" style={{ borderRadius: '16px' }}>
+            <div className="text-center">
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(6,214,160,0.15)', border: '2px solid rgba(6,214,160,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '24px' }}>
+                📧
+              </div>
+              <h2 className="text-lg mb-2 text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)' }}>ACCOUNT CREATED!</h2>
+              <p className="text-sm text-[var(--cream-muted)] mb-4">
+                {emailSent
+                  ? <>We sent a <strong style={{ color: 'var(--mario-yellow)' }}>6-digit verification code</strong> to your email. Check your inbox!</>
+                  : <>Your account is ready. You can verify your email later from your profile.</>
+                }
+              </p>
+              <div style={{ background: 'rgba(255,214,10,0.06)', border: '1px solid rgba(255,214,10,0.15)', borderRadius: '8px', padding: '12px', marginBottom: '20px' }}>
+                <p style={{ fontSize: '11px', color: 'var(--mario-text-muted)' }}>Go to <strong style={{ color: 'var(--mario-yellow)' }}>muragoods.vercel.app/verify-email</strong> and enter the code sent to your email.</p>
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button onClick={() => { setShowSuccess(false); router.push('/verify-email'); }} style={{ flex: 1, padding: '12px', background: 'var(--mario-yellow)', border: 'none', borderRadius: '10px', color: '#0f0f1a', fontFamily: 'var(--font-arcade)', fontSize: '10px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 3px 0 var(--mario-yellow-dark)' }}>
+                  VERIFY NOW
+                </button>
+                <button onClick={() => { setShowSuccess(false); router.push('/'); }} style={{ flex: 1, padding: '12px', background: 'var(--mario-bg-card)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: 'var(--mario-text)', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
+                  Skip for now
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

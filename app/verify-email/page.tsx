@@ -67,8 +67,8 @@ export default function VerifyEmailPage() {
           </div>
 
           <h1 className="text-lg mb-2 text-center text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)' }}>ENTER CODE</h1>
-          <p className="text-xs text-[var(--pewter)] mb-2 text-center">Enter the 6-digit verification code.</p>
-          <p className="text-[10px] text-[var(--gold)] mb-6 text-center" style={{ fontFamily: 'var(--font-arcade)' }}>Ask an admin at @muragoods_ for your code</p>
+          <p className="text-xs text-[var(--pewter)] mb-2 text-center">We sent a 6-digit code to your email.</p>
+          <p className="text-[10px] text-[var(--gold)] mb-6 text-center" style={{ fontFamily: 'var(--font-arcade)' }}>Check your inbox (and spam folder!)</p>
 
           <form onSubmit={handleVerify} className="space-y-4">
             <label className="block">

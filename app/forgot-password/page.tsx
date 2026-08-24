@@ -132,8 +132,8 @@ export default function ForgotPasswordPage() {
           {step === 'verify' && (
             <>
               <h1 className="text-lg mb-2 text-center text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)' }}>ENTER CODE</h1>
-              <p className="text-xs text-[var(--pewter)] mb-2 text-center">We generated a 6-digit code for you.</p>
-              <p className="text-[10px] text-[var(--gold)] mb-6 text-center" style={{ fontFamily: 'var(--font-arcade)' }}>Ask an admin for your code at @muragoods_</p>
+              <p className="text-xs text-[var(--pewter)] mb-2 text-center">Check your email for the 6-digit code.</p>
+              <p className="text-[10px] text-[var(--gold)] mb-6 text-center" style={{ fontFamily: 'var(--font-arcade)' }}>Check your inbox (and spam folder!)</p>
               <form onSubmit={handleVerifyCode} className="space-y-4">
                 <label className="block">
                   <span className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2 block" style={{ fontFamily: 'var(--font-arcade)' }}>Verification Code</span>

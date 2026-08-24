@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import User from '@/app/lib/models/User';
 import crypto from 'crypto';
+import { sendVerificationEmail } from '@/lib/email';
 
 export async function POST(req: Request) {
   try {
@@ -51,6 +52,14 @@ export async function POST(req: Request) {
       referralUsed: false,
     });
 
+    // Send verification email
+    let emailSent = false;
+    try {
+      emailSent = await sendVerificationEmail(email, verificationCode, name);
+    } catch (e) {
+      console.error('[Signup] Email send failed:', e);
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -60,7 +69,7 @@ export async function POST(req: Request) {
         createdAt: user.createdAt,
         emailVerified: false,
         referralCode: user.referralCode,
-        _debug_verification_code: verificationCode,
+        emailSent,
       },
     }, { status: 201 });
   } catch (error: unknown) {
