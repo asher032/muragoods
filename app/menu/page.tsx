@@ -29,8 +29,6 @@ const productMeta: Record<string, { rating: number; reviews: number; popular: bo
 
 // Combo deals
 const comboDeals = [
-  { id: 'combo1', name: 'Musubi + Coffee Jelly', original: 55, combo: 45, items: ['musubi', 'coffee-jelly'], emoji: '🍱☕', desc: 'Perfect campus lunch combo' },
-  { id: 'combo2', name: 'Churros + Coffee Jelly', original: 85, combo: 70, items: ['churros', 'coffee-jelly'], emoji: '🍩☕', desc: 'Snack time bundle' },
   { id: 'combo3', name: 'Musubi + Churros', original: 110, combo: 95, items: ['musubi', 'churros'], emoji: '🍱🍩', desc: 'Power-up duo' },
 ];
 
