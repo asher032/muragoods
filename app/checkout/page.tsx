@@ -138,6 +138,40 @@ export default function CheckoutPage() {
 
   const handleRemovePromo = () => { setPromoApplied(null); setPromoError(''); };
 
+  // Owned discount codes from mystery box wins
+  const [ownedCodes, setOwnedCodes] = useState<{ code: string; label: string; wonAt: string; used?: boolean }[]>([]);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('muragoods_discount_codes') || '[]');
+      setOwnedCodes(saved);
+    } catch { setOwnedCodes([]); }
+  }, []);
+
+  const unusedCodes = ownedCodes.filter(c => !c.used);
+
+  // Auto-apply best available discount code
+  const autoApplyBestCode = () => {
+    if (discountApplied) return;
+    const codePriority = ['MYSTERY20', 'MYSTERY15', 'MYSTERY10', 'FREEMUSUBI'];
+    const unusedOwned = unusedCodes.map(c => c.code);
+    for (const code of codePriority) {
+      if (unusedOwned.includes(code)) {
+        const codeData = validCodes[code];
+        if (codeData) {
+          setDiscountApplied({ code, type: codeData.type, value: codeData.value, label: codeData.label });
+          return;
+        }
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (cartItems.length > 0 && !discountApplied && unusedCodes.length > 0) {
+      autoApplyBestCode();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartItems.length]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -146,10 +180,8 @@ export default function CheckoutPage() {
     const phoneDigits = phone.replace(/[\s\-()+]/g, '');
     if (!phoneDigits || phoneDigits.length < 10 || phoneDigits.length > 15) { setError('Please enter a valid contact number (10-15 digits).'); return; }
     if (!isDwcl && !isCustom && !mapAddress) { setError('Please select your delivery location on the map'); return; }
-    if (!customOrderDate) { setError('Please enter your preferred order date'); return; }
-    if (isGcash) {
+    if (!customOrderDate) { setError('Please enter your preferred order date'); return; }      if (isGcash) {
       if (!gcashRef.trim() || gcashRef.trim().length < 5) { setError('Please enter a valid GCash reference number.'); return; }
-      if (!gcashFile) { setError('Payment proof is required. Please upload your GCash receipt.'); return; }
     }
     setIsSubmitting(true);
     const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -369,40 +401,53 @@ export default function CheckoutPage() {
                   </div>
 
                   {isGcash && (
-                    <div style={{ marginTop: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid #2e2e2e', borderRadius: '8px', padding: '16px' }}>
-                      <p style={{ fontSize: '11px', fontWeight: 600, color: '#ffd60a', marginBottom: '12px' }}>💳 GCash Payment</p>
-                      {/* QR Code */}
-                      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
-                        <div style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '2px solid rgba(255,214,10,0.3)', textAlign: 'center' }}>
-                          <img src="/images/gcash-qr.png" alt="GCash QR Code" style={{ width: '200px', height: '200px', objectFit: 'contain', display: 'block', borderRadius: '8px' }} onError={(e) => {
-                            const img = e.target as HTMLImageElement;
-                            img.style.display = 'none';
-                            const fallback = img.nextElementSibling as HTMLElement;
-                            if (fallback) fallback.style.display = 'flex';
-                          }} />
-                          <div style={{ display: 'none', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '200px', height: '200px', background: '#f0f4f8', borderRadius: '8px' }}>
-                            <span style={{ fontSize: '40px', marginBottom: '8px' }}>💳</span>
-                            <p style={{ fontSize: '12px', color: '#1a1a2e', fontWeight: 700, fontFamily: 'var(--font-arcade)' }}>GCash</p>
-                            <p style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>Scan QR in GCash app</p>
-                          </div>
-                          <p style={{ fontSize: '10px', color: '#666', textAlign: 'center', marginTop: '8px' }}>Scan to pay with GCash</p>
+                    <div style={{ marginTop: '12px', background: '#0064e0', borderRadius: '16px', padding: '0', overflow: 'hidden', border: '2px solid #0050b3' }}>
+                      {/* GCash Header */}
+                      <div style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ fontSize: '14px', fontWeight: 900, color: '#0064e0' }}>G</span>
                         </div>
+                        <span style={{ fontSize: '18px', fontWeight: 700, color: '#fff', letterSpacing: '0.5px' }}>GCash</span>
                       </div>
-                      <p style={{ fontSize: '12px', color: '#fff', marginBottom: '6px', textAlign: 'center' }}>Send to: <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#ffd60a' }}>0946 647 2599</span></p>
-                      <p style={{ fontSize: '10px', color: 'var(--mario-text-muted)', marginBottom: '12px', textAlign: 'center' }}>Name: <span style={{ color: '#ffd60a' }}>muragoods</span></p>
-                      <div style={{ marginBottom: '12px' }}>
-                        <p style={{ fontSize: '11px', fontWeight: 600, color: '#fff', marginBottom: '6px' }}>Reference Number *</p>
-                        <input type="text" value={gcashRef} onChange={(e) => setGcashRef(e.target.value)} placeholder="GCash reference number" className="input_field" required={isGcash} />
+                      {/* QR Code Card */}
+                      <div style={{ margin: '0 16px 16px', background: '#fff', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
+                        <img src="/images/gcash-qr.png" alt="Scan this QR code to pay with GCash" style={{ width: '220px', height: '220px', objectFit: 'contain', display: 'block', margin: '0 auto', borderRadius: '8px' }} onError={(e) => {
+                          const img = e.target as HTMLImageElement;
+                          img.style.display = 'none';
+                          const fallback = img.nextElementSibling as HTMLElement;
+                          if (fallback) fallback.style.display = 'flex';
+                        }} />
+                        <div style={{ display: 'none', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '220px', height: '220px', margin: '0 auto', background: '#f5f7fa', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
+                          <span style={{ fontSize: '36px', marginBottom: '6px' }}>📱</span>
+                          <p style={{ fontSize: '12px', color: '#333', fontWeight: 700 }}>Open GCash App</p>
+                          <p style={{ fontSize: '10px', color: '#888', marginTop: '4px' }}>Scan QR to pay</p>
+                        </div>
+                        <p style={{ fontSize: '11px', color: '#888', marginTop: '10px' }}>Transfer fees may apply.</p>
                       </div>
-                      <div>
-                        <p style={{ fontSize: '11px', fontWeight: 600, color: '#fff', marginBottom: '6px' }}>Upload Receipt *</p>
-                        <input type="file" accept="image/*" onChange={(e) => setGcashFile(e.target.files?.[0] || null)} className="input_file" required={isGcash} />
+                      <div style={{ margin: '0 16px 16px', background: '#fff', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
+                        <p style={{ fontSize: '18px', fontWeight: 700, color: '#0064e0', marginBottom: '4px' }}>muragoods</p>
+                        <p style={{ fontSize: '12px', color: '#888' }}>Mobile No.: <span style={{ color: '#333' }}>+63 946 647 ****</span></p>
+                      </div>
+                      <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', textAlign: 'center', padding: '0 16px 14px' }}>Open your GCash app → Scan the QR above → Enter amount → Send</p>
+                      <div style={{ marginTop: '12px' }}>
+                        <div style={{ marginBottom: '10px', background: 'rgba(255,214,10,0.06)', border: '1px solid rgba(255,214,10,0.15)', borderRadius: '8px', padding: '10px 12px' }}>
+                          <p style={{ fontSize: '10px', color: '#ffd60a', fontWeight: 600 }}>📋 After paying, enter your GCash reference number below</p>
+                        </div>
+                        <div style={{ marginBottom: '10px' }}>
+                          <p style={{ fontSize: '11px', fontWeight: 600, color: '#fff', marginBottom: '6px' }}>Reference Number *</p>
+                          <input type="text" value={gcashRef} onChange={(e) => setGcashRef(e.target.value)} placeholder="e.g. 1234567890123" className="input_field" required={isGcash} />
+                        </div>
+                        <div>
+                          <p style={{ fontSize: '11px', fontWeight: 600, color: '#fff', marginBottom: '6px' }}>Upload Screenshot (optional)</p>
+                          <input type="file" accept="image/*" onChange={(e) => setGcashFile(e.target.files?.[0] || null)} className="input_file" />
+                          <p style={{ fontSize: '9px', color: 'var(--mario-text-muted)', marginTop: '4px' }}>Optional: helps us verify your payment faster</p>
+                        </div>
                       </div>
                     </div>
                   )}
 
                   {!isGcash && (
-                    <div style={{ marginTop: '12px', background: 'rgba(6,214,160,0.06)', border: '1px solid rgba(6,214,160,0.2)', borderRadius: '8px', padding: '16px' }}>
+                    <div style={{ marginTop: '12px', background: 'rgba(6,214,160,0.06)', border: '1px solid rgba(6,214,160,0.2)', borderRadius: '12px', padding: '16px' }}>
                       <p style={{ fontSize: '11px', fontWeight: 600, color: '#06d6a0' }}>💵 Cash on Delivery</p>
                       <p style={{ fontSize: '12px', color: '#fff', marginTop: '6px' }}>{isDwcl ? 'Pay in cash when you pick up your order. No payment proof needed!' : 'Pay in cash when delivered. No payment proof needed!'}</p>
                     </div>
@@ -414,6 +459,43 @@ export default function CheckoutPage() {
               <div className="checkout-card" style={{ marginTop: '12px' }}>
                 <div className="checkout-title">CODES & PROMOS</div>
                 <div className="cart-steps">
+                  {/* Owned Codes */}
+                  {unusedCodes.length > 0 && (
+                    <div style={{ background: 'rgba(255,214,10,0.06)', border: '1px solid rgba(255,214,10,0.15)', borderRadius: '10px', padding: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <p style={{ fontSize: '11px', fontWeight: 600, color: '#ffd60a' }}>🎁 Your Codes ({unusedCodes.length} available)</p>
+                        {!discountApplied && (
+                          <button type="button" onClick={autoApplyBestCode} style={{ fontSize: '9px', padding: '4px 10px', background: 'rgba(255,214,10,0.15)', border: '1px solid rgba(255,214,10,0.3)', borderRadius: '5px', color: '#ffd60a', cursor: 'pointer', fontWeight: 600, fontFamily: 'var(--font-arcade)' }}>AUTO-APPLY BEST</button>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {unusedCodes.map((code) => (
+                          <button
+                            key={code.code}
+                            type="button"
+                            onClick={() => {
+                              if (!discountApplied) {
+                                setDiscountCode(code.code);
+                                setTimeout(() => {
+                                  const codeData = validCodes[code.code];
+                                  if (codeData) {
+                                    setDiscountApplied({ code: code.code, type: codeData.type, value: codeData.value, label: codeData.label });
+                                    setDiscountCode('');
+                                  }
+                                }, 50);
+                              }
+                            }}
+                            style={{
+                              padding: '6px 10px', borderRadius: '6px', border: '1px solid rgba(255,214,10,0.25)', background: 'rgba(255,214,10,0.08)', color: '#ffd60a', fontSize: '9px', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-arcade)', opacity: discountApplied ? 0.5 : 1,
+                            }}
+                          >
+                            {code.code} — {code.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Discount Code */}
                   <div className="step">
                     <span>🎁 Discount Code</span>

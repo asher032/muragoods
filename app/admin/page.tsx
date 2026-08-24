@@ -215,6 +215,8 @@ export default function AdminPage() {
             <a href="/" className="deco-btn deco-btn-sm">Back to Shop</a>
             <a href="/admin/analytics" className="deco-btn deco-btn-sm deco-btn-gold">📊 Analytics</a>
             <a href="/admin/promo-codes" className="deco-btn deco-btn-sm deco-btn-gold">🎁 Promos</a>
+            <a href="/admin/support" className="deco-btn deco-btn-sm deco-btn-gold">💬 Support</a>
+            <a href="/admin/verification" className="deco-btn deco-btn-sm deco-btn-gold">📧 Verify</a>
             <button type="button" onClick={() => setIsAuthenticated(false)} className="deco-btn deco-btn-crimson">LOG OUT</button>
           </div>
         </header>

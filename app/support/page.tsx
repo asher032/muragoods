@@ -1,357 +1,313 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { NavBar } from '@/app/components/NavBar';
 
-interface ChatMsg {
-  _id: string;
+type Message = {
   sender: string;
   senderName: string;
-  senderEmail: string;
-  recipient: string;
-  message: string;
-  isAdmin: boolean;
-  read: boolean;
-  orderId: string;
-  createdAt: string;
-}
+  text: string;
+  timestamp: string;
+  isAutoReply?: boolean;
+};
 
-const adminEmails = ['muragoods0@gmail.com', 'mhaxthedog@gmail.com'];
+type Ticket = {
+  _id: string;
+  userId: string;
+  userName: string;
+  subject: string;
+  category: string;
+  status: 'open' | 'replied' | 'closed';
+  messages: Message[];
+  lastActivity: string;
+  createdAt: string;
+};
+
+const categories = [
+  { value: 'General', label: '💬 General Question' },
+  { value: 'Order', label: '📦 Order Issue' },
+  { value: 'Payment', label: '💳 Payment Problem' },
+  { value: 'Delivery', label: '🚚 Delivery Question' },
+  { value: 'Refund', label: '💰 Refund Request' },
+  { value: 'Account', label: '👤 Account Issue' },
+  { value: 'Feedback', label: '⭐ Feedback' },
+  { value: 'Bug', label: '🐛 Bug Report' },
+];
 
 export default function SupportPage() {
   const router = useRouter();
-  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [user, setUser] = useState<{ name?: string; email?: string } | null>(null);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
+  const [view, setView] = useState<'list' | 'chat' | 'new'>('list');
+  const [newSubject, setNewSubject] = useState('');
+  const [newCategory, setNewCategory] = useState('General');
   const [newMessage, setNewMessage] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [activeChat, setActiveChat] = useState<string>('');
-  const [userList, setUserList] = useState<{ email: string; name: string; unread: number; lastMessage: string; lastTime: string }[]>([]);
-  const [newChatEmail, setNewChatEmail] = useState('');
+  const [chatMessage, setChatMessage] = useState('');
+  const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, []);
-
-  // Load user
   useEffect(() => {
     const userStr = localStorage.getItem('user');
     if (!userStr) { router.push('/login'); return; }
-    const u = JSON.parse(userStr);
-    setUser(u);
-    setIsAdmin(adminEmails.includes(u.email));
+    const userData = JSON.parse(userStr);
+    setUser(userData);
+    fetchTickets(userData.email);
   }, [router]);
 
-  // Fetch messages
-  const fetchMessages = useCallback(async () => {
-    if (!user) return;
-    try {
-      const isUserAdmin = adminEmails.includes(user.email);
-      if (isUserAdmin) {
-        const res = await fetch(`/api/chat?isAdmin=true&email=${encodeURIComponent(user.email)}`);
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [activeTicket?.messages]);
+
+  // Poll for new messages every 10 seconds
+  useEffect(() => {
+    if (!activeTicket || !user) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/support?id=${activeTicket._id}`);
         const result = await res.json();
         if (result.success) {
-          setMessages(result.data);
-          // Build user list for admin sidebar
-          const userMap = new Map<string, { email: string; name: string; unread: number; lastMessage: string; lastTime: string }>();
-          for (const msg of result.data as ChatMsg[]) {
-            // Include both customer messages and admin messages to/from customers
-            const otherEmail = msg.isAdmin ? (msg.recipient || '') : msg.senderEmail;
-            if (!otherEmail || adminEmails.includes(otherEmail)) continue;
-            
-            const existing = userMap.get(otherEmail);
-            if (!existing) {
-              userMap.set(otherEmail, {
-                email: otherEmail,
-                name: !msg.isAdmin ? msg.senderName : otherEmail.split('@')[0],
-                unread: !msg.isAdmin ? result.data.filter((m: ChatMsg) => m.senderEmail === otherEmail && !m.isAdmin && !m.read).length : 0,
-                lastMessage: msg.message,
-                lastTime: msg.createdAt,
-              });
-            } else {
-              existing.lastMessage = msg.message;
-              existing.lastTime = msg.createdAt;
-            }
-          }
-          // Also check for admin messages sent to users
-          for (const msg of result.data as ChatMsg[]) {
-            if (msg.isAdmin && msg.recipient && !adminEmails.includes(msg.recipient)) {
-              const existing = userMap.get(msg.recipient);
-              if (!existing) {
-                userMap.set(msg.recipient, {
-                  email: msg.recipient,
-                  name: msg.recipient.split('@')[0],
-                  unread: 0,
-                  lastMessage: msg.message,
-                  lastTime: msg.createdAt,
-                });
-              } else {
-                existing.lastMessage = msg.message;
-                existing.lastTime = msg.createdAt;
-              }
-            }
-          }
-          setUserList(Array.from(userMap.values()).sort((a, b) => new Date(b.lastTime).getTime() - new Date(a.lastTime).getTime()));
+          setActiveTicket(result.data);
+          setTickets(prev => prev.map(t => t._id === result.data._id ? result.data : t));
         }
-      } else {
-        const res = await fetch(`/api/chat?email=${encodeURIComponent(user.email)}`);
-        const result = await res.json();
-        if (result.success) setMessages(result.data);
-      }
-    } catch { /* empty */ }
-    setLoading(false);
-  }, [user]);
+      } catch { /* empty */ }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [activeTicket?._id, user]);
 
-  useEffect(() => {
-    if (!user) return;
-    fetchMessages();
-    if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(fetchMessages, 5000);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [user, fetchMessages]);
-
-  useEffect(scrollToBottom, [messages, scrollToBottom]);
-
-  // Mark messages as read when viewing
-  useEffect(() => {
-    if (!user || messages.length === 0 || !activeChat) return;
-    const unreadIds = messages
-      .filter(m => !m.read && !m.isAdmin && m.senderEmail === activeChat)
-      .map(m => m._id);
-    if (unreadIds.length > 0) {
-      fetch('/api/chat', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messageIds: unreadIds }),
-      });
-    }
-  }, [messages, user, activeChat]);
-
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !user || sending) return;
-    setSending(true);
-
+  const fetchTickets = async (email: string) => {
     try {
-      const recipientEmail = isAdmin && activeChat ? activeChat : 'admin';
-      const res = await fetch('/api/chat', {
+      const res = await fetch(`/api/support?userId=${encodeURIComponent(email)}`);
+      const result = await res.json();
+      if (result.success) setTickets(result.data);
+    } catch { /* empty */ }
+  };
+
+  const handleCreateTicket = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !user) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/support', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sender: user.name,
-          senderName: user.name,
-          senderEmail: user.email,
-          message: newMessage.trim(),
-          recipient: recipientEmail,
+          action: 'create',
+          userId: user.email,
+          userName: user.name || 'User',
+          subject: newSubject || 'Support Request',
+          category: newCategory,
+          text: newMessage,
         }),
       });
       const result = await res.json();
       if (result.success) {
-        setMessages(prev => [...prev, result.data]);
+        setActiveTicket(result.data);
+        setTickets(prev => [result.data, ...prev]);
+        setView('chat');
+        setNewSubject('');
         setNewMessage('');
-        // Refresh to update sidebar
-        setTimeout(fetchMessages, 300);
+      }
+    } catch { /* empty */ } finally { setLoading(false); }
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatMessage.trim() || !activeTicket || !user) return;
+    const msg = chatMessage;
+    setChatMessage('');
+    try {
+      const res = await fetch('/api/support', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'message',
+          ticketId: activeTicket._id,
+          userId: user.email,
+          senderName: user.name || 'User',
+          text: msg,
+        }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        setActiveTicket(result.data);
+        setTickets(prev => prev.map(t => t._id === result.data._id ? result.data : t));
       }
     } catch { /* empty */ }
-    setSending(false);
   };
 
-  const handleStartNewChat = () => {
-    if (newChatEmail.trim()) {
-      setActiveChat(newChatEmail.trim());
-      setNewChatEmail('');
-    }
+  const handleCloseTicket = async (ticketId: string) => {
+    try {
+      const res = await fetch('/api/support', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'close', ticketId }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        setActiveTicket(result.data);
+        setTickets(prev => prev.map(t => t._id === result.data._id ? result.data : t));
+      }
+    } catch { /* empty */ }
   };
 
-  // Filter messages for active chat
-  const filteredMessages = isAdmin && activeChat
-    ? messages.filter(m =>
-        (m.senderEmail === activeChat && !m.isAdmin) ||
-        (m.isAdmin && m.senderEmail === user?.email && m.recipient === activeChat)
-      )
-    : isAdmin
-      ? []
-      : messages;
+  const formatTime = (ts: string) => {
+    try { return new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+    catch { return ''; }
+  };
 
   if (!user) return null;
 
   return (
-    <main className="mario-bg min-h-screen">
-      <NavBar pageLabel="Customer Support" />
+    <main style={{ minHeight: '100vh', background: 'var(--mario-bg)' }}>
+      <NavBar pageLabel="Support" />
 
-      <section className="px-4 py-6 sm:px-8">
-        <div className="mario-container" style={{ maxWidth: '72rem' }}>
-          <div className="mb-6">
-            <h1 className="mario-title text-2xl sm:text-3xl">
-              💬 Customer Support
-            </h1>
-            <p className="mt-2 text-sm text-mario-text-muted">
-              {isAdmin ? 'Manage conversations with customers' : 'Chat with our team about your orders or any questions'}
-            </p>
+      <div style={{ maxWidth: '700px', margin: '0 auto', padding: '20px 16px 60px' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+          <div>
+            <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '14px', color: 'var(--mario-yellow)', textTransform: 'uppercase' }}>Customer Support</h1>
+            <p style={{ fontSize: '12px', color: 'var(--mario-text-muted)', marginTop: '4px' }}>Get help with orders, payments, and more</p>
           </div>
-
-          <div className="mario-card overflow-hidden" style={{ height: 'calc(100vh - 220px)', minHeight: '500px' }}>
-            <div className="grid gap-0 lg:grid-cols-[280px_1fr] h-full">
-              {/* ─── Sidebar (Admin only) ─── */}
-              {isAdmin && (
-                <div className="border-r-2 border-white/10 bg-[#1a1a2e] overflow-y-auto">
-                  <div className="p-4 border-b border-white/10">
-                    <p className="mario-text-xs text-mario-yellow font-arcade mb-3">Conversations</p>
-                    {/* Start new chat */}
-                    <div className="flex gap-2">
-                      <input
-                        type="email"
-                        value={newChatEmail}
-                        onChange={(e) => setNewChatEmail(e.target.value)}
-                        placeholder="Customer email..."
-                        className="mario-input flex-1 text-xs"
-                        onKeyDown={(e) => e.key === 'Enter' && handleStartNewChat()}
-                      />
-                      <button
-                        onClick={handleStartNewChat}
-                        className="mario-btn mario-btn-primary mario-btn-sm text-xs"
-                        disabled={!newChatEmail.trim()}
-                      >
-                        ➕
-                      </button>
-                    </div>
-                  </div>
-                  {userList.length === 0 && (
-                    <div className="p-6 text-center">
-                      <p className="text-3xl mb-2">💬</p>
-                      <p className="text-xs text-mario-text-muted">No conversations yet</p>
-                      <p className="text-[10px] text-mario-text-muted mt-1">Enter a customer email above to start</p>
-                    </div>
-                  )}
-                  {userList.map(u => (
-                    <button
-                      key={u.email}
-                      onClick={() => setActiveChat(u.email)}
-                      className={`w-full text-left p-4 border-b border-white/5 transition-all hover:bg-white/5 ${activeChat === u.email ? 'bg-mario-yellow/10 border-l-2 border-l-mario-yellow' : ''}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-white truncate">{u.name}</span>
-                        {u.unread > 0 && (
-                          <span className="mario-badge mario-badge-red text-[8px]">{u.unread}</span>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-mario-text-muted mt-1 truncate">{u.lastMessage}</p>
-                      <p className="text-[8px] text-mario-text-muted mt-1">{new Date(u.lastTime).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })}</p>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* ─── Chat Area ─── */}
-              <div className="flex flex-col bg-[#0f0f1a]">
-                {/* Chat Header */}
-                <div className="p-4 border-b border-white/10 bg-[#1a1a2e] flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-mario-yellow flex items-center justify-center text-mario-navy text-xs font-arcade">
-                      {isAdmin && activeChat ? activeChat[0].toUpperCase() : user.name[0].toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="text-sm text-white font-arcade text-[10px]">
-                        {isAdmin && activeChat ? userList.find(u => u.email === activeChat)?.name || activeChat : 'Muragoods Support'}
-                      </p>
-                      <p className="text-[8px] text-mario-text-muted">
-                        {isAdmin && activeChat ? activeChat : 'Typically replies within minutes'}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="mario-badge text-[8px]">
-                    {isAdmin ? '🔧 ADMIN' : '💬 SUPPORT'}
-                  </span>
-                </div>
-
-                {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                  {isAdmin && !activeChat && (
-                    <div className="flex flex-col items-center justify-center h-full text-center">
-                      <p className="text-4xl mb-3">💬</p>
-                      <p className="text-sm text-white font-arcade text-[10px]">SELECT A CONVERSATION</p>
-                      <p className="text-xs text-mario-text-muted mt-2">Choose a customer from the sidebar or start a new chat above</p>
-                    </div>
-                  )}
-                  {!isAdmin && messages.length === 0 && (
-                    <div className="flex flex-col items-center justify-center h-full text-center">
-                      <p className="text-4xl mb-3">💬</p>
-                      <p className="text-sm text-white font-arcade text-[10px]">START A CONVERSATION</p>
-                      <p className="text-xs text-mario-text-muted mt-2">Send a message below and our team will respond shortly</p>
-                      <div className="mt-6 space-y-2 text-left">
-                        <p className="text-[10px] text-mario-yellow font-arcade">💡 Common topics:</p>
-                        <p className="text-xs text-mario-text-muted">• Order status inquiries</p>
-                        <p className="text-xs text-mario-text-muted">• Delivery questions</p>
-                        <p className="text-xs text-mario-text-muted">• Payment issues</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {filteredMessages.map((msg) => {
-                    const isOwn = msg.senderEmail === user.email;
-                    return (
-                      <div key={msg._id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                        <div className="max-w-[75%]">
-                          <div className={`p-3 rounded-xl border-2 ${
-                            isOwn
-                              ? 'border-mario-yellow/30 bg-mario-yellow/10 rounded-br-sm'
-                              : 'border-white/10 bg-[#1e1e32] rounded-bl-sm'
-                          }`}>
-                            {msg.isAdmin && !isOwn && (
-                              <p className="text-[8px] text-mario-yellow font-arcade uppercase mb-1">🔧 Support Team</p>
-                            )}
-                            <p className="text-sm text-white leading-relaxed">{msg.message}</p>
-                            {msg.orderId && (
-                              <p className="text-[8px] text-mario-yellow mt-2 font-arcade">
-                                📦 Ref: #{msg.orderId.slice(-8).toUpperCase()}
-                              </p>
-                            )}
-                          </div>
-                          <p className={`text-[8px] text-mario-text-muted mt-1 ${isOwn ? 'text-right' : 'text-left'}`}>
-                            {new Date(msg.createdAt).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })}
-                            {isOwn && msg.read && <span className="ml-1 text-mario-green">✓✓</span>}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div ref={messagesEndRef} />
-                </div>
-
-                {/* Message Input */}
-                <div className="p-4 border-t border-white/10 bg-[#1a1a2e]">
-                  {isAdmin && !activeChat ? (
-                    <p className="text-xs text-mario-text-muted text-center">Select a conversation to start replying</p>
-                  ) : (
-                    <form onSubmit={handleSend} className="flex gap-3">
-                      <input
-                        type="text"
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        placeholder="Type your message..."
-                        className="mario-input flex-1"
-                        disabled={sending}
-                      />
-                      <button
-                        type="submit"
-                        disabled={!newMessage.trim() || sending}
-                        className="mario-btn mario-btn-primary rounded-xl disabled:opacity-50"
-                        style={{ minHeight: '48px', padding: '12px 24px' }}
-                      >
-                        {sending ? '...' : '📤 Send'}
-                      </button>
-                    </form>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          {view !== 'new' && (
+            <button onClick={() => setView('new')} className="deco-btn deco-btn-gold deco-btn-sm">
+              + New Ticket
+            </button>
+          )}
         </div>
-      </section>
+
+        {/* ─── New Ticket Form ──────────────────────── */}
+        {view === 'new' && (
+          <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-6 rounded-2xl">
+            <h2 className="text-sm text-[var(--cream)] mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>NEW SUPPORT TICKET</h2>
+            <form onSubmit={handleCreateTicket} className="space-y-4">
+              <label className="block">
+                <span className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2 block" style={{ fontFamily: 'var(--font-arcade)' }}>Category</span>
+                <select value={newCategory} onChange={(e) => setNewCategory(e.target.value)} className="deco-select" style={{ cursor: 'pointer' }}>
+                  {categories.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2 block" style={{ fontFamily: 'var(--font-arcade)' }}>Subject</span>
+                <input type="text" value={newSubject} onChange={(e) => setNewSubject(e.target.value)} className="deco-input" placeholder="Brief description of your issue" />
+              </label>
+              <label className="block">
+                <span className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2 block" style={{ fontFamily: 'var(--font-arcade)' }}>Message *</span>
+                <textarea value={newMessage} onChange={(e) => setNewMessage(e.target.value)} className="deco-input" placeholder="Describe your issue in detail..." rows={4} style={{ resize: 'vertical' }} />
+              </label>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button type="button" onClick={() => setView('list')} className="deco-btn" style={{ flex: 1 }}>Cancel</button>
+                <button type="submit" disabled={loading || !newMessage.trim()} className="deco-btn deco-btn-gold" style={{ flex: 1 }}>
+                  {loading ? 'SENDING...' : 'SUBMIT'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* ─── Ticket List ──────────────────────────── */}
+        {view === 'list' && (
+          <div className="space-y-3">
+            {tickets.length === 0 ? (
+              <div className="border-2 border-[rgba(255,255,255,0.08)] bg-[var(--charcoal)] p-8 rounded-2xl text-center">
+                <p style={{ fontSize: '32px', marginBottom: '12px' }}>💬</p>
+                <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: 'var(--mario-text)' }}>No support tickets yet</p>
+                <p style={{ fontSize: '12px', color: 'var(--mario-text-muted)', marginTop: '6px' }}>Need help? Create a new ticket!</p>
+              </div>
+            ) : (
+              tickets.map(ticket => (
+                <div
+                  key={ticket._id}
+                  onClick={() => { setActiveTicket(ticket); setView('chat'); }}
+                  className="power-card p-4"
+                  style={{ cursor: 'pointer', transition: 'all 0.15s' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,214,10,0.3)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'var(--mario-text)' }}>{ticket.subject}</p>
+                    <span style={{
+                      fontSize: '8px', padding: '3px 8px', borderRadius: '20px', fontFamily: 'var(--font-arcade)',
+                      background: ticket.status === 'open' ? 'rgba(255,214,10,0.15)' : ticket.status === 'replied' ? 'rgba(6,214,160,0.15)' : 'rgba(255,255,255,0.08)',
+                      color: ticket.status === 'open' ? '#ffd60a' : ticket.status === 'replied' ? '#06d6a0' : '#9090a8',
+                    }}>
+                      {ticket.status.toUpperCase()}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '11px', color: 'var(--mario-text-muted)' }}>{ticket.messages[ticket.messages.length - 1]?.text.slice(0, 80)}...</p>
+                  <p style={{ fontSize: '9px', color: 'var(--pewter)', marginTop: '6px' }}>{formatTime(ticket.lastActivity)} · {ticket.messages.length} messages</p>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* ─── Chat View ────────────────────────────── */}
+        {view === 'chat' && activeTicket && (
+          <div className="border-2 border-[rgba(255,255,255,0.08)] bg-[var(--charcoal)] rounded-2xl overflow-hidden" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 180px)' }}>
+            {/* Chat Header */}
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,214,10,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button onClick={() => setView('list')} style={{ background: 'none', border: 'none', color: 'var(--mario-yellow)', cursor: 'pointer', fontSize: '14px' }}>←</button>
+                  <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'var(--mario-text)' }}>{activeTicket.subject}</p>
+                </div>
+                <p style={{ fontSize: '9px', color: 'var(--mario-text-muted)', marginTop: '2px', marginLeft: '22px' }}>{activeTicket.category} · {formatTime(activeTicket.createdAt)}</p>
+              </div>
+              {activeTicket.status !== 'closed' && (
+                <button onClick={() => handleCloseTicket(activeTicket._id)} className="deco-btn deco-btn-sm" style={{ fontSize: '8px', padding: '4px 10px' }}>
+                  Close
+                </button>
+              )}
+            </div>
+
+            {/* Messages */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {activeTicket.messages.map((msg, i) => (
+                <div key={i} style={{
+                  maxWidth: '80%',
+                  alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
+                }}>
+                  {msg.isAutoReply && (
+                    <div style={{ fontSize: '8px', color: 'var(--mario-blue)', marginBottom: '3px', fontFamily: 'var(--font-arcade)' }}>🤖 Auto-Reply</div>
+                  )}
+                  <div style={{
+                    padding: '10px 14px',
+                    borderRadius: msg.sender === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                    background: msg.sender === 'user' ? 'rgba(255,214,10,0.12)' : msg.isAutoReply ? 'rgba(72,149,239,0.1)' : 'rgba(255,255,255,0.06)',
+                    border: msg.sender === 'user' ? '1px solid rgba(255,214,10,0.2)' : msg.isAutoReply ? '1px solid rgba(72,149,239,0.15)' : '1px solid rgba(255,255,255,0.08)',
+                  }}>
+                    <p style={{ fontSize: '8px', color: 'var(--mario-text-muted)', marginBottom: '4px', fontFamily: 'var(--font-arcade)' }}>
+                      {msg.sender === 'user' ? '👤 ' : '💬 '}{msg.senderName}
+                    </p>
+                    <p style={{ fontSize: '13px', color: 'var(--mario-text)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{msg.text}</p>
+                    <p style={{ fontSize: '8px', color: 'var(--pewter)', marginTop: '4px', textAlign: 'right' }}>{formatTime(msg.timestamp)}</p>
+                  </div>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input */}
+            {activeTicket.status !== 'closed' && (
+              <form onSubmit={handleSendMessage} style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  value={chatMessage}
+                  onChange={(e) => setChatMessage(e.target.value)}
+                  placeholder="Type your message..."
+                  className="deco-input"
+                  style={{ flex: 1, margin: 0 }}
+                />
+                <button type="submit" disabled={!chatMessage.trim()} className="deco-btn deco-btn-gold deco-btn-sm" style={{ padding: '8px 16px' }}>
+                  Send
+                </button>
+              </form>
+            )}
+          </div>
+        )}
+      </div>
     </main>
   );
 }

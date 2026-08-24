@@ -8,7 +8,6 @@ import dynamic from 'next/dynamic';
 
 const LightBloom = dynamic(() => import('@/app/components/ui/LightBloom'), { ssr: false });
 const MaskedHeading = dynamic(() => import('@/app/components/ui/MaskedHeading'), { ssr: false });
-const MagicBento = dynamic(() => import('@/app/components/ui/MagicBento'), { ssr: false });
 const AnimatedButton = dynamic(() => import('@/app/components/ui/AnimatedButton'), { ssr: false });
 
 export default function Home() {
@@ -165,28 +164,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── Power-Up Zone (MagicBento) ─────────────────────── */}
-      <section className="px-4 py-12 sm:px-8">
-        <div className="mario-container">
-          <div className="text-center mb-8">
-            <h2 className="mario-title text-xl sm:text-2xl lg:text-3xl">Power-Up Zone</h2>
-            <p className="text-mario-text-muted text-sm mt-2">Play, earn coins, and climb the ranks!</p>
-          </div>
 
-          <MagicBento
-            textAutoHide={true}
-            enableStars={true}
-            enableSpotlight={true}
-            enableBorderGlow={true}
-            enableTilt={true}
-            enableMagnetism={true}
-            clickEffect={true}
-            spotlightRadius={300}
-            particleCount={12}
-            glowColor="255, 214, 10"
-          />
-        </div>
-      </section>
 
       {/* ─── Footer ─────────────────────────────────────────── */}
       <footer className="border-t border-white/5 py-8 text-center">

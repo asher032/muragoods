@@ -13,6 +13,7 @@ export default function SignupPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [agreeToTos, setAgreeToTos] = useState(false);
+  const [referralCode, setReferralCode] = useState('');
   const router = useRouter();
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -41,7 +42,7 @@ export default function SignupPage() {
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, referredBy: referralCode || undefined }),
       });
       const result = await res.json();
 
@@ -139,6 +140,22 @@ export default function SignupPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="deco-input"
                 placeholder="••••••••"
+              />
+            </label>
+
+            <label className="block">
+              <span
+                className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2 block"
+                style={{ fontFamily: 'var(--font-arcade)' }}
+              >
+                Referral Code (optional)
+              </span>
+              <input
+                type="text"
+                value={referralCode}
+                onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                className="deco-input"
+                placeholder="e.g. MURA-A1B2C3D4"
               />
             </label>
 

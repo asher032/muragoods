@@ -240,6 +240,7 @@ export default function HubPage() {
             { href: '/', label: '🏠 Home' },
             { href: '/terms', label: '📜 Terms' },
             { href: '/play/mysterybox', label: '🎁 Mystery Box' },
+            { href: '/my-codes', label: '🎟️ My Codes' },
             { href: '/play/trivia', label: '🧠 Trivia' },
           ].map(link => (
             <Link key={link.href} href={link.href} className="mario-btn mario-btn-sm" style={{ fontSize: '9px' }}>

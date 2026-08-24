@@ -126,6 +126,12 @@ export default function LoginPage() {
             <button type="submit" className="deco-btn deco-btn-crimson w-full deco-btn-lg mt-6">
               SIGN IN
             </button>
+
+            <div className="text-center mt-4">
+              <Link href="/forgot-password" className="text-[10px] text-[var(--gold)] hover:text-[var(--gold-bright)] underline transition-colors" style={{ fontFamily: 'var(--font-arcade)' }}>
+                Forgot Password?
+              </Link>
+            </div>
           </form>
 
           {/* Divider */}
