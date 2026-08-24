@@ -5,6 +5,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { NotificationSetup } from "@/app/components/NotificationSetup";
 import { AppLoader } from "@/app/components/AppLoader";
+import { PWAInstallBanner } from "@/app/components/PWAInstallBanner";
 
 const pressStart = Press_Start_2P({
   subsets: ["latin"],
@@ -25,17 +26,25 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#4A90D9",
+  themeColor: "#0f0f1a",
+  colorScheme: "dark",
 };
 
 export const metadata: Metadata = {
   title: "Muragoods | Fresh Musubi, Churros, Coffee Jelly & Cookies",
-  description: "Muragoods — Campus power-up food stall. Order legendary musubi, churros, coffee jelly & cookies delivered to your door.",
+  description: "Muragoods — Campus power-up food stall. Order legendary musubi, churros, coffee jelly & cookies delivered to your door. Play games, earn coins, and discover unsent letters.",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/icons/icon-192.png",
+    apple: "/icons/icon-192.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "Muragoods",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
   },
 };
 
@@ -46,6 +55,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <AppLoader>
           {children}
         </AppLoader>
+        <PWAInstallBanner />
         <NotificationSetup />
         <Analytics />
         <SpeedInsights />
