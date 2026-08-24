@@ -15,7 +15,7 @@ const cardData = [
   { color: '#1e1e32', title: 'Leaderboard', description: "See who's the top spender on campus!", label: '🏆 Rankings' },
   { color: '#1e1e32', title: 'Mystery Box', description: 'Spend 10 coins for a chance to win big!', label: '🎁 Rewards' },
   { color: '#1e1e32', title: 'Trivia Challenge', description: 'Test your knowledge and earn coins!', label: '🧠 Play' },
-  { color: '#1e1e32', title: 'Honey, If Only', description: 'Write unsent letters to anyone!', label: '💌 Letters' },
+  { color: '#1e1e32', title: 'Open Archive', description: 'Write unsent letters to anyone!', label: '💌 Letters' },
 ];
 
 const createParticleElement = (x: number, y: number, color = DEFAULT_GLOW_COLOR) => {

@@ -4,18 +4,18 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 
-export default function HoneyPage() {
+export default function OpenArchivePage() {
   const router = useRouter();
 
   return (
     <main className="mario-bg min-h-screen">
-      <NavBar pageLabel="Honey, If Only" />
+      <NavBar pageLabel="Open Archive" />
       <section className="px-4 py-16 sm:px-8">
         <div className="mario-container max-w-3xl mx-auto text-center">
           <div className="mario-card border-mario-pink p-8 sm:p-12">
             <span className="text-5xl mb-4 block">💌</span>
             <h1 className="mario-title text-3xl sm:text-4xl text-mario-pink mb-4">
-              Honey, If Only
+              Open Archive
             </h1>
             <p className="mario-text-sm text-mario-brown mb-2 max-w-lg mx-auto">
               A collection of messages and letters that people write but never send.

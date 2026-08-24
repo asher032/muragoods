@@ -178,7 +178,6 @@ export default function CheckoutPage() {
       if (result.success) {
         localStorage.removeItem('cart');
         setCart({});
-        addCoins(pointsEarned, `Order #${result.data?.id?.slice(-8) || 'placed'}`);
         setPlacedOrderId(result.data?.id || result.data?._id || '');
         setShowSuccessModal(true);
       } else { setError(result.error || 'Failed to place order.'); }
@@ -371,8 +370,15 @@ export default function CheckoutPage() {
 
                   {isGcash && (
                     <div style={{ marginTop: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid #2e2e2e', borderRadius: '8px', padding: '16px' }}>
-                      <p style={{ fontSize: '11px', fontWeight: 600, color: '#ffd60a', marginBottom: '8px' }}>💳 GCash Payment Details</p>
-                      <p style={{ fontSize: '12px', color: '#fff', marginBottom: '12px' }}>Send amount to: <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#ffd60a' }}>639466472599</span></p>
+                      <p style={{ fontSize: '11px', fontWeight: 600, color: '#ffd60a', marginBottom: '12px' }}>💳 GCash Payment</p>
+                      {/* QR Code */}
+                      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+                        <div style={{ background: '#fff', borderRadius: '12px', padding: '16px', border: '2px solid rgba(255,214,10,0.3)' }}>
+                          <img src="/images/gcash-qr.png" alt="GCash QR Code" style={{ width: '180px', height: '180px', objectFit: 'contain', display: 'block' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                          <p style={{ fontSize: '10px', color: '#666', textAlign: 'center', marginTop: '8px' }}>Scan to pay with GCash</p>
+                        </div>
+                      </div>
+                      <p style={{ fontSize: '12px', color: '#fff', marginBottom: '12px', textAlign: 'center' }}>Send to: <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#ffd60a' }}>639466472599</span></p>
                       <div style={{ marginBottom: '12px' }}>
                         <p style={{ fontSize: '11px', fontWeight: 600, color: '#fff', marginBottom: '6px' }}>Reference Number *</p>
                         <input type="text" value={gcashRef} onChange={(e) => setGcashRef(e.target.value)} placeholder="GCash reference number" className="input_field" required={isGcash} />
@@ -488,7 +494,7 @@ export default function CheckoutPage() {
               <p style={{ color: '#fff', fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
                 {isGcash ? 'Message @muragoods_ on Instagram to confirm!' : 'Pay cash when you pick up!'}
               </p>
-              <p style={{ fontSize: '11px', color: '#ffd60a', marginBottom: '20px' }}>🪙 +{pointsEarned} coins added!</p>
+              <p style={{ fontSize: '11px', color: '#ffd60a', marginBottom: '20px' }}>🪙 Earn {pointsEarned} coins after delivery!</p>
               {isGcash && (
                 <a href="https://www.instagram.com/muragoods_/" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '10px', background: '#555', borderRadius: '5px', color: '#fff', fontSize: '11px', fontWeight: 600, textDecoration: 'none', marginBottom: '10px' }}>
                   Open Instagram @muragoods_

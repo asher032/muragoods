@@ -7,7 +7,7 @@ import Order from '@/app/lib/models/Order';
 export async function GET() {
   try {
     await dbConnect();
-    const users = await User.find({}, { name: 1, email: 1, userId: 1, perks: 1, createdAt: 1 }).sort({ createdAt: -1 });
+    const users = await User.find({}, { name: 1, email: 1, userId: 1, perks: 1, createdAt: 1, coinBalance: 1 }).sort({ createdAt: -1 });
 
     // Fetch order counts per user
     const userEmails = users.map((u: { email: string }) => u.email);
@@ -17,7 +17,7 @@ export async function GET() {
     ]);
     const orderMap = new Map(orderCounts.map((o: { _id: string; totalSpent: number; orderCount: number; delivered: number }) => [o._id, o]));
 
-    const result = users.map((u: { name: string; email: string; userId?: string; perks?: { perkId: string; perkName: string }[]; createdAt: Date }) => {
+    const result = users.map((u: { name: string; email: string; userId?: string; perks?: { perkId: string; perkName: string }[]; createdAt: Date; coinBalance?: number }) => {
       const stats = orderMap.get(u.email) || { totalSpent: 0, orderCount: 0, delivered: 0 };
       return {
         name: u.name,
@@ -28,6 +28,7 @@ export async function GET() {
         totalSpent: stats.totalSpent,
         orderCount: stats.orderCount,
         delivered: stats.delivered,
+        coinBalance: u.coinBalance || 0,
       };
     });
 

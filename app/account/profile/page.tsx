@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { type Order } from '@/app/lib/muragoods-data';
@@ -12,6 +12,7 @@ interface UserData {
   name?: string;
   email?: string;
   avatar?: string;
+  userId?: string;
 }
 
 interface Perk {
@@ -26,7 +27,7 @@ interface Perk {
 export default function AccountProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
-  const [orders, setOrders] = useState<(Order & { _id?: string })[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [avatar, setAvatar] = useState<string>('');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -34,58 +35,58 @@ export default function AccountProfilePage() {
   const [userId, setUserId] = useState('');
   const [perks, setPerks] = useState<Perk[]>([]);
   const { coins } = useCoins();
+  const displayIdRef = useRef('');
 
   useEffect(() => {
-    const userStr = localStorage.getItem('user');
-    if (!userStr) { router.push('/login'); return; }
-    const userData = JSON.parse(userStr);
-    setUser(userData);
-    const savedAvatar = localStorage.getItem('muragoods_avatar');
-    if (savedAvatar) setAvatar(savedAvatar);
-    // Read userId from localStorage (set on login/signup)
-    if (userData.userId) setUserId(userData.userId);
+    try {
+      const userStr = localStorage.getItem('user');
+      if (!userStr) { router.push('/login'); return; }
+      const userData = JSON.parse(userStr);
+      setUser(userData);
+      const savedAvatar = localStorage.getItem('muragoods_avatar');
+      if (savedAvatar) setAvatar(savedAvatar);
+      if (userData.userId) setUserId(userData.userId);
 
-    async function fetchOrders() {
-      try {
-        const res = await fetch(`/api/orders?userId=${encodeURIComponent(userData.email)}`);
-        const result = await res.json();
-        if (result.success && Array.isArray(result.data)) {
-          setOrders(result.data.map((o: Order & { _id?: string }) => ({ ...o, id: o._id || o.id })));
-        }
-      } catch { /* empty */ }
+      async function fetchOrders() {
+        try {
+          const res = await fetch(`/api/orders?userId=${encodeURIComponent(userData.email)}`);
+          const result = await res.json();
+          if (result.success && Array.isArray(result.data)) {
+            setOrders(result.data.map((o: any) => ({ ...o, id: o._id || o.id })));
+          }
+        } catch { /* empty */ }
+        setLoading(false);
+      }
+
+      async function fetchPerks() {
+        try {
+          const res = await fetch(`/api/perks?email=${encodeURIComponent(userData.email)}`);
+          const result = await res.json();
+          if (result.success && result.data) {
+            if (result.data.userId) {
+              setUserId(result.data.userId);
+              const stored = JSON.parse(localStorage.getItem('user') || '{}');
+              if (!stored.userId) {
+                stored.userId = result.data.userId;
+                localStorage.setItem('user', JSON.stringify(stored));
+              }
+            }
+            setPerks(result.data.perks || []);
+          }
+        } catch { /* empty */ }
+      }
+
+      fetchOrders();
+      fetchPerks();
+    } catch {
       setLoading(false);
     }
-
-    async function fetchPerks() {
-      try {
-        const res = await fetch(`/api/perks?email=${encodeURIComponent(userData.email)}`);
-        const result = await res.json();
-        if (result.success && result.data) {
-          if (result.data.userId) {
-            setUserId(result.data.userId);
-            // Also store in localStorage for future use
-            const stored = JSON.parse(localStorage.getItem('user') || '{}');
-            if (!stored.userId) {
-              stored.userId = result.data.userId;
-              localStorage.setItem('user', JSON.stringify(stored));
-            }
-          }
-          setPerks(result.data.perks || []);
-        }
-      } catch { /* empty */ }
-    }
-
-    fetchOrders();
-    fetchPerks();
   }, [router]);
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      alert('Image must be under 2MB');
-      return;
-    }
+    if (file.size > 2 * 1024 * 1024) { alert('Image must be under 2MB'); return; }
     setUploadingAvatar(true);
     const reader = new FileReader();
     reader.onload = (ev) => {
@@ -97,114 +98,211 @@ export default function AccountProfilePage() {
     reader.readAsDataURL(file);
   };
 
-  if (!user) return null;
-
-  const totalSpent = orders.reduce((sum, o) => sum + o.total, 0);
-  const deliveredCount = orders.filter(o => o.status === 'Delivered').length;
-  const activeCount = orders.filter(o => !['Cancelled', 'Delivered'].includes(o.status)).length;
-  const memberSince = (() => {
-    if (orders.length === 0) return new Date().toLocaleDateString('en', { month: 'short', year: 'numeric' });
-    // Try to find a valid date from orders (oldest order = when they joined)
+  const memberSince = useMemo(() => {
+    if (orders.length === 0) return 'N/A';
     for (let i = orders.length - 1; i >= 0; i--) {
-      const raw = orders[i].createdAt || (orders[i] as Record<string, unknown>)._id;
+      const raw = orders[i].createdAt || orders[i].created;
       if (!raw) continue;
-      // Handle MongoDB serialized dates (could be string, Date, or {$date: ...} object)
       let d: Date;
       if (raw instanceof Date) d = raw;
       else if (typeof raw === 'string') d = new Date(raw);
-      else if (typeof raw === 'object' && raw !== null && '$date' in (raw as Record<string, unknown>)) d = new Date((raw as Record<string, string>).$date);
+      else if (typeof raw === 'object' && raw !== null && '$date' in raw) d = new Date(raw.$date);
       else d = new Date(String(raw));
       if (!isNaN(d.getTime())) return d.toLocaleDateString('en', { month: 'short', year: 'numeric' });
     }
-    return new Date().toLocaleDateString('en', { month: 'short', year: 'numeric' });
-  })();
+    return 'N/A';
+  }, [orders]);
 
-  const displayIdRef = useRef('');
-  if (!userId && user?.email && !displayIdRef.current) {
-    displayIdRef.current = 'MG-' + user.email.split('@')[0].toUpperCase().slice(0, 6) + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+  const displayId = useMemo(() => {
+    if (userId) return userId;
+    if (!displayIdRef.current && user?.email) {
+      displayIdRef.current = 'MG-' + user.email.split('@')[0].toUpperCase().slice(0, 6) + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+    }
+    return displayIdRef.current || 'N/A';
+  }, [userId, user]);
+
+  if (loading) {
+    return (
+      <main className="min-h-screen" style={{ background: 'var(--mario-bg)' }}>
+        <NavBar pageLabel="My Profile" />
+        <div className="flex items-center justify-center py-32">
+          <p className="text-sm animate-pulse" style={{ fontFamily: 'var(--font-arcade)', color: 'var(--mario-yellow)' }}>LOADING PROFILE...</p>
+        </div>
+      </main>
+    );
   }
-  const displayId = userId || displayIdRef.current;
+
+  if (!user) {
+    return (
+      <main className="min-h-screen" style={{ background: 'var(--mario-bg)' }}>
+        <NavBar pageLabel="My Profile" />
+        <div className="flex items-center justify-center py-32">
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ color: 'var(--mario-text)', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>Please log in to view your profile</p>
+            <Link href="/login" className="mario-btn mario-btn-yellow mario-btn-sm" style={{ marginTop: '12px' }}>Login</Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const totalSpent = orders.reduce((sum: number, o: any) => sum + (o.total || 0), 0);
+  const deliveredCount = orders.filter((o: any) => o.status === 'Delivered').length;
+  const activeCount = orders.filter((o: any) => !['Cancelled', 'Delivered'].includes(o.status)).length;
 
   return (
-    <main className="min-h-screen">
+    <main style={{ minHeight: '100vh', background: 'var(--mario-bg)' }}>
       <NavBar pageLabel="My Profile" />
 
-      {/* Profile Banner + Card */}
-      <section className="relative">
-        {/* Banner */}
-        <div className="h-40 sm:h-52 w-full bg-gradient-to-r from-[var(--gold-dark)] via-[var(--gold)] to-[var(--gold-dark)] relative overflow-hidden">
-          {/* Decorative pattern */}
-          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(10,10,10,0.3) 10px, rgba(10,10,10,0.3) 20px)' }} />
-          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[var(--obsidian)] to-transparent" />
-        </div>
+      <div style={{ maxWidth: '800px', margin: '0 auto', padding: '0 16px' }}>
+        {/* Profile Card */}
+        <div style={{
+          background: 'var(--mario-bg-card)',
+          border: '2px solid rgba(255,214,10,0.2)',
+          borderRadius: '20px',
+          padding: '32px 24px',
+          marginTop: '24px',
+          backdropFilter: 'blur(16px)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+          position: 'relative',
+          overflow: 'hidden',
+        }}>
+          {/* Gold accent line at top */}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '3px',
+            background: 'linear-gradient(90deg, transparent, var(--mario-yellow), transparent)',
+          }} />
 
-        {/* Profile Card (overlapping banner) */}
-        <div className="max-w-4xl mx-auto px-4 sm:px-8 -mt-20 relative z-10">
-          <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-2xl p-6 sm:p-8 shadow-[0_0_30px_rgba(212,175,55,0.1)]">
-            <div className="flex flex-col sm:flex-row items-center sm:items-end gap-6">
-              {/* Avatar */}
-              <div className="relative group cursor-pointer shrink-0" onClick={() => fileInputRef.current?.click()}>
-                {avatar ? (
-                  <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full border-4 border-[var(--gold)] shadow-[0_0_25px_rgba(212,175,55,0.4)] overflow-hidden bg-[var(--charcoal-light)]">
-                    <img src={avatar} alt="Profile" className="w-full h-full object-cover" />
-                  </div>
-                ) : (
-                  <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full border-4 border-[var(--gold)] shadow-[0_0_25px_rgba(212,175,55,0.4)] bg-gradient-to-br from-[var(--gold)] to-[var(--gold-dark)] flex items-center justify-center">
-                    <span className="text-4xl sm:text-5xl text-[var(--obsidian)]" style={{ fontFamily: 'var(--font-arcade)' }}>
-                      {(user.name || user.email || 'P').charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                )}
-                {/* Hover overlay */}
-                <div className="absolute inset-0 rounded-full bg-[rgba(10,10,10,0.6)] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border-2 border-[var(--gold)]">
-                  <span className="text-[var(--gold)] text-xl">📷</span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
+            {/* Avatar */}
+            <div
+              className="group"
+              style={{ cursor: 'pointer', position: 'relative' }}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {avatar ? (
+                <div style={{
+                  width: '100px',
+                  height: '100px',
+                  borderRadius: '50%',
+                  border: '3px solid var(--mario-yellow)',
+                  overflow: 'hidden',
+                  boxShadow: '0 0 20px rgba(255,214,10,0.2)',
+                }}>
+                  <img src={avatar} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
-                {uploadingAvatar && (
-                  <div className="absolute inset-0 rounded-full bg-[rgba(10,10,10,0.8)] flex items-center justify-center">
-                    <span className="text-[var(--gold-bright)] animate-pulse text-xs">Uploading...</span>
-                  </div>
-                )}
-                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
+              ) : (
+                <div style={{
+                  width: '100px',
+                  height: '100px',
+                  borderRadius: '50%',
+                  border: '3px solid var(--mario-yellow)',
+                  background: 'linear-gradient(135deg, var(--mario-yellow), var(--mario-orange))',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 0 20px rgba(255,214,10,0.2)',
+                }}>
+                  <span style={{
+                    fontFamily: 'var(--font-arcade)',
+                    fontSize: '32px',
+                    color: 'var(--mario-bg)',
+                  }}>
+                    {(user.name || user.email || 'P').charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
+              <div style={{
+                position: 'absolute',
+                bottom: '2px',
+                right: '2px',
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                background: 'var(--mario-yellow)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '12px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              }}>📷</div>
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
+            </div>
+
+            {/* Name & Info */}
+            <div style={{ textAlign: 'center' }}>
+              <h1 style={{
+                fontFamily: 'var(--font-arcade)',
+                fontSize: '16px',
+                color: 'var(--mario-yellow)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                textShadow: '2px 2px 0 rgba(0,0,0,0.5)',
+              }}>
+                {user.name || 'Player'}
+              </h1>
+              <p style={{ color: 'var(--mario-text-muted)', fontSize: '13px', marginTop: '4px' }}>
+                {user.email}
+              </p>
+              <div style={{
+                marginTop: '8px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '4px 12px',
+                background: 'rgba(255,214,10,0.1)',
+                border: '1px solid rgba(255,214,10,0.2)',
+                borderRadius: '8px',
+              }}>
+                <span style={{ fontSize: '12px' }}>🪪</span>
+                <span style={{
+                  fontFamily: 'var(--font-arcade)',
+                  fontSize: '9px',
+                  color: 'var(--mario-yellow)',
+                }}>
+                  ID: {displayId}
+                </span>
               </div>
-
-              {/* Info */}
-              <div className="flex-1 text-center sm:text-left pb-2">
-                <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
-                  <h1 className="text-xl sm:text-2xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>
-                    {user.name || 'Player'}
-                  </h1>
-                  {perks.some(p => p.perkId === 'gold_member') && (
-                    <span className="text-lg px-2 py-0.5 bg-gradient-to-r from-[var(--gold)] to-[var(--gold-bright)] text-[var(--obsidian)] rounded-lg text-[8px] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>
-                      👑 Gold Member
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-[var(--pewter)] mt-1">{user.email}</p>
-                <p className="text-[9px] text-[var(--gold)] mt-1 font-arcade">
-                  🪪 ID: {userId || displayId}
-                </p>
-                <div className="mt-3 flex items-center justify-center sm:justify-start gap-3">
-                  <CoinBalance size="md" />
-                  <span className="text-[8px] text-[var(--pewter)]" style={{ fontFamily: 'var(--font-arcade)' }}>Member since {memberSince}</span>
-                </div>
-              </div>
-
-              {/* Action */}
-              <div className="shrink-0">
-                <Link href="/support" className="deco-btn deco-btn-sm deco-btn-dark">
-                  💬 Support
-                </Link>
+              <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+                <CoinBalance size="md" />
+                <span style={{
+                  fontFamily: 'var(--font-arcade)',
+                  fontSize: '8px',
+                  color: 'var(--mario-text-muted)',
+                }}>
+                  Member since {memberSince}
+                </span>
               </div>
             </div>
 
             {/* Perks */}
             {perks.length > 0 && (
-              <div className="mt-6 pt-4 border-t-2 border-[rgba(212,175,55,0.15)]">
-                <p className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-3" style={{ fontFamily: 'var(--font-arcade)' }}>Your Perks</p>
-                <div className="flex flex-wrap gap-2">
+              <div style={{ width: '100%', borderTop: '1px solid rgba(255,214,10,0.1)', paddingTop: '16px' }}>
+                <p style={{
+                  fontFamily: 'var(--font-arcade)',
+                  fontSize: '8px',
+                  color: 'var(--mario-yellow)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  marginBottom: '8px',
+                }}>Your Perks</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                   {perks.map((perk, i) => (
-                    <span key={i} className={`text-[8px] px-3 py-1.5 rounded-lg border ${perk.redeemed ? 'border-[var(--pewter)] text-[var(--pewter)] opacity-60' : 'border-[var(--gold)] bg-[rgba(212,175,55,0.1)] text-[var(--gold-bright)]'}`} style={{ fontFamily: 'var(--font-arcade)' }}>
-                      {perk.perkId === 'gold_member' ? '👑 ' : perk.perkId === 'priority_order' ? '⚡ ' : perk.perkId === 'mystery_upgrade' ? '🎁 ' : perk.perkId === 'custom_shoutout' ? '📱 ' : '🏷️ '}{perk.perkName} {perk.redeemed ? '(Used)' : ''}
+                    <span key={i} style={{
+                      fontFamily: 'var(--font-arcade)',
+                      fontSize: '8px',
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      border: perk.redeemed ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(255,214,10,0.25)',
+                      background: perk.redeemed ? 'rgba(255,255,255,0.03)' : 'rgba(255,214,10,0.1)',
+                      color: perk.redeemed ? 'var(--mario-text-muted)' : 'var(--mario-yellow)',
+                      opacity: perk.redeemed ? 0.5 : 1,
+                    }}>
+                      {perk.perkId === 'gold_member' ? '👑 ' : '🏷️ '}{perk.perkName} {perk.redeemed ? '(Used)' : ''}
                     </span>
                   ))}
                 </div>
@@ -212,88 +310,197 @@ export default function AccountProfilePage() {
             )}
           </div>
         </div>
-      </section>
 
-      <section className="px-4 sm:px-8 mt-8 pb-16">
-        <div className="max-w-4xl mx-auto space-y-8">
+        {/* Stats */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: '12px',
+          marginTop: '20px',
+        }}>
+          {[
+            { label: 'Orders', value: String(orders.length), icon: '📦', color: 'var(--mario-text)' },
+            { label: 'Delivered', value: String(deliveredCount), icon: '✅', color: 'var(--mario-green)' },
+            { label: 'Active', value: String(activeCount), icon: '⏳', color: 'var(--mario-yellow)' },
+            { label: 'Spent', value: `₱${totalSpent.toLocaleString()}`, icon: '💰', color: 'var(--mario-yellow)' },
+          ].map(stat => (
+            <div key={stat.label} style={{
+              background: 'var(--mario-bg-card)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: '12px',
+              padding: '16px 8px',
+              textAlign: 'center',
+            }}>
+              <span style={{ fontSize: '18px' }}>{stat.icon}</span>
+              <p style={{
+                fontFamily: 'var(--font-arcade)',
+                fontSize: '7px',
+                color: 'var(--mario-text-muted)',
+                textTransform: 'uppercase',
+                marginTop: '6px',
+              }}>{stat.label}</p>
+              <p style={{
+                fontFamily: 'var(--font-arcade)',
+                fontSize: '12px',
+                color: stat.color,
+                marginTop: '4px',
+              }}>{stat.value}</p>
+            </div>
+          ))}
+        </div>
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {/* Quick Actions */}
+        <div style={{ marginTop: '24px' }}>
+          <p style={{
+            fontFamily: 'var(--font-arcade)',
+            fontSize: '8px',
+            color: 'var(--mario-yellow)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            marginBottom: '10px',
+          }}>Quick Actions</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
             {[
-              { label: 'Total Orders', value: String(orders.length), icon: '📦', color: 'var(--cream)' },
-              { label: 'Delivered', value: String(deliveredCount), icon: '✅', color: 'var(--emerald-bright)' },
-              { label: 'Active', value: String(activeCount), icon: '⏳', color: 'var(--gold-bright)' },
-              { label: 'Total Spent', value: `₱${totalSpent.toLocaleString()}`, icon: '💰', color: 'var(--gold)' },
-            ].map(stat => (
-              <div key={stat.label} className="power-card p-5 text-center rounded-xl hover:shadow-[0_0_20px_rgba(212,175,55,0.15)] transition-all">
-                <span className="text-2xl">{stat.icon}</span>
-                <p className="text-[9px] text-[var(--pewter)] uppercase mt-2" style={{ fontFamily: 'var(--font-arcade)' }}>{stat.label}</p>
-                <p className="text-lg mt-1" style={{ fontFamily: 'var(--font-arcade)', color: stat.color }}>{stat.value}</p>
-              </div>
+              { href: '/menu', icon: '🍕', label: 'Order Food' },
+              { href: '/points', icon: '🪙', label: 'My Points' },
+              { href: '/rewards', icon: '🏪', label: 'Rewards' },
+              { href: '/orders', icon: '📋', label: 'Orders' },
+              { href: '/support', icon: '💬', label: 'Support' },
+              { href: '/favorites', icon: '❤️', label: 'Favorites' },
+            ].map(action => (
+              <Link key={action.href} href={action.href} style={{
+                display: 'block',
+                background: 'var(--mario-bg-card)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: '12px',
+                padding: '16px 8px',
+                textAlign: 'center',
+                textDecoration: 'none',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,214,10,0.3)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
+              >
+                <span style={{ fontSize: '18px' }}>{action.icon}</span>
+                <p style={{
+                  fontFamily: 'var(--font-arcade)',
+                  fontSize: '7px',
+                  color: 'var(--mario-text)',
+                  marginTop: '6px',
+                  textTransform: 'uppercase',
+                }}>{action.label}</p>
+              </Link>
             ))}
           </div>
+        </div>
 
-          {/* Quick Actions */}
-          <div>
-            <p className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] mb-3" style={{ fontFamily: 'var(--font-arcade)' }}>Quick Actions</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[
-                { href: '/menu', icon: '🍕', label: 'Order Food' },
-                { href: '/points', icon: '🪙', label: 'My Points' },
-                { href: '/rewards', icon: '🏪', label: 'Rewards Shop' },
-                { href: '/orders', icon: '📋', label: 'Order History' },
-                { href: '/achievements', icon: '🏆', label: 'Achievements' },
-                { href: '/support', icon: '💬', label: 'Support' },
-              ].map(action => (
-                <Link key={action.href} href={action.href} className="border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal)] p-4 rounded-xl text-center hover:border-[var(--gold)] hover:bg-[rgba(212,175,55,0.05)] transition-all">
-                  <span className="text-xl">{action.icon}</span>
-                  <p className="text-[9px] text-[var(--cream)] mt-2 uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>{action.label}</p>
+        {/* Recent Orders */}
+        <div style={{ marginTop: '24px', paddingBottom: '60px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <p style={{
+              fontFamily: 'var(--font-arcade)',
+              fontSize: '8px',
+              color: 'var(--mario-yellow)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+            }}>Recent Orders</p>
+            {orders.length > 0 && (
+              <Link href="/orders" style={{
+                fontFamily: 'var(--font-arcade)',
+                fontSize: '8px',
+                color: 'var(--mario-yellow)',
+                textDecoration: 'none',
+              }}>VIEW ALL →</Link>
+            )}
+          </div>
+          {orders.length > 0 ? (
+            <div style={{
+              background: 'var(--mario-bg-card)',
+              border: '1px solid rgba(255,214,10,0.15)',
+              borderRadius: '16px',
+              overflow: 'hidden',
+            }}>
+              {orders.slice(0, 5).map((order: any, idx: number) => (
+                <Link key={order.id || idx} href={`/order/${order.id}`} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 16px',
+                  textDecoration: 'none',
+                  borderTop: idx > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '8px',
+                      background: 'var(--mario-bg-input)',
+                      border: '1px solid rgba(255,214,10,0.1)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <span style={{ fontSize: '14px' }}>
+                        {order.status === 'Delivered' ? '✅' : order.status === 'Cancelled' ? '✖' : '📦'}
+                      </span>
+                    </div>
+                    <div>
+                      <p style={{
+                        fontFamily: 'var(--font-arcade)',
+                        fontSize: '8px',
+                        color: 'var(--mario-yellow)',
+                      }}>#{String(order.id || '').slice(-8).toUpperCase()}</p>
+                      <p style={{ fontSize: '11px', color: 'var(--mario-text-muted)', marginTop: '2px' }}>
+                        {order.deliveryDate || '—'}
+                      </p>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{
+                      fontFamily: 'var(--font-arcade)',
+                      fontSize: '12px',
+                      color: 'var(--mario-yellow)',
+                    }}>₱{order.total}</span>
+                    <p style={{
+                      fontFamily: 'var(--font-arcade)',
+                      fontSize: '7px',
+                      marginTop: '2px',
+                      textTransform: 'uppercase',
+                      color: order.status === 'Cancelled' ? 'var(--mario-red)' : order.status === 'Delivered' ? 'var(--mario-green)' : 'var(--mario-text-muted)',
+                    }}>{order.status}</p>
+                  </div>
                 </Link>
               ))}
             </div>
-          </div>
-
-          {/* Recent Orders */}
-          {loading ? (
-            <div className="text-center py-8"><p className="text-[var(--gold-bright)] animate-pulse" style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px' }}>LOADING...</p></div>
-          ) : orders.length > 0 ? (
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>Recent Orders</p>
-                <Link href="/orders" className="text-[9px] text-[var(--gold)] hover:text-[var(--gold-bright)] transition-colors" style={{ fontFamily: 'var(--font-arcade)' }}>VIEW ALL →</Link>
-              </div>
-              <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-2xl overflow-hidden">
-                {orders.slice(0, 5).map((order, idx) => (
-                  <Link key={order.id} href={`/order/${order.id}`} className={`flex items-center justify-between p-4 hover:bg-[var(--charcoal-light)] transition-all ${idx > 0 ? 'border-t border-[rgba(212,175,55,0.1)]' : ''}`}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-[var(--charcoal-light)] border border-[rgba(212,175,55,0.15)] flex items-center justify-center">
-                        <span className="text-sm">
-                          {order.status === 'Delivered' ? '✅' : order.status === 'Cancelled' ? '✖' : order.status === 'Preparing' ? '🍳' : '📦'}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="text-[9px] text-[var(--gold)]" style={{ fontFamily: 'var(--font-arcade)' }}>#{String(order.id).slice(-8).toUpperCase()}</p>
-                        <p className="text-xs text-[var(--pewter)] mt-0.5">{order.deliveryDate}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="coin-price text-sm">₱{order.total}</span>
-                      <p className={`text-[8px] mt-1 uppercase ${order.status === 'Cancelled' ? 'text-[var(--crimson)]' : order.status === 'Delivered' ? 'text-[var(--emerald-bright)]' : 'text-[var(--pewter)]'}`} style={{ fontFamily: 'var(--font-arcade)' }}>{order.status}</p>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
           ) : (
-            <div className="border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal)] rounded-2xl p-8 text-center">
-              <span className="text-3xl">📦</span>
-              <p className="text-sm text-[var(--cream)] mt-3" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>NO ORDERS YET</p>
-              <p className="text-xs text-[var(--pewter)] mt-1">Your order history will appear here</p>
-              <Link href="/menu" className="deco-btn deco-btn-gold rounded-xl mt-4 inline-block">Start Ordering</Link>
+            <div style={{
+              background: 'var(--mario-bg-card)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: '16px',
+              padding: '40px 20px',
+              textAlign: 'center',
+            }}>
+              <span style={{ fontSize: '32px' }}>📦</span>
+              <p style={{
+                fontFamily: 'var(--font-arcade)',
+                fontSize: '10px',
+                color: 'var(--mario-text)',
+                marginTop: '12px',
+              }}>NO ORDERS YET</p>
+              <p style={{ fontSize: '12px', color: 'var(--mario-text-muted)', marginTop: '6px' }}>
+                Your order history will appear here
+              </p>
+              <Link href="/menu" className="mario-btn mario-btn-yellow mario-btn-sm" style={{ marginTop: '16px', display: 'inline-flex' }}>
+                Start Ordering
+              </Link>
             </div>
           )}
         </div>
-      </section>
+      </div>
     </main>
   );
 }

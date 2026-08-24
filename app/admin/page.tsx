@@ -102,10 +102,30 @@ export default function AdminPage() {
   const handleStatusUpdate = async (orderId: string, nextStatus: string) => {
     try {
       const historyEntry = { status: nextStatus, timestamp: new Date().toISOString() };
+      const updateData: Record<string, unknown> = { status: nextStatus, $push: { statusHistory: historyEntry } };
+
+      // Award points when marking as Delivered
+      if (nextStatus === 'Delivered') {
+        const order = orders.find(o => (o._id || o.id) === orderId);
+        if (order && order.userId && order.pointsEarned && order.pointsEarned > 0) {
+          // Add coins to user's server-side balance
+          await fetch('/api/admin/coins', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: order.userId,
+              action: 'add',
+              amount: order.pointsEarned,
+              reason: `Order #${orderId.slice(-8).toUpperCase()} delivered`,
+            }),
+          }).catch(() => {});
+        }
+      }
+
       const res = await fetch(`/api/orders?id=${orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextStatus, $push: { statusHistory: historyEntry } }),
+        body: JSON.stringify(updateData),
       });
       const result = await res.json();
       if (result.success) {

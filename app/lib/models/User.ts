@@ -10,6 +10,13 @@ const PerkSchema = new mongoose.Schema({
   redeemedAt: { type: Date },
 }, { _id: false });
 
+const CoinHistorySchema = new mongoose.Schema({
+  type: { type: String, enum: ['earn', 'spend'], required: true },
+  amount: { type: Number, required: true },
+  label: { type: String, default: '' },
+  date: { type: Date, default: Date.now },
+}, { _id: false });
+
 const UserSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
@@ -17,6 +24,8 @@ const UserSchema = new mongoose.Schema({
   userId: { type: String, unique: true, sparse: true },
   role: { type: String, default: 'user' },
   perks: { type: [PerkSchema], default: [] },
+  coinBalance: { type: Number, default: 0 },
+  coinHistory: { type: [CoinHistorySchema], default: [] },
   createdAt: { type: Date, default: Date.now },
 });
 
