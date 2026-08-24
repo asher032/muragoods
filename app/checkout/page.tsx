@@ -403,32 +403,43 @@ export default function CheckoutPage() {
                   {isGcash && (
                     <div style={{ marginTop: '12px', background: '#0064e0', borderRadius: '16px', padding: '0', overflow: 'hidden', border: '2px solid #0050b3' }}>
                       {/* GCash Header */}
-                      <div style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <span style={{ fontSize: '14px', fontWeight: 900, color: '#0064e0' }}>G</span>
+                      <div style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ fontSize: '16px', fontWeight: 900, color: '#0064e0', fontFamily: 'Arial, sans-serif' }}>G</span>
                         </div>
-                        <span style={{ fontSize: '18px', fontWeight: 700, color: '#fff', letterSpacing: '0.5px' }}>GCash</span>
+                        <span style={{ fontSize: '20px', fontWeight: 700, color: '#fff', letterSpacing: '1px' }}>GCash</span>
                       </div>
-                      {/* QR Code Card */}
-                      <div style={{ margin: '0 16px 16px', background: '#fff', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
-                        <img src="/images/gcash-qr.png" alt="Scan this QR code to pay with GCash" style={{ width: '220px', height: '220px', objectFit: 'contain', display: 'block', margin: '0 auto', borderRadius: '8px' }} onError={(e) => {
-                          const img = e.target as HTMLImageElement;
-                          img.style.display = 'none';
-                          const fallback = img.nextElementSibling as HTMLElement;
-                          if (fallback) fallback.style.display = 'flex';
-                        }} />
-                        <div style={{ display: 'none', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '220px', height: '220px', margin: '0 auto', background: '#f5f7fa', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
-                          <span style={{ fontSize: '36px', marginBottom: '6px' }}>📱</span>
-                          <p style={{ fontSize: '12px', color: '#333', fontWeight: 700 }}>Open GCash App</p>
-                          <p style={{ fontSize: '10px', color: '#888', marginTop: '4px' }}>Scan QR to pay</p>
+                      {/* QR Code — clean white card */}
+                      <div style={{ margin: '0 16px 16px', background: '#fff', borderRadius: '12px', padding: '24px 20px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+                          <img
+                            src="/images/gcash-qr.png"
+                            alt="Scan this QR code to pay with GCash"
+                            style={{ width: '240px', height: '240px', objectFit: 'contain', display: 'block', borderRadius: '8px' }}
+                            onError={(e) => {
+                              const img = e.target as HTMLImageElement;
+                              img.style.display = 'none';
+                              const fallback = img.nextElementSibling as HTMLElement;
+                              if (fallback) fallback.style.display = 'flex';
+                            }}
+                          />
+                          <div style={{ display: 'none', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '240px', height: '240px', background: '#f5f7fa', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
+                            <span style={{ fontSize: '40px', marginBottom: '8px' }}>📱</span>
+                            <p style={{ fontSize: '13px', color: '#333', fontWeight: 700 }}>Open GCash App</p>
+                            <p style={{ fontSize: '11px', color: '#888', marginTop: '4px' }}>Scan QR to pay</p>
+                          </div>
                         </div>
-                        <p style={{ fontSize: '11px', color: '#888', marginTop: '10px' }}>Transfer fees may apply.</p>
+                        <p style={{ fontSize: '12px', color: '#999', marginBottom: '4px' }}>Transfer fees may apply.</p>
                       </div>
-                      <div style={{ margin: '0 16px 16px', background: '#fff', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
-                        <p style={{ fontSize: '18px', fontWeight: 700, color: '#0064e0', marginBottom: '4px' }}>muragoods</p>
-                        <p style={{ fontSize: '12px', color: '#888' }}>Mobile No.: <span style={{ color: '#333' }}>+63 946 647 ****</span></p>
+                      {/* Account Info */}
+                      <div style={{ margin: '0 16px 16px', background: '#fff', borderRadius: '12px', padding: '18px', textAlign: 'center' }}>
+                        <p style={{ fontSize: '20px', fontWeight: 700, color: '#0064e0', marginBottom: '6px', letterSpacing: '0.5px' }}>muragoods</p>
+                        <p style={{ fontSize: '13px', color: '#999', marginBottom: '2px' }}>Mobile No.: <span style={{ color: '#333', fontWeight: 600 }}>+63 946 647 ****</span></p>
+                        <p style={{ fontSize: '11px', color: '#bbb' }}>User ID: <span style={{ color: '#666' }}>••••••••5BOO2V</span></p>
                       </div>
-                      <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', textAlign: 'center', padding: '0 16px 14px' }}>Open your GCash app → Scan the QR above → Enter amount → Send</p>
+                      <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.85)', textAlign: 'center', padding: '0 16px 16px', lineHeight: 1.6 }}>
+                        Open your <strong>GCash app</strong> → Tap <strong>Scan</strong> → Scan the QR above → Enter the <strong>exact amount</strong> → Send
+                      </p>
                       <div style={{ marginTop: '12px' }}>
                         <div style={{ marginBottom: '10px', background: 'rgba(255,214,10,0.06)', border: '1px solid rgba(255,214,10,0.15)', borderRadius: '8px', padding: '10px 12px' }}>
                           <p style={{ fontSize: '10px', color: '#ffd60a', fontWeight: 600 }}>📋 After paying, enter your GCash reference number below</p>
