@@ -1,154 +1,34 @@
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 486ms
-✓ Running next.config.ts took 37ms
+
+> muragoods@0.1.0 dev
+> next dev -p 3456
 
 ▲ Next.js 16.3.0 (Turbopack)
 - Local:         http://localhost:3456
 - Network:       http://192.168.1.8:3456
 - Environments: .env.local, .env
-✓ Ready in 796ms
-✓ Running next.config.ts took 48ms
+✓ Ready in 1498ms
+✓ Running next.config.ts took 256ms
 
+ GET / 200 in 1031ms (next.js: 650ms, application-code: 381ms)
+ GET /hub 200 in 1663ms (next.js: 1546ms, application-code: 117ms)
+ GET /hub 200 in 62ms (next.js: 10ms, application-code: 52ms)
+ GET / 200 in 161ms (next.js: 112ms, application-code: 49ms)
+ GET / 200 in 65ms (next.js: 15ms, application-code: 50ms)
+ GET / 200 in 143ms (next.js: 33ms, application-code: 109ms)
+ GET / 200 in 322ms (next.js: 236ms, application-code: 86ms)
+ GET /hub 200 in 205ms (next.js: 111ms, application-code: 94ms)
+ GET / 200 in 332ms (next.js: 126ms, application-code: 206ms)
+ GET /hub 200 in 151ms (next.js: 42ms, application-code: 109ms)
+ GET /terms 200 in 3.7s (next.js: 3.4s, application-code: 221ms)
+ GET /terms 200 in 156ms (next.js: 37ms, application-code: 119ms)
+ GET / 200 in 375ms (next.js: 316ms, application-code: 59ms)
+ GET / 200 in 709ms (next.js: 554ms, application-code: 156ms)
+✓ Compiled in 786ms
+✓ Compiled in 202ms
 ▲ Next.js 16.3.0 (Turbopack)
 - Local:         http://localhost:3456
 - Network:       http://192.168.1.8:3456
 - Environments: .env.local, .env
-✓ Ready in 857ms
-✓ Running next.config.ts took 60ms
-
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 765ms
-✓ Running next.config.ts took 44ms
-
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 683ms
-✓ Running next.config.ts took 41ms
-
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 679ms
-✓ Running next.config.ts took 48ms
-
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 1116ms
-✓ Running next.config.ts took 93ms
-
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 799ms
-✓ Running next.config.ts took 46ms
-
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 1298ms
-✓ Running next.config.ts took 193ms
-
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 1338ms
-✓ Running next.config.ts took 210ms
-
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 6.8s
-✓ Running next.config.ts took 145ms
-
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 819ms
-✓ Running next.config.ts took 76ms
-
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 736ms
-✓ Running next.config.ts took 150ms
-
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 1138ms
-✓ Running next.config.ts took 137ms
-
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 929ms
-✓ Running next.config.ts took 109ms
-
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 2.9s
-✓ Running next.config.ts took 375ms
-
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 1399ms
-✓ Running next.config.ts took 174ms
-
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 872ms
-✓ Running next.config.ts took 49ms
-
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 1046ms
-✓ Running next.config.ts took 97ms
-
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 1079ms
-✓ Running next.config.ts took 64ms
-
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 1610ms
-✓ Running next.config.ts took 71ms
-
-▲ Next.js 16.3.0 (Turbopack)
-- Local:         http://localhost:3456
-- Network:       http://192.168.1.8:3456
-- Environments: .env.local, .env
-✓ Ready in 1745ms
-✓ Running next.config.ts took 145ms
+✓ Ready in 7.8s
+✓ Running next.config.ts took 123ms
 

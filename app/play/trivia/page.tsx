@@ -60,6 +60,8 @@ type GamePhase = 'menu' | 'playing' | 'feedback' | 'gameover' | 'complete';
 const QUESTION_TIME = 15; // seconds per question
 const MAX_LIVES = 3;
 const STREAK_BONUS = 5; // extra coins per streak
+const MAX_PLAYS_PER_DAY = 2;
+const TRIVIA_PLAYS_KEY = 'muragoods_trivia_plays';
 
 export default function TriviaPage() {
   const router = useRouter();
@@ -81,6 +83,8 @@ export default function TriviaPage() {
   const [totalWrong, setTotalWrong] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [highScore, setHighScore] = useState(0);
+  const [playsToday, setPlaysToday] = useState(0);
+  const [playsLeft, setPlaysLeft] = useState(MAX_PLAYS_PER_DAY);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -89,6 +93,24 @@ export default function TriviaPage() {
     setIsLoggedIn(true);
     const saved = parseInt(localStorage.getItem('muragoods_trivia_highscore') || '0', 10);
     setHighScore(saved);
+
+    // Load daily plays
+    try {
+      const playsData = JSON.parse(localStorage.getItem(TRIVIA_PLAYS_KEY) || '{}');
+      const today = new Date().toISOString().split('T')[0];
+      if (playsData.date === today) {
+        setPlaysToday(playsData.count || 0);
+        setPlaysLeft(Math.max(0, MAX_PLAYS_PER_DAY - (playsData.count || 0)));
+      } else {
+        // New day, reset
+        localStorage.setItem(TRIVIA_PLAYS_KEY, JSON.stringify({ date: today, count: 0 }));
+        setPlaysToday(0);
+        setPlaysLeft(MAX_PLAYS_PER_DAY);
+      }
+    } catch {
+      const today = new Date().toISOString().split('T')[0];
+      localStorage.setItem(TRIVIA_PLAYS_KEY, JSON.stringify({ date: today, count: 0 }));
+    }
   }, [router]);
 
   // Timer
@@ -109,6 +131,12 @@ export default function TriviaPage() {
   }, [phase, currentIndex]);
 
   const startGame = useCallback(() => {
+    // Check daily play limit
+    if (playsLeft <= 0) {
+      alert('You\'ve used all 2 plays for today! Come back tomorrow.');
+      return;
+    }
+
     let pool = [...allQuestions];
     if (selectedCategory !== 'all') {
       pool = pool.filter(q => q.category === selectedCategory);
@@ -127,7 +155,14 @@ export default function TriviaPage() {
     setSelectedAnswer(null);
     setIsCorrect(null);
     setPhase('playing');
-  }, [selectedCategory]);
+
+    // Increment plays counter
+    const today = new Date().toISOString().split('T')[0];
+    const newCount = playsToday + 1;
+    setPlaysToday(newCount);
+    setPlaysLeft(Math.max(0, MAX_PLAYS_PER_DAY - newCount));
+    localStorage.setItem(TRIVIA_PLAYS_KEY, JSON.stringify({ date: today, count: newCount }));
+  }, [selectedCategory, playsToday, playsLeft]);
 
   const handleAnswer = useCallback((answerIndex: number) => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -252,14 +287,30 @@ export default function TriviaPage() {
               </div>
             </div>
 
+            {/* Daily Plays */}
+            <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.08)] p-4 rounded-2xl text-center mb-6">
+              <p className="text-[9px] text-[var(--gold)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Daily Plays</p>
+              <div className="flex justify-center gap-2 mt-2">
+                {Array.from({ length: MAX_PLAYS_PER_DAY }).map((_, i) => (
+                  <span key={i} className="text-xl" style={{ opacity: i < playsLeft ? 1 : 0.3 }}>
+                    {i < playsLeft ? '🎮' : '🚫'}
+                  </span>
+                ))}
+              </div>
+              <p className="text-[10px] text-[var(--cream-muted)] mt-2" style={{ fontFamily: 'var(--font-arcade)' }}>
+                {playsLeft > 0 ? `${playsLeft} play${playsLeft !== 1 ? 's' : ''} remaining today` : 'No plays left today!'}
+              </p>
+            </div>
+
             {/* Start Button */}
             <div className="text-center">
               <button
                 onClick={startGame}
-                className="deco-btn deco-btn-gold deco-btn-lg rounded-2xl pulse-glow"
+                disabled={playsLeft <= 0}
+                className="deco-btn deco-btn-gold deco-btn-lg rounded-2xl pulse-glow disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ fontFamily: 'var(--font-arcade)', minWidth: '220px' }}
               >
-                🎮 START GAME
+                🎮 {playsLeft > 0 ? 'START GAME' : 'NO PLAYS LEFT'}
               </button>
             </div>
           </div>

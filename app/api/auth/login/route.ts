@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       await user.save();
     }
 
-    return NextResponse.json({ success: true, data: { name: user.name, email: user.email, userId } });
+    return NextResponse.json({ success: true, data: { name: user.name, email: user.email, userId, createdAt: user.createdAt } });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'An error occurred';
     return NextResponse.json({ success: false, error: message }, { status: 400 });

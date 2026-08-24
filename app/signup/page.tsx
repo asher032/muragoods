@@ -12,6 +12,7 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [agreeToTos, setAgreeToTos] = useState(false);
   const router = useRouter();
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -28,6 +29,10 @@ export default function SignupPage() {
     }
     if (password.length < 6) {
       setError('Password must be at least 6 characters');
+      return;
+    }
+    if (!agreeToTos) {
+      setError('You must agree to the Terms of Service');
       return;
     }
 
@@ -151,6 +156,27 @@ export default function SignupPage() {
                 className="deco-input"
                 placeholder="••••••••"
               />
+            </label>
+
+            {/* Terms of Service */}
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={agreeToTos}
+                onChange={(e) => setAgreeToTos(e.target.checked)}
+                className="mt-1 w-4 h-4 accent-[var(--gold)]"
+                style={{ minWidth: '16px' }}
+              />
+              <span className="text-xs text-[var(--cream-muted)]" style={{ lineHeight: '1.5' }}>
+                I agree to the{' '}
+                <Link href="/terms" target="_blank" className="text-[var(--gold)] hover:text-[var(--gold-bright)] underline">
+                  Terms of Service
+                </Link>{' '}
+                and{' '}
+                <Link href="/terms" target="_blank" className="text-[var(--gold)] hover:text-[var(--gold-bright)] underline">
+                  Privacy Policy
+                </Link>
+              </span>
             </label>
 
             {error && (

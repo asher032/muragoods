@@ -13,6 +13,7 @@ interface UserData {
   email?: string;
   avatar?: string;
   userId?: string;
+  createdAt?: string;
 }
 
 interface Perk {
@@ -34,7 +35,8 @@ export default function AccountProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [userId, setUserId] = useState('');
   const [perks, setPerks] = useState<Perk[]>([]);
-  const { coins } = useCoins();
+  const { coins: localCoins } = useCoins();
+  const [serverCoins, setServerCoins] = useState<number | null>(null);
   const displayIdRef = useRef('');
 
   useEffect(() => {
@@ -46,6 +48,19 @@ export default function AccountProfilePage() {
       const savedAvatar = localStorage.getItem('muragoods_avatar');
       if (savedAvatar) setAvatar(savedAvatar);
       if (userData.userId) setUserId(userData.userId);
+
+      // Fetch coin balance from server
+      async function fetchCoinBalance() {
+        try {
+          const res = await fetch(`/api/admin/coins?email=${encodeURIComponent(userData.email)}`);
+          if (res.ok) {
+            const result = await res.json();
+            if (result.success && result.data?.coinBalance !== undefined) {
+              setServerCoins(result.data.coinBalance);
+            }
+          }
+        } catch { /* empty */ }
+      }
 
       async function fetchOrders() {
         try {
@@ -78,6 +93,7 @@ export default function AccountProfilePage() {
 
       fetchOrders();
       fetchPerks();
+      fetchCoinBalance();
     } catch {
       setLoading(false);
     }
@@ -99,19 +115,23 @@ export default function AccountProfilePage() {
   };
 
   const memberSince = useMemo(() => {
+    // First try user's own createdAt from DB
+    if (user?.createdAt) {
+      const d = new Date(user.createdAt);
+      if (!isNaN(d.getTime())) return d.toLocaleDateString('en', { month: 'short', year: 'numeric' });
+    }
+    // Fallback: earliest order date
     if (orders.length === 0) return 'N/A';
     for (let i = orders.length - 1; i >= 0; i--) {
       const raw = orders[i].createdAt || orders[i].created;
       if (!raw) continue;
       let d: Date;
-      if (raw instanceof Date) d = raw;
-      else if (typeof raw === 'string') d = new Date(raw);
-      else if (typeof raw === 'object' && raw !== null && '$date' in raw) d = new Date(raw.$date);
+      if (typeof raw === 'object' && raw !== null && '$date' in raw) d = new Date(raw.$date);
       else d = new Date(String(raw));
       if (!isNaN(d.getTime())) return d.toLocaleDateString('en', { month: 'short', year: 'numeric' });
     }
     return 'N/A';
-  }, [orders]);
+  }, [orders, user]);
 
   const displayId = useMemo(() => {
     if (userId) return userId;
@@ -268,7 +288,7 @@ export default function AccountProfilePage() {
                 </span>
               </div>
               <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
-                <CoinBalance size="md" />
+                <CoinBalance count={serverCoins !== null ? serverCoins : localCoins} size="md" />
                 <span style={{
                   fontFamily: 'var(--font-arcade)',
                   fontSize: '8px',

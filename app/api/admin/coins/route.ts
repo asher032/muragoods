@@ -2,6 +2,29 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import User from '@/app/lib/models/User';
 
+// GET — Fetch a user's coin balance
+export async function GET(req: Request) {
+  try {
+    await dbConnect();
+    const { searchParams } = new URL(req.url);
+    const email = searchParams.get('email');
+    if (!email) {
+      return NextResponse.json({ success: false, error: 'Email required' }, { status: 400 });
+    }
+    const user = await User.findOne({ email });
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
+    }
+    return NextResponse.json({
+      success: true,
+      data: { coinBalance: user.coinBalance || 0, coinHistory: user.coinHistory || [] },
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'An error occurred';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
+}
+
 // PATCH — Add or deduct coins from a user
 export async function PATCH(req: Request) {
   try {

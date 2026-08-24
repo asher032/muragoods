@@ -10,12 +10,12 @@ const DEFAULT_GLOW_COLOR = '255, 214, 10';
 const MOBILE_BREAKPOINT = 768;
 
 const cardData = [
-  { color: '#1e1e32', title: 'Daily Check-In', description: 'Log in daily to earn bonus coins!', label: '📅 Coins' },
-  { color: '#1e1e32', title: 'Refer a Friend', description: 'Invite friends and earn 50 coins each!', label: '👥 Social' },
-  { color: '#1e1e32', title: 'Leaderboard', description: "See who's the top spender on campus!", label: '🏆 Rankings' },
-  { color: '#1e1e32', title: 'Mystery Box', description: 'Spend 10 coins for a chance to win big!', label: '🎁 Rewards' },
-  { color: '#1e1e32', title: 'Trivia Challenge', description: 'Test your knowledge and earn coins!', label: '🧠 Play' },
-  { color: '#1e1e32', title: 'Open Archive', description: 'Write unsent letters to anyone!', label: '💌 Letters' },
+  { color: '#1e1e32', title: 'Daily Check-In', description: 'Log in daily to earn bonus coins!', label: '📅 Coins', icon: '/images/daily.png' },
+  { color: '#1e1e32', title: 'Refer a Friend', description: 'Invite friends and earn 50 coins each!', label: '👥 Social', icon: '/images/social-media.png' },
+  { color: '#1e1e32', title: 'Leaderboard', description: "See who's the top spender on campus!", label: '🏆 Rankings', icon: '/images/ranking.png' },
+  { color: '#1e1e32', title: 'Mystery Box', description: 'Spend 10 coins for a chance to win big!', label: '🎁 Rewards', icon: '/images/mystery.png' },
+  { color: '#1e1e32', title: 'Trivia Challenge', description: 'Test your knowledge and earn coins!', label: '🧠 Play', icon: '/images/trivia.png' },
+  { color: '#1e1e32', title: 'Open Archive', description: 'Write unsent letters to anyone!', label: '💌 Letters', icon: '/images/archieve.png' },
 ];
 
 const createParticleElement = (x: number, y: number, color = DEFAULT_GLOW_COLOR) => {
@@ -279,6 +279,11 @@ export default function MagicBento({
             return (
               <ParticleCard key={index} {...cardProps} disableAnimations={shouldDisableAnimations} particleCount={particleCount} glowColor={glowColor} enableTilt={enableTilt} clickEffect={clickEffect} enableMagnetism={enableMagnetism}>
                 <div className="magic-bento-card__header">
+                  {card.icon && (
+                    <div style={{ width: '48px', height: '48px', borderRadius: '12px', overflow: 'hidden', marginBottom: '8px', border: '1px solid rgba(255,214,10,0.2)', background: 'rgba(255,214,10,0.08)' }}>
+                      <img src={card.icon} alt={card.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                  )}
                   <div className="magic-bento-card__label">{card.label}</div>
                 </div>
                 <div className="magic-bento-card__content">
@@ -291,6 +296,11 @@ export default function MagicBento({
           return (
             <div key={index} {...cardProps}>
               <div className="magic-bento-card__header">
+                {card.icon && (
+                  <div style={{ width: '48px', height: '48px', borderRadius: '12px', overflow: 'hidden', marginBottom: '8px', border: '1px solid rgba(255,214,10,0.2)', background: 'rgba(255,214,10,0.08)' }}>
+                    <img src={card.icon} alt={card.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                )}
                 <div className="magic-bento-card__label">{card.label}</div>
               </div>
               <div className="magic-bento-card__content">
