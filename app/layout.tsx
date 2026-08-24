@@ -6,6 +6,8 @@ import "./globals.css";
 import { NotificationSetup } from "@/app/components/NotificationSetup";
 import { AppLoader } from "@/app/components/AppLoader";
 import { PWAInstallBanner } from "@/app/components/PWAInstallBanner";
+import { NotificationProvider } from "@/app/components/NotificationSystem";
+import { OrderNotificationPoller } from "@/app/components/OrderNotifications";
 
 const pressStart = Press_Start_2P({
   subsets: ["latin"],
@@ -52,11 +54,14 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body className={`${pressStart.variable} ${josefin.variable}`} style={{ fontFamily: "var(--font-body)" }}>
-        <AppLoader>
-          {children}
-        </AppLoader>
-        <PWAInstallBanner />
-        <NotificationSetup />
+        <NotificationProvider>
+          <AppLoader>
+            {children}
+          </AppLoader>
+          <OrderNotificationPoller />
+          <PWAInstallBanner />
+          <NotificationSetup />
+        </NotificationProvider>
         <Analytics />
         <SpeedInsights />
       </body>

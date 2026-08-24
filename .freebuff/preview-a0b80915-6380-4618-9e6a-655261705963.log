@@ -1236,3 +1236,10 @@
 ✓ Ready in 1113ms
 ✓ Running next.config.ts took 65ms
 
+▲ Next.js 16.3.0 (Turbopack)
+- Local:         http://localhost:3456
+- Network:       http://192.168.1.8:3456
+- Environments: .env.local, .env
+✓ Ready in 1051ms
+✓ Running next.config.ts took 179ms
+

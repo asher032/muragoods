@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { NavBar } from '@/app/components/NavBar';
+import { useNotifications } from '@/app/components/NotificationSystem';
 
 type Message = {
   sender: string;
@@ -47,6 +48,8 @@ export default function SupportPage() {
   const [chatMessage, setChatMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const prevMsgCountRef = useRef<Record<string, number>>({});
+  const { addNotification } = useNotifications();
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
@@ -60,21 +63,43 @@ export default function SupportPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeTicket?.messages]);
 
-  // Poll for new messages every 10 seconds
+  // Poll for new messages every 8 seconds + notify on new admin messages
   useEffect(() => {
-    if (!activeTicket || !user) return;
+    if (!user) return;
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/support?id=${activeTicket._id}`);
+        const res = await fetch(`/api/support?userId=${encodeURIComponent(user.email || '')}`);
         const result = await res.json();
         if (result.success) {
-          setActiveTicket(result.data);
-          setTickets(prev => prev.map(t => t._id === result.data._id ? result.data : t));
+          const updatedTickets = result.data;
+          setTickets(updatedTickets);
+
+          // Check each ticket for new messages from admin
+          updatedTickets.forEach((ticket: Ticket) => {
+            const prevCount = prevMsgCountRef.current[ticket._id] || 0;
+            const newMsgs = ticket.messages.filter(m => m.sender !== 'user');
+            if (newMsgs.length > prevCount && prevCount > 0) {
+              const lastAdminMsg = newMsgs[newMsgs.length - 1];
+              addNotification(
+                'support',
+                `💬 Reply: ${ticket.subject}`,
+                lastAdminMsg.text.slice(0, 120),
+                `/support`
+              );
+            }
+            prevMsgCountRef.current[ticket._id] = newMsgs.length;
+          });
+
+          // Update active ticket if viewing one
+          if (activeTicket) {
+            const updated = updatedTickets.find((t: Ticket) => t._id === activeTicket._id);
+            if (updated) setActiveTicket(updated);
+          }
         }
       } catch { /* empty */ }
-    }, 10000);
+    }, 8000);
     return () => clearInterval(interval);
-  }, [activeTicket?._id, user]);
+  }, [user, activeTicket?._id, addNotification]);
 
   const fetchTickets = async (email: string) => {
     try {

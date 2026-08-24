@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { NotificationBell } from '@/app/components/NotificationBell';
 
 interface NavBarProps {
   pageLabel?: string;
@@ -76,6 +77,9 @@ export function NavBar({ pageLabel, cartCount }: NavBarProps) {
 
         {/* Right: Menu Icon + Cart */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Notification Bell */}
+          {isLoggedIn && <NotificationBell />}
+
           {/* Cart */}
           {isLoggedIn && cartCount !== undefined && cartCount > 0 && (
             <Link href="/checkout" style={{

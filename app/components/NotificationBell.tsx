@@ -1,197 +1,192 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
-
-interface OrderUpdate {
-  id: string;
-  status: string;
-  message: string;
-  timestamp: string;
-  read: boolean;
-}
-
-const statusMessages: Record<string, string> = {
-  'Pending Payment': '⏳ Your order is awaiting payment verification.',
-  'Payment Verified': '✅ Payment verified! Your order is being prepared.',
-  'Preparing': '👨‍🍳 Your order is being prepared with love!',
-  'Out for Delivery': '🚚 Your order is on its way!',
-  'Delivered': '🎉 Your order has been delivered! Enjoy!',
-};
-
-const statusColors: Record<string, string> = {
-  'Pending Payment': 'var(--gold)',
-  'Payment Verified': 'var(--emerald-bright)',
-  'Preparing': 'var(--gold-bright)',
-  'Out for Delivery': 'var(--crimson)',
-  'Delivered': 'var(--emerald-bright)',
-};
+import { useState, useRef, useEffect } from 'react';
+import { useNotifications, type Notification } from './NotificationSystem';
 
 export function NotificationBell() {
-  const [notifications, setNotifications] = useState<OrderUpdate[]>([]);
+  const { notifications, unreadCount, markAsRead, markAllAsRead, clearNotifications } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
-  const [userEmail, setUserEmail] = useState('');
-  const [prevStatuses, setPrevStatuses] = useState<Record<string, string>>({});
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Close on outside click
   useEffect(() => {
-    const userStr = localStorage.getItem('user');
-    if (!userStr) return;
-    const user = JSON.parse(userStr);
-    setUserEmail(user.email);
-
-    // Load previous statuses
-    const saved = localStorage.getItem('muragoods_order_statuses');
-    if (saved) {
-      try { setPrevStatuses(JSON.parse(saved)); } catch { /* empty */ }
-    }
-  }, []);
-
-  // Poll for order updates
-  useEffect(() => {
-    if (!userEmail) return;
-
-    async function checkOrders() {
-      try {
-        const res = await fetch(`/api/orders?userId=${encodeURIComponent(userEmail)}`);
-        const result = await res.json();
-        if (!result.success || !Array.isArray(result.data)) return;
-
-        const newNotifications: OrderUpdate[] = [];
-        const currentStatuses: Record<string, string> = {};
-
-        for (const order of result.data) {
-          const orderId = order._id || order.id;
-          const currentStatus = order.status;
-          currentStatuses[orderId] = currentStatus;
-
-          // Check if status changed from what we last saw
-          if (prevStatuses[orderId] && prevStatuses[orderId] !== currentStatus) {
-            const alreadyNotified = notifications.some(n => n.id === orderId && n.status === currentStatus);
-            if (!alreadyNotified) {
-              newNotifications.push({
-                id: orderId,
-                status: currentStatus,
-                message: statusMessages[currentStatus] || `Status updated to ${currentStatus}`,
-                timestamp: new Date().toISOString(),
-                read: false,
-              });
-            }
-          }
-        }
-
-        if (newNotifications.length > 0) {
-          setNotifications(prev => [...newNotifications, ...prev].slice(0, 20));
-        }
-
-        setPrevStatuses(currentStatuses);
-        localStorage.setItem('muragoods_order_statuses', JSON.stringify(currentStatuses));
-      } catch { /* empty */ }
-    }
-
-    checkOrders();
-    const interval = setInterval(checkOrders, 30000); // Poll every 30s
-    return () => clearInterval(interval);
-  }, [userEmail, prevStatuses, notifications]);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
+    const handler = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
+    if (isOpen) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [isOpen]);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  const markAllRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  const formatTime = (ts: number) => {
+    const diff = Date.now() - ts;
+    if (diff < 60000) return 'Just now';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  const clearAll = () => {
-    setNotifications([]);
+  const typeIcons: Record<string, string> = {
+    info: 'ℹ️',
+    success: '✅',
+    warning: '⚠️',
+    error: '❌',
+    support: '💬',
+    order: '📦',
   };
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div ref={dropdownRef} style={{ position: 'relative' }}>
       {/* Bell Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] rounded-xl hover:border-[var(--gold)] transition-all"
+        style={{
+          position: 'relative',
+          width: '36px',
+          height: '36px',
+          borderRadius: '10px',
+          background: 'rgba(255,255,255,0.06)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          transition: 'all 0.15s ease',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,214,10,0.3)'; e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
       >
-        <span className="text-lg">🔔</span>
+        <span style={{ fontSize: '16px' }}>🔔</span>
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-[var(--crimson)] text-white text-[8px] rounded-full flex items-center justify-center" style={{ fontFamily: 'var(--font-arcade)' }}>
-            {unreadCount}
+          <span style={{
+            position: 'absolute',
+            top: '-4px',
+            right: '-4px',
+            minWidth: '18px',
+            height: '18px',
+            borderRadius: '9px',
+            background: 'var(--mario-red)',
+            color: '#fff',
+            fontSize: '9px',
+            fontWeight: 700,
+            fontFamily: 'var(--font-arcade)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0 4px',
+            boxShadow: '0 2px 6px rgba(230,57,70,0.4)',
+            animation: unreadCount > 0 ? 'pulse-glow 1.5s ease-in-out infinite' : 'none',
+          }}>
+            {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
       </button>
 
-      {/* Dropdown */}
+      {/* Dropdown Panel */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-80 border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-50 overflow-hidden">
+        <div style={{
+          position: 'absolute',
+          top: '42px',
+          right: 0,
+          width: '340px',
+          maxHeight: '480px',
+          background: 'var(--mario-bg-card)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: '16px',
+          boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
+          overflow: 'hidden',
+          animation: 'slideDown 0.2s ease',
+          zIndex: 100,
+        }}>
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-[rgba(242,240,228,0.12)]">
-            <h3 className="text-[10px] text-[var(--gold)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Notifications</h3>
-            <div className="flex gap-2">
+          <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'var(--mario-yellow)', textTransform: 'uppercase' }}>Notifications</p>
+              {unreadCount > 0 && <p style={{ fontSize: '9px', color: 'var(--mario-text-muted)', marginTop: '2px' }}>{unreadCount} unread</p>}
+            </div>
+            <div style={{ display: 'flex', gap: '6px' }}>
               {unreadCount > 0 && (
-                <button onClick={markAllRead} className="text-[8px] text-[var(--pewter)] hover:text-[var(--gold)]" style={{ fontFamily: 'var(--font-arcade)' }}>
+                <button onClick={markAllAsRead} style={{ fontSize: '8px', padding: '4px 8px', background: 'rgba(255,214,10,0.1)', border: '1px solid rgba(255,214,10,0.2)', borderRadius: '6px', color: 'var(--mario-yellow)', cursor: 'pointer', fontFamily: 'var(--font-arcade)' }}>
                   Mark all read
                 </button>
               )}
               {notifications.length > 0 && (
-                <button onClick={clearAll} className="text-[8px] text-[var(--crimson)] hover:text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)' }}>
+                <button onClick={clearNotifications} style={{ fontSize: '8px', padding: '4px 8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px', color: 'var(--mario-text-muted)', cursor: 'pointer' }}>
                   Clear
                 </button>
               )}
             </div>
           </div>
 
-          {/* Notifications List */}
-          <div className="max-h-80 overflow-y-auto">
+          {/* Notification List */}
+          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
             {notifications.length === 0 ? (
-              <div className="p-6 text-center">
-                <span className="text-2xl">🔕</span>
-                <p className="text-[9px] text-[var(--pewter)] mt-2" style={{ fontFamily: 'var(--font-arcade)' }}>No notifications yet</p>
-                <p className="text-[8px] text-[var(--pewter)] mt-1">Order status updates will appear here</p>
+              <div style={{ padding: '40px 20px', textAlign: 'center' }}>
+                <p style={{ fontSize: '28px', marginBottom: '8px' }}>🔔</p>
+                <p style={{ fontSize: '11px', color: 'var(--mario-text-muted)' }}>No notifications yet</p>
               </div>
             ) : (
-              notifications.map((notif, i) => (
-                <div key={`${notif.id}-${i}`} className={`p-4 border-b border-[rgba(242,240,228,0.08)] transition-colors ${notif.read ? 'opacity-60' : 'bg-[rgba(212,175,55,0.03)]'}`}>
-                  <div className="flex items-start gap-3">
-                    {!notif.read && <div className="w-2 h-2 bg-[var(--gold-bright)] rounded-full shrink-0 mt-1.5" />}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[9px] text-[var(--cream)] leading-relaxed">{notif.message}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[7px] px-2 py-0.5 rounded border" style={{ fontFamily: 'var(--font-arcade)', color: statusColors[notif.status], borderColor: statusColors[notif.status], background: `${statusColors[notif.status]}15` }}>
-                          {notif.status}
-                        </span>
-                        <span className="text-[7px] text-[var(--pewter)]">{timeAgo(notif.timestamp)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              notifications.slice(0, 30).map(notif => (
+                <NotificationItem
+                  key={notif.id}
+                  notification={notif}
+                  icon={typeIcons[notif.type] || 'ℹ️'}
+                  formatTime={formatTime}
+                  onClick={() => {
+                    markAsRead(notif.id);
+                    if (notif.url) {
+                      setIsOpen(false);
+                      window.location.href = notif.url;
+                    }
+                  }}
+                />
               ))
             )}
           </div>
-
-          {/* Footer */}
-          <Link href="/orders" onClick={() => setIsOpen(false)} className="block p-3 text-center border-t border-[rgba(242,240,228,0.12)] text-[9px] text-[var(--gold)] hover:bg-[var(--charcoal-light)] transition-colors" style={{ fontFamily: 'var(--font-arcade)' }}>
-            View All Orders →
-          </Link>
         </div>
       )}
+
+      <style jsx>{`
+        @keyframes slideDown {
+          from { transform: translateY(-8px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes pulse-glow {
+          0%, 100% { box-shadow: 0 2px 6px rgba(230,57,70,0.4); }
+          50% { box-shadow: 0 2px 12px rgba(230,57,70,0.7); }
+        }
+      `}</style>
     </div>
   );
 }
 
-function timeAgo(dateString: string): string {
-  const seconds = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000);
-  if (seconds < 60) return 'Just now';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  return `${Math.floor(seconds / 86400)}d ago`;
+function NotificationItem({ notification, icon, formatTime, onClick }: { notification: Notification; icon: string; formatTime: (ts: number) => string; onClick: () => void }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        padding: '12px 16px',
+        borderBottom: '1px solid rgba(255,255,255,0.04)',
+        cursor: notification.url ? 'pointer' : 'default',
+        background: notification.read ? 'transparent' : 'rgba(255,214,10,0.03)',
+        transition: 'background 0.15s',
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '10px',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = notification.read ? 'transparent' : 'rgba(255,214,10,0.03)'; }}
+    >
+      <span style={{ fontSize: '16px', flexShrink: 0 }}>{icon}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <p style={{ fontSize: '11px', fontWeight: notification.read ? 400 : 700, color: 'var(--mario-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{notification.title}</p>
+          {!notification.read && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--mario-yellow)', flexShrink: 0 }} />}
+        </div>
+        <p style={{ fontSize: '10px', color: 'var(--mario-text-muted)', marginTop: '2px', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>{notification.message}</p>
+        <p style={{ fontSize: '8px', color: 'var(--pewter)', marginTop: '4px' }}>{formatTime(notification.timestamp)}</p>
+      </div>
+    </div>
+  );
 }
