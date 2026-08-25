@@ -7,6 +7,8 @@ const SongMessageSchema = new mongoose.Schema({
   isAnonymous: { type: Boolean, default: false },
   songTitle: { type: String, required: true },
   artist: { type: String, required: true },
+  spotifyUrl: { type: String, default: '' },
+  platform: { type: String, default: 'spotify' },
   message: { type: String, required: true },
   messageTitle: { type: String, default: '' },
   photoUrl: { type: String, default: '' },

@@ -26,8 +26,10 @@ const navItems = [
   ]},
   { section: 'UNTOLD LETTERS', items: [
     { href: '/untold-words', label: 'Home', icon: '💌' },
-    { href: '/untold-words/letter/create', label: 'Write a Letter', icon: '📝' },
-    { href: '/untold-words/song/create', label: 'Send a Song', icon: '🎵' },
+    { href: '/untold-words/anonymous/create', label: 'Anonymous Letter', icon: '🥷' },
+    { href: '/untold-words/anonymous/archive', label: 'Letter Archive', icon: '📚' },
+    { href: '/untold-words/letter/create', label: 'Virtual Letter', icon: '💗' },
+    { href: '/untold-words/song/create', label: 'Song Message', icon: '🎵' },
     { href: '/untold-words/gallery', label: 'Gallery', icon: '🖼️' },
   ]},
   { section: 'ACCOUNT', items: [

@@ -18,6 +18,7 @@ export default function CreateSongMessage() {
   const [messageTitle, setMessageTitle] = useState('');
   const [message, setMessage] = useState('');
   const [memoryDate, setMemoryDate] = useState('');
+  const [spotifyUrl, setSpotifyUrl] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState('');
   const [sending, setSending] = useState(false);
@@ -39,6 +40,7 @@ export default function CreateSongMessage() {
           isAnonymous,
           songTitle,
           artist,
+          spotifyUrl,
           messageTitle,
           message,
           memoryDate,
@@ -173,6 +175,13 @@ export default function CreateSongMessage() {
             <div style={{ display: 'grid', gap: '12px' }}>
               <input value={songTitle} onChange={e => setSongTitle(e.target.value)} placeholder="Song title..." style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '12px 14px', color: '#fff', fontSize: '14px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
               <input value={artist} onChange={e => setArtist(e.target.value)} placeholder="Artist name..." style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '12px 14px', color: '#fff', fontSize: '14px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '14px' }}>🎵</span>
+                <input value={spotifyUrl} onChange={e => setSpotifyUrl(e.target.value)} placeholder="Spotify link (optional) — paste song URL" style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(30,215,96,0.2)', borderRadius: '10px', padding: '10px 14px', color: '#fff', fontSize: '12px', fontFamily: 'inherit', outline: 'none' }} />
+              </div>
+              {spotifyUrl && spotifyUrl.includes('open.spotify.com') && (
+                <p style={{ fontSize: '9px', color: '#1ed760', marginTop: '4px' }}>✓ Spotify link detected — the recipient will see a play button</p>
+              )}
             </div>
           </div>
 

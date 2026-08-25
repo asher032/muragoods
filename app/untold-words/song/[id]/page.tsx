@@ -11,6 +11,7 @@ interface SongData {
   isAnonymous: boolean;
   songTitle: string;
   artist: string;
+  spotifyUrl: string;
   message: string;
   messageTitle: string;
   photoUrl: string;
@@ -141,6 +142,27 @@ export default function ViewSongMessage() {
             </div>
           </div>
         </div>
+
+        {/* Spotify Embed */}
+        {song.spotifyUrl && song.spotifyUrl.includes('open.spotify.com') && (
+          <div style={{ marginBottom: '24px' }}>
+            <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginBottom: '10px', letterSpacing: '0.1em' }}>🎵 THIS SONG WAS CHOSEN FOR YOU</p>
+            <div style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid rgba(30,215,96,0.2)' }}>
+              <iframe
+                src={`https://open.spotify.com/embed/track/${song.spotifyUrl.match(/track\/([a-zA-Z0-9]+)/)?.[1] || ''}?utm_source=generator&theme=0`}
+                width="100%"
+                height="152"
+                frameBorder="0"
+                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                loading="lazy"
+                style={{ borderRadius: '16px' }}
+              />
+            </div>
+            <div style={{ textAlign: 'center', marginTop: '10px' }}>
+              <a href={song.spotifyUrl} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#1ed760', textDecoration: 'none' }}>▶ Open in Spotify →</a>
+            </div>
+          </div>
+        )}
 
         {/* Photo if any */}
         {song.photoUrl && (
