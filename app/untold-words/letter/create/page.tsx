@@ -1,8 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
+
+interface Track {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  artwork: string;
+  previewUrl: string;
+  deezerUrl: string;
+  duration: number;
+}
 
 export default function CreateAnonymousLetter() {
   const [loaded, setLoaded] = useState(false);
@@ -16,8 +27,45 @@ export default function CreateAnonymousLetter() {
   const [sending, setSending] = useState(false);
   const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [sendError, setSendError] = useState('');
+  // Optional song
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Track[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
+  const [playingPreview, setPlayingPreview] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { setTimeout(() => setLoaded(true), 100); }, []);
+  useEffect(() => { return () => { if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; } }; }, []);
+
+  const searchSongs = useCallback(async (query: string) => {
+    if (!query.trim()) { setSearchResults([]); return; }
+    setSearching(true);
+    try {
+      const res = await fetch('/api/deezer/search?q=' + encodeURIComponent(query));
+      const data = await res.json();
+      setSearchResults(data.success ? (data.tracks || []) : []);
+    } catch { setSearchResults([]); }
+    setSearching(false);
+  }, []);
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(() => searchSongs(value), 400);
+  };
+
+  const togglePreview = (track: Track) => {
+    if (!track.previewUrl) return;
+    if (audioRef.current && playingPreview) { audioRef.current.pause(); setPlayingPreview(false); return; }
+    if (audioRef.current) audioRef.current.pause();
+    const audio = new Audio(track.previewUrl);
+    audio.onended = () => setPlayingPreview(false);
+    audioRef.current = audio;
+    audio.play();
+    setPlayingPreview(true);
+  };
 
   const handleCreate = async () => {
     if (!title.trim() || !content.trim()) return;
@@ -27,7 +75,14 @@ export default function CreateAnonymousLetter() {
       const res = await fetch('/api/untold-words/anonymous', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content, category: 'Letter', visibility }),
+        body: JSON.stringify({
+          title, content, category: 'Letter', visibility,
+          songTitle: selectedTrack?.title,
+          artist: selectedTrack?.artist,
+          artwork: selectedTrack?.artwork,
+          previewUrl: selectedTrack?.previewUrl,
+          deezerUrl: selectedTrack?.deezerUrl,
+        }),
       });
       const result = await res.json();
       if (result.success) setCreated(result.data.shortId);
@@ -126,6 +181,46 @@ export default function CreateAnonymousLetter() {
             <label style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: '#ffd60a', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>Your Letter *</label>
             <textarea value={content} onChange={e => setContent(e.target.value)} placeholder="Write what you've been holding inside..." rows={10} maxLength={2000} style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontSize: '14px', fontFamily: 'Georgia, serif', padding: '8px 0', resize: 'vertical', lineHeight: 2 }} />
             <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.2)', textAlign: 'right', marginTop: '4px' }}>{content.length}/2000</p>
+          </div>
+
+          {/* Optional Song */}
+          <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '20px' }}>
+            <label style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: '#1ed760', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: '12px' }}>🎵 Add a song (optional)</label>
+            {selectedTrack ? (
+              <div style={{ background: 'rgba(30,215,96,0.06)', border: '1px solid rgba(30,215,96,0.25)', borderRadius: '12px', padding: '12px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                {selectedTrack.artwork && <img src={selectedTrack.artwork} alt="" style={{ width: '56px', height: '56px', borderRadius: '8px', objectFit: 'cover' }} />}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: '#1ed760', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedTrack.title}</p>
+                  <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedTrack.artist}</p>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    {selectedTrack.previewUrl && <button onClick={() => togglePreview(selectedTrack)} style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid rgba(30,215,96,0.3)', background: playingPreview ? 'rgba(30,215,96,0.2)' : 'rgba(30,215,96,0.08)', color: '#1ed760', fontSize: '8px', fontFamily: 'var(--font-arcade)', cursor: 'pointer' }}>{playingPreview ? '⏸' : '▶'}</button>}
+                    <button onClick={() => setSelectedTrack(null)} style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)', fontSize: '8px', fontFamily: 'var(--font-arcade)', cursor: 'pointer' }}>Change</button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <input value={searchQuery} onChange={e => handleSearchChange(e.target.value)} placeholder="Search for a song..." style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', padding: '10px 14px', color: '#fff', fontSize: '12px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+                {searching && <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginTop: '8px', textAlign: 'center' }}>Searching...</p>}
+                {searchResults.length > 0 && (
+                  <div style={{ marginTop: '8px', maxHeight: '200px', overflowY: 'auto', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    {searchResults.slice(0, 5).map(track => (
+                      <div key={track.id} onClick={() => { setSelectedTrack(track); setSearchQuery(''); setSearchResults([]); setPlayingPreview(false); if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; } }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)', transition: 'background 0.15s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(30,215,96,0.06)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        {track.artwork && <img src={track.artwork} alt="" style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover' }} />}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontSize: '12px', color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.title}</p>
+                          <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.artist}</p>
+                        </div>
+                        {track.previewUrl && <button onClick={e => { e.stopPropagation(); togglePreview(track); }} style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid rgba(30,215,96,0.3)', background: 'rgba(30,215,96,0.08)', color: '#1ed760', fontSize: '9px', fontFamily: 'var(--font-arcade)', cursor: 'pointer', flexShrink: 0 }}>{playingPreview ? '⏸' : '▶'}</button>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           {/* Visibility */}

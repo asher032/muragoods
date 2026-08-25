@@ -43,6 +43,12 @@ export async function POST(req: Request) {
       category,
       visibility,
       createdBy: body.createdBy || '',
+      // Optional song
+      songTitle: body.songTitle || undefined,
+      artist: body.artist || undefined,
+      artwork: body.artwork || undefined,
+      previewUrl: body.previewUrl || undefined,
+      deezerUrl: body.deezerUrl || undefined,
     });
 
     return NextResponse.json({ success: true, data: letter }, { status: 201 });
@@ -93,6 +99,20 @@ export async function GET(req: Request) {
     return NextResponse.json({ success: true, data: letters, total, page, pages: Math.ceil(total / limit) });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch';
+    return NextResponse.json({ success: false, error: message }, { status: 400 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    await dbConnect();
+    const body = await req.json();
+    if (!body.shortId) return NextResponse.json({ success: false, error: 'shortId required' }, { status: 400 });
+    const letter = await AnonymousLetter.findOneAndUpdate({ shortId: body.shortId }, { removed: true }, { new: true });
+    if (!letter) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
+    return NextResponse.json({ success: true });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed';
     return NextResponse.json({ success: false, error: message }, { status: 400 });
   }
 }

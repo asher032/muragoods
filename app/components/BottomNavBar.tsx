@@ -55,7 +55,7 @@ export function BottomNavBar({ cartCount }: { cartCount?: number }) {
   return (
     <>
       {/* Spacer for fixed bottom nav */}
-      <div style={{ height: '72px' }} />
+      <div style={{ height: '58px' }} />
       
       <style jsx>{`
         .bottom-nav {
@@ -68,28 +68,28 @@ export function BottomNavBar({ cartCount }: { cartCount?: number }) {
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
           border-top: 1px solid rgba(255, 214, 10, 0.12);
-          padding: 6px 0 env(safe-area-inset-bottom, 8px);
+          padding: 4px 0 env(safe-area-inset-bottom, 6px);
           box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.3);
         }
         .tab-list {
           display: flex;
           justify-content: space-around;
           align-items: center;
-          max-width: 500px;
+          max-width: 420px;
           margin: 0 auto;
-          padding: 0 8px;
+          padding: 0 4px;
         }
         .tab-item {
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 2px;
-          padding: 6px 12px;
-          border-radius: 12px;
+          gap: 1px;
+          padding: 4px 8px;
+          border-radius: 10px;
           text-decoration: none;
           transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
           position: relative;
-          min-width: 56px;
+          min-width: 48px;
         }
         .tab-item.active {
           background: rgba(255, 214, 10, 0.1);

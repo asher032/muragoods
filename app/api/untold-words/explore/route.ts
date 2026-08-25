@@ -16,7 +16,7 @@ export async function GET(req: Request) {
       letters = await LoveLetter.find({ visibility: 'link' }).sort({ createdAt: -1 }).limit(50).select('shortId recipientName senderName isAnonymous title theme content createdAt');
     }
     if (type === 'all' || type === 'songs') {
-      songs = await SongMessage.find({ visibility: 'link' }).sort({ createdAt: -1 }).limit(50).select('shortId recipientName senderName isAnonymous songTitle artist message spotifyUrl createdAt');
+      songs = await SongMessage.find({ visibility: 'link' }).sort({ createdAt: -1 }).limit(50).select('shortId recipientName senderName isAnonymous songTitle artist message spotifyUrl artwork previewUrl createdAt');
     }
 
     return NextResponse.json({ success: true, letters, songs });

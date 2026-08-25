@@ -107,7 +107,11 @@ export default function UntoldWordsHome() {
         });
       }
 
-      allItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      // Shuffle gallery on each visit for variety
+      for (let i = allItems.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [allItems[i], allItems[j]] = [allItems[j], allItems[i]];
+      }
       setItems(allItems);
     } catch { /* empty */ }
     setLoading(false);

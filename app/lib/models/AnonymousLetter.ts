@@ -12,6 +12,12 @@ const AnonymousLetterSchema = new mongoose.Schema({
   reported: { type: Boolean, default: false },
   reportCount: { type: Number, default: 0 },
   removed: { type: Boolean, default: false },
+  // Optional song attachment
+  songTitle: { type: String },
+  artist: { type: String },
+  artwork: { type: String },
+  previewUrl: { type: String },
+  deezerUrl: { type: String },
   createdAt: { type: Date, default: Date.now },
 });
 

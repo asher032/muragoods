@@ -26,6 +26,7 @@ const navItems = [
   ]},
   { section: 'UNTOLD WORDS', items: [
     { href: '/untold-words', label: 'Explore', icon: '💌' },
+    { href: '/untold-words/my', label: 'My Submissions', icon: '📋' },
     { href: '/untold-words/confession/create', label: 'Confession', icon: '💜' },
     { href: '/untold-words/letter/create', label: 'Anonymous Letter', icon: '✉️' },
     { href: '/untold-words/song/create', label: 'Send a Song', icon: '🎵' },

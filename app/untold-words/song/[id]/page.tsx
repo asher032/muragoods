@@ -162,7 +162,7 @@ export default function ViewSongMessage() {
           {/* Message */}
           <div style={{ padding: '0 32px 32px' }}>
             <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '16px', padding: '24px' }}>
-              <p style={{ fontSize: '15px', color: 'rgba(255,255,255,0.7)', lineHeight: 1.8, fontStyle: 'italic' }}>&ldquo;{song.message}&rdquo;</p>
+              <p style={{ fontSize: '15px', color: 'rgba(255,255,255,0.7)', lineHeight: 1.8, fontStyle: 'italic', wordBreak: 'break-word', overflowWrap: 'break-word', whiteSpace: 'pre-wrap', maxHeight: '200px', overflowY: 'auto' }}>&ldquo;{song.message}&rdquo;</p>
             </div>
           </div>
         </div>

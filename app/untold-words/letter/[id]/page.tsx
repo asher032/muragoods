@@ -12,6 +12,11 @@ interface LetterData {
   likes: number;
   views: number;
   createdAt: string;
+  songTitle?: string;
+  artist?: string;
+  artwork?: string;
+  previewUrl?: string;
+  deezerUrl?: string;
 }
 
 const catColors: Record<string, { emoji: string; color: string }> = {
@@ -36,6 +41,8 @@ export default function ViewLetter() {
   const [likes, setLikes] = useState(0);
   const [liked, setLiked] = useState(false);
   const [reported, setReported] = useState(false);
+  const [playingPreview, setPlayingPreview] = useState(false);
+  const [audioRef, setAudioRef] = useState<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     async function fetchLetter() {
@@ -131,6 +138,30 @@ export default function ViewLetter() {
               ))}
             </div>
           </div>
+
+          {/* Song Player (if attached) */}
+          {letter.songTitle && (
+            <div style={{ padding: '0 32px 20px' }}>
+              <div style={{ background: 'rgba(30,215,96,0.06)', border: '1px solid rgba(30,215,96,0.2)', borderRadius: '14px', padding: '14px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                {letter.artwork && <img src={letter.artwork} alt="" style={{ width: '52px', height: '52px', borderRadius: '8px', objectFit: 'cover' }} />}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#1ed760', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{letter.songTitle}</p>
+                  <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginBottom: '6px' }}>{letter.artist}</p>
+                  {letter.previewUrl && (
+                    <button onClick={() => {
+                      if (audioRef && playingPreview) { audioRef.pause(); setPlayingPreview(false); return; }
+                      if (audioRef) audioRef.pause();
+                      const audio = new Audio(letter.previewUrl!);
+                      audio.onended = () => setPlayingPreview(false);
+                      setAudioRef(audio); audio.play(); setPlayingPreview(true);
+                    }} style={{ padding: '4px 12px', borderRadius: '8px', border: '1px solid rgba(30,215,96,0.3)', background: playingPreview ? 'rgba(30,215,96,0.2)' : 'rgba(30,215,96,0.08)', color: '#1ed760', fontSize: '9px', fontFamily: 'var(--font-arcade)', cursor: 'pointer' }}>
+                      {playingPreview ? '⏸ Pause' : '▶ Play 30s'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div style={{ padding: '16px 32px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${cat.color}10` }}>
             <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>

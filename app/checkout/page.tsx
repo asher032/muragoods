@@ -8,6 +8,7 @@ import { products as staticProducts, type CartItem, deliveryZones, dwclOnlyProdu
 import { useProducts } from '@/app/hooks/useProducts';
 import { useCoins } from '@/app/hooks/useCoins';
 import { NavBar } from '@/app/components/NavBar';
+import { ReceiptGenerator } from '@/app/components/ReceiptGenerator';
 
 const LocationPicker = dynamic(() => import('@/app/components/LocationPicker'), { ssr: false });
 
@@ -585,10 +586,24 @@ export default function CheckoutPage() {
                   Open Instagram @muragoods_
                 </a>
               )}
-              <div style={{ display: 'flex', gap: '10px' }}>
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
                 <button onClick={() => { setShowSuccessModal(false); router.push(placedOrderId ? `/order/${placedOrderId}` : '/orders'); }} style={{ flex: 1, padding: '10px', background: '#333', border: '1px solid #2e2e2e', borderRadius: '5px', color: '#fff', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>View Order</button>
                 <button onClick={() => { setShowSuccessModal(false); router.push('/menu'); }} style={{ flex: 1, padding: '10px', background: '#555', border: '1px solid #2e2e2e', borderRadius: '5px', color: '#fff', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>Continue Shopping</button>
               </div>
+              <ReceiptGenerator
+                orderId={placedOrderId}
+                items={cartItems.map(item => ({ name: item.name, quantity: item.quantity, price: item.selectedVariant?.price || 0, variant: item.selectedVariant?.name }))}
+                subtotal={Number(subtotal)}
+                deliveryFee={Number(shippingFee)}
+                total={Number(total)}
+                paymentMethod={paymentMethod}
+                customerName={'Customer'}
+                customerPhone={phone}
+                deliveryAddress={mapAddress || location}
+                orderDate={new Date().toISOString()}
+                timeSlot={timeSlotOptions.find(s => s.value === timeSlot)?.label}
+                discount={discountAmount + promoDiscountAmount}
+              />
             </div>
           </div>
         </div>

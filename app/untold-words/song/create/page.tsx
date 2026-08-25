@@ -23,10 +23,7 @@ export default function CreateSongMessage() {
   const [senderName, setSenderName] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [message, setMessage] = useState('');
-  const [recipientEmail, setRecipientEmail] = useState('');
-  const [sending, setSending] = useState(false);
-  const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
-  const [sendError, setSendError] = useState('');
+
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Track[]>([]);
   const [searching, setSearching] = useState(false);
@@ -99,61 +96,20 @@ export default function CreateSongMessage() {
     setCreating(false);
   };
 
-  const handleSendEmail = async () => {
-    if (!recipientEmail) return;
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(recipientEmail)) { setSendError('Please enter a valid email address'); return; }
-    setSending(true); setSendState('sending'); setSendError('');
-    try {
-      const res = await fetch('/api/untold-words/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipientEmail, letterUrl: link, senderName: isAnonymous ? 'Anonymous' : senderName || 'Someone who cares', recipientName }),
-      });
-      const result = await res.json();
-      if (result.success) { setSendState('sent'); } else { setSendState('error'); setSendError(result.error || 'Failed to send'); }
-    } catch { setSendState('error'); setSendError('Network error.'); }
-    setSending(false);
-  };
-
   if (created) {
     return (
       <main style={{ minHeight: '100vh', background: '#0a0a18' }}>
-        <NavBar pageLabel="Message Sent" />
+        <NavBar pageLabel="Song Sent" />
         <div style={{ minHeight: '90vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 20px' }}>
           <div style={{ textAlign: 'center', maxWidth: '480px', width: '100%' }}>
-            {sendState !== 'sent' ? (
-              <>
-                <div style={{ fontSize: '64px', marginBottom: '20px', animation: 'float 3s ease-in-out infinite' }}>🎵</div>
-                <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '22px', color: '#ffd60a', marginBottom: '8px' }}>Your song message is ready!</h1>
-                <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', marginBottom: '32px' }}>Send it to {recipientName}</p>
-                <div style={{ background: 'rgba(123,47,247,0.06)', border: '1px solid rgba(123,47,247,0.2)', borderRadius: '16px', padding: '24px', marginBottom: '16px', textAlign: 'left' }}>
-                  <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: '#e8b4f8', marginBottom: '4px' }}>💌 Send this song message</p>
-                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', marginBottom: '16px' }}>Send from muragoods0@gmail.com.</p>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input value={recipientEmail} onChange={e => { setRecipientEmail(e.target.value); setSendError(''); }} placeholder="recipient@gmail.com" style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', padding: '12px 14px', color: '#fff', fontSize: '13px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
-                    <button onClick={handleSendEmail} disabled={sending || !recipientEmail} style={{ padding: '12px 20px', borderRadius: '10px', border: '1px solid rgba(123,47,247,0.4)', background: sending ? 'rgba(123,47,247,0.05)' : 'rgba(123,47,247,0.15)', color: '#e8b4f8', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: sending ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
-                      {sending ? 'SENDING...' : 'SEND'}
-                    </button>
-                  </div>
-                  {sendError && <p style={{ fontSize: '11px', color: '#e63946', marginTop: '8px' }}>{sendError}</p>}
-                </div>
-                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '20px', marginBottom: '20px', textAlign: 'left' }}>
-                  <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '10px' }}>🔗 Or copy the link</p>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => navigator.clipboard.writeText(link)} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid rgba(123,47,247,0.3)', background: 'rgba(123,47,247,0.1)', color: '#e8b4f8', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}>📋 Copy Link</button>
-                  </div>
-                </div>
-                <Link href="/untold-words" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'rgba(255,255,255,0.4)', textDecoration: 'none' }}>← Back</Link>
-              </>
-            ) : (
-              <>
-                <div style={{ fontSize: '64px', marginBottom: '20px' }}>💗</div>
-                <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '20px', color: '#ffd60a', marginBottom: '8px' }}>Sent! 💗</h1>
-                <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', marginBottom: '20px' }}>Sent to: <span style={{ color: '#e8b4f8' }}>{recipientEmail}</span></p>
-                <Link href="/untold-words" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#ffd60a', textDecoration: 'none' }}>← Back to Untold Words</Link>
-              </>
-            )}
+            <div style={{ fontSize: '64px', marginBottom: '20px', animation: 'float 3s ease-in-out infinite' }}>🎵</div>
+            <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '22px', color: '#ffd60a', marginBottom: '8px' }}>Your song message is live!</h1>
+            <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', marginBottom: '32px' }}>Send it to {recipientName} using the link below.</p>
+            <div style={{ background: 'rgba(123,47,247,0.06)', border: '1px solid rgba(123,47,247,0.2)', borderRadius: '16px', padding: '24px', marginBottom: '16px', textAlign: 'center' }}>
+              <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '10px 14px', marginBottom: '12px', wordBreak: 'break-all', fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>{link}</div>
+              <button onClick={() => navigator.clipboard.writeText(link)} style={{ padding: '10px 24px', borderRadius: '10px', border: '1px solid rgba(123,47,247,0.4)', background: 'rgba(123,47,247,0.12)', color: '#e8b4f8', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}>📋 Copy Link</button>
+            </div>
+            <Link href="/untold-words" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'rgba(255,255,255,0.4)', textDecoration: 'none' }}>← Back to Untold Words</Link>
           </div>
         </div>
         <style jsx>{`@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }`}</style>
