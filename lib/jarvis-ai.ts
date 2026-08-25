@@ -2,7 +2,7 @@
 // Makes JARVIS genuinely intelligent with real AI reasoning
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL = 'llama-3.1-8b-instant'; // Fast, free, smart
+const GROQ_MODEL = 'groq/compound-mini'; // Fast, free, smart
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
