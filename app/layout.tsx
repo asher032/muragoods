@@ -10,6 +10,7 @@ import { NotificationProvider } from "@/app/components/NotificationSystem";
 import { OrderNotificationPoller } from "@/app/components/OrderNotifications";
 import { BottomNavBar } from "@/app/components/BottomNavBar";
 import { CookieNotice } from "@/app/components/CookieNotice";
+import { JarvisProvider } from "@/app/components/JARVISProvider";
 
 const pressStart = Press_Start_2P({
   subsets: ["latin"],
@@ -81,14 +82,16 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en">
       <body className={`${pressStart.variable} ${josefin.variable}`} style={{ fontFamily: "var(--font-body)" }}>
         <NotificationProvider>
-          <AppLoader>
-            {children}
-            <BottomNavBar />
-            <CookieNotice />
-          </AppLoader>
+          <JarvisProvider>
+            <AppLoader>
+              {children}
+              <BottomNavBar />
+              <CookieNotice />
+            </AppLoader>
           <OrderNotificationPoller />
           <PWAInstallBanner />
           <NotificationSetup />
+          </JarvisProvider>
         </NotificationProvider>
         <Analytics />
         <SpeedInsights />

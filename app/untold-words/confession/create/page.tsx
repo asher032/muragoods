@@ -21,15 +21,13 @@ export default function CreateConfession() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('Confession');
-  const [visibility, setVisibility] = useState<'public' | 'private'>('public');
-  const [showConfirm, setShowConfirm] = useState(false);
+  const visibility = 'public';
 
 
   useEffect(() => { setTimeout(() => setLoaded(true), 100); }, []);
 
   const handleCreate = async () => {
     if (!title.trim() || !content.trim()) return;
-    if (visibility === 'public' && !showConfirm) { setShowConfirm(true); return; }
     setCreating(true);
     try {
       const res = await fetch('/api/untold-words/confessions', {
@@ -41,7 +39,6 @@ export default function CreateConfession() {
       if (result.success) setCreated(result.data.shortId);
     } catch { /* empty */ }
     setCreating(false);
-    setShowConfirm(false);
   };
 
   if (created) {
@@ -53,7 +50,7 @@ export default function CreateConfession() {
             <div style={{ fontSize: '64px', marginBottom: '20px', animation: 'float 3s ease-in-out infinite' }}>💜</div>
             <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '20px', color: '#ffd60a', marginBottom: '8px' }}>Your confession is live!</h1>
             <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', marginBottom: '32px' }}>
-              {visibility === 'public' ? 'It\'s now part of the Untold Words gallery.' : 'Only people with the link can see it.'}
+              It&apos;s now part of the Untold Words gallery.
             </p>
             <>
               <div style={{ background: 'rgba(200,150,255,0.06)', border: '1px solid rgba(200,150,255,0.2)', borderRadius: '16px', padding: '24px', marginBottom: '16px', textAlign: 'center' }}>
@@ -110,43 +107,12 @@ export default function CreateConfession() {
             <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.2)', textAlign: 'right', marginTop: '4px' }}>{content.length}/1500</p>
           </div>
 
-          {/* Visibility */}
-          <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '20px' }}>
-            <label style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: '12px' }}>Who can see this?</label>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={() => setVisibility('public')} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: `1px solid ${visibility === 'public' ? 'rgba(255,214,10,0.4)' : 'rgba(255,255,255,0.08)'}`, background: visibility === 'public' ? 'rgba(255,214,10,0.1)' : 'rgba(255,255,255,0.03)', color: visibility === 'public' ? '#ffd60a' : 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer', transition: 'all 0.2s', textAlign: 'center' }}>
-                <span style={{ fontSize: '16px', display: 'block', marginBottom: '4px' }}>🌎</span>
-                Public
-                <span style={{ display: 'block', fontSize: '8px', marginTop: '4px', opacity: 0.6 }}>Visible in the gallery</span>
-              </button>
-              <button onClick={() => setVisibility('private')} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: `1px solid ${visibility === 'private' ? 'rgba(123,47,247,0.4)' : 'rgba(255,255,255,0.08)'}`, background: visibility === 'private' ? 'rgba(123,47,247,0.1)' : 'rgba(255,255,255,0.03)', color: visibility === 'private' ? '#e8b4f8' : 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer', transition: 'all 0.2s', textAlign: 'center' }}>
-                <span style={{ fontSize: '16px', display: 'block', marginBottom: '4px' }}>🔒</span>
-                Private
-                <span style={{ display: 'block', fontSize: '8px', marginTop: '4px', opacity: 0.6 }}>Only with the link</span>
-              </button>
-            </div>
-          </div>
-
           {/* Submit */}
           <button onClick={handleCreate} disabled={creating || !title.trim() || !content.trim()} style={{ padding: '16px', borderRadius: '14px', border: `2px solid ${selectedCat?.color || '#c896ff'}44`, background: creating ? `${selectedCat?.color || '#c896ff'}05` : `${selectedCat?.color || '#c896ff'}18`, color: selectedCat?.color || '#c896ff', fontFamily: 'var(--font-arcade)', fontSize: '12px', cursor: creating || !title.trim() || !content.trim() ? 'not-allowed' : 'pointer', opacity: !title.trim() || !content.trim() ? 0.4 : 1, transition: 'all 0.2s' }}>
-            {creating ? 'PUBLISHING...' : visibility === 'public' ? '💜 PUBLISH ANONYMOUSLY' : '💜 PUBLISH PRIVATELY'}
+            {creating ? 'PUBLISHING...' : '💜 PUBLISH ANONYMOUSLY'}
           </button>
         </div>
 
-        {/* Confirm Public Modal */}
-        {showConfirm && (
-          <div onClick={() => setShowConfirm(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '20px', backdropFilter: 'blur(8px)' }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: '#141428', border: '1px solid rgba(255,214,10,0.3)', borderRadius: '20px', padding: '32px', maxWidth: '400px', width: '100%', textAlign: 'center' }}>
-              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🌎</div>
-              <h2 style={{ fontFamily: 'var(--font-arcade)', fontSize: '16px', color: '#ffd60a', marginBottom: '12px' }}>Make this confession public?</h2>
-              <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', lineHeight: 1.6, marginBottom: '24px' }}>Anyone may be able to read this in the Untold Words gallery. Your identity will remain anonymous.</p>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button onClick={() => setShowConfirm(false)} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}>Cancel</button>
-                <button onClick={handleCreate} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid rgba(255,214,10,0.4)', background: 'rgba(255,214,10,0.12)', color: '#ffd60a', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}>Make Public</button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </main>
   );
