@@ -1,12 +1,4 @@
-import nodemailer from 'nodemailer';
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER || 'muragoods0@gmail.com',
-    pass: process.env.EMAIL_PASSWORD || '', // App Password from Google
-  },
-});
+import { sendEmail } from './email-providers';
 
 export async function sendVerificationEmail(to: string, code: string, userName: string) {
   const html = `
@@ -63,14 +55,14 @@ export async function sendVerificationEmail(to: string, code: string, userName: 
   `;
 
   try {
-    await transporter.sendMail({
-      from: `"Muragoods" <${process.env.EMAIL_USER || 'muragoods0@gmail.com'}>`,
+    const result = await sendEmail({
       to,
       subject: `🎮 Your Muragoods Verification Code: ${code}`,
       html,
       text: `Hey ${userName}!\n\nYour Muragoods verification code is: ${code}\n\nThis code expires in 30 minutes.\nEnter it at muragoods.vercel.app/verify-email\n\nIf you didn't create this account, ignore this email.`,
     });
-    return true;
+    console.log(`[Email] Verification sent via ${result.provider}: ${result.success}`);
+    return result.success;
   } catch (error) {
     console.error('[Email] Failed to send verification email:', error);
     return false;
@@ -127,14 +119,14 @@ export async function sendLetterEmail(to: string, letterUrl: string, senderName:
   `;
 
   try {
-    await transporter.sendMail({
-      from: `"Muragoods 💌" <${process.env.EMAIL_USER || 'muragoods0@gmail.com'}>`,
+    const result = await sendEmail({
       to,
       subject: 'You received a digital letter 💌',
       html,
       text: `You received a digital letter!\n\n${senderName !== 'Anonymous' ? senderName : 'Someone'} sent you a letter through Muragoods.\n\nOpen it here: ${letterUrl}\n\n— Muragoods Untold Letters`,
     });
-    return true;
+    console.log(`[Email] Letter sent via ${result.provider}: ${result.success}`);
+    return result.success;
   } catch (error) {
     console.error('[Email] Failed to send letter email:', error);
     return false;
@@ -196,16 +188,19 @@ export async function sendPasswordResetEmail(to: string, code: string, userName:
   `;
 
   try {
-    await transporter.sendMail({
-      from: `"Muragoods" <${process.env.EMAIL_USER || 'muragoods0@gmail.com'}>`,
+    const result = await sendEmail({
       to,
       subject: `🔑 Your Muragoods Password Reset Code: ${code}`,
       html,
       text: `Hey ${userName}!\n\nYour password reset code is: ${code}\n\nThis code expires in 15 minutes.\nEnter it at muragoods.vercel.app/forgot-password\n\nIf you didn't request this, ignore this email.`,
     });
-    return true;
+    console.log(`[Email] Password reset sent via ${result.provider}: ${result.success}`);
+    return result.success;
   } catch (error) {
     console.error('[Email] Failed to send password reset email:', error);
     return false;
   }
 }
+
+// Re-export for backwards compatibility
+export { getAvailableProviders } from './email-providers';
