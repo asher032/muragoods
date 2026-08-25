@@ -5,17 +5,6 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
 const DIGIT_COUNT = 6;
-const ORBIT_RADIUS = 120;
-const SLOT_SIZE = 40;
-
-function slotPosition(i: number, r: number, cx: number, cy: number) {
-  const angle = (Math.PI * 2 * i) / DIGIT_COUNT - Math.PI / 2;
-  return {
-    x: cx + r * Math.cos(angle) - SLOT_SIZE / 2,
-    y: cy + r * Math.sin(angle) - SLOT_SIZE / 2,
-    deg: (angle * 180) / Math.PI,
-  };
-}
 
 export default function VerifyEmailPage() {
   const router = useRouter();
@@ -24,6 +13,7 @@ export default function VerifyEmailPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [verdict, setVerdict] = useState<'idle' | 'ok' | 'bad'>('idle');
   const [mounted, setMounted] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -98,261 +88,265 @@ export default function VerifyEmailPage() {
       } else {
         setVerdict('bad');
         setError(result.error || 'Verification failed');
-        setTimeout(() => setVerdict('idle'), 1200);
+        setTimeout(() => setVerdict('idle'), 1500);
       }
     } catch {
       setVerdict('bad');
       setError('An error occurred. Please try again.');
-      setTimeout(() => setVerdict('idle'), 1200);
+      setTimeout(() => setVerdict('idle'), 1500);
     } finally {
       setLoading(false);
     }
   };
 
-  const hubCx = ORBIT_RADIUS + SLOT_SIZE / 2 + 16;
-  const hubCy = ORBIT_RADIUS + SLOT_SIZE / 2 + 16;
-  const svgSize = (ORBIT_RADIUS + SLOT_SIZE / 2 + 16) * 2;
-  const ringColor = verdict === 'ok' ? '#2eeba8' : verdict === 'bad' ? '#ff4d6a' : 'rgba(255,214,10,0.25)';
+  const handleResend = async () => {
+    if (!email) { setError('Enter your email first'); return; }
+    setResending(true);
+    setError('');
+    try {
+      const res = await fetch('/api/auth/verify-email/resend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        setSuccess('New code sent! Check your inbox.');
+      } else {
+        setError(result.error || 'Failed to resend code');
+      }
+    } catch {
+      setError('Failed to resend code');
+    } finally {
+      setResending(false);
+    }
+  };
 
   return (
     <main className="min-h-screen flex items-center justify-center px-4 py-8" style={{ background: 'var(--mario-bg)' }}>
       <style jsx>{`
-        .orbit-container {
-          position: relative;
-          width: ${svgSize}px;
-          height: ${svgSize}px;
-          margin: 0 auto 24px;
-        }
-        .orbit-ring {
-          position: absolute;
-          inset: 0;
-        }
-        .orbit-hub {
-          position: absolute;
-          left: ${hubCx - 18}px;
-          top: ${hubCy - 18}px;
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          background: rgba(255,214,10,0.12);
-          border: 2px solid rgba(255,214,10,0.3);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 16px;
-          z-index: 2;
-          transition: border-color 0.4s, background 0.4s;
-        }
-        .orbit-hub.verdict-ok { border-color: #2eeba8; background: rgba(46,235,168,0.12); }
-        .orbit-hub.verdict-bad { border-color: #ff4d6a; background: rgba(255,77,106,0.12); }
-        .digit-slot {
-          position: absolute;
-          width: ${SLOT_SIZE}px;
-          height: ${SLOT_SIZE}px;
-          z-index: 3;
-          transition: border-color 0.4s, box-shadow 0.4s;
-        }
-        .digit-slot input {
+        .verify-container {
           width: 100%;
-          height: 100%;
-          border-radius: 10px;
+          max-width: 400px;
+          opacity: ${mounted ? 1 : 0};
+          transform: translateY(${mounted ? '0' : '20px'});
+          transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .verify-card {
+          background: var(--mario-bg-card);
+          border: 2px solid rgba(255,214,10,0.15);
+          border-radius: 20px;
+          padding: 36px 28px;
+          backdrop-filter: blur(16px);
+          box-shadow: 0 12px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        .logo-icon {
+          width: 64px; height: 64px; border-radius: 50%;
+          background: linear-gradient(135deg, rgba(255,214,10,0.15), rgba(255,214,10,0.05));
           border: 2px solid rgba(255,214,10,0.25);
+          display: flex; align-items: center; justify-content: center;
+          font-size: 28px; margin: 0 auto 16px;
+          box-shadow: 0 4px 20px rgba(255,214,10,0.15);
+          animation: float-glow 3s ease-in-out infinite;
+        }
+        @keyframes float-glow {
+          0%, 100% { transform: translateY(0); box-shadow: 0 4px 20px rgba(255,214,10,0.15); }
+          50% { transform: translateY(-4px); box-shadow: 0 8px 30px rgba(255,214,10,0.25); }
+        }
+        .title {
+          font-family: var(--font-arcade); font-size: 14px;
+          color: var(--mario-yellow); text-align: center;
+          letter-spacing: 0.15em; margin-bottom: 4px;
+        }
+        .subtitle {
+          font-size: 13px; color: var(--mario-text-muted);
+          text-align: center; margin-bottom: 28px; line-height: 1.5;
+        }
+        .input-group { margin-bottom: 20px; }
+        .input-label {
+          font-family: var(--font-arcade); font-size: 9px;
+          color: var(--mario-yellow); text-transform: uppercase;
+          letter-spacing: 0.15em; display: block; margin-bottom: 8px;
+        }
+        .email-input {
+          width: 100%; height: 44px; padding: 0 14px;
+          border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.08);
+          background: var(--mario-bg-input); color: var(--mario-text);
+          font-size: 14px; outline: none; font-family: var(--font-body);
+          transition: border-color 0.3s, box-shadow 0.3s;
+          box-sizing: border-box;
+        }
+        .email-input:focus {
+          border-color: rgba(255,214,10,0.4);
+          box-shadow: 0 0 0 3px rgba(255,214,10,0.08);
+        }
+        .digits-row {
+          display: flex; gap: 8px; justify-content: center;
+          margin-bottom: 24px;
+        }
+        .digit-input {
+          width: 48px; height: 56px; border-radius: 12px;
+          border: 2px solid rgba(255,214,10,0.2);
           background: rgba(26,26,42,0.9);
-          backdrop-filter: blur(8px);
           color: var(--mario-yellow);
-          font-family: var(--font-arcade);
-          font-size: 18px;
-          font-weight: 700;
-          text-align: center;
-          outline: none;
-          transition: border-color 0.3s, box-shadow 0.3s, background 0.3s;
+          font-family: var(--font-arcade); font-size: 22px;
+          font-weight: 700; text-align: center; outline: none;
+          transition: border-color 0.3s, box-shadow 0.3s, background 0.3s, transform 0.2s;
           caret-color: transparent;
         }
-        .digit-slot input:focus {
+        .digit-input:focus {
           border-color: var(--mario-yellow);
-          box-shadow: 0 0 0 3px rgba(255,214,10,0.15), 0 0 16px rgba(255,214,10,0.1);
+          box-shadow: 0 0 0 3px rgba(255,214,10,0.12), 0 0 20px rgba(255,214,10,0.08);
           background: rgba(30,30,50,0.95);
+          transform: scale(1.05);
         }
-        .digit-slot input.filled {
-          border-color: rgba(255,214,10,0.5);
+        .digit-input.filled {
+          border-color: rgba(255,214,10,0.4);
           background: rgba(255,214,10,0.06);
         }
-        .digit-slot.verdict-ok input {
-          border-color: #2eeba8;
-          box-shadow: 0 0 12px rgba(46,235,168,0.2);
-          color: #2eeba8;
+        .digit-input.verdict-ok {
+          border-color: #2eeba8; color: #2eeba8;
+          box-shadow: 0 0 15px rgba(46,235,168,0.2);
         }
-        .digit-slot.verdict-bad input {
-          border-color: #ff4d6a;
-          box-shadow: 0 0 12px rgba(255,77,106,0.2);
-          color: #ff4d6a;
-          animation: slotShake 0.4s ease-in-out;
+        .digit-input.verdict-bad {
+          border-color: #ff4d6a; color: #ff4d6a;
+          box-shadow: 0 0 15px rgba(255,77,106,0.2);
+          animation: shake 0.5s ease-in-out;
         }
-        @keyframes slotShake {
-          0%, 100% { transform: translate(0, 0); }
-          20% { transform: translate(-3px, 1px); }
-          40% { transform: translate(3px, -1px); }
-          60% { transform: translate(-2px, 2px); }
-          80% { transform: translate(2px, -2px); }
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          20% { transform: translateX(-4px); }
+          40% { transform: translateX(4px); }
+          60% { transform: translateX(-3px); }
+          80% { transform: translateX(3px); }
+        }
+        .verify-btn {
+          width: 100%; height: 48px; border-radius: 12px;
+          border: 2px solid var(--mario-yellow);
+          background: linear-gradient(135deg, rgba(255,214,10,0.2), rgba(255,214,10,0.1));
+          color: var(--mario-yellow);
+          font-family: var(--font-arcade); font-size: 13px; font-weight: 700;
+          cursor: pointer; transition: all 0.25s;
+          text-transform: uppercase; letter-spacing: 0.1em;
+        }
+        .verify-btn:hover:not(:disabled) {
+          background: rgba(255,214,10,0.25);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 16px rgba(255,214,10,0.2);
+        }
+        .verify-btn:active:not(:disabled) { transform: translateY(1px); }
+        .verify-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+        .resend-btn {
+          background: none; border: none; color: var(--mario-blue);
+          font-size: 12px; cursor: pointer; padding: 8px;
+          font-family: var(--font-body); font-weight: 600;
+          transition: color 0.2s;
+        }
+        .resend-btn:hover:not(:disabled) { color: var(--mario-yellow); }
+        .resend-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .msg-error {
+          border: 1.5px solid var(--mario-red); border-radius: 10px;
+          background: rgba(230,57,70,0.08); padding: 10px 14px;
+          font-size: 12px; color: var(--mario-red);
+          margin-bottom: 12px; text-align: center;
+        }
+        .msg-success {
+          border: 1.5px solid var(--mario-green); border-radius: 10px;
+          background: rgba(6,214,160,0.08); padding: 10px 14px;
+          font-size: 12px; color: var(--mario-green);
+          margin-bottom: 12px; text-align: center;
+        }
+        .back-link {
+          display: block; text-align: center; padding: 12px;
+          border-radius: 10px; border: 1px solid rgba(255,255,255,0.08);
+          background: var(--mario-bg-input); color: var(--mario-text-muted);
+          font-size: 12px; text-decoration: none; font-weight: 600;
+          transition: border-color 0.2s;
+        }
+        .back-link:hover { border-color: rgba(255,214,10,0.3); }
+        @media (max-width: 440px) {
+          .digits-row { gap: 6px; }
+          .digit-input { width: 44px; height: 50px; font-size: 20px; }
+          .verify-card { padding: 28px 20px; }
         }
       `}</style>
 
-      <div className="w-full max-w-md">
-        <div style={{
-          background: 'var(--mario-bg-card)',
-          border: '2px solid rgba(255,214,10,0.2)',
-          borderRadius: '20px',
-          padding: '32px 24px',
-          backdropFilter: 'blur(16px)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-        }}>
-          <div className="flex flex-col items-center gap-3 mb-6">
-            <div style={{
-              width: '48px', height: '48px', borderRadius: '50%',
-              background: 'rgba(72,149,239,0.15)', border: '2px solid rgba(72,149,239,0.3)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px',
-            }}>📧</div>
-            <div className="text-center">
-              <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'var(--mario-blue)', textTransform: 'uppercase', letterSpacing: '0.2em' }}>
-                Verify Your Email
-              </p>
-              <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--mario-text-muted)', textTransform: 'uppercase', letterSpacing: '0.15em', marginTop: '2px' }}>
-                One last step!
-              </p>
-            </div>
-          </div>
-
-          <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '16px', color: 'var(--mario-yellow)', textAlign: 'center', marginBottom: '4px' }}>
-            ENTER CODE
-          </h1>
-          <p style={{ fontSize: '12px', color: 'var(--mario-text-muted)', textAlign: 'center', marginBottom: '4px' }}>
-            We sent a 6-digit code to your email.
-          </p>
-          <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'var(--mario-yellow)', textAlign: 'center', marginBottom: '24px' }}>
-            Check your inbox (and spam folder!)
+      <div className="verify-container">
+        <div className="verify-card">
+          <div className="logo-icon">✉️</div>
+          <p className="title">VERIFY YOUR EMAIL</p>
+          <p className="subtitle">
+            We sent a 6-digit code to your email.<br />
+            Enter it below to activate your account.
           </p>
 
           <form onSubmit={handleVerify}>
-            <div style={{ marginBottom: '24px' }}>
-              <label style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: 'var(--mario-yellow)', textTransform: 'uppercase', letterSpacing: '0.15em', display: 'block', marginBottom: '8px' }}>
-                Email
-              </label>
+            <div className="input-group">
+              <label className="input-label">Email Address</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="your@email.com"
-                style={{
-                  width: '100%', height: '40px', padding: '0 12px', borderRadius: '8px',
-                  border: '1px solid rgba(255,255,255,0.1)', background: 'var(--mario-bg-input)',
-                  color: 'var(--mario-text)', fontSize: '13px', outline: 'none',
-                  fontFamily: 'var(--font-body)',
-                }}
+                className="email-input"
               />
             </div>
 
-            <div className="orbit-container">
-              <svg className="orbit-ring" viewBox={`0 0 ${svgSize} ${svgSize}`} fill="none">
-                <circle
-                  cx={hubCx}
-                  cy={hubCy}
-                  r={ORBIT_RADIUS}
-                  stroke={ringColor}
-                  strokeWidth="1.5"
-                  strokeDasharray="2 8"
-                  vectorEffect="non-scaling-stroke"
-                  style={{ transition: 'stroke 0.4s' }}
-                />
-              </svg>
-
-              <div className={`orbit-hub ${verdict === 'ok' ? 'verdict-ok' : verdict === 'bad' ? 'verdict-bad' : ''}`}>
-                {verdict === 'ok' ? '✓' : verdict === 'bad' ? '✗' : '✉'}
-              </div>
-
-              {Array.from({ length: DIGIT_COUNT }).map((_, i) => {
-                const pos = slotPosition(i, ORBIT_RADIUS, hubCx, hubCy);
-                return (
-                  <div
+            <div className="input-group">
+              <label className="input-label" style={{ textAlign: 'center', display: 'block' }}>
+                Verification Code
+              </label>
+              <div className="digits-row">
+                {Array.from({ length: DIGIT_COUNT }).map((_, i) => (
+                  <input
                     key={i}
-                    className={`digit-slot ${verdict === 'ok' ? 'verdict-ok' : verdict === 'bad' ? 'verdict-bad' : ''}`}
+                    ref={(el) => { inputRefs.current[i] = el; }}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={1}
+                    value={digits[i]}
+                    onChange={(e) => handleDigitChange(i, e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(i, e)}
+                    onPaste={i === 0 ? handlePaste : undefined}
+                    className={`digit-input ${digits[i] ? 'filled' : ''} ${
+                      verdict === 'ok' ? 'verdict-ok' : verdict === 'bad' ? 'verdict-bad' : ''
+                    }`}
                     style={{
-                      left: `${pos.x}px`,
-                      top: `${pos.y}px`,
-                      transformOrigin: `${hubCx - pos.x}px ${hubCy - pos.y}px`,
                       opacity: mounted ? 1 : 0,
-                      transform: mounted ? 'scale(1)' : 'scale(0.1)',
-                      transition: mounted
-                        ? `opacity 0.4s ease ${i * 0.06}s, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 0.06}s`
-                        : 'none',
+                      transform: mounted ? 'translateY(0)' : 'translateY(10px)',
+                      transition: `opacity 0.3s ease ${i * 0.05}s, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 0.05}s, border-color 0.3s, box-shadow 0.3s, background 0.3s`,
                     }}
-                  >
-                    <input
-                      ref={(el) => { inputRefs.current[i] = el; }}
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={1}
-                      value={digits[i]}
-                      onChange={(e) => handleDigitChange(i, e.target.value)}
-                      onKeyDown={(e) => handleKeyDown(i, e)}
-                      onPaste={i === 0 ? handlePaste : undefined}
-                      className={digits[i] ? 'filled' : ''}
-                    />
-                  </div>
-                );
-              })}
+                  />
+                ))}
+              </div>
             </div>
 
-            {error && (
-              <div style={{
-                border: '2px solid var(--mario-red)', borderRadius: '8px',
-                background: 'rgba(230,57,70,0.1)', padding: '10px 14px',
-                fontFamily: 'var(--font-arcade)', fontSize: '9px', color: 'var(--mario-red)',
-                marginBottom: '12px', textAlign: 'center',
-              }}>
-                ⚠ {error}
-              </div>
-            )}
-            {success && (
-              <div style={{
-                border: '2px solid var(--mario-green)', borderRadius: '8px',
-                background: 'rgba(6,214,160,0.1)', padding: '10px 14px',
-                fontFamily: 'var(--font-arcade)', fontSize: '9px', color: 'var(--mario-green)',
-                marginBottom: '12px', textAlign: 'center',
-              }}>
-                ✓ {success}
-              </div>
-            )}
+            {error && <div className="msg-error">⚠ {error}</div>}
+            {success && <div className="msg-success">✓ {success}</div>}
 
             <button
               type="submit"
               disabled={loading || code.length !== DIGIT_COUNT}
-              style={{
-                width: '100%', height: '42px', borderRadius: '10px',
-                border: '2px solid var(--mario-yellow)',
-                background: 'rgba(255,214,10,0.15)',
-                color: 'var(--mario-yellow)',
-                fontFamily: 'var(--font-arcade)', fontSize: '12px', fontWeight: 700,
-                cursor: loading || code.length !== DIGIT_COUNT ? 'not-allowed' : 'pointer',
-                opacity: loading || code.length !== DIGIT_COUNT ? 0.4 : 1,
-                transition: 'all 0.2s',
-                marginTop: '8px',
-              }}
+              className="verify-btn"
             >
-              {loading ? 'VERIFYING...' : 'VERIFY EMAIL'}
+              {loading ? '⏳ VERIFYING...' : '✓ VERIFY EMAIL'}
             </button>
           </form>
 
-          <div style={{ margin: '24px 0', borderTop: '1px solid rgba(255,255,255,0.08)' }} />
-          <Link
-            href="/"
-            style={{
-              display: 'block', textAlign: 'center', padding: '10px',
-              borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)',
-              background: 'var(--mario-bg-input)', color: 'var(--mario-text)',
-              fontSize: '12px', textDecoration: 'none', fontWeight: 600,
-            }}
-          >
+          <div style={{ textAlign: 'center', marginTop: '16px' }}>
+            <button
+              onClick={handleResend}
+              disabled={resending || !email}
+              className="resend-btn"
+            >
+              {resending ? '⏳ Sending...' : '🔄 Resend Code'}
+            </button>
+          </div>
+
+          <div style={{ margin: '20px 0', borderTop: '1px solid rgba(255,255,255,0.06)' }} />
+
+          <Link href="/" className="back-link">
             ← Back to Home
           </Link>
         </div>

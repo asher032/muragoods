@@ -24,12 +24,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'No verification code found. Please sign up again.' }, { status: 400 });
     }
 
-    if (new Date() > user.verificationExpires) {
+    if (user.verificationExpires && new Date() > new Date(user.verificationExpires)) {
       return NextResponse.json({ success: false, error: 'Verification code has expired. Please sign up again.' }, { status: 400 });
     }
 
-    if (user.verificationCode !== code) {
-      return NextResponse.json({ success: false, error: 'Invalid verification code' }, { status: 400 });
+    const storedCode = String(user.verificationCode).trim();
+    const inputCode = String(code).trim();
+    if (storedCode !== inputCode) {
+      return NextResponse.json({ success: false, error: `Invalid verification code. Check your email and try again.` }, { status: 400 });
     }
 
     user.emailVerified = true;

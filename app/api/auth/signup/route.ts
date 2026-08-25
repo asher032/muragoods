@@ -44,6 +44,7 @@ export async function POST(req: Request) {
       password,
       userId,
       verificationCode,
+      verificationExpires: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes from now
       emailVerified: false,
       referralCode,
       referredBy: referrerEmail,
