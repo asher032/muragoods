@@ -216,37 +216,47 @@ export default function UntoldWordsHome() {
             </div>
           )}
 
-          {/* Rotating Card Carousel */}
+          {/* Horizontal Scrollable Cards */}
           {filtered.length > 0 && (
-            <div className="carousel-wrap">
-              <div className="orbit">
-                {filtered.slice(0, 3).map((item, i) => {
-                  const accent = item.type === 'confession'
-                    ? (catColors[item.category || '']?.color || '#c896ff')
-                    : item.type === 'song' ? '#1ed760' : '#ffb4a2';
-                  const bg = item.type === 'confession'
-                    ? `radial-gradient(circle, rgba(200,150,255,1), rgba(139,6,157,1))`
-                    : item.type === 'song'
-                    ? `radial-gradient(circle, rgba(142,249,252,1), rgba(8,81,192,1))`
-                    : `radial-gradient(circle, rgba(252,240,142,1), rgba(192,142,8,1))`;
-                  const viewPath = item.type === 'confession' ? `/untold-words/confession/${item.id}` : item.type === 'song' ? `/untold-words/song/${item.id}` : `/untold-words/letter/${item.id}`;
-                  return (
-                    <Link key={item.id} href={viewPath} className={`card card-${i + 1}`}>
-                      <div className="card-bg" style={{ background: bg }} />
-                      <div className="card-content">
-                        <div className="card-text-wrap">
-                          <p className="card-type">{item.type === 'confession' ? '✨ CONFESSION' : item.type === 'song' ? '🎵 SONG' : '💌 LETTER'}</p>
-                          <h3 className="card-title">{item.type === 'song' ? item.title : `“${item.title}”`}</h3>
-                          {item.artist && <p className="card-artist">{item.artist}</p>}
-                          <p className="card-preview">{item.preview || ''}</p>
-                          <p className="card-sender">— {item.sender}</p>
-                          <span className="card-read">Read →</span>
+            <div style={{ display: 'flex', gap: '14px', overflowX: 'auto', paddingBottom: '16px', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
+              {filtered.slice(0, 8).map((item, i) => {
+                const accent = item.type === 'confession'
+                  ? (catColors[item.category || '']?.color || '#c896ff')
+                  : item.type === 'song' ? '#1ed760' : '#ffb4a2';
+                const bg = item.type === 'confession'
+                  ? 'linear-gradient(135deg, #2d1b4e, #1a0a3e)'
+                  : item.type === 'song'
+                  ? 'linear-gradient(135deg, #0a2a4a, #0d1b3e)'
+                  : 'linear-gradient(135deg, #3e2a0a, #1a1a2e)';
+                const viewPath = item.type === 'confession' ? `/untold-words/confession/${item.id}` : item.type === 'song' ? `/untold-words/song/${item.id}` : `/untold-words/letter/${item.id}`;
+                return (
+                  <Link key={item.id} href={viewPath} style={{ textDecoration: 'none', flexShrink: 0, width: '260px', scrollSnapAlign: 'start' }}>
+                    <div style={{ background: bg, border: `1px solid ${accent}30`, borderRadius: '18px', overflow: 'hidden', height: '220px', display: 'flex', flexDirection: 'column', transition: 'all 0.3s ease', cursor: 'pointer', position: 'relative' }}
+                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = `0 12px 32px ${accent}20`; }}
+                      onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+                    >
+                      {/* Glow line */}
+                      <div style={{ height: '3px', background: `linear-gradient(90deg, ${accent}, transparent)` }} />
+                      {/* Content */}
+                      <div style={{ padding: '18px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                          <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '7px', color: accent, background: accent + '18', padding: '3px 8px', borderRadius: '6px', letterSpacing: '0.1em' }}>
+                            {item.type === 'confession' ? '✨ CONFESSION' : item.type === 'song' ? '🎵 SONG' : '💌 LETTER'}
+                          </span>
+                          {item.views > 0 && <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)' }}>👁 {item.views}</span>}
+                        </div>
+                        <h3 style={{ fontFamily: 'Georgia, serif', fontSize: '15px', color: accent, marginBottom: '6px', lineHeight: 1.3, flexShrink: 0 }}>{`“${item.title}”`}</h3>
+                        {item.artist && <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginBottom: '4px', flexShrink: 0 }}>{item.artist}</p>}
+                        <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', lineHeight: 1.5, flex: 1, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.preview || ''}</p>
+                        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+                          <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.25)' }}>— {item.sender}</p>
+                          <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: accent }}>Read →</span>
                         </div>
                       </div>
-                    </Link>
-                  );
-                })}
-              </div>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           )}
 
@@ -300,129 +310,8 @@ export default function UntoldWordsHome() {
         @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
         @keyframes pulse { 0%,100%{opacity:0.3} 50%{opacity:1} }
 
-        .carousel-wrap {
-          position: relative;
-          width: 100%;
-          height: 240px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin: 0 auto 32px;
-          max-width: 420px;
-        }
-        .orbit {
-          position: relative;
-          width: 150px;
-          height: 200px;
-        }
-        .card {
-          position: absolute;
-          width: 150px;
-          height: 200px;
-          border-radius: 16px;
-          overflow: hidden;
-          text-decoration: none;
-          cursor: pointer;
-          animation: rotating 9s cubic-bezier(0.75, 0, 0, 1.01) infinite;
-        }
-        .card-bg {
-          position: absolute;
-          inset: 0;
-          filter: brightness(0.35);
-          transition: filter 0.3s;
-        }
-        .card:hover .card-bg { filter: brightness(0.5); }
-        .card-content {
-          position: relative;
-          z-index: 2;
-          width: 100%;
-          height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 16px;
-        }
-        .card-text-wrap {
-          width: 100%;
-          overflow: hidden;
-        }
-        .card-type {
-          font-family: var(--font-arcade);
-          font-size: 7px;
-          letter-spacing: 0.1em;
-          color: rgba(255,255,255,0.7);
-          margin-bottom: 8px;
-          background: rgba(0,0,0,0.3);
-          display: inline-block;
-          padding: 2px 6px;
-          border-radius: 4px;
-        }
-        .card-title {
-          font-family: Georgia, serif;
-          font-size: 14px;
-          color: #fff;
-          margin-bottom: 4px;
-          line-height: 1.3;
-          text-shadow: 0 2px 8px rgba(0,0,0,0.5);
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
-        .card-artist {
-          font-size: 10px;
-          color: rgba(255,255,255,0.5);
-          margin-bottom: 6px;
-        }
-        .card-preview {
-          font-size: 10px;
-          color: rgba(255,255,255,0.4);
-          line-height: 1.4;
-          display: -webkit-box;
-          -webkit-line-clamp: 3;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-          margin-bottom: 8px;
-        }
-        .card-sender {
-          font-size: 9px;
-          color: rgba(255,255,255,0.35);
-          margin-bottom: 4px;
-        }
-        .card-read {
-          font-family: var(--font-arcade);
-          font-size: 9px;
-          color: #ffd60a;
-        }
-
-        .card-1 {
-          --delay: 4.3s;
-          animation: rotating 9s cubic-bezier(0.75, 0, 0, 1.01) infinite 0s;
-        }
-        .card-2 {
-          --delay: 7.3s;
-          animation: rotating 9s cubic-bezier(0.75, 0, 0, 1.01) infinite -3s;
-        }
-        .card-3 {
-          --delay: 10.3s;
-          animation: rotating 9s cubic-bezier(0.75, 0, 0, 1.01) infinite -6s;
-        }
-
-        @keyframes rotating {
-          0%, 99.99% {
-            z-index: 1;
-            transform: rotate(0deg) translateY(0);
-            opacity: 1;
-          }
-          33.33% {
-            z-index: 2;
-            transform: rotate(-15deg) translateY(-80px) translateX(-60px);
-          }
-          66.66% {
-            z-index: 2;
-            transform: rotate(15deg) translateY(-80px) translateX(60px);
-          }
-        }
+        /* Hide scrollbar on horizontal scroll */
+        div::-webkit-scrollbar { display: none; }
       `}</style>
     </main>
   );

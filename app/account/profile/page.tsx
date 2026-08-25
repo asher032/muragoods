@@ -196,19 +196,28 @@ export default function AccountProfilePage() {
       <NavBar pageLabel="My Profile" />
 
       <div style={{ maxWidth: '800px', margin: '0 auto', padding: '0 16px' }}>
-        {/* Profile Card */}
-        <div className="profile-card" style={{
+        {/* Hero Header */}
+        <div style={{
           marginTop: '24px',
+          borderRadius: '20px',
+          overflow: 'hidden',
+          position: 'relative',
+          background: 'linear-gradient(135deg, #1a0a3e 0%, #0f0f1a 50%, #0a1a2e 100%)',
+          border: '1px solid rgba(255,214,10,0.15)',
+          padding: '32px 20px 24px',
+          textAlign: 'center',
         }}>
-          {/* Gold accent line at top */}
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: '3px',
-            background: 'linear-gradient(90deg, transparent, var(--mario-yellow), transparent)',
-          }} />
+          {/* Floating decorative elements */}
+          <div style={{ position: 'absolute', top: '12px', left: '16px', fontSize: '20px', opacity: 0.3, animation: 'float 3s ease-in-out infinite' }}>⭐</div>
+          <div style={{ position: 'absolute', top: '20px', right: '20px', fontSize: '16px', opacity: 0.25, animation: 'float 3s ease-in-out infinite 0.5s' }}>🪙</div>
+          <div style={{ position: 'absolute', bottom: '16px', left: '30px', fontSize: '14px', opacity: 0.2, animation: 'float 3s ease-in-out infinite 1s' }}>🍄</div>
+          <div style={{ position: 'absolute', bottom: '20px', right: '40px', fontSize: '12px', opacity: 0.2, animation: 'float 3s ease-in-out infinite 1.5s' }}>✨</div>
+
+          {/* Glow */}
+          <div style={{ position: 'absolute', top: '30%', left: '50%', width: '200px', height: '200px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,214,10,0.08), transparent 70%)', transform: 'translate(-50%, -50%)', pointerEvents: 'none' }} />
+
+          {/* Profile Card Inner */}
+          <div className="profile-card" style={{ marginTop: 0 }}>
 
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
             {/* Avatar */}
@@ -341,6 +350,7 @@ export default function AccountProfilePage() {
                 </div>
               </div>
             )}
+          </div>
           </div>
         </div>
 
