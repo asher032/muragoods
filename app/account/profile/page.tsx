@@ -56,12 +56,13 @@ export default function AccountProfilePage() {
           const res = await fetch(`/api/admin/users?email=${encodeURIComponent(userData.email)}`);
           if (res.ok) {
             const result = await res.json();
-            if (result.success && result.data?.createdAt) {
-              setUser(prev => ({ ...prev!, createdAt: result.data.createdAt }));
+            if (result.success && (result.data?.createdAt || result.data?.joinedAt)) {
+              const date = result.data.createdAt || result.data.joinedAt;
+              setUser(prev => ({ ...prev!, createdAt: date }));
               // Update localStorage so future loads are instant
               const stored = JSON.parse(localStorage.getItem('user') || '{}');
               if (!stored.createdAt) {
-                stored.createdAt = result.data.createdAt;
+                stored.createdAt = date;
                 localStorage.setItem('user', JSON.stringify(stored));
               }
             }
