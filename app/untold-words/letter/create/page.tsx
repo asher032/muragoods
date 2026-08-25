@@ -12,6 +12,10 @@ export default function CreateAnonymousLetter() {
   const [content, setContent] = useState('');
   const [visibility, setVisibility] = useState<'public' | 'private'>('public');
   const [showConfirm, setShowConfirm] = useState(false);
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [sendError, setSendError] = useState('');
 
   useEffect(() => { setTimeout(() => setLoaded(true), 100); }, []);
 
@@ -43,10 +47,55 @@ export default function CreateAnonymousLetter() {
             <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', marginBottom: '32px' }}>
               {visibility === 'public' ? 'It\'s now part of the Untold Words gallery.' : 'Only people with the link can see it.'}
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <Link href={`/untold-words/letter/${created}`} style={{ display: 'block', padding: '14px', borderRadius: '12px', border: '1px solid rgba(255,214,10,0.4)', background: 'rgba(255,214,10,0.12)', color: '#ffd60a', fontFamily: 'var(--font-arcade)', fontSize: '11px', textDecoration: 'none', textAlign: 'center' }}>📖 Read Your Letter</Link>
-              <Link href="/untold-words" style={{ display: 'block', padding: '14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-arcade)', fontSize: '11px', textDecoration: 'none', textAlign: 'center' }}>← Back to Untold Words</Link>
-            </div>
+            {sendState !== 'sent' ? (
+              <>
+                {/* Send via Gmail */}
+                <div style={{ background: 'rgba(255,100,150,0.06)', border: '1px solid rgba(255,100,150,0.2)', borderRadius: '16px', padding: '20px', marginBottom: '16px', textAlign: 'left' }}>
+                  <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: '#ffb4a2', marginBottom: '4px' }}>💌 Send this letter</p>
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', marginBottom: '12px' }}>Send from muragoods0@gmail.com — they get a link to read your letter.</p>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input value={recipientEmail} onChange={e => { setRecipientEmail(e.target.value); setSendError(''); }} placeholder="recipient@gmail.com" style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', padding: '10px 12px', color: '#fff', fontSize: '12px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+                    <button onClick={async () => {
+                      if (!recipientEmail) return;
+                      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                      if (!emailRegex.test(recipientEmail)) { setSendError('Enter a valid email'); return; }
+                      setSending(true); setSendState('sending'); setSendError('');
+                      try {
+                        const res = await fetch('/api/untold-words/send-email', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ recipientEmail, letterUrl: (typeof window !== 'undefined' ? window.location.origin : '') + '/untold-words/letter/' + created, senderName: 'Anonymous', recipientName: 'You' }),
+                        });
+                        const result = await res.json();
+                        if (result.success) setSendState('sent'); else { setSendState('error'); setSendError(result.error || 'Failed'); }
+                      } catch { setSendState('error'); setSendError('Network error'); }
+                      setSending(false);
+                    }} disabled={sending || !recipientEmail} style={{ padding: '10px 16px', borderRadius: '10px', border: '1px solid rgba(255,100,150,0.4)', background: sending ? 'rgba(255,100,150,0.05)' : 'rgba(255,100,150,0.15)', color: '#ffb4a2', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: sending ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>{sending ? 'SENDING...' : 'SEND'}</button>
+                  </div>
+                  {sendError && <p style={{ fontSize: '10px', color: '#e63946', marginTop: '6px' }}>{sendError}</p>}
+                </div>
+                {/* Copy Link */}
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '14px', marginBottom: '12px' }}>
+                  <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: 'rgba(255,255,255,0.4)', marginBottom: '8px' }}>🔗 Or copy the link</p>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => navigator.clipboard.writeText((typeof window !== 'undefined' ? window.location.origin : '') + '/untold-words/letter/' + created)} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,100,150,0.3)', background: 'rgba(255,100,150,0.08)', color: '#ffb4a2', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}>📋 Copy Link</button>
+                    <button onClick={() => {
+                      const subject = encodeURIComponent('You received an anonymous letter 💌');
+                      const body = encodeURIComponent('Someone sent you a letter through Muragoods Untold Words.\n\nOpen it here: ' + (typeof window !== 'undefined' ? window.location.origin : '') + '/untold-words/letter/' + created + '\n\n— Sent via Muragoods');
+                      window.open('https://mail.google.com/mail/?view=cm&to=&subject=' + subject + '&body=' + body, '_blank');
+                    }} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,180,100,0.3)', background: 'rgba(255,180,100,0.08)', color: '#ffb464', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}>✉️ Gmail</button>
+                  </div>
+                </div>
+                <Link href="/untold-words" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'rgba(255,255,255,0.4)', textDecoration: 'none' }}>← Back to Untold Words</Link>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>💗</div>
+                <h2 style={{ fontFamily: 'var(--font-arcade)', fontSize: '16px', color: '#ffd60a', marginBottom: '8px' }}>Letter sent! 💗</h2>
+                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '20px' }}>Sent to: <span style={{ color: '#ffb4a2' }}>{recipientEmail}</span></p>
+                <Link href="/untold-words" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#ffd60a', textDecoration: 'none' }}>← Back to Untold Words</Link>
+              </>
+            )}
           </div>
         </div>
         <style jsx>{`@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }`}</style>
