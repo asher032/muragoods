@@ -35,8 +35,11 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Muragoods | Fresh Musubi, Churros, Coffee Jelly & Cookies",
-  description: "Muragoods — Campus power-up food stall. Order legendary musubi, churros, coffee jelly & cookies delivered to your door. Play games, earn coins, and discover unsent letters.",
+  title: {
+    default: "Muragoods — Campus Power-Up Food",
+    template: "%s | Muragoods",
+  },
+  description: "Order fresh musubi, churros, coffee jelly & cookies. Play games, earn coins, and share untold words.",
   manifest: "/manifest.json",
   icons: {
     icon: "/icons/icon-192.png",
@@ -46,6 +49,26 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "Muragoods",
+  },
+  openGraph: {
+    title: "Muragoods — Campus Power-Up Food",
+    description: "Order fresh musubi, churros, coffee jelly & cookies. Play games, earn coins, and share untold words.",
+    siteName: "Muragoods",
+    images: [
+      {
+        url: "/api/og",
+        width: 1200,
+        height: 630,
+        alt: "Muragoods",
+      },
+    ],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Muragoods — Campus Power-Up Food",
+    description: "Order fresh musubi, churros, coffee jelly & cookies. Play games, earn coins, and share untold words.",
+    images: ["/api/og"],
   },
   other: {
     "mobile-web-app-capable": "yes",
