@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { NotificationBell } from '@/app/components/NotificationBell';
 import { Sidebar } from '@/app/components/Sidebar';
 
@@ -16,6 +16,7 @@ export function NavBar({ pageLabel, cartCount }: NavBarProps) {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
 
   useEffect(() => {
     const user = localStorage.getItem('user');
@@ -24,7 +25,7 @@ export function NavBar({ pageLabel, cartCount }: NavBarProps) {
 
   return (
     <>
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar open={sidebarOpen} onClose={closeSidebar} />
       <nav style={{
         position: 'sticky',
         top: 0,

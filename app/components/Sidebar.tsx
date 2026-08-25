@@ -45,8 +45,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
     } catch { /* empty */ }
   }, []);
 
-  // Close on route change
-  useEffect(() => { onClose(); }, [pathname, onClose]);
+  // Close on route change only (not on every render)
+  useEffect(() => { onClose(); }, [pathname]);
 
   return (
     <>
