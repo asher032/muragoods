@@ -92,7 +92,7 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
       const g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
       setMessages([{
         id: 'w', role: 'jarvis',
-        text: `${g}, Commander. I'm **JARVIS** — your tactical operations AI.\n\nAll systems are online. I can navigate, search, order food, check your balance, manage tasks, and analyze images.\n\nWhat would you like to do?`,
+        text: `${g}, Commander. All systems online. Tap the orb or press the mic to speak, or type a command.`,
         intent: 'INFORMATION', timestamp: new Date(),
       }]);
     }
@@ -102,23 +102,31 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
   useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 400); }, [open]);
 
-  // ─── Speech Recognition (fixed) ─────────────────────────
+  // ─── Speech Recognition (with proper permission handling) ──
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return;
+    if (!SR) { console.warn('[JARVIS] SpeechRecognition not supported in this browser'); return; }
     const rec = new SR();
     rec.continuous = false;
     rec.interimResults = false;
     rec.lang = 'en-US';
     rec.onresult = (ev: SpeechRecognitionEvent) => {
       const transcript = ev.results[0][0].transcript;
+      console.log('[JARVIS] Voice recognized:', transcript);
       setListening(false);
       handleSend(transcript);
     };
-    rec.onerror = (ev: Event) => {
-      console.log('[JARVIS] Speech error:', ev);
+    rec.onerror = (ev: SpeechRecognitionErrorEvent) => {
+      console.error('[JARVIS] Speech error:', ev.error, ev.message);
       setListening(false);
+      if (ev.error === 'not-allowed') {
+        alert('Microphone access was denied. Please allow microphone access in your browser settings to use voice commands.');
+      } else if (ev.error === 'no-speech') {
+        // No speech detected, just stop silently
+      } else if (ev.error === 'network') {
+        alert('Network error during speech recognition. Please check your connection.');
+      }
     };
     rec.onend = () => setListening(false);
     recognitionRef.current = rec;
@@ -229,11 +237,35 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
     processMessage(msg);
   }, [input, processing, processMessage]);
 
-  // ─── Voice toggle ───────────────────────────────────────
-  const toggleVoice = useCallback(() => {
-    if (!recognitionRef.current) { alert('Voice not supported in this browser. Use Chrome.'); return; }
-    if (listening) { recognitionRef.current.stop(); setListening(false); }
-    else { synthRef.current?.cancel(); setSpeaking(false); try { recognitionRef.current.start(); setListening(true); } catch { /* empty */ } }
+  // ─── Voice toggle (with permission request) ──────────────
+  const toggleVoice = useCallback(async () => {
+    if (!recognitionRef.current) {
+      alert('Voice commands are not supported in this browser. Please use Chrome or Edge for voice features.');
+      return;
+    }
+    if (listening) {
+      recognitionRef.current.stop();
+      setListening(false);
+      return;
+    }
+    // Request microphone permission first
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      alert('Microphone access is required for voice commands.\n\nPlease allow microphone access in your browser settings and try again.');
+      return;
+    }
+    // Stop any ongoing speech
+    synthRef.current?.cancel();
+    setSpeaking(false);
+    // Start listening
+    try {
+      recognitionRef.current.start();
+      setListening(true);
+    } catch (err) {
+      console.error('[JARVIS] Failed to start recognition:', err);
+      setListening(false);
+    }
   }, [listening]);
 
   // ─── Camera ─────────────────────────────────────────────
@@ -526,7 +558,7 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
                     </div>
                   </div>
                 </div>
-                <div className="orb-label">{listening ? '🎤 LISTENING — SPEAK NOW' : speaking ? '🔊 SPEAKING' : processing ? '⏳ PROCESSING' : '💡 CLICK ORB TO SPEAK — OR TYPE BELOW'}</div>
+                <div className="orb-label">{listening ? '🎤 Listening...' : speaking ? '🔊 Speaking' : processing ? '⏳ Processing' : 'Tap orb or press 🎤'}</div>
 
                 {processing && <div className="processing-bar"><div className="dots"><span /><span /><span /></div>Analyzing your request...</div>}
 
@@ -557,7 +589,7 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
                       <button className="action-icon" onClick={() => setScreenContextEnabled(!screenContextEnabled)} title="Screen Context" style={screenContextEnabled ? { borderColor: 'rgba(0,255,136,0.3)', color: '#00ff88' } : {}}>📄</button>
                       <button className="action-icon" onClick={() => { setPanel('camera'); }} title="Camera">📸</button>
                     </div>
-                    <input ref={inputRef} className="chat-input" value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} placeholder={listening ? 'Listening...' : 'Command JARVIS...'} disabled={processing} />
+                    <input ref={inputRef} className="chat-input" value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} placeholder="Type a command..." disabled={processing} />
                     <button className="send-btn" onClick={() => handleSend()} disabled={!input.trim() || processing}>{processing ? '⏳' : '▶'}</button>
                   </div>
                   <div className="quick-row">
