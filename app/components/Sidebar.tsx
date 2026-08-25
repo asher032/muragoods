@@ -24,6 +24,9 @@ const navItems = [
     { href: '/play/checkin', label: 'Check-In', icon: '📅' },
     { href: '/play/mysterybox', label: 'Mystery Box', icon: '🎁' },
   ]},
+  { section: 'FEELINGS', items: [
+    { href: '/untold-words', label: 'Untold Words', icon: '💌' },
+  ]},
   { section: 'ACCOUNT', items: [
     { href: '/account/profile', label: 'My Profile', icon: '👤' },
     { href: '/orders', label: 'My Orders', icon: '📦' },
