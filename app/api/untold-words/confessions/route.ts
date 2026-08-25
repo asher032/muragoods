@@ -87,8 +87,16 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   await dbConnect();
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get('id');
+  // Support both searchParams and JSON body
+  let id: string | null = null;
+  try {
+    const { searchParams } = new URL(req.url);
+    id = searchParams.get('id');
+    if (!id) {
+      const body = await req.json();
+      id = body.shortId || body.id || null;
+    }
+  } catch { /* empty */ }
   if (!id) return NextResponse.json({ success: false, error: 'ID required' }, { status: 400 });
   await AnonymousConfession.updateOne({ shortId: id }, { removed: true });
   return NextResponse.json({ success: true });

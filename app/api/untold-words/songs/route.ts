@@ -61,8 +61,16 @@ export async function GET(req: Request) {
 export async function DELETE(req: Request) {
   try {
     await dbConnect();
-    const { searchParams } = new URL(req.url);
-    const shortId = searchParams.get('id');
+    // Support both searchParams and JSON body
+    let shortId: string | null = null;
+    try {
+      const { searchParams } = new URL(req.url);
+      shortId = searchParams.get('id');
+      if (!shortId) {
+        const body = await req.json();
+        shortId = body.shortId || body.id || null;
+      }
+    } catch { /* empty */ }
     if (!shortId) {
       return NextResponse.json({ success: false, error: 'id is required' }, { status: 400 });
     }
