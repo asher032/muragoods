@@ -3,6 +3,7 @@ import dbConnect from '@/app/lib/mongodb';
 import User from '@/app/lib/models/User';
 import JarvisMemory from '@/app/lib/models/JarvisMemory';
 import JarvisTask from '@/app/lib/models/JarvisTask';
+import { askJarvisAI, getWeather, clearJarvisHistory } from '@/lib/jarvis-ai';
 
 // ─── Types ───────────────────────────────────────────────────
 type Intent = 'NAVIGATION' | 'SEARCH' | 'INFORMATION' | 'CREATION' | 'ACTION' | 'SYSTEM' | 'SCREEN_CONTEXT' | 'AGENT' | 'MEMORY' | 'OPERATOR' | 'UNKNOWN';
@@ -187,6 +188,14 @@ function parseCommand(input: string): ParsedCommand {
   // ─── SYSTEM ──────────────────────────────────────────────
   if (/\b(time|date|what time|current time|clock)\b/.test(lower)) {
     return { intent: 'SYSTEM', action: 'time', params };
+  }
+  if (/\b(weather|temperature|forecast|rain|sunny)\b/.test(lower)) {
+    const cityMatch = lower.match(/(?:weather|temperature|forecast|rain|sunny)\s+(?:in|at|of|for)?\s*(.+)/);
+    params.city = cityMatch?.[1]?.trim() || 'Manila';
+    return { intent: 'SYSTEM', action: 'weather', params };
+  }
+  if (/\b(clear chat|clear history|reset conversation|start over)\b/.test(lower)) {
+    return { intent: 'SYSTEM', action: 'clear-history', params };
   }
 
   return { intent: 'UNKNOWN', action: 'unknown', params: { original: input } };
@@ -557,6 +566,13 @@ function generateResponse(
         const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
         return { response: `It's currently **${timeStr}** on **${dateStr}**, ${name}.`, intent: 'SYSTEM', timestamp: ts };
       }
+      if (parsed.action === 'weather') {
+        const city = parsed.params.city || 'Manila';
+        return { response: `Checking weather for ${city}...`, intent: 'SYSTEM', action: 'weather', actionParams: { city }, timestamp: ts };
+      }
+      if (parsed.action === 'clear-history') {
+        return { response: `Clearing conversation history...`, intent: 'SYSTEM', action: 'clear-history', timestamp: ts };
+      }
       break;
     }
 
@@ -640,6 +656,33 @@ export async function POST(req: Request) {
     // Generate response
     const result = generateResponse(parsed, userName, memories);
 
+    // ─── AI ENHANCEMENT: Try Groq for UNKNOWN or INFORMATION intents ────
+    if (parsed.intent === 'UNKNOWN' || (parsed.intent === 'INFORMATION' && !['greeting', 'thanks', 'help', 'identity'].includes(parsed.action))) {
+      const aiResult = await askJarvisAI(body.message, body.userId, body.screenContext, userName || undefined);
+      if (aiResult.isAI && aiResult.response) {
+        // AI provided a response — use it but keep the original parsed intent for UI
+        result.response = aiResult.response;
+        result.intent = 'INFORMATION';
+      }
+    }
+
+    // ─── WEATHER: If user asks about weather ────
+    if (parsed.intent === 'UNKNOWN' && /\b(weather|temperature|forecast|rain|sunny|hot|cold)\b/.test(body.message.toLowerCase())) {
+      const cityMatch = body.message.toLowerCase().match(/(?:weather|temperature|forecast)\s+(?:in|at|of|for)?\s*(.+)/);
+      const city = cityMatch?.[1]?.trim() || 'Manila';
+      const weatherData = await getWeather(city);
+      if (weatherData) {
+        result.response = weatherData;
+        result.intent = 'SYSTEM';
+      }
+    }
+
+    // ─── CLEAR HISTORY: If user asks to clear chat ────
+    if (/\b(clear chat|clear history|reset conversation|start over)\b/.test(body.message.toLowerCase())) {
+      clearJarvisHistory(body.userId);
+      result.response = 'Conversation history cleared. Starting fresh, Commander.';
+    }
+
     // If it's a health check, actually run it
     if (parsed.intent === 'OPERATOR' && parsed.action === 'health-check') {
       try {
@@ -667,6 +710,19 @@ export async function POST(req: Request) {
       } catch { /* health check fetch failed */ }
     }
 
+    // ─── WEATHER: Fetch real weather data ────
+    if (parsed.intent === 'SYSTEM' && parsed.action === 'weather') {
+      const city = parsed.params.city || 'Manila';
+      const weatherData = await getWeather(city);
+      result.response = weatherData || `I couldn't get the weather for ${city}. Try again later.`;
+    }
+
+    // ─── CLEAR HISTORY ────
+    if (parsed.intent === 'SYSTEM' && parsed.action === 'clear-history') {
+      clearJarvisHistory(body.userId);
+      result.response = `Conversation history cleared. Starting fresh, ${userName || 'Commander'}.`;
+    }
+
     return NextResponse.json({ success: true, data: result });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'An error occurred';
@@ -686,14 +742,16 @@ export async function GET() {
     data: {
       status: 'online',
       name: 'JARVIS',
-      version: '2.0.0',
+      version: '3.0.0',
       capabilities: [
         'NAVIGATION', 'SEARCH', 'INFORMATION', 'CREATION', 'ACTION',
         'SYSTEM', 'SCREEN_CONTEXT', 'AGENT', 'MEMORY', 'OPERATOR',
+        'AI_REASONING', 'WEATHER', 'CAMERA',
       ],
       features: [
-        'Voice input/output', 'Persistent memory', 'Screen context analysis',
-        'Agent mode', 'Operator mode', 'Health checks', 'Proactive suggestions',
+        'Groq LLM AI reasoning', 'Voice input/output', 'Persistent memory',
+        'Screen context analysis', 'Agent mode', 'Operator mode',
+        'Weather info', 'Camera/vision', 'Health checks',
         'Rich response cards', 'Command history', 'Task center',
       ],
       timestamp: new Date().toISOString(),
