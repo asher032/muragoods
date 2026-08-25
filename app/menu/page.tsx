@@ -646,7 +646,7 @@ export default function MenuPage() {
 
       {/* ─── Floating Cart Button ─────────────────────── */}
       {cartItems.length > 0 && (
-        <div style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 40 }}>
+        <div style={{ position: 'fixed', bottom: '72px', right: '24px', zIndex: 40 }}>
           <button onClick={handleCheckout} style={{
             padding: '12px 24px', borderRadius: '12px', border: '1px solid var(--mario-green-dark)',
             background: 'var(--mario-green)', color: '#0f0f1a', fontSize: '12px', fontWeight: 700,
