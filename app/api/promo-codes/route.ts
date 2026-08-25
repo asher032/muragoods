@@ -56,9 +56,15 @@ export async function GET(req: Request) {
         return NextResponse.json({ success: false, error: 'Invalid promo code' }, { status: 404 });
       }
 
-      // Check expiry
+      // Check expiry (default 1 week)
       if (promoCode.validUntil && new Date(promoCode.validUntil) < new Date()) {
         return NextResponse.json({ success: false, error: 'This promo code has expired' }, { status: 400 });
+      }
+
+      // Check if already used by this user
+      const userEmail = searchParams.get('email');
+      if (userEmail && promoCode.usedBy?.includes(userEmail)) {
+        return NextResponse.json({ success: false, error: 'You have already used this code' }, { status: 400 });
       }
 
       // Check usage limit
@@ -74,6 +80,7 @@ export async function GET(req: Request) {
           value: promoCode.value,
           description: promoCode.description,
           minOrder: promoCode.minOrder,
+          promoId: promoCode._id,
         },
       });
     }
@@ -102,8 +109,13 @@ export async function PATCH(req: Request) {
     }
 
     if (id) {
-      // Increment used count
-      await PromoCode.findByIdAndUpdate(id, { $inc: { usedCount: 1 } });
+      // Increment used count and track user
+      const userEmail = body.userEmail;
+      const update: Record<string, unknown> = { $inc: { usedCount: 1 } };
+      if (userEmail) {
+        update.$addToSet = { usedBy: userEmail };
+      }
+      await PromoCode.findByIdAndUpdate(id, update);
       return NextResponse.json({ success: true });
     }
 

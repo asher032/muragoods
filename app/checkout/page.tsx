@@ -46,7 +46,7 @@ export default function CheckoutPage() {
   const [discountApplied, setDiscountApplied] = useState<{ code: string; type: string; value: number; label: string } | null>(null);
   const [discountError, setDiscountError] = useState('');
   const [promoCode, setPromoCode] = useState('');
-  const [promoApplied, setPromoApplied] = useState<{ code: string; type: string; value: number; description: string; minOrder: number } | null>(null);
+  const [promoApplied, setPromoApplied] = useState<{ code: string; type: string; value: number; description: string; minOrder: number; promoId?: string } | null>(null);
   const [promoError, setPromoError] = useState('');
   const { products } = useProducts();
   const { addCoins } = useCoins();
@@ -57,6 +57,13 @@ export default function CheckoutPage() {
     setIsLoggedIn(true);
     const savedCart = localStorage.getItem('cart');
     if (savedCart) { try { setCart(JSON.parse(savedCart)); } catch { setCart({}); } }
+    // Clean up expired discount codes (older than 1 week)
+    const savedCodes = JSON.parse(localStorage.getItem('muragoods_discount_codes') || '[]') as { code: string; label: string; wonAt: string }[];
+    const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+    const validCodes = savedCodes.filter(c => Date.now() - new Date(c.wonAt).getTime() < oneWeekMs);
+    if (validCodes.length !== savedCodes.length) {
+      localStorage.setItem('muragoods_discount_codes', JSON.stringify(validCodes));
+    }
   }, [router]);
 
   useEffect(() => {
@@ -113,10 +120,27 @@ export default function CheckoutPage() {
     const codeData = validCodes[code];
     if (!codeData) { setDiscountError('Invalid discount code.'); return; }
     const savedCodes = JSON.parse(localStorage.getItem('muragoods_discount_codes') || '[]') as { code: string; label: string; wonAt: string }[];
-    const hasCode = savedCodes.some((c) => c.code === code);
-    if (!hasCode) { setDiscountError('You haven\'t won this code yet. Open a Mystery Box to earn discount codes!'); return; }
+    const found = savedCodes.find((c) => c.code === code);
+    if (!found) { setDiscountError('You haven\'t won this code yet. Open a Mystery Box to earn discount codes!'); return; }
+    // Check 1 week expiration
+    const wonDate = new Date(found.wonAt);
+    const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+    if (Date.now() - wonDate.getTime() > oneWeekMs) {
+      // Remove expired code
+      const updated = savedCodes.filter(c => c.code !== code);
+      localStorage.setItem('muragoods_discount_codes', JSON.stringify(updated));
+      setDiscountError('This code has expired (codes expire after 1 week).');
+      return;
+    }
     setDiscountApplied({ code, type: codeData.type, value: codeData.value, label: codeData.label });
     setDiscountCode('');
+  };
+
+  // Remove code from localStorage after successful order placement
+  const removeUsedCode = (code: string) => {
+    const savedCodes = JSON.parse(localStorage.getItem('muragoods_discount_codes') || '[]') as { code: string; label: string; wonAt: string }[];
+    const updated = savedCodes.filter(c => c.code !== code);
+    localStorage.setItem('muragoods_discount_codes', JSON.stringify(updated));
   };
 
   const handleRemoveCode = () => { setDiscountApplied(null); setDiscountError(''); };
@@ -128,7 +152,8 @@ export default function CheckoutPage() {
     if (promoApplied) { setPromoError('A promo code is already applied. Remove it first.'); return; }
     if (discountApplied) { setPromoError('Remove the discount code first.'); return; }
     try {
-      const res = await fetch(`/api/promo-codes?code=${encodeURIComponent(code)}`);
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const res = await fetch(`/api/promo-codes?code=${encodeURIComponent(code)}&email=${encodeURIComponent(user.email || '')}`);
       const result = await res.json();
       if (!result.success) { setPromoError(result.error || 'Invalid promo code'); return; }
       const data = result.data;
@@ -220,6 +245,17 @@ export default function CheckoutPage() {
         });
         localStorage.removeItem('cart');
         setCart({});
+        // Remove used discount code (single-use)
+        if (discountApplied) removeUsedCode(discountApplied.code);
+        // Mark promo code as used on server
+        if (promoApplied?.promoId) {
+          const user = JSON.parse(localStorage.getItem('user') || '{}');
+          fetch('/api/promo-codes', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: promoApplied.promoId, userEmail: user.email }),
+          }).catch(() => {});
+        }
         setPlacedOrderId(result.data?.id || result.data?._id || '');
         setShowSuccessModal(true);
       } else { setError(result.error || 'Failed to place order.'); }

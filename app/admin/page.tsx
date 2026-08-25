@@ -78,12 +78,14 @@ export default function AdminPage() {
   }, [isAuthenticated, orders.length, fetchOrders, syncCatalog]);
 
   const summary = useMemo(() => {
-    const totalSales = orders.reduce((sum, order) => sum + order.total, 0);
-    const pending = orders.filter(o => o.status === 'Pending Payment').length;
-    const preparing = orders.filter(o => o.status === 'Preparing').length;
-    const delivered = orders.filter(o => o.status === 'Delivered').length;
+    // Exclude cancelled orders from all stats
+    const activeOrders = orders.filter(o => o.status !== 'Cancelled');
+    const totalSales = activeOrders.reduce((sum, order) => sum + order.total, 0);
+    const pending = activeOrders.filter(o => o.status === 'Pending Payment').length;
+    const preparing = activeOrders.filter(o => o.status === 'Preparing').length;
+    const delivered = activeOrders.filter(o => o.status === 'Delivered').length;
     const cancelled = orders.filter(o => o.status === 'Cancelled').length;
-    return { totalSales, pending, preparing, delivered, cancelled };
+    return { totalSales, pending, preparing, delivered, cancelled, activeCount: activeOrders.length };
   }, [orders]);
 
   const handleLogin = (e: React.FormEvent) => {
@@ -251,7 +253,7 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.map((order, idx) => (
+                  {orders.filter(o => o.status !== 'Cancelled').map((order, idx) => (
                     <tr key={String(order._id || order.id)} className={`border-t border-[rgba(242,240,228,0.08)] transition-colors hover:bg-[var(--charcoal-light)] ${idx % 2 === 0 ? '' : 'bg-[rgba(212,175,55,0.02)]'}`}>
                       <td className="px-3 py-3 text-xs text-[var(--cream-muted)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>{String(order._id || order.id || '').slice(-8).toUpperCase()}</td>
                       <td className="px-3 py-3">

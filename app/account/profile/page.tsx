@@ -187,9 +187,10 @@ export default function AccountProfilePage() {
     );
   }
 
-  const totalSpent = orders.reduce((sum: number, o: any) => sum + (o.total || 0), 0);
-  const deliveredCount = orders.filter((o: any) => o.status === 'Delivered').length;
-  const activeCount = orders.filter((o: any) => !['Cancelled', 'Delivered'].includes(o.status)).length;
+  const activeOrders = orders.filter((o: any) => o.status !== 'Cancelled');
+  const totalSpent = activeOrders.reduce((sum: number, o: any) => sum + (o.total || 0), 0);
+  const deliveredCount = activeOrders.filter((o: any) => o.status === 'Delivered').length;
+  const activeCount = activeOrders.filter((o: any) => !['Delivered'].includes(o.status)).length;
 
   return (
     <main style={{ minHeight: '100vh', background: 'var(--mario-bg)' }} className="page-enter">
@@ -362,7 +363,7 @@ export default function AccountProfilePage() {
           marginTop: '20px',
         }}>
           {[
-            { label: 'Orders', value: String(orders.length), icon: '📦', color: 'var(--mario-text)' },
+            { label: 'Orders', value: String(activeOrders.length), icon: '📦', color: 'var(--mario-text)' },
             { label: 'Delivered', value: String(deliveredCount), icon: '✅', color: 'var(--mario-green)' },
             { label: 'Active', value: String(activeCount), icon: '⏳', color: 'var(--mario-yellow)' },
             { label: 'Spent', value: `₱${totalSpent.toLocaleString()}`, icon: '💰', color: 'var(--mario-yellow)' },
