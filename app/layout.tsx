@@ -11,6 +11,7 @@ import { OrderNotificationPoller } from "@/app/components/OrderNotifications";
 import { BottomNavBar } from "@/app/components/BottomNavBar";
 import { CookieNotice } from "@/app/components/CookieNotice";
 import { JarvisProvider } from "@/app/components/JARVISProvider";
+import { JARVISOrb } from "@/app/components/JARVISOrb";
 
 const pressStart = Press_Start_2P({
   subsets: ["latin"],
@@ -87,6 +88,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               {children}
               <BottomNavBar />
               <CookieNotice />
+              <JARVISOrb />
             </AppLoader>
           <OrderNotificationPoller />
           <PWAInstallBanner />
