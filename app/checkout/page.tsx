@@ -41,6 +41,7 @@ export default function CheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState('');
+  const [receiptData, setReceiptData] = useState<{ items: { name: string; quantity: number; price: number; variant?: string }[]; subtotal: number; deliveryFee: number; total: number; discount: number } | null>(null);
   const [discountCode, setDiscountCode] = useState('');
   const [discountApplied, setDiscountApplied] = useState<{ code: string; type: string; value: number; label: string } | null>(null);
   const [discountError, setDiscountError] = useState('');
@@ -209,6 +210,14 @@ export default function CheckoutPage() {
       const res = await fetch('/api/orders', { method: 'POST', body: formData });
       const result = await res.json();
       if (result.success) {
+        // Save receipt data BEFORE clearing cart
+        setReceiptData({
+          items: cartItems.map(item => ({ name: item.name, quantity: item.quantity, price: item.selectedVariant?.price || 0, variant: item.selectedVariant?.name })),
+          subtotal: Number(subtotal),
+          deliveryFee: Number(shippingFee),
+          total: Number(total),
+          discount: discountAmount + promoDiscountAmount,
+        });
         localStorage.removeItem('cart');
         setCart({});
         setPlacedOrderId(result.data?.id || result.data?._id || '');
@@ -590,20 +599,22 @@ export default function CheckoutPage() {
                 <button onClick={() => { setShowSuccessModal(false); router.push(placedOrderId ? `/order/${placedOrderId}` : '/orders'); }} style={{ flex: 1, padding: '10px', background: '#333', border: '1px solid #2e2e2e', borderRadius: '5px', color: '#fff', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>View Order</button>
                 <button onClick={() => { setShowSuccessModal(false); router.push('/menu'); }} style={{ flex: 1, padding: '10px', background: '#555', border: '1px solid #2e2e2e', borderRadius: '5px', color: '#fff', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>Continue Shopping</button>
               </div>
-              <ReceiptGenerator
-                orderId={placedOrderId}
-                items={cartItems.map(item => ({ name: item.name, quantity: item.quantity, price: item.selectedVariant?.price || 0, variant: item.selectedVariant?.name }))}
-                subtotal={Number(subtotal)}
-                deliveryFee={Number(shippingFee)}
-                total={Number(total)}
-                paymentMethod={paymentMethod}
-                customerName={'Customer'}
-                customerPhone={phone}
-                deliveryAddress={mapAddress || location}
-                orderDate={new Date().toISOString()}
-                timeSlot={timeSlotOptions.find(s => s.value === timeSlot)?.label}
-                discount={discountAmount + promoDiscountAmount}
-              />
+              {receiptData && (
+                <ReceiptGenerator
+                  orderId={placedOrderId}
+                  items={receiptData.items}
+                  subtotal={receiptData.subtotal}
+                  deliveryFee={receiptData.deliveryFee}
+                  total={receiptData.total}
+                  paymentMethod={paymentMethod}
+                  customerName={'Customer'}
+                  customerPhone={phone}
+                  deliveryAddress={mapAddress || location}
+                  orderDate={new Date().toISOString()}
+                  timeSlot={timeSlotOptions.find(s => s.value === timeSlot)?.label}
+                  discount={receiptData.discount}
+                />
+              )}
             </div>
           </div>
         </div>

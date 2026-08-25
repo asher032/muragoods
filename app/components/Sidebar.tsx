@@ -19,8 +19,9 @@ const navItems = [
   ]},
   { section: 'PLAY', items: [
     { href: '/entertainment', label: 'Games', icon: '🎮' },
-    { href: '/play/spin', label: 'Spin Wheel', icon: '🎰' },
-    { href: '/play/trivia', label: 'Trivia', icon: '🧠' },
+    { href: '/play/memory', label: 'Memory Match', icon: '🧠' },
+    { href: '/play/flappy', label: 'Flappy Bird', icon: '🐦' },
+    { href: '/play/trivia', label: 'Trivia', icon: '❓' },
     { href: '/play/checkin', label: 'Check-In', icon: '📅' },
     { href: '/play/mysterybox', label: 'Mystery Box', icon: '🎁' },
   ]},

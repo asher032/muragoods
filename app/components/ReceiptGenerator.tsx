@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useCallback } from 'react';
 
 interface ReceiptItem {
   name: string;
@@ -25,108 +25,211 @@ interface ReceiptProps {
 }
 
 export function ReceiptGenerator({ orderId, items, subtotal, deliveryFee, total, paymentMethod, customerName, customerPhone, deliveryAddress, orderDate, timeSlot, discount }: ReceiptProps) {
-  const receiptRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const handlePrint = () => {
+  const generateReceiptImage = useCallback(async (): Promise<HTMLCanvasElement> => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 800;
+    canvas.height = 1100;
+    const ctx = canvas.getContext('2d')!;
+
+    // Background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Dashed border
+    ctx.setLineDash([8, 6]);
+    ctx.strokeStyle = '#cccccc';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(20, 20, canvas.width - 40, canvas.height - 40);
+    ctx.setLineDash([]);
+
+    // Header
+    ctx.font = '48px serif';
+    ctx.fillStyle = '#000000';
+    ctx.textAlign = 'center';
+    ctx.fillText('🍄', canvas.width / 2, 80);
+
+    ctx.font = 'bold 36px "Courier New", monospace';
+    ctx.fillText('MURAGOODS', canvas.width / 2, 130);
+
+    ctx.font = '18px "Courier New", monospace';
+    ctx.fillStyle = '#666666';
+    ctx.fillText('Campus Power-Up Food Stall', canvas.width / 2, 165);
+
+    // Divider
+    ctx.strokeStyle = '#dddddd';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(60, 185);
+    ctx.lineTo(canvas.width - 60, 185);
+    ctx.stroke();
+
+    // Order info
+    ctx.textAlign = 'left';
+    ctx.font = '16px "Courier New", monospace';
+    ctx.fillStyle = '#333333';
+    const infoX = 80;
+    ctx.fillText(`Order: #${orderId.slice(0, 8).toUpperCase()}`, infoX, 220);
+    ctx.fillText(`Date: ${new Date(orderDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}`, infoX, 248);
+    if (timeSlot) ctx.fillText(`Time: ${timeSlot}`, infoX, 276);
+    ctx.fillText(`Payment: ${paymentMethod}`, infoX, timeSlot ? 304 : 276);
+
+    // Items header
+    const itemsY = timeSlot ? 340 : 310;
+    ctx.fillStyle = '#999999';
+    ctx.font = 'bold 14px "Courier New", monospace';
+    ctx.fillText('ITEM', infoX, itemsY);
+    ctx.fillText('QTY', 400, itemsY);
+    ctx.textAlign = 'right';
+    ctx.fillText('AMOUNT', canvas.width - 80, itemsY);
+
+    // Items
+    ctx.fillStyle = '#333333';
+    ctx.font = '16px "Courier New", monospace';
+    let y = itemsY + 30;
+    items.forEach(item => {
+      ctx.textAlign = 'left';
+      const itemName = item.variant ? `${item.name} (${item.variant})` : item.name;
+      ctx.fillText(itemName.length > 28 ? itemName.slice(0, 28) + '...' : itemName, infoX, y);
+      ctx.fillText(String(item.quantity), 400, y);
+      ctx.textAlign = 'right';
+      ctx.fillText(`P${(item.price * item.quantity).toFixed(0)}`, canvas.width - 80, y);
+      y += 28;
+
+      // Dotted line
+      ctx.strokeStyle = '#eeeeee';
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(infoX, y - 10);
+      ctx.lineTo(canvas.width - 80, y - 10);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+
+    y += 10;
+
+    // Divider
+    ctx.strokeStyle = '#cccccc';
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(60, y);
+    ctx.lineTo(canvas.width - 60, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    y += 30;
+
+    // Totals
+    ctx.font = '16px "Courier New", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#333333';
+    ctx.fillText('Subtotal', infoX, y);
+    ctx.textAlign = 'right';
+    ctx.fillText(`P${subtotal.toFixed(0)}`, canvas.width - 80, y);
+    y += 28;
+
+    if (discount && discount > 0) {
+      ctx.fillStyle = '#06d6a0';
+      ctx.textAlign = 'left';
+      ctx.fillText('Discount', infoX, y);
+      ctx.textAlign = 'right';
+      ctx.fillText(`-P${discount.toFixed(0)}`, canvas.width - 80, y);
+      y += 28;
+    }
+
+    ctx.fillStyle = '#333333';
+    ctx.textAlign = 'left';
+    ctx.fillText('Delivery', infoX, y);
+    ctx.textAlign = 'right';
+    ctx.fillText(`P${deliveryFee.toFixed(0)}`, canvas.width - 80, y);
+    y += 35;
+
+    // Total line
+    ctx.strokeStyle = '#000000';
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(infoX, y - 10);
+    ctx.lineTo(canvas.width - 80, y - 10);
+    ctx.stroke();
+
+    ctx.font = 'bold 22px "Courier New", monospace';
+    ctx.fillStyle = '#000000';
+    ctx.textAlign = 'left';
+    ctx.fillText('TOTAL', infoX, y + 15);
+    ctx.textAlign = 'right';
+    ctx.fillText(`P${total.toFixed(0)}`, canvas.width - 80, y + 15);
+    y += 50;
+
+    // Customer info
+    ctx.strokeStyle = '#cccccc';
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(60, y);
+    ctx.lineTo(canvas.width - 60, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    y += 30;
+
+    ctx.font = '15px "Courier New", monospace';
+    ctx.fillStyle = '#333333';
+    ctx.textAlign = 'center';
+    ctx.fillText(customerName || 'Customer', canvas.width / 2, y);
+    y += 24;
+    ctx.fillText(customerPhone || '', canvas.width / 2, y);
+    y += 24;
+    ctx.fillText(deliveryAddress || '', canvas.width / 2, y);
+    y += 35;
+
+    // Barcode
+    ctx.font = '12px "Courier New", monospace';
+    ctx.fillStyle = '#999999';
+    ctx.fillText(`||||| ${orderId.slice(0, 8).toUpperCase()} |||||`, canvas.width / 2, y);
+    y += 35;
+
+    // Thanks
+    ctx.font = '16px "Courier New", monospace';
+    ctx.fillStyle = '#333333';
+    ctx.fillText('Thank you for ordering!', canvas.width / 2, y);
+    y += 22;
+    ctx.font = '13px "Courier New", monospace';
+    ctx.fillStyle = '#999999';
+    ctx.fillText('Some power-ups never get old.', canvas.width / 2, y);
+
+    return canvas;
+  }, [orderId, items, subtotal, deliveryFee, total, paymentMethod, customerName, customerPhone, deliveryAddress, orderDate, timeSlot, discount]);
+
+  const handlePrint = useCallback(async () => {
+    const canvas = await generateReceiptImage();
+    const dataUrl = canvas.toDataURL('image/png');
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
     printWindow.document.write(`
       <!DOCTYPE html>
       <html><head><title>Receipt - ${orderId}</title>
       <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Courier New', monospace; background: #fff; padding: 20px; }
-        .receipt { width: 280px; margin: 0 auto; border: 2px dashed #ccc; border-radius: 8px; padding: 16px; }
-        .shop-name { font-size: 18px; font-weight: bold; text-align: center; margin-bottom: 4px; }
-        .shop-sub { font-size: 9px; text-align: center; color: #666; margin-bottom: 12px; }
-        .info { text-align: center; font-size: 10px; color: #555; margin-bottom: 12px; line-height: 1.5; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 10px; }
-        th, td { padding: 3px 2px; text-align: left; border-bottom: 1px dotted #ddd; }
-        th { font-weight: bold; font-size: 9px; color: #666; }
-        td:last-child { text-align: right; }
-        th:last-child { text-align: right; }
-        .divider { border-top: 1px dashed #ccc; margin: 8px 0; }
-        .totals { font-size: 10px; }
-        .totals .row { display: flex; justify-content: space-between; margin-bottom: 3px; }
-        .totals .total-row { font-weight: bold; font-size: 12px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #000; }
-        .barcode { text-align: center; margin: 12px 0; font-size: 8px; letter-spacing: 2px; color: #999; }
-        .thanks { font-size: 10px; text-align: center; margin-top: 10px; color: #666; }
-        .footer { font-size: 8px; text-align: center; margin-top: 8px; color: #999; }
-        @media print { body { padding: 0; } .receipt { border: none; box-shadow: none; } }
+        body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f5f5f5; }
+        img { max-width: 100%; height: auto; }
+        @media print { body { background: #fff; } }
       </style></head><body>
-      <div class="receipt">
-        <div class="shop-name">🍄 MURAGOODS</div>
-        <div class="shop-sub">Campus Power-Up Food Stall</div>
-        <div class="info">
-          Order: <strong>#${orderId.slice(0, 8).toUpperCase()}</strong><br>
-          Date: ${new Date(orderDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}<br>
-          ${timeSlot ? `Time: ${timeSlot}<br>` : ''}
-          Payment: ${paymentMethod}
-        </div>
-        <table>
-          <tr><th>ITEM</th><th>QTY</th><th>AMT</th></tr>
-          ${items.map(item => `<tr><td>${item.name}${item.variant ? ` (${item.variant})` : ''}</td><td>${item.quantity}</td><td>₱${(item.price * item.quantity).toFixed(0)}</td></tr>`).join('')}
-        </table>
-        <div class="divider"></div>
-        <div class="totals">
-          <div class="row"><span>Subtotal</span><span>₱${subtotal.toFixed(0)}</span></div>
-          ${discount ? `<div class="row" style="color:#06d6a0"><span>Discount</span><span>-₱${discount.toFixed(0)}</span></div>` : ''}
-          <div class="row"><span>Delivery</span><span>₱${deliveryFee.toFixed(0)}</span></div>
-          <div class="total-row"><span>TOTAL</span><span>₱${total.toFixed(0)}</span></div>
-        </div>
-        <div class="divider"></div>
-        <div class="info">
-          ${customerName}<br>
-          ${customerPhone}<br>
-          ${deliveryAddress}
-        </div>
-        <div class="barcode">||||| ${orderId.slice(0, 8).toUpperCase()} |||||</div>
-        <div class="thanks">Thank you for ordering! 🍄</div>
-        <div class="footer">Some power-ups never get old.</div>
-      </div>
+      <img src="${dataUrl}" />
       <script>window.onload = () => { window.print(); }</script>
       </body></html>
     `);
     printWindow.document.close();
-  };
+  }, [generateReceiptImage, orderId]);
 
-  const handleDownload = () => {
-    const content = `
-╔══════════════════════════════════╗
-║         🍄 MURAGOODS            ║
-║    Campus Power-Up Food Stall   ║
-╠══════════════════════════════════╣
-║ Order: #${orderId.slice(0, 8).toUpperCase().padEnd(23)}║
-║ Date: ${new Date(orderDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).padEnd(24)}║
-║ Payment: ${paymentMethod.padEnd(21)}║
-╠══════════════════════════════════╣
-${items.map(item => `║ ${item.name.slice(0, 14).padEnd(14)} x${item.quantity}  ₱${(item.price * item.quantity).toFixed(0).padStart(5)}     ║`).join('\n')}
-╠══════════════════════════════════╣
-║ Subtotal:           ₱${subtotal.toFixed(0).padStart(8)}    ║
-${discount ? `║ Discount:          -₱${discount.toFixed(0).padStart(8)}    ║\n` : ''}║ Delivery:           ₱${deliveryFee.toFixed(0).padStart(8)}    ║
-║ ─────────────────────────────── ║
-║ TOTAL:              ₱${total.toFixed(0).padStart(8)}    ║
-╠══════════════════════════════════╣
-║ ${customerName.padEnd(32)}║
-║ ${customerPhone.padEnd(32)}║
-╠══════════════════════════════════╣
-║     Thank you for ordering!     ║
-║     Some power-ups never        ║
-║     get old.                    ║
-╚══════════════════════════════════╝
-    `.trim();
-
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
+  const handleDownload = useCallback(async () => {
+    const canvas = await generateReceiptImage();
+    const dataUrl = canvas.toDataURL('image/png');
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `muragoods-receipt-${orderId.slice(0, 8)}.txt`;
+    a.href = dataUrl;
+    a.download = `muragoods-receipt-${orderId.slice(0, 8)}.png`;
     a.click();
-    URL.revokeObjectURL(url);
-  };
+  }, [generateReceiptImage, orderId]);
 
   return (
-    <div ref={receiptRef}>
+    <>
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
       <style jsx>{`
         .receipt-actions {
           display: flex;
@@ -163,9 +266,9 @@ ${discount ? `║ Discount:          -₱${discount.toFixed(0).padStart(8)}    �
         }
       `}</style>
       <div className="receipt-actions">
-        <button className="receipt-btn receipt-btn-print" onClick={handlePrint}>🖨️ Print Receipt</button>
-        <button className="receipt-btn" onClick={handleDownload}>📥 Download</button>
+        <button className="receipt-btn receipt-btn-print" onClick={handlePrint}>🖨️ Print</button>
+        <button className="receipt-btn" onClick={handleDownload}>📥 Download Image</button>
       </div>
-    </div>
+    </>
   );
 }
