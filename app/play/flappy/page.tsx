@@ -244,12 +244,12 @@ export default function FlappyBird() {
           <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>Tap or press Space to fly!</p>
         </div>
 
-        <div style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', border: '2px solid rgba(255,214,10,0.2)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
-          <canvas ref={canvasRef} width={GAME_WIDTH} height={GAME_HEIGHT} onClick={jump} style={{ display: 'block', cursor: 'pointer' }} />
+        <div onClick={jump} style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', border: '2px solid rgba(255,214,10,0.2)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', cursor: 'pointer' }}>
+          <canvas ref={canvasRef} width={GAME_WIDTH} height={GAME_HEIGHT} style={{ display: 'block' }} />
 
           {/* Menu Overlay */}
           {gameState === 'menu' && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)' }}>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', pointerEvents: 'none' }}>
               <div style={{ fontSize: '48px', marginBottom: '16px' }}>🐦</div>
               <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '14px', color: '#ffd60a', marginBottom: '8px' }}>FLAPPY BIRD</p>
               <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginBottom: '20px' }}>Tap to start flying!</p>
@@ -267,8 +267,8 @@ export default function FlappyBird() {
               {coinsEarned > 0 && <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#06d6a0', marginBottom: '12px' }}>+{coinsEarned} coins!</p>}
               {bestScore > 0 && <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginBottom: '16px' }}>Best: {bestScore}</p>}
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={() => { setGameState('menu'); gameStateRef.current = 'menu'; draw(); }} style={{ padding: '8px 20px', borderRadius: '8px', border: '1px solid rgba(255,214,10,0.4)', background: 'rgba(255,214,10,0.12)', color: '#ffd60a', fontFamily: 'var(--font-arcade)', fontSize: '9px', cursor: 'pointer' }}>Retry</button>
-                <Link href="/entertainment" style={{ padding: '8px 20px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-arcade)', fontSize: '9px', textDecoration: 'none' }}>More</Link>
+                <button onClick={(e) => { e.stopPropagation(); setGameState('menu'); gameStateRef.current = 'menu'; scoreRef.current = 0; birdRef.current = { y: GAME_HEIGHT / 2, velocity: 0 }; pipesRef.current = []; draw(); }} style={{ padding: '8px 20px', borderRadius: '8px', border: '1px solid rgba(255,214,10,0.4)', background: 'rgba(255,214,10,0.12)', color: '#ffd60a', fontFamily: 'var(--font-arcade)', fontSize: '9px', cursor: 'pointer' }}>Retry</button>
+                <Link href="/entertainment" onClick={(e) => e.stopPropagation()} style={{ padding: '8px 20px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-arcade)', fontSize: '9px', textDecoration: 'none' }}>More</Link>
               </div>
             </div>
           )}
