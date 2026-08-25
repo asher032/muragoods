@@ -126,18 +126,18 @@ export default function UntoldWordsHome() {
             </Link>
           </div>
 
-          {/* Explore link */}
-          <div style={{ opacity: loaded ? 1 : 0, transition: 'opacity 0.8s ease 1.1s' }}>
+          {/* Explore links */}
+          <div style={{ opacity: loaded ? 1 : 0, transition: 'opacity 0.8s ease 1.1s', display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Link href="/untold-words/gallery" style={{
+              fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'rgba(255,255,255,0.3)', textDecoration: 'none', letterSpacing: '0.1em', padding: '10px 20px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', transition: 'all 0.3s ease',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#ffd60a'; e.currentTarget.style.borderColor = 'rgba(255,214,10,0.3)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.3)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
+            >
+              🖼️ Gallery
+            </Link>
             <Link href="/untold-words/explore" style={{
-              fontFamily: 'var(--font-arcade)',
-              fontSize: '10px',
-              color: 'rgba(255,255,255,0.3)',
-              textDecoration: 'none',
-              letterSpacing: '0.1em',
-              padding: '10px 20px',
-              borderRadius: '12px',
-              border: '1px solid rgba(255,255,255,0.08)',
-              transition: 'all 0.3s ease',
+              fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'rgba(255,255,255,0.3)', textDecoration: 'none', letterSpacing: '0.1em', padding: '10px 20px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', transition: 'all 0.3s ease',
             }}
             onMouseEnter={e => { e.currentTarget.style.color = '#ffd60a'; e.currentTarget.style.borderColor = 'rgba(255,214,10,0.3)'; }}
             onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.3)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}

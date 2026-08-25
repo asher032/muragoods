@@ -143,16 +143,29 @@ export default function Home() {
                 </div>
               </div>
             </Link>
-            <Link href="/unsent" className="stagger-2">
-              <div className="highlight-card" style={{ background: 'linear-gradient(135deg, rgba(123,47,247,0.12), rgba(255,100,150,0.08))' }}>
-                <div className="highlight-content">
-                  <span style={{ fontSize: '40px', marginBottom: '12px' }} className="float-anim">✉️</span>
-                  <h3 className="font-arcade text-sm text-mario-yellow mb-1">LETTERS</h3>
-                  <p className="text-xs text-mario-text-muted mb-3">The Unsent Project — write anonymous letters, read what others left behind.</p>
-                  <span className="font-arcade text-[9px] text-purple-400" style={{ letterSpacing: '0.1em' }}>OPEN ARCHIVE →</span>
+            <div className="stagger-2">
+              <div className="highlight-card" style={{ background: 'linear-gradient(135deg, rgba(123,47,247,0.12), rgba(255,100,150,0.08))', cursor: 'default' }}>
+                <div className="highlight-content" style={{ gap: '8px' }}>
+                  <span style={{ fontSize: '40px', marginBottom: '4px' }} className="float-anim">✉️</span>
+                  <h3 className="font-arcade text-sm text-mario-yellow mb-2">UNTOLD LETTERS</h3>
+                  <p className="text-xs text-mario-text-muted mb-4">Express your untold message through letters and songs.</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                    <a href="/untold-words/letter/create" style={{ display: 'block', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(255,100,150,0.25)', background: 'rgba(255,100,150,0.08)', color: '#ffb4a2', fontSize: '10px', fontFamily: 'var(--font-arcade)', textDecoration: 'none', transition: 'all 0.2s', textAlign: 'left' }}>
+                      💌 Anonymous Letter
+                    </a>
+                    <a href="/untold-words/letter/create" style={{ display: 'block', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(255,180,100,0.25)', background: 'rgba(255,180,100,0.08)', color: '#ffb464', fontSize: '10px', fontFamily: 'var(--font-arcade)', textDecoration: 'none', transition: 'all 0.2s', textAlign: 'left' }}>
+                      🌹 Virtual Letter
+                    </a>
+                    <a href="/untold-words/song/create" style={{ display: 'block', padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(123,47,247,0.25)', background: 'rgba(123,47,247,0.08)', color: '#e8b4f8', fontSize: '10px', fontFamily: 'var(--font-arcade)', textDecoration: 'none', transition: 'all 0.2s', textAlign: 'left' }}>
+                      🎵 Send a Song
+                    </a>
+                    <a href="/untold-words/explore" style={{ display: 'block', padding: '8px 14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.4)', fontSize: '10px', fontFamily: 'var(--font-arcade)', textDecoration: 'none', transition: 'all 0.2s', textAlign: 'left' }}>
+                      📚 Browse All
+                    </a>
+                  </div>
                 </div>
               </div>
-            </Link>
+            </div>
           </div>
         </div>
       </section>

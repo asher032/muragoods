@@ -77,6 +77,70 @@ export async function sendVerificationEmail(to: string, code: string, userName: 
   }
 }
 
+export async function sendLetterEmail(to: string, letterUrl: string, senderName: string, recipientName: string) {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { margin: 0; padding: 0; background: #0f0f1a; font-family: 'Segoe UI', Arial, sans-serif; }
+        .container { max-width: 480px; margin: 0 auto; padding: 40px 20px; }
+        .card { background: #1e1e32; border: 2px solid rgba(255,100,150,0.4); border-radius: 16px; overflow: hidden; }
+        .header { background: rgba(255,100,150,0.08); padding: 32px 24px; text-align: center; border-bottom: 2px solid rgba(255,100,150,0.15); }
+        .logo { font-size: 28px; color: #ffd60a; font-weight: 900; letter-spacing: 4px; }
+        .body { padding: 32px 24px; color: #e8e8f0; text-align: center; }
+        .btn { display: inline-block; padding: 14px 40px; background: linear-gradient(135deg, #ff6496, #ff8fb4); color: #fff; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 14px; margin: 24px 0; letter-spacing: 1px; }
+        .note { font-size: 13px; color: #9090a8; margin-top: 16px; line-height: 1.6; }
+        .divider { width: 40px; height: 2px; background: linear-gradient(90deg, transparent, #ff6496, transparent); margin: 24px auto; }
+        .footer { padding: 16px 24px; text-align: center; border-top: 1px solid rgba(255,255,255,0.08); }
+        .footer p { font-size: 11px; color: #707090; margin: 4px 0; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="card">
+          <div class="header">
+            <div style="font-size: 36px; margin-bottom: 12px;">💌</div>
+            <div class="logo">MURAGOODS</div>
+            <p style="font-size: 11px; color: #9090a8; margin-top: 6px; letter-spacing: 2px;">UNTOLD LETTERS</p>
+          </div>
+          <div class="body">
+            <p style="font-size: 18px; color: #ff6496; margin-bottom: 8px;">You received a digital letter 💌</p>
+            <p style="font-size: 14px; color: #9090a8; margin-bottom: 4px;">${senderName !== 'Anonymous' ? senderName : 'Someone'} has sent you a ${letterUrl.includes('/letter/') ? 'digital letter' : 'song message'} through Muragoods.</p>
+            <p style="font-size: 13px; color: #707090;">For: ${recipientName}</p>
+            <div class="divider" />
+            <a href="${letterUrl}" class="btn">Open Your Letter 💌</a>
+            <p class="note">
+              If the button doesn't work, copy and paste this link into your browser:<br>
+              <a href="${letterUrl}" style="color: #ff6496; word-break: break-all;">${letterUrl}</a>
+            </p>
+          </div>
+          <div class="footer">
+            <p style="color: #ff6496; font-weight: 700;">MURAGOODS</p>
+            <p>Untold Letters — Some words are easier to send than to say.</p>
+            <p>muragoods.vercel.app</p>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: `"Muragoods 💌" <${process.env.EMAIL_USER || 'muragoods0@gmail.com'}>`,
+      to,
+      subject: 'You received a digital letter 💌',
+      html,
+      text: `You received a digital letter!\n\n${senderName !== 'Anonymous' ? senderName : 'Someone'} sent you a letter through Muragoods.\n\nOpen it here: ${letterUrl}\n\n— Muragoods Untold Letters`,
+    });
+    return true;
+  } catch (error) {
+    console.error('[Email] Failed to send letter email:', error);
+    return false;
+  }
+}
+
 export async function sendPasswordResetEmail(to: string, code: string, userName: string) {
   const html = `
     <!DOCTYPE html>

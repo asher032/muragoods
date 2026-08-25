@@ -24,8 +24,11 @@ const navItems = [
     { href: '/play/checkin', label: 'Check-In', icon: '📅' },
     { href: '/play/mysterybox', label: 'Mystery Box', icon: '🎁' },
   ]},
-  { section: 'FEELINGS', items: [
-    { href: '/untold-words', label: 'Untold Words', icon: '💌' },
+  { section: 'UNTOLD LETTERS', items: [
+    { href: '/untold-words', label: 'Home', icon: '💌' },
+    { href: '/untold-words/letter/create', label: 'Write a Letter', icon: '📝' },
+    { href: '/untold-words/song/create', label: 'Send a Song', icon: '🎵' },
+    { href: '/untold-words/gallery', label: 'Gallery', icon: '🖼️' },
   ]},
   { section: 'ACCOUNT', items: [
     { href: '/account/profile', label: 'My Profile', icon: '👤' },
