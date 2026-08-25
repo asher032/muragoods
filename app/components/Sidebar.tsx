@@ -24,13 +24,11 @@ const navItems = [
     { href: '/play/checkin', label: 'Check-In', icon: '📅' },
     { href: '/play/mysterybox', label: 'Mystery Box', icon: '🎁' },
   ]},
-  { section: 'UNTOLD LETTERS', items: [
-    { href: '/untold-words', label: 'Home', icon: '💌' },
-    { href: '/untold-words/anonymous/create', label: 'Anonymous Letter', icon: '🥷' },
-    { href: '/untold-words/anonymous/archive', label: 'Letter Archive', icon: '📚' },
-    { href: '/untold-words/letter/create', label: 'Virtual Letter', icon: '💗' },
-    { href: '/untold-words/song/create', label: 'Song Message', icon: '🎵' },
-    { href: '/untold-words/gallery', label: 'Gallery', icon: '🖼️' },
+  { section: 'UNTOLD WORDS', items: [
+    { href: '/untold-words', label: 'Explore', icon: '💌' },
+    { href: '/untold-words/confession/create', label: 'Confession', icon: '💜' },
+    { href: '/untold-words/letter/create', label: 'Anonymous Letter', icon: '✉️' },
+    { href: '/untold-words/song/create', label: 'Send a Song', icon: '🎵' },
   ]},
   { section: 'ACCOUNT', items: [
     { href: '/account/profile', label: 'My Profile', icon: '👤' },

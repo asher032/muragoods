@@ -34,12 +34,15 @@ export async function POST(req: Request) {
 
     const validCategories = ['Confession', 'Appreciation', 'Missing Someone', 'Friendship', 'Crush', 'Moving On', 'Random Thoughts'];
     const category = validCategories.includes(body.category) ? body.category : 'Random Thoughts';
+    const visibility = body.visibility === 'private' ? 'private' : 'public';
 
     const letter = await AnonymousLetter.create({
       shortId,
       title: body.title?.trim().slice(0, 100) || 'Untitled',
       content: body.content?.trim().slice(0, 2000) || '',
       category,
+      visibility,
+      createdBy: body.createdBy || '',
     });
 
     return NextResponse.json({ success: true, data: letter }, { status: 201 });
@@ -71,7 +74,7 @@ export async function GET(req: Request) {
     }
 
     // List/search
-    const query: Record<string, unknown> = { removed: false };
+    const query: Record<string, unknown> = { removed: false, visibility: 'public' };
     if (category && category !== 'All') query.category = category;
     if (search) {
       query.$or = [

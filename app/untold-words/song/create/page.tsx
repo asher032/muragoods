@@ -1,34 +1,97 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 
+interface Track {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  artwork: string;
+  previewUrl: string;
+  spotifyUrl: string;
+  duration: number;
+}
+
 export default function CreateSongMessage() {
-  const router = useRouter();
   const [loaded, setLoaded] = useState(false);
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<string | null>(null);
   const [recipientName, setRecipientName] = useState('');
   const [senderName, setSenderName] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
-  const [songTitle, setSongTitle] = useState('');
-  const [artist, setArtist] = useState('');
   const [messageTitle, setMessageTitle] = useState('');
   const [message, setMessage] = useState('');
   const [memoryDate, setMemoryDate] = useState('');
-  const [spotifyUrl, setSpotifyUrl] = useState('');
-  const [showPreview, setShowPreview] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState('');
   const [sending, setSending] = useState(false);
   const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [sendError, setSendError] = useState('');
 
+  // Song search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Track[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [playingPreview, setPlayingPreview] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => { setTimeout(() => setLoaded(true), 100); }, []);
 
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    };
+  }, []);
+
+  const searchSongs = useCallback(async (query: string) => {
+    if (!query.trim()) { setSearchResults([]); return; }
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if (data.success) setSearchResults(data.tracks || []);
+      else setSearchResults([]);
+    } catch { setSearchResults([]); }
+    setSearching(false);
+  }, []);
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(() => searchSongs(value), 400);
+  };
+
+  const selectTrack = (track: Track) => {
+    setSelectedTrack(track);
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
+  const togglePreview = (track: Track) => {
+    if (!track.previewUrl) return;
+    if (audioRef.current && playingPreview) {
+      audioRef.current.pause();
+      setPlayingPreview(false);
+      return;
+    }
+    if (audioRef.current) audioRef.current.pause();
+    const audio = new Audio(track.previewUrl);
+    audio.onended = () => setPlayingPreview(false);
+    audioRef.current = audio;
+    audio.play();
+    setPlayingPreview(true);
+  };
+
+  const link = created ? `${typeof window !== 'undefined' ? window.location.origin : ''}/untold-words/song/${created}` : '';
+
   const handleCreate = async () => {
-    if (!recipientName || !songTitle || !artist || !message) return;
+    if (!recipientName || !selectedTrack || !message) return;
     setCreating(true);
     try {
       const res = await fetch('/api/untold-words/songs', {
@@ -38,23 +101,21 @@ export default function CreateSongMessage() {
           recipientName,
           senderName: isAnonymous ? 'Anonymous' : senderName || 'Someone who cares',
           isAnonymous,
-          songTitle,
-          artist,
-          spotifyUrl,
+          songTitle: selectedTrack.title,
+          artist: selectedTrack.artist,
+          spotifyUrl: selectedTrack.spotifyUrl,
+          artwork: selectedTrack.artwork,
+          previewUrl: selectedTrack.previewUrl,
           messageTitle,
           message,
           memoryDate,
         }),
       });
       const result = await res.json();
-      if (result.success) {
-        setCreated(result.data.shortId);
-      }
+      if (result.success) setCreated(result.data.shortId);
     } catch { /* empty */ }
     setCreating(false);
   };
-
-  const link = created ? `${typeof window !== 'undefined' ? window.location.origin : ''}/untold-words/song/${created}` : '';
 
   const handleSendEmail = async () => {
     if (!recipientEmail) return;
@@ -84,11 +145,9 @@ export default function CreateSongMessage() {
                 <div style={{ fontSize: '64px', marginBottom: '20px', animation: 'float 3s ease-in-out infinite' }}>🎵</div>
                 <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '22px', color: '#ffd60a', marginBottom: '8px' }}>Your song message is ready!</h1>
                 <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', marginBottom: '32px' }}>Send it to {recipientName}</p>
-
-                {/* Send to Gmail */}
                 <div style={{ background: 'rgba(123,47,247,0.06)', border: '1px solid rgba(123,47,247,0.2)', borderRadius: '16px', padding: '24px', marginBottom: '16px', textAlign: 'left' }}>
                   <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: '#e8b4f8', marginBottom: '4px' }}>💌 Send this song message</p>
-                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', marginBottom: '16px' }}>Send directly from muragoods0@gmail.com — they get a beautiful email with a link to hear your song message.</p>
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', marginBottom: '16px' }}>Send directly from muragoods0@gmail.com.</p>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <input value={recipientEmail} onChange={e => { setRecipientEmail(e.target.value); setSendError(''); }} placeholder="recipient@gmail.com" style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', padding: '12px 14px', color: '#fff', fontSize: '13px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
                     <button onClick={handleSendEmail} disabled={sending || !recipientEmail} style={{ padding: '12px 20px', borderRadius: '10px', border: '1px solid rgba(123,47,247,0.4)', background: sending ? 'rgba(123,47,247,0.05)' : 'rgba(123,47,247,0.15)', color: '#e8b4f8', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: sending ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
@@ -96,45 +155,29 @@ export default function CreateSongMessage() {
                     </button>
                   </div>
                   {sendError && <p style={{ fontSize: '11px', color: '#e63946', marginTop: '8px' }}>{sendError}</p>}
-                  {sendState === 'sending' && <p style={{ fontSize: '12px', color: '#e8b4f8', marginTop: '12px', animation: 'pulse 1.5s ease infinite' }}>Sending your song message... 🎵</p>}
                 </div>
-
-                {/* Copy & Share */}
                 <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '20px', marginBottom: '20px', textAlign: 'left' }}>
-                  <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '10px' }}>🔗 Or copy the link and share it yourself</p>
-                  <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', padding: '12px', marginBottom: '12px', wordBreak: 'break-all' }}>
-                    <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#e8b4f8' }}>{link}</p>
-                  </div>
+                  <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '10px' }}>🔗 Or copy the link</p>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button onClick={() => navigator.clipboard.writeText(link)} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid rgba(123,47,247,0.3)', background: 'rgba(123,47,247,0.1)', color: '#e8b4f8', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}>📋 Copy Link</button>
-                    <button onClick={() => {
-                      const subject = encodeURIComponent('You received a song message 🎵');
-                      const body = encodeURIComponent(`Hey ${recipientName},\n\nSomeone wanted to tell you something through a song.\n\nOpen it here: ${link}\n\n— Sent via Muragoods Untold Letters`);
-                      window.open(`https://mail.google.com/mail/?view=cm&to=&subject=${subject}&body=${body}`, '_blank');
-                    }} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid rgba(255,100,150,0.3)', background: 'rgba(255,100,150,0.1)', color: '#ffb4a2', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}>✉️ Open Gmail</button>
                   </div>
                 </div>
-
-                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                  <Link href="/untold-words" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'rgba(255,255,255,0.4)', textDecoration: 'none' }}>← Back</Link>
-                  <Link href={`/untold-words/song/${created}`} style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#ffd60a', textDecoration: 'none' }}>Preview →</Link>
-                </div>
+                <Link href="/untold-words" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'rgba(255,255,255,0.4)', textDecoration: 'none' }}>← Back</Link>
               </>
             ) : (
               <>
                 <div style={{ fontSize: '64px', marginBottom: '20px' }}>💗</div>
                 <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '20px', color: '#ffd60a', marginBottom: '8px' }}>Your song message has been sent! 💗</h1>
                 <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>Sent to: <span style={{ color: '#e8b4f8' }}>{recipientEmail}</span></p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '28px', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '28px' }}>
                   <Link href={`/untold-words/song/${created}`} style={{ display: 'block', padding: '14px', borderRadius: '12px', border: '1px solid rgba(255,214,10,0.4)', background: 'rgba(255,214,10,0.12)', color: '#ffd60a', fontFamily: 'var(--font-arcade)', fontSize: '11px', textDecoration: 'none', textAlign: 'center' }}>🎵 Open Song Message</Link>
-                  <button onClick={() => navigator.clipboard.writeText(link)} style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid rgba(123,47,247,0.4)', background: 'rgba(123,47,247,0.12)', color: '#e8b4f8', fontFamily: 'var(--font-arcade)', fontSize: '11px', cursor: 'pointer' }}>📋 Copy Link</button>
-                  <Link href="/untold-words/song/create" style={{ display: 'block', padding: '14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-arcade)', fontSize: '11px', textDecoration: 'none', textAlign: 'center' }}>🎵 Send Another</Link>
+                  <Link href="/untold-words" style={{ display: 'block', padding: '14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-arcade)', fontSize: '11px', textDecoration: 'none', textAlign: 'center' }}>← Back to Untold Words</Link>
                 </div>
               </>
             )}
           </div>
         </div>
-        <style jsx>{`@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} } @keyframes pulse { 0%,100%{opacity:0.5} 50%{opacity:1} }`}</style>
+        <style jsx>{`@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }`}</style>
       </main>
     );
   }
@@ -143,19 +186,79 @@ export default function CreateSongMessage() {
     <main style={{ minHeight: '100vh', background: '#0a0a18' }}>
       <NavBar pageLabel="Say It Through a Song" />
       <div style={{ maxWidth: '700px', margin: '0 auto', padding: '80px 20px 100px' }}>
-        {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '36px', opacity: loaded ? 1 : 0, transform: loaded ? 'translateY(0)' : 'translateY(20px)', transition: 'all 0.6s ease' }}>
           <span style={{ fontSize: '36px', display: 'block', marginBottom: '12px' }}>🎵</span>
           <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '20px', color: '#e8b4f8', marginBottom: '8px' }}>Say it through a song.</h1>
-          <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', maxWidth: '400px', margin: '0 auto', lineHeight: 1.6 }}>Sometimes a song says what words can&apos;t. Choose a song and let it carry the message you never knew how to say.</p>
+          <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', maxWidth: '400px', margin: '0 auto', lineHeight: 1.6 }}>Sometimes a song says what words can&apos;t. Search for a song and let it carry the message.</p>
         </div>
 
-        {/* Form */}
         <div style={{ display: 'grid', gap: '16px', opacity: loaded ? 1 : 0, transform: loaded ? 'translateY(0)' : 'translateY(20px)', transition: 'all 0.6s ease 0.2s' }}>
           {/* Recipient */}
           <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '20px' }}>
             <label style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: '#ffd60a', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>Who is this for? *</label>
             <input value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="Their name..." style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontSize: '15px', fontFamily: 'inherit', padding: '8px 0' }} />
+          </div>
+
+          {/* Song Search */}
+          <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '20px' }}>
+            <label style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: '#1ed760', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: '12px' }}>🎵 Choose a song *</label>
+
+            {selectedTrack ? (
+              /* Selected Track */
+              <div style={{ background: 'rgba(30,215,96,0.06)', border: '1px solid rgba(30,215,96,0.25)', borderRadius: '14px', padding: '16px', display: 'flex', gap: '14px', alignItems: 'center' }}>
+                {selectedTrack.artwork && (
+                  <img src={selectedTrack.artwork} alt="" style={{ width: '72px', height: '72px', borderRadius: '10px', objectFit: 'cover' }} />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '12px', color: '#1ed760', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedTrack.title}</p>
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginBottom: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedTrack.artist}</p>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    {selectedTrack.previewUrl && (
+                      <button onClick={() => togglePreview(selectedTrack)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '8px', border: '1px solid rgba(30,215,96,0.3)', background: playingPreview ? 'rgba(30,215,96,0.2)' : 'rgba(30,215,96,0.08)', color: '#1ed760', fontSize: '9px', fontFamily: 'var(--font-arcade)', cursor: 'pointer' }}>
+                        {playingPreview ? '⏸ Pause' : '▶ Preview'}
+                      </button>
+                    )}
+                    <button onClick={() => setSelectedTrack(null)} style={{ padding: '4px 10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)', fontSize: '9px', fontFamily: 'var(--font-arcade)', cursor: 'pointer' }}>
+                      Change
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Search Input */
+              <div>
+                <div style={{ position: 'relative' }}>
+                  <input value={searchQuery} onChange={e => handleSearchChange(e.target.value)} placeholder="Search for a song..." style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(30,215,96,0.2)', borderRadius: '12px', padding: '14px 16px', color: '#fff', fontSize: '14px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+                  {searching && <span style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', color: '#1ed760', animation: 'pulse 1s ease infinite' }}>⏳</span>}
+                </div>
+                {searchQuery && !searching && searchResults.length === 0 && (
+                  <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginTop: '8px', textAlign: 'center' }}>No results. Try a different search or paste a Spotify link below.</p>
+                )}
+                {searchResults.length > 0 && (
+                  <div style={{ marginTop: '12px', maxHeight: '360px', overflowY: 'auto', display: 'grid', gap: '6px' }}>
+                    {searchResults.map(track => (
+                      <div key={track.id} onClick={() => selectTrack(track)} style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '10px 12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)', cursor: 'pointer', transition: 'all 0.2s' }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(30,215,96,0.3)'; e.currentTarget.style.background = 'rgba(30,215,96,0.04)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; }}
+                      >
+                        {track.artwork && <img src={track.artwork} alt="" style={{ width: '44px', height: '44px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }} />}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontSize: '12px', color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.title}</p>
+                          <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.artist} · {track.album}</p>
+                        </div>
+                        {track.previewUrl && (
+                          <button onClick={e => { e.stopPropagation(); togglePreview(track); }} style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid rgba(30,215,96,0.3)', background: playingPreview ? 'rgba(30,215,96,0.2)' : 'rgba(30,215,96,0.08)', color: '#1ed760', fontSize: '10px', cursor: 'pointer', flexShrink: 0 }}>
+                            ▶
+                          </button>
+                        )}
+                        <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', flexShrink: 0 }}>Select →</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.25)', marginTop: '10px', textAlign: 'center' }}>Powered by Spotify · 30-second previews available</p>
+              </div>
+            )}
           </div>
 
           {/* Sender */}
@@ -166,23 +269,7 @@ export default function CreateSongMessage() {
                 {isAnonymous ? '🥷 Anonymous' : '✏️ Your name'}
               </button>
             </div>
-            {!isAnonymous && <input value={senderName} onChange={e => setSenderName(e.target.value)} placeholder="Your name (or leave blank for 'Someone who cares')" style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontSize: '14px', fontFamily: 'inherit', padding: '8px 0' }} />}
-          </div>
-
-          {/* Song */}
-          <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '20px' }}>
-            <label style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: '#ffd60a', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: '12px' }}>🎵 The Song *</label>
-            <div style={{ display: 'grid', gap: '12px' }}>
-              <input value={songTitle} onChange={e => setSongTitle(e.target.value)} placeholder="Song title..." style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '12px 14px', color: '#fff', fontSize: '14px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
-              <input value={artist} onChange={e => setArtist(e.target.value)} placeholder="Artist name..." style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '12px 14px', color: '#fff', fontSize: '14px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '14px' }}>🎵</span>
-                <input value={spotifyUrl} onChange={e => setSpotifyUrl(e.target.value)} placeholder="Spotify link (optional) — paste song URL" style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(30,215,96,0.2)', borderRadius: '10px', padding: '10px 14px', color: '#fff', fontSize: '12px', fontFamily: 'inherit', outline: 'none' }} />
-              </div>
-              {spotifyUrl && spotifyUrl.includes('open.spotify.com') && (
-                <p style={{ fontSize: '9px', color: '#1ed760', marginTop: '4px' }}>✓ Spotify link detected — the recipient will see a play button</p>
-              )}
-            </div>
+            {!isAnonymous && <input value={senderName} onChange={e => setSenderName(e.target.value)} placeholder="Your name..." style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontSize: '14px', fontFamily: 'inherit', padding: '8px 0' }} />}
           </div>
 
           {/* Message */}
@@ -195,45 +282,49 @@ export default function CreateSongMessage() {
           {/* Memory date */}
           <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '20px' }}>
             <label style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>📅 A Date That Matters (optional)</label>
-            <input value={memoryDate} onChange={e => setMemoryDate(e.target.value)} placeholder="e.g. The day we first met, March 2024..." style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontSize: '14px', fontFamily: 'inherit', padding: '8px 0' }} />
+            <input value={memoryDate} onChange={e => setMemoryDate(e.target.value)} placeholder="e.g. The day we first met..." style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontSize: '14px', fontFamily: 'inherit', padding: '8px 0' }} />
           </div>
 
-          {/* Preview & Create */}
+          {/* Submit */}
           <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-            <button onClick={() => setShowPreview(!showPreview)} disabled={!recipientName || !songTitle || !artist || !message} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--font-arcade)', fontSize: '11px', cursor: 'pointer', transition: 'all 0.2s', opacity: !recipientName || !songTitle || !artist || !message ? 0.4 : 1 }}>
+            <button onClick={() => setShowPreview(!showPreview)} disabled={!recipientName || !selectedTrack || !message} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--font-arcade)', fontSize: '11px', cursor: 'pointer', opacity: !recipientName || !selectedTrack || !message ? 0.4 : 1 }}>
               👁️ PREVIEW
             </button>
-            <button onClick={handleCreate} disabled={creating || !recipientName || !songTitle || !artist || !message} style={{ flex: 2, padding: '14px', borderRadius: '12px', border: '1px solid rgba(123,47,247,0.4)', background: creating ? 'rgba(123,47,247,0.05)' : 'rgba(123,47,247,0.15)', color: '#e8b4f8', fontFamily: 'var(--font-arcade)', fontSize: '11px', cursor: creating ? 'wait' : 'pointer', transition: 'all 0.2s', opacity: !recipientName || !songTitle || !artist || !message ? 0.4 : 1 }}>
+            <button onClick={handleCreate} disabled={creating || !recipientName || !selectedTrack || !message} style={{ flex: 2, padding: '14px', borderRadius: '12px', border: '1px solid rgba(123,47,247,0.4)', background: creating ? 'rgba(123,47,247,0.05)' : 'rgba(123,47,247,0.15)', color: '#e8b4f8', fontFamily: 'var(--font-arcade)', fontSize: '11px', cursor: creating ? 'wait' : 'pointer', opacity: !recipientName || !selectedTrack || !message ? 0.4 : 1 }}>
               {creating ? 'CREATING...' : '💌 SEND YOUR MESSAGE'}
             </button>
           </div>
         </div>
 
         {/* Preview Modal */}
-        {showPreview && (
+        {showPreview && selectedTrack && (
           <div onClick={() => setShowPreview(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '20px', backdropFilter: 'blur(8px)' }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: '#141428', border: '1px solid rgba(123,47,247,0.3)', borderRadius: '20px', padding: '0', maxWidth: '420px', width: '100%', overflow: 'hidden' }}>
-              {/* Music card preview */}
-              <div style={{ background: 'linear-gradient(135deg, rgba(123,47,247,0.2), rgba(255,100,150,0.1))', padding: '32px 28px 20px', textAlign: 'center' }}>
-                <div style={{ width: '100px', height: '100px', borderRadius: '16px', background: 'linear-gradient(135deg, #7b2ff7, #ff6496)', margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 32px rgba(123,47,247,0.3)' }}>
-                  <span style={{ fontSize: '40px' }}>🎵</span>
+            <div onClick={e => e.stopPropagation()} style={{ background: '#141428', border: '1px solid rgba(123,47,247,0.3)', borderRadius: '20px', overflow: 'hidden', maxWidth: '420px', width: '100%' }}>
+              {selectedTrack.artwork && (
+                <div style={{ position: 'relative', width: '100%', paddingBottom: '100%' }}>
+                  <img src={selectedTrack.artwork} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
-                <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '14px', color: '#fff', marginBottom: '4px' }}>{songTitle || 'Song Title'}</p>
-                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>{artist || 'Artist'}</p>
-                {messageTitle && <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#e8b4f8', marginTop: '10px' }}>&ldquo;{messageTitle}&rdquo;</p>}
-              </div>
-              <div style={{ padding: '24px 28px' }}>
-                <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', lineHeight: 1.8, fontStyle: 'italic', marginBottom: '20px' }}>{message || 'Your message...'}</p>
-                {memoryDate && <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', marginBottom: '12px' }}>📅 {memoryDate}</p>}
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '16px', textAlign: 'right' }}>
-                  <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>— {isAnonymous ? 'Anonymous' : senderName || 'Someone who cares'}</p>
-                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.2)', marginTop: '2px' }}>For {recipientName}</p>
+              )}
+              <div style={{ padding: '24px 28px', textAlign: 'center' }}>
+                <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '14px', color: '#fff', marginBottom: '4px' }}>{selectedTrack.title}</p>
+                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '16px' }}>{selectedTrack.artist}</p>
+                {selectedTrack.previewUrl && (
+                  <button onClick={() => togglePreview(selectedTrack)} style={{ padding: '8px 20px', borderRadius: '10px', border: '1px solid rgba(30,215,96,0.4)', background: playingPreview ? 'rgba(30,215,96,0.2)' : 'rgba(30,215,96,0.1)', color: '#1ed760', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}>
+                    {playingPreview ? '⏸ Pause Preview' : '▶ Play Preview'}
+                  </button>
+                )}
+                {messageTitle && <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#e8b4f8', marginTop: '16px' }}>&ldquo;{messageTitle}&rdquo;</p>}
+                {message && <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginTop: '12px', fontStyle: 'italic', lineHeight: 1.6 }}>{message}</p>}
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '12px', marginTop: '16px' }}>
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>— {isAnonymous ? 'Anonymous' : senderName || 'Someone who cares'}</p>
+                  <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', marginTop: '2px' }}>For {recipientName}</p>
                 </div>
               </div>
             </div>
           </div>
         )}
       </div>
+      <style jsx>{`@keyframes pulse { 0%,100%{opacity:0.5} 50%{opacity:1} }`}</style>
     </main>
   );
 }

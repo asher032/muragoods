@@ -1,10 +1,10 @@
 import mongoose from 'mongoose';
 
-const AnonymousLetterSchema = new mongoose.Schema({
+const AnonymousConfessionSchema = new mongoose.Schema({
   shortId: { type: String, required: true, unique: true, index: true },
   title: { type: String, required: true },
   content: { type: String, required: true },
-  category: { type: String, default: 'Random Thoughts' },
+  category: { type: String, default: 'Confession' },
   visibility: { type: String, enum: ['public', 'private'], default: 'public' },
   likes: { type: Number, default: 0 },
   likedBy: [{ type: String }],
@@ -12,7 +12,8 @@ const AnonymousLetterSchema = new mongoose.Schema({
   reported: { type: Boolean, default: false },
   reportCount: { type: Number, default: 0 },
   removed: { type: Boolean, default: false },
+  createdBy: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now },
 });
 
-export default mongoose.models.AnonymousLetter || mongoose.model('AnonymousLetter', AnonymousLetterSchema);
+export default mongoose.models.AnonymousConfession || mongoose.model('AnonymousConfession', AnonymousConfessionSchema);

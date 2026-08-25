@@ -13,10 +13,10 @@ export async function GET(req: Request) {
     let songs: unknown[] = [];
 
     if (type === 'all' || type === 'letters') {
-      letters = await LoveLetter.find({ visibility: 'link' }).sort({ createdAt: -1 }).limit(50).select('shortId recipientName senderName isAnonymous title theme createdAt');
+      letters = await LoveLetter.find({ visibility: 'link' }).sort({ createdAt: -1 }).limit(50).select('shortId recipientName senderName isAnonymous title theme content createdAt');
     }
     if (type === 'all' || type === 'songs') {
-      songs = await SongMessage.find({ visibility: 'link' }).sort({ createdAt: -1 }).limit(50).select('shortId recipientName senderName isAnonymous songTitle artist createdAt');
+      songs = await SongMessage.find({ visibility: 'link' }).sort({ createdAt: -1 }).limit(50).select('shortId recipientName senderName isAnonymous songTitle artist message spotifyUrl createdAt');
     }
 
     return NextResponse.json({ success: true, letters, songs });

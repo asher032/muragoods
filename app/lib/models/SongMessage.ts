@@ -8,6 +8,8 @@ const SongMessageSchema = new mongoose.Schema({
   songTitle: { type: String, required: true },
   artist: { type: String, required: true },
   spotifyUrl: { type: String, default: '' },
+  artwork: { type: String, default: '' },
+  previewUrl: { type: String, default: '' },
   platform: { type: String, default: 'spotify' },
   message: { type: String, required: true },
   messageTitle: { type: String, default: '' },

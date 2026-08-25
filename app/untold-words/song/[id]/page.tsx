@@ -12,6 +12,8 @@ interface SongData {
   songTitle: string;
   artist: string;
   spotifyUrl: string;
+  artwork: string;
+  previewUrl: string;
   message: string;
   messageTitle: string;
   photoUrl: string;
@@ -28,6 +30,19 @@ export default function ViewSongMessage() {
   const [error, setError] = useState('');
   const [opened, setOpened] = useState(false);
   const [showContent, setShowContent] = useState(false);
+  const [playingPreview, setPlayingPreview] = useState(false);
+  const [audioRef, setAudioRef] = useState<HTMLAudioElement | null>(null);
+
+  const togglePreview = () => {
+    if (!song?.previewUrl) return;
+    if (audioRef && playingPreview) { audioRef.pause(); setPlayingPreview(false); return; }
+    if (audioRef) audioRef.pause();
+    const audio = new Audio(song.previewUrl);
+    audio.onended = () => setPlayingPreview(false);
+    setAudioRef(audio);
+    audio.play();
+    setPlayingPreview(true);
+  };
 
   useEffect(() => {
     async function fetchSong() {
@@ -120,18 +135,27 @@ export default function ViewSongMessage() {
         <div style={{ background: 'linear-gradient(135deg, rgba(123,47,247,0.12), rgba(255,100,150,0.06))', border: '1px solid rgba(123,47,247,0.2)', borderRadius: '24px', overflow: 'hidden', marginBottom: '24px' }}>
           {/* Album art area */}
           <div style={{ padding: '40px 32px 28px', textAlign: 'center', position: 'relative' }}>
-            <div style={{ width: '140px', height: '140px', borderRadius: '20px', background: 'linear-gradient(135deg, #7b2ff7, #ff6496)', margin: '0 auto 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 12px 40px rgba(123,47,247,0.3)', position: 'relative' }}>
-              <span style={{ fontSize: '56px' }}>🎵</span>
+            <div style={{ width: '140px', height: '140px', borderRadius: '20px', background: song.artwork ? 'transparent' : 'linear-gradient(135deg, #7b2ff7, #ff6496)', margin: '0 auto 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 12px 40px rgba(123,47,247,0.3)', position: 'relative', overflow: 'hidden' }}>
+              {song.artwork ? (
+                <img src={song.artwork} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <span style={{ fontSize: '56px' }}>🎵</span>
+              )}
               {/* Animated music waves */}
               <div style={{ position: 'absolute', bottom: '-2px', left: 0, right: 0, height: '20px', display: 'flex', justifyContent: 'center', gap: '3px', alignItems: 'flex-end' }}>
                 {[...Array(12)].map((_, i) => (
-                  <div key={i} style={{ width: '3px', borderRadius: '2px', background: 'rgba(255,255,255,0.5)', animation: `wave 1s ease-in-out ${i * 0.1}s infinite`, height: '8px' }} />
+                  <div key={i} style={{ width: '3px', borderRadius: '2px', background: 'rgba(255,255,255,0.5)', animation: playingPreview ? `wave 0.6s ease-in-out ${i * 0.08}s infinite` : 'none', height: playingPreview ? '8px' : '4px', transition: 'height 0.3s' }} />
                 ))}
               </div>
             </div>
 
             <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: '#fff', marginBottom: '4px' }}>{song.songTitle}</h1>
             <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>{song.artist}</p>
+            {song.previewUrl && (
+              <button onClick={togglePreview} style={{ margin: '12px auto 0', display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 16px', borderRadius: '10px', border: '1px solid rgba(30,215,96,0.3)', background: playingPreview ? 'rgba(30,215,96,0.2)' : 'rgba(30,215,96,0.08)', color: '#1ed760', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}>
+                {playingPreview ? '⏸ Pause Preview' : '▶ Play 30s Preview'}
+              </button>
+            )}
             {song.messageTitle && <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#e8b4f8', marginTop: '12px' }}>&ldquo;{song.messageTitle}&rdquo;</p>}
           </div>
 
