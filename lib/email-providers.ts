@@ -38,7 +38,7 @@ class ResendProvider implements EmailProvider {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: options.from || 'Muragoods <onboarding@resend.dev>',
+          from: options.from || `Muragoods <${process.env.EMAIL_USER || 'muragoods0@gmail.com'}>`,
           to: [options.to],
           subject: options.subject,
           html: options.html,
