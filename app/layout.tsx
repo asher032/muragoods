@@ -56,19 +56,20 @@ export const metadata: Metadata = {
     siteName: "Muragoods",
     images: [
       {
-        url: "/api/og",
+        url: "https://muragoods.vercel.app/api/og",
         width: 1200,
         height: 630,
         alt: "Muragoods",
       },
     ],
     type: "website",
+    url: "https://muragoods.vercel.app",
   },
   twitter: {
     card: "summary_large_image",
     title: "Muragoods — Campus Power-Up Food",
     description: "Order fresh musubi, churros, coffee jelly & cookies. Play games, earn coins, and share untold words.",
-    images: ["/api/og"],
+    images: ["https://muragoods.vercel.app/api/og"],
   },
   other: {
     "mobile-web-app-capable": "yes",
