@@ -63,7 +63,7 @@ export default function SignupPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-4 py-8">
+    <main className="min-h-screen flex items-center justify-center px-4 py-8 page-enter">
       <div className="w-full max-w-md">
         {/* Card */}
         <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-8">
@@ -244,12 +244,12 @@ export default function SignupPage() {
               <h2 className="text-lg mb-2 text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)' }}>ACCOUNT CREATED!</h2>
               <p className="text-sm text-[var(--cream-muted)] mb-4">
                 {emailSent
-                  ? <>We sent a <strong style={{ color: 'var(--mario-yellow)' }}>6-digit verification code</strong> to your email. Check your inbox!</>
-                  : <>Your account is ready. You can verify your email later from your profile.</>
+                  ? <>We sent a <strong style={{ color: 'var(--mario-yellow)' }}>6-digit code</strong> to your email. Check your inbox!</>
+                  : <>Your account is ready. You can verify your email later.</>
                 }
               </p>
               <div style={{ background: 'rgba(255,214,10,0.06)', border: '1px solid rgba(255,214,10,0.15)', borderRadius: '8px', padding: '12px', marginBottom: '20px' }}>
-                <p style={{ fontSize: '11px', color: 'var(--mario-text-muted)' }}>Go to <strong style={{ color: 'var(--mario-yellow)' }}>muragoods.vercel.app/verify-email</strong> and enter the code sent to your email.</p>
+                <p style={{ fontSize: '11px', color: 'var(--mario-text-muted)' }}>Go to <strong style={{ color: 'var(--mario-yellow)' }}>muragoods.vercel.app/verify-email</strong> and enter the code.</p>
               </div>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button onClick={() => { setShowSuccess(false); router.push('/verify-email'); }} style={{ flex: 1, padding: '12px', background: 'var(--mario-yellow)', border: 'none', borderRadius: '10px', color: '#0f0f1a', fontFamily: 'var(--font-arcade)', fontSize: '10px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 3px 0 var(--mario-yellow-dark)' }}>

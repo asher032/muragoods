@@ -495,10 +495,10 @@ export default function OrderDetailPage() {
                   <span style={{ color: 'var(--mario-text-muted)' }}>Method</span>
                   <span style={{ color: 'var(--mario-text)' }}>{order.payment}</span>
                 </div>
-                {order.gcashRefNumber && (
+                {(order.instaPayRefNumber || order.gcashRefNumber) && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
                     <span style={{ color: 'var(--mario-text-muted)' }}>Ref #</span>
-                    <span style={{ color: 'var(--mario-text)' }}>{order.gcashRefNumber}</span>
+                    <span style={{ color: 'var(--mario-text)' }}>{order.instaPayRefNumber || order.gcashRefNumber}</span>
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>

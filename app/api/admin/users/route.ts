@@ -4,9 +4,19 @@ import User from '@/app/lib/models/User';
 import Order from '@/app/lib/models/Order';
 
 // GET — List all users with stats
-export async function GET() {
+export async function GET(req: Request) {
   try {
     await dbConnect();
+    const url = new URL(req.url);
+    const email = url.searchParams.get('email');
+
+    // Single user lookup
+    if (email) {
+      const user = await User.findOne({ email }, { name: 1, email: 1, userId: 1, perks: 1, createdAt: 1, coinBalance: 1 });
+      if (!user) return NextResponse.json({ success: true, data: null });
+      return NextResponse.json({ success: true, data: { name: user.name, email: user.email, userId: user.userId, perks: user.perks, joinedAt: user.createdAt, coinBalance: user.coinBalance || 0 } });
+    }
+
     const users = await User.find({}, { name: 1, email: 1, userId: 1, perks: 1, createdAt: 1, coinBalance: 1 }).sort({ createdAt: -1 });
 
     // Fetch order counts per user

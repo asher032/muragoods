@@ -15,6 +15,9 @@ const OrderSchema = new mongoose.Schema({
   latitude: Number,
   longitude: Number,
   payment: { type: String, required: true },
+  instaPayRefNumber: String,
+  instaPayScreenshotUrl: String,
+  // Legacy fields for backward compatibility
   gcashRefNumber: String,
   gcashScreenshotUrl: String,
   deliveryDate: { type: String, required: true },

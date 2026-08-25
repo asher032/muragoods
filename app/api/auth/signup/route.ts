@@ -16,7 +16,6 @@ export async function POST(req: Request) {
 
     const userId = 'MG-' + email.split('@')[0].toUpperCase().slice(0, 6) + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
     const verificationCode = crypto.randomInt(100000, 999999).toString();
-    const verificationExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
     
     // Generate unique referral code for this user
     const referralCode = 'MURA-' + crypto.randomBytes(4).toString('hex').toUpperCase();
@@ -45,14 +44,13 @@ export async function POST(req: Request) {
       password,
       userId,
       verificationCode,
-      verificationExpires,
       emailVerified: false,
       referralCode,
       referredBy: referrerEmail,
       referralUsed: false,
     });
 
-    // Send verification email
+    // Auto-send verification email
     let emailSent = false;
     try {
       emailSent = await sendVerificationEmail(email, verificationCode, name);

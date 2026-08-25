@@ -16,7 +16,7 @@ interface Transaction {
 }
 
 const earnMethods = [
-  { icon: '🛒', title: 'Place an Order', desc: 'Earn 1 coin per peso spent on every order', link: '/menu', coins: '1x', color: 'var(--gold)' },
+  { icon: '🛒', title: 'Place an Order', desc: 'Earn 0.5 coins per peso spent on every order', link: '/menu', coins: '0.5x', color: 'var(--gold)' },
   { icon: '📅', title: 'Daily Check-In', desc: 'Log in daily for 5-50 coins over 7 days', link: '/play/checkin', coins: '5-50', color: 'var(--emerald-bright)' },
   { icon: '🧠', title: 'Trivia Challenge', desc: 'Answer campus questions for 5-15 coins each', link: '/play/trivia', coins: '5-15', color: 'var(--crimson)' },
   { icon: '👥', title: 'Refer a Friend', desc: 'Invite friends and earn 50 coins per referral', link: '/play/refer', coins: '50', color: 'var(--gold-bright)' },

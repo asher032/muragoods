@@ -20,27 +20,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, message: 'Email already verified' });
     }
 
-    if (!user.verificationCode || !user.verificationExpires) {
+    if (!user.verificationCode) {
       return NextResponse.json({ success: false, error: 'No verification code found. Please sign up again.' }, { status: 400 });
     }
 
     if (new Date() > user.verificationExpires) {
-      return NextResponse.json({ success: false, error: 'Code has expired. Please sign up again.' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Verification code has expired. Please sign up again.' }, { status: 400 });
     }
 
     if (user.verificationCode !== code) {
       return NextResponse.json({ success: false, error: 'Invalid verification code' }, { status: 400 });
     }
 
-    // Mark as verified
     user.emailVerified = true;
     user.verificationCode = null;
-    user.verificationExpires = null;
     await user.save();
 
     return NextResponse.json({ success: true, message: 'Email verified successfully' });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'An error occurred';
-    return NextResponse.json({ success: false, error: message }, { status: 400 });
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

@@ -183,7 +183,7 @@ export default function Receipt({
             <span>Method:</span>
             <span className="receipt-bold">{paymentMethod}</span>
           </div>
-          {paymentMethod === 'GCash' && (
+          {paymentMethod === 'InstaPay' && (
             <div className="receipt-row">
               <span>Status:</span>
               <span>PENDING VERIFICATION</span>

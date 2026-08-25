@@ -11,11 +11,11 @@ export async function POST(req: Request) {
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData();
       body = Object.fromEntries(formData.entries());
-      const gcashScreenshot = formData.get('gcashScreenshot');
-      if (gcashScreenshot instanceof File) {
-        const bytes = await gcashScreenshot.arrayBuffer();
+      const instaPayScreenshot = formData.get('instaPayScreenshot');
+      if (instaPayScreenshot instanceof File) {
+        const bytes = await instaPayScreenshot.arrayBuffer();
         const base64 = Buffer.from(bytes).toString('base64');
-        body.gcashScreenshotUrl = `data:${gcashScreenshot.type};base64,${base64}`;
+        body.instaPayScreenshotUrl = `data:${instaPayScreenshot.type};base64,${base64}`;
       }
     } else {
       body = await req.json();

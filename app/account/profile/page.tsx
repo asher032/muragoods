@@ -7,6 +7,7 @@ import { type Order } from '@/app/lib/muragoods-data';
 import { NavBar } from '@/app/components/NavBar';
 import { CoinBalance } from '@/app/components/CoinBalance';
 import { useCoins } from '@/app/hooks/useCoins';
+import { AnimatedProgressBar } from '@/app/components/AnimatedProgressBar';
 
 interface UserData {
   name?: string;
@@ -48,6 +49,25 @@ export default function AccountProfilePage() {
       const savedAvatar = localStorage.getItem('muragoods_avatar');
       if (savedAvatar) setAvatar(savedAvatar);
       if (userData.userId) setUserId(userData.userId);
+
+      // Fetch user profile from server to get createdAt
+      async function fetchProfile() {
+        try {
+          const res = await fetch(`/api/admin/users?email=${encodeURIComponent(userData.email)}`);
+          if (res.ok) {
+            const result = await res.json();
+            if (result.success && result.data?.createdAt) {
+              setUser(prev => ({ ...prev!, createdAt: result.data.createdAt }));
+              // Update localStorage so future loads are instant
+              const stored = JSON.parse(localStorage.getItem('user') || '{}');
+              if (!stored.createdAt) {
+                stored.createdAt = result.data.createdAt;
+                localStorage.setItem('user', JSON.stringify(stored));
+              }
+            }
+          }
+        } catch { /* empty */ }
+      }
 
       // Fetch coin balance from server
       async function fetchCoinBalance() {
@@ -94,6 +114,7 @@ export default function AccountProfilePage() {
       fetchOrders();
       fetchPerks();
       fetchCoinBalance();
+      fetchProfile();
     } catch {
       setLoading(false);
     }
@@ -171,21 +192,13 @@ export default function AccountProfilePage() {
   const activeCount = orders.filter((o: any) => !['Cancelled', 'Delivered'].includes(o.status)).length;
 
   return (
-    <main style={{ minHeight: '100vh', background: 'var(--mario-bg)' }}>
+    <main style={{ minHeight: '100vh', background: 'var(--mario-bg)' }} className="page-enter">
       <NavBar pageLabel="My Profile" />
 
       <div style={{ maxWidth: '800px', margin: '0 auto', padding: '0 16px' }}>
         {/* Profile Card */}
-        <div style={{
-          background: 'var(--mario-bg-card)',
-          border: '2px solid rgba(255,214,10,0.2)',
-          borderRadius: '20px',
-          padding: '32px 24px',
+        <div className="profile-card" style={{
           marginTop: '24px',
-          backdropFilter: 'blur(16px)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-          position: 'relative',
-          overflow: 'hidden',
         }}>
           {/* Gold accent line at top */}
           <div style={{

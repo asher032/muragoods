@@ -19,7 +19,7 @@ const timeSlotOptions = [
   { value: 'evening', label: 'Evening', time: '5:00 PM – 8:00 PM', icon: '🌙' },
 ];
 
-type PaymentMethod = 'GCash' | 'Cash on Delivery';
+type PaymentMethod = 'InstaPay' | 'Cash on Delivery';
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -30,9 +30,9 @@ export default function CheckoutPage() {
   const [deliveryService, setDeliveryService] = useState('DWCL Pickup — Free');
   const [customOrderDate, setCustomOrderDate] = useState('');
   const [timeSlot, setTimeSlot] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('GCash');
-  const [gcashRef, setGcashRef] = useState('');
-  const [gcashFile, setGcashFile] = useState<File | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('InstaPay');
+  const [instaPayRef, setInstaPayRef] = useState('');
+  const [instaPayFile, setInstaPayFile] = useState<File | null>(null);
   const [mapAddress, setMapAddress] = useState('');
   const [latitude, setLatitude] = useState('13.1550');
   const [longitude, setLongitude] = useState('123.7450');
@@ -59,7 +59,7 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (location !== 'DWCL' && location !== 'Daraga' && paymentMethod === 'Cash on Delivery') {
-      setPaymentMethod('GCash');
+      setPaymentMethod('InstaPay');
     }
   }, [location, paymentMethod]);
 
@@ -83,7 +83,7 @@ export default function CheckoutPage() {
   const isDwcl = location === 'DWCL';
   const isCustom = location === 'Custom';
   const isDaraga = location === 'Daraga';
-  const isGcash = paymentMethod === 'GCash';
+  const isInstaPay = paymentMethod === 'InstaPay';
   const restrictedItems = cartItems.filter(item => dwclOnlyProducts.includes(item.id) && !isDwcl && !isDaraga);
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = cartItems.reduce((sum, item) => sum + (item.selectedVariant?.price || 0) * item.quantity, 0);
@@ -180,8 +180,8 @@ export default function CheckoutPage() {
     const phoneDigits = phone.replace(/[\s\-()+]/g, '');
     if (!phoneDigits || phoneDigits.length < 10 || phoneDigits.length > 15) { setError('Please enter a valid contact number (10-15 digits).'); return; }
     if (!isDwcl && !isCustom && !mapAddress) { setError('Please select your delivery location on the map'); return; }
-    if (!customOrderDate) { setError('Please enter your preferred order date'); return; }      if (isGcash) {
-      if (!gcashRef.trim() || gcashRef.trim().length < 5) { setError('Please enter a valid GCash reference number.'); return; }
+    if (!customOrderDate) { setError('Please enter your preferred order date'); return; }      if (isInstaPay) {
+      if (!instaPayRef.trim() || instaPayRef.trim().length < 5) { setError('Please enter a valid InstaPay reference number.'); return; }
     }
     setIsSubmitting(true);
     const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -203,7 +203,7 @@ export default function CheckoutPage() {
     formData.append('pointsEarned', String(pointsEarned));
     if (discountApplied) { formData.append('discountCode', discountApplied.code); formData.append('discountAmount', String(discountAmount)); }
     if (promoApplied) { formData.append('promoCode', promoApplied.code); formData.append('promoDiscount', String(promoDiscountAmount)); }
-    if (isGcash) { formData.append('gcashRefNumber', gcashRef); formData.append('gcashScreenshot', gcashFile!); }
+    if (isInstaPay) { formData.append('instaPayRefNumber', instaPayRef); formData.append('instaPayScreenshot', instaPayFile!); }
     try {
       const res = await fetch('/api/orders', { method: 'POST', body: formData });
       const result = await res.json();
@@ -378,14 +378,14 @@ export default function CheckoutPage() {
                 <div className="checkout-title">PAYMENT</div>
                 <div className="cart-steps">
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <button type="button" onClick={() => setPaymentMethod('GCash')}
+                    <button type="button" onClick={() => setPaymentMethod('InstaPay')}
                       style={{
-                        padding: '16px 12px', borderRadius: '8px', border: isGcash ? '1px solid #ffd60a' : '1px solid #2e2e2e',
-                        background: isGcash ? 'rgba(255,214,10,0.08)' : '#333', color: '#fff', cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s'
+                        padding: '16px 12px', borderRadius: '8px', border: isInstaPay ? '1px solid #ffd60a' : '1px solid #2e2e2e',
+                        background: isInstaPay ? 'rgba(255,214,10,0.08)' : '#333', color: '#fff', cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s'
                       }}>
-                      <div style={{ fontSize: '20px', marginBottom: '6px' }}>💳</div>
-                      <p style={{ fontSize: '11px', fontWeight: 600 }}>GCash</p>
-                      <p style={{ fontSize: '9px', color: '#bbb', marginTop: '4px' }}>Ref + proof required</p>
+                      <div style={{ fontSize: '20px', marginBottom: '6px' }}>🏦</div>
+                      <p style={{ fontSize: '11px', fontWeight: 600 }}>InstaPay</p>
+                      <p style={{ fontSize: '9px', color: '#bbb', marginTop: '4px' }}>QR + proof required</p>
                     </button>
                     <button type="button" onClick={() => (isDwcl || isDaraga) && setPaymentMethod('Cash on Delivery')} disabled={!isDwcl && !isDaraga}
                       style={{
@@ -400,64 +400,24 @@ export default function CheckoutPage() {
                     </button>
                   </div>
 
-                  {isGcash && (
-                    <div style={{ marginTop: '12px', background: '#0064e0', borderRadius: '16px', padding: '0', overflow: 'hidden', border: '2px solid #0050b3' }}>
-                      {/* GCash Header */}
-                      <div style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <span style={{ fontSize: '16px', fontWeight: 900, color: '#0064e0', fontFamily: 'Arial, sans-serif' }}>G</span>
-                        </div>
-                        <span style={{ fontSize: '20px', fontWeight: 700, color: '#fff', letterSpacing: '1px' }}>GCash</span>
+                  {isInstaPay && (
+                    <div style={{ marginTop: '12px' }}>
+                      <div style={{ marginBottom: '10px', background: 'rgba(255,214,10,0.06)', border: '1px solid rgba(255,214,10,0.15)', borderRadius: '8px', padding: '10px 12px' }}>
+                        <p style={{ fontSize: '10px', color: '#ffd60a', fontWeight: 600 }}>📋 After paying, enter your InstaPay reference number below</p>
                       </div>
-                      {/* QR Code — clean white card */}
-                      <div style={{ margin: '0 16px 16px', background: '#fff', borderRadius: '12px', padding: '24px 20px', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
-                          <img
-                            src="/images/gcash-qr.png"
-                            alt="Scan this QR code to pay with GCash"
-                            style={{ width: '240px', height: '240px', objectFit: 'contain', display: 'block', borderRadius: '8px' }}
-                            onError={(e) => {
-                              const img = e.target as HTMLImageElement;
-                              img.style.display = 'none';
-                              const fallback = img.nextElementSibling as HTMLElement;
-                              if (fallback) fallback.style.display = 'flex';
-                            }}
-                          />
-                          <div style={{ display: 'none', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '240px', height: '240px', background: '#f5f7fa', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
-                            <span style={{ fontSize: '40px', marginBottom: '8px' }}>📱</span>
-                            <p style={{ fontSize: '13px', color: '#333', fontWeight: 700 }}>Open GCash App</p>
-                            <p style={{ fontSize: '11px', color: '#888', marginTop: '4px' }}>Scan QR to pay</p>
-                          </div>
-                        </div>
-                        <p style={{ fontSize: '12px', color: '#999', marginBottom: '4px' }}>Transfer fees may apply.</p>
+                      <div style={{ marginBottom: '10px' }}>
+                        <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--mario-text)', marginBottom: '6px' }}>Reference Number *</p>
+                        <input type="text" value={instaPayRef} onChange={(e) => setInstaPayRef(e.target.value)} placeholder="e.g. 1234567890123" className="input_field" required={isInstaPay} />
                       </div>
-                      {/* Account Info */}
-                      <div style={{ margin: '0 16px 16px', background: '#fff', borderRadius: '12px', padding: '18px', textAlign: 'center' }}>
-                        <p style={{ fontSize: '20px', fontWeight: 700, color: '#0064e0', marginBottom: '6px', letterSpacing: '0.5px' }}>muragoods</p>
-                        <p style={{ fontSize: '13px', color: '#999', marginBottom: '2px' }}>Mobile No.: <span style={{ color: '#333', fontWeight: 600 }}>+63 946 647 ****</span></p>
-                        <p style={{ fontSize: '11px', color: '#bbb' }}>User ID: <span style={{ color: '#666' }}>••••••••5BOO2V</span></p>
-                      </div>
-                      <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.85)', textAlign: 'center', padding: '0 16px 16px', lineHeight: 1.6 }}>
-                        Open your <strong>GCash app</strong> → Tap <strong>Scan</strong> → Scan the QR above → Enter the <strong>exact amount</strong> → Send
-                      </p>
-                      <div style={{ marginTop: '12px' }}>
-                        <div style={{ marginBottom: '10px', background: 'rgba(255,214,10,0.06)', border: '1px solid rgba(255,214,10,0.15)', borderRadius: '8px', padding: '10px 12px' }}>
-                          <p style={{ fontSize: '10px', color: '#ffd60a', fontWeight: 600 }}>📋 After paying, enter your GCash reference number below</p>
-                        </div>
-                        <div style={{ marginBottom: '10px' }}>
-                          <p style={{ fontSize: '11px', fontWeight: 600, color: '#fff', marginBottom: '6px' }}>Reference Number *</p>
-                          <input type="text" value={gcashRef} onChange={(e) => setGcashRef(e.target.value)} placeholder="e.g. 1234567890123" className="input_field" required={isGcash} />
-                        </div>
-                        <div>
-                          <p style={{ fontSize: '11px', fontWeight: 600, color: '#fff', marginBottom: '6px' }}>Upload Screenshot (optional)</p>
-                          <input type="file" accept="image/*" onChange={(e) => setGcashFile(e.target.files?.[0] || null)} className="input_file" />
-                          <p style={{ fontSize: '9px', color: 'var(--mario-text-muted)', marginTop: '4px' }}>Optional: helps us verify your payment faster</p>
-                        </div>
+                      <div>
+                        <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--mario-text)', marginBottom: '6px' }}>Upload Screenshot (optional)</p>
+                        <input type="file" accept="image/*" onChange={(e) => setInstaPayFile(e.target.files?.[0] || null)} className="input_file" />
+                        <p style={{ fontSize: '9px', color: 'var(--mario-text-muted)', marginTop: '4px' }}>Optional: helps us verify your payment faster</p>
                       </div>
                     </div>
                   )}
 
-                  {!isGcash && (
+                  {!isInstaPay && (
                     <div style={{ marginTop: '12px', background: 'rgba(6,214,160,0.06)', border: '1px solid rgba(6,214,160,0.2)', borderRadius: '12px', padding: '16px' }}>
                       <p style={{ fontSize: '11px', fontWeight: 600, color: '#06d6a0' }}>💵 Cash on Delivery</p>
                       <p style={{ fontSize: '12px', color: '#fff', marginTop: '6px' }}>{isDwcl ? 'Pay in cash when you pick up your order. No payment proof needed!' : 'Pay in cash when delivered. No payment proof needed!'}</p>
@@ -596,10 +556,10 @@ export default function CheckoutPage() {
             <div style={{ padding: '30px 20px', textAlign: 'center' }}>
               <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(6,214,160,0.15)', border: '1px solid rgba(6,214,160,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '20px', color: '#06d6a0' }}>✓</div>
               <p style={{ color: '#fff', fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
-                {isGcash ? 'Message @muragoods_ on Instagram to confirm!' : 'Pay cash when you pick up!'}
+                {isInstaPay ? 'Message @muragoods_ on Instagram to confirm!' : 'Pay cash when you pick up!'}
               </p>
               <p style={{ fontSize: '11px', color: '#ffd60a', marginBottom: '20px' }}>🪙 Earn {pointsEarned} coins after delivery!</p>
-              {isGcash && (
+              {isInstaPay && (
                 <a href="https://www.instagram.com/muragoods_/" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '10px', background: '#555', borderRadius: '5px', color: '#fff', fontSize: '11px', fontWeight: 600, textDecoration: 'none', marginBottom: '10px' }}>
                   Open Instagram @muragoods_
                 </a>

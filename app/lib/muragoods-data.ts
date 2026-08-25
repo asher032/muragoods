@@ -43,8 +43,12 @@ export type Order = {
   address: string;
   latitude?: number;
   longitude?: number;
-  payment: "GCash" | "Cash on Delivery";
+  payment: "InstaPay" | "Cash on Delivery";
+  instaPayRefNumber?: string;
+  instaPayScreenshotUrl?: string;
+  /** @deprecated Legacy field — use instaPayRefNumber */
   gcashRefNumber?: string;
+  /** @deprecated Legacy field — use instaPayScreenshotUrl */
   gcashScreenshotUrl?: string;
   deliveryDate: string;
   status: OrderStatus;

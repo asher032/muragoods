@@ -8,6 +8,7 @@ import { AppLoader } from "@/app/components/AppLoader";
 import { PWAInstallBanner } from "@/app/components/PWAInstallBanner";
 import { NotificationProvider } from "@/app/components/NotificationSystem";
 import { OrderNotificationPoller } from "@/app/components/OrderNotifications";
+import { BottomNavBar } from "@/app/components/BottomNavBar";
 
 const pressStart = Press_Start_2P({
   subsets: ["latin"],
@@ -57,6 +58,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <NotificationProvider>
           <AppLoader>
             {children}
+            <BottomNavBar />
           </AppLoader>
           <OrderNotificationPoller />
           <PWAInstallBanner />

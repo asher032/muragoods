@@ -17,6 +17,14 @@ const features = [
     tagColor: 'var(--emerald-bright)',
   },
   {
+    icon: "🎰",
+    title: "Spin the Wheel",
+    desc: "Pay 15 coins to spin the wheel! Win up to 50 coins per spin. 3 spins per day.",
+    link: "/play/spin",
+    tag: "🎰 SPIN",
+    tagColor: "var(--emerald-bright)",
+  },
+  {
     icon: '🧠',
     title: 'Trivia Challenge',
     desc: 'Test your knowledge with 25 campus, Bicol, food, and Mario trivia questions. Earn coins for every correct answer!',
