@@ -402,6 +402,27 @@ export default function CheckoutPage() {
 
                   {isInstaPay && (
                     <div style={{ marginTop: '12px' }}>
+                      {/* InstaPay Card */}
+                      <div style={{ background: 'linear-gradient(135deg, #1a365d, #2563eb)', borderRadius: '16px', overflow: 'hidden', marginBottom: '14px' }}>
+                        <div style={{ padding: '16px 20px 12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 800, color: '#1a365d' }}>G</div>
+                          <div>
+                            <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '13px', color: '#fff', fontWeight: 700 }}>InstaPay</p>
+                          </div>
+                        </div>
+                        <div style={{ padding: '0 20px 20px' }}>
+                          <div style={{ background: '#fff', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <img src="/images/instapay-qr.png" alt="InstaPay QR Code" style={{ width: '200px', maxWidth: '100%', height: 'auto', borderRadius: '8px' }} />
+                            <p style={{ fontSize: '10px', color: '#888', marginTop: '8px' }}>Scan this QR code using any bank app</p>
+                            <p style={{ fontSize: '10px', color: '#888' }}>Fees may apply.</p>
+                          </div>
+                          <div style={{ textAlign: 'center', marginTop: '12px' }}>
+                            <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '12px', color: '#fff', fontWeight: 700, marginBottom: '4px' }}>muragoods</p>
+                            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>Mobile No.: +63 946 647 ****</p>
+                          </div>
+                        </div>
+                      </div>
+
                       <div style={{ marginBottom: '10px', background: 'rgba(255,214,10,0.06)', border: '1px solid rgba(255,214,10,0.15)', borderRadius: '8px', padding: '10px 12px' }}>
                         <p style={{ fontSize: '10px', color: '#ffd60a', fontWeight: 600 }}>📋 After paying, enter your InstaPay reference number below</p>
                       </div>
