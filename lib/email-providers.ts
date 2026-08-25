@@ -1,5 +1,6 @@
-// Multi-provider email system with automatic fallback
-// Order: Resend → Supabase → Gmail SMTP
+// Smart multi-provider email system
+// Strategy: Resend primary → auto-switch to Gmail when rate-limited or daily limit approached
+// Daily limit for Resend free tier: 100 emails/day
 
 interface EmailOptions {
   to: string;
@@ -15,21 +16,74 @@ interface EmailProvider {
   isAvailable(): boolean;
 }
 
+// ─── Daily Counter (resets each day) ─────────────────────────
+class DailyCounter {
+  private count = 0;
+  private date = new Date().toDateString();
+  private readonly maxDaily = 90; // Stay under 100 limit with buffer
+
+  resetIfNeeded() {
+    const today = new Date().toDateString();
+    if (today !== this.date) {
+      this.count = 0;
+      this.date = today;
+      console.log(`[Counter] 📅 New day — reset email count to 0`);
+    }
+  }
+
+  increment(provider: string) {
+    this.resetIfNeeded();
+    this.count++;
+    console.log(`[Counter] 📧 ${provider} sent #${this.count}/${this.maxDaily} today`);
+  }
+
+  hasCapacity(): boolean {
+    this.resetIfNeeded();
+    return this.count < this.maxDaily;
+  }
+
+  getRemaining(): number {
+    this.resetIfNeeded();
+    return Math.max(0, this.maxDaily - this.count);
+  }
+
+  getCount(): number {
+    this.resetIfNeeded();
+    return this.count;
+  }
+}
+
+const dailyCounter = new DailyCounter();
+
 // ─── Resend.com Provider ─────────────────────────────────────
 class ResendProvider implements EmailProvider {
   name = 'Resend';
   private apiKey: string;
+  private consecutiveFailures = 0;
 
   constructor() {
     this.apiKey = process.env.RESEND_API_KEY || '';
   }
 
   isAvailable(): boolean {
-    return !!this.apiKey;
+    if (!this.apiKey) return false;
+    // If too many consecutive failures, disable temporarily
+    if (this.consecutiveFailures >= 3) {
+      console.log(`[Resend] ⚠️ ${this.consecutiveFailures} consecutive failures — using Gmail instead`);
+      return false;
+    }
+    return true;
   }
 
   async send(options: EmailOptions): Promise<boolean> {
-    if (!this.isAvailable()) return false;
+    if (!this.apiKey) return false;
+
+    // Check daily limit before even trying
+    if (!dailyCounter.hasCapacity()) {
+      console.log(`[Resend] 📊 Daily limit reached (${dailyCounter.getCount()}/90) — skipping`);
+      return false;
+    }
+
     try {
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -45,83 +99,30 @@ class ResendProvider implements EmailProvider {
           text: options.text,
         }),
       });
-      if (!res.ok) {
-        const err = await res.text();
-        console.error(`[Resend] Failed: ${err}`);
+
+      // Rate limited (429) or server error (5xx)
+      if (res.status === 429 || res.status >= 500) {
+        console.error(`[Resend] ❌ Rate limited or server error (${res.status})`);
+        this.consecutiveFailures++;
         return false;
       }
-      console.log(`[Resend] ✅ Email sent to ${options.to}`);
-      return true;
-    } catch (error) {
-      console.error('[Resend] Error:', error);
-      return false;
-    }
-  }
-}
 
-// ─── Supabase Email Provider ─────────────────────────────────
-class SupabaseProvider implements EmailProvider {
-  name = 'Supabase';
-  private url: string;
-  private serviceRoleKey: string;
-
-  constructor() {
-    this.url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-    this.serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-  }
-
-  isAvailable(): boolean {
-    return !!(this.url && this.serviceRoleKey);
-  }
-
-  async send(options: EmailOptions): Promise<boolean> {
-    if (!this.isAvailable()) return false;
-    try {
-      // Supabase Edge Function or direct SMTP via their API
-      const res = await fetch(`${this.url}/functions/v1/send-email`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.serviceRoleKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          to: options.to,
-          subject: options.subject,
-          html: options.html,
-          text: options.text,
-          from: options.from || 'Muragoods <muragoods0@gmail.com>',
-        }),
-      });
+      // Other errors
       if (!res.ok) {
-        // If edge function doesn't exist, try Supabase Auth invite as fallback
-        console.log(`[Supabase] Edge function not available, trying auth API...`);
-        return await this.sendViaAuth(options);
+        const err = await res.text();
+        console.error(`[Resend] ❌ Failed (${res.status}): ${err}`);
+        this.consecutiveFailures++;
+        return false;
       }
-      console.log(`[Supabase] ✅ Email sent to ${options.to}`);
+
+      // Success!
+      this.consecutiveFailures = 0;
+      dailyCounter.increment('Resend');
+      console.log(`[Resend] ✅ Email sent to ${options.to} (${dailyCounter.getRemaining()} remaining today)`);
       return true;
     } catch (error) {
-      console.error('[Supabase] Error:', error);
-      return await this.sendViaAuth(options);
-    }
-  }
-
-  private async sendViaAuth(options: EmailOptions): Promise<boolean> {
-    try {
-      // Use Supabase Auth to send a magic link (as a fallback mechanism)
-      const res = await fetch(`${this.url}/auth/v1/magiclink`, {
-        method: 'POST',
-        headers: {
-          'apikey': this.serviceRoleKey,
-          'Authorization': `Bearer ${this.serviceRoleKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: options.to,
-          data: { custom_message: options.text },
-        }),
-      });
-      return res.ok;
-    } catch {
+      console.error('[Resend] ❌ Network error:', error);
+      this.consecutiveFailures++;
       return false;
     }
   }
@@ -131,19 +132,20 @@ class SupabaseProvider implements EmailProvider {
 class GmailProvider implements EmailProvider {
   name = 'Gmail';
   private transporter: unknown;
-
-  constructor() {
-    // Lazy init to avoid import issues
-  }
+  private consecutiveFailures = 0;
 
   isAvailable(): boolean {
+    if (this.consecutiveFailures >= 5) {
+      console.log(`[Gmail] ⚠️ ${this.consecutiveFailures} consecutive failures — temporarily disabled`);
+      return false;
+    }
     return !!(process.env.EMAIL_USER || process.env.EMAIL_PASSWORD);
   }
 
   async send(options: EmailOptions): Promise<boolean> {
     if (!this.isAvailable()) return false;
+
     try {
-      // Dynamic import to avoid circular deps
       const nodemailer = await import('nodemailer');
       if (!this.transporter) {
         this.transporter = nodemailer.default.createTransport({
@@ -161,39 +163,60 @@ class GmailProvider implements EmailProvider {
         html: options.html,
         text: options.text,
       });
+
+      this.consecutiveFailures = 0;
+      dailyCounter.increment('Gmail');
       console.log(`[Gmail] ✅ Email sent to ${options.to}`);
       return true;
     } catch (error) {
-      console.error('[Gmail] Error:', error);
+      console.error('[Gmail] ❌ Error:', error);
+      this.consecutiveFailures++;
       return false;
     }
   }
 }
 
-// ─── Email Manager (tries providers in order) ────────────────
+// ─── Smart Email Manager ─────────────────────────────────────
+// Strategy: Resend first → Gmail fallback (or when daily limit hit)
+
 const providers: EmailProvider[] = [
   new ResendProvider(),
-  new SupabaseProvider(),
   new GmailProvider(),
 ];
 
 export async function sendEmail(options: EmailOptions): Promise<{ success: boolean; provider: string }> {
+  // Reset counter if new day
+  dailyCounter.resetIfNeeded();
+
   for (const provider of providers) {
     if (!provider.isAvailable()) {
-      console.log(`[Email] ⏭️ ${provider.name} not configured, skipping...`);
+      console.log(`[Email] ⏭️ ${provider.name} not available, trying next...`);
       continue;
     }
-    console.log(`[Email] 📧 Trying ${provider.name}...`);
+
+    console.log(`[Email] 📧 Trying ${provider.name}... (${dailyCounter.getRemaining()} emails remaining today)`);
     const sent = await provider.send(options);
+
     if (sent) {
       return { success: true, provider: provider.name };
     }
-    console.log(`[Email] ❌ ${provider.name} failed, trying next provider...`);
+    console.log(`[Email] ❌ ${provider.name} failed, falling back to next provider...`);
   }
+
   console.error('[Email] ❌ All email providers failed');
   return { success: false, provider: 'none' };
 }
 
 export function getAvailableProviders(): string[] {
+  dailyCounter.resetIfNeeded();
   return providers.filter(p => p.isAvailable()).map(p => p.name);
+}
+
+export function getEmailStats(): { providers: string[]; resendRemaining: number; totalSentToday: number } {
+  dailyCounter.resetIfNeeded();
+  return {
+    providers: providers.filter(p => p.isAvailable()).map(p => p.name),
+    resendRemaining: dailyCounter.getRemaining(),
+    totalSentToday: dailyCounter.getCount(),
+  };
 }
