@@ -149,15 +149,38 @@ function parseCommand(input: string): ParsedCommand {
 
   // ─── ACTIONS ─────────────────────────────────────────────
   if (/\b(add to cart|order|buy|purchase|checkout)\b/.test(lower)) {
+    // Try to extract food item
+    const itemMatch = lower.match(/\b(add to cart|order|buy|purchase)\b\s+(?:a\s+)?(.+?)(?:\s+to\s+cart)?$/);
+    if (itemMatch) params.item = itemMatch[2].trim();
     return { intent: 'ACTION', action: 'order', params };
   }
-  if (/\b(check in|daily|daily check)\b/.test(lower)) {
+  if (/\b(check ?in|daily|daily check)\b/.test(lower)) {
     return { intent: 'ACTION', action: 'checkin', params };
   }
   if (/\b(log ?out|sign ?out|sign ?off)\b/.test(lower)) {
     return { intent: 'ACTION', action: 'logout', params };
   }
-  if (/\b(mystery box|open box|spin|random reward)\b/.test(lower)) {
+  if (/\b(mystery box|open box|spin|random reward|lucky box)\b/.test(lower)) {
+    return { intent: 'ACTION', action: 'mystery-box', params };
+  }
+  if (/\b(my )?(coins?|balance|points?|rewards?)\b/.test(lower) && /\b(check|how many|what|show|see|view|tell)\b/.test(lower)) {
+    return { intent: 'ACTION', action: 'check-balance', params };
+  }
+  if (/\b(my )?(coins?|balance|points?)\b/.test(lower)) {
+    return { intent: 'ACTION', action: 'check-balance', params };
+  }
+  if (/\b(order|food|menu|musubi|churros|coffee|cookie)\b/.test(lower) && /\b(add|cart|buy|want|order)\b/.test(lower)) {
+    const foodMatch = lower.match(/\b(musubi|churros|coffee jelly|cookies?)\b/);
+    if (foodMatch) params.item = foodMatch[1];
+    return { intent: 'ACTION', action: 'order-food', params };
+  }
+  if (/\b(scan|camera|qr|image|photo|picture|vision|analyze image|read qr)\b/.test(lower)) {
+    return { intent: 'ACTION', action: 'camera', params };
+  }
+  if (/\b(my orders?|order history|previous orders?)\b/.test(lower)) {
+    return { intent: 'NAVIGATION', action: 'orders', params };
+  }
+  if (/\b(open|show)\b.*\b(rewards?|prize|perk)\b/.test(lower)) {
     return { intent: 'ACTION', action: 'mystery-box', params };
   }
 
@@ -479,13 +502,50 @@ function generateResponse(
     case 'ACTION': {
       switch (parsed.action) {
         case 'order':
-          return { response: `Let me take you to checkout, ${name}. 🛒`, intent: 'ACTION', action: 'navigate', actionParams: { path: '/checkout' }, timestamp: ts };
+          if (parsed.params.item) {
+            return {
+              response: `I'll add **${parsed.params.item}** to your cart and take you to checkout, ${name}. 🛒`,
+              intent: 'ACTION', action: 'add-to-cart',
+              actionParams: { item: parsed.params.item, path: '/menu' },
+              buttons: [{ label: 'Go to Menu', action: 'navigate', actionParams: { path: '/menu' } }, { label: 'Checkout', action: 'navigate', actionParams: { path: '/checkout' } }],
+              timestamp: ts,
+            };
+          }
+          return { response: `Let me take you to the menu, ${name}. Add items to your cart and checkout! 🛒`, intent: 'ACTION', action: 'navigate', actionParams: { path: '/menu' }, timestamp: ts };
+        case 'order-food': {
+          const item = parsed.params.item || 'food';
+          return {
+            response: `Great choice! Let me take you to the menu to order **${item}**. 🍽️`,
+            intent: 'ACTION', action: 'navigate', actionParams: { path: '/menu' },
+            cards: [{ title: `🍽️ Order ${item}`, description: `Add ${item} to your cart from the menu`, action: 'navigate', actionParams: { path: '/menu' } }],
+            timestamp: ts,
+          };
+        }
         case 'checkin':
           return { response: `Heading to the daily check-in page! 📅`, intent: 'ACTION', action: 'navigate', actionParams: { path: '/points' }, timestamp: ts };
+        case 'check-balance':
+          return {
+            response: `Let me check your coin balance, ${name}. 🪙`,
+            intent: 'ACTION', action: 'navigate', actionParams: { path: '/points' },
+            cards: [{ title: '🪙 My Coins', description: 'View your coin balance, earn history, and redeem rewards', action: 'navigate', actionParams: { path: '/points' } }],
+            timestamp: ts,
+          };
         case 'logout':
           return { response: `Logging you out. See you later, ${name}! 👋`, intent: 'ACTION', action: 'logout', timestamp: ts };
         case 'mystery-box':
-          return { response: `Opening the Mystery Box! 🎁 Good luck!`, intent: 'ACTION', action: 'navigate', actionParams: { path: '/points' }, timestamp: ts };
+          return {
+            response: `Opening the Mystery Box! 🎁 Good luck, ${name}!`,
+            intent: 'ACTION', action: 'navigate', actionParams: { path: '/play/mysterybox' },
+            cards: [{ title: '🎁 Mystery Box', description: 'Spend 10 coins for a chance to win promo codes, bonus coins, or exclusive perks!', action: 'navigate', actionParams: { path: '/play/mysterybox' } }],
+            timestamp: ts,
+          };
+        case 'camera':
+          return {
+            response: `Camera mode activated. 📸 You can upload an image or scan a QR code.\n\nClick the camera button below to start.`,
+            intent: 'ACTION', action: 'camera',
+            buttons: [{ label: '📸 Open Camera', action: 'camera' }, { label: '📁 Upload Image', action: 'upload-image' }],
+            timestamp: ts,
+          };
       }
       break;
     }
