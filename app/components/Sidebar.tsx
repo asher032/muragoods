@@ -48,6 +48,16 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   // Close on route change only (not on every render)
   useEffect(() => { onClose(); }, [pathname]);
 
+  // Lock body scroll when sidebar is open
+  useEffect(() => {
+    if (open) {
+      document.body.classList.add('sidebar-open');
+    } else {
+      document.body.classList.remove('sidebar-open');
+    }
+    return () => document.body.classList.remove('sidebar-open');
+  }, [open]);
+
   return (
     <>
       <div className={`sidebar-overlay ${open ? 'open' : ''}`} onClick={onClose} />

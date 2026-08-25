@@ -252,8 +252,8 @@ export default function AdminPage() {
                 </thead>
                 <tbody>
                   {orders.map((order, idx) => (
-                    <tr key={order._id || order.id} className={`border-t border-[rgba(242,240,228,0.08)] transition-colors hover:bg-[var(--charcoal-light)] ${idx % 2 === 0 ? '' : 'bg-[rgba(212,175,55,0.02)]'}`}>
-                      <td className="px-3 py-3 text-xs text-[var(--cream-muted)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>{(order._id || order.id).slice(-5)}</td>
+                    <tr key={String(order._id || order.id)} className={`border-t border-[rgba(242,240,228,0.08)] transition-colors hover:bg-[var(--charcoal-light)] ${idx % 2 === 0 ? '' : 'bg-[rgba(212,175,55,0.02)]'}`}>
+                      <td className="px-3 py-3 text-xs text-[var(--cream-muted)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>{String(order._id || order.id || '').slice(-8).toUpperCase()}</td>
                       <td className="px-3 py-3">
                         <div className="text-xs text-[var(--cream)]">{order.customer}</div>
                         <div className="text-[11px] text-[var(--pewter)] hidden sm:block">{order.address}</div>
@@ -274,12 +274,12 @@ export default function AdminPage() {
                         )}
                       </td>
                       <td className="px-3 py-3">
-                        <select value={order.status} onChange={(e) => handleStatusUpdate(order._id || order.id, e.target.value)} className="deco-select text-[10px] py-1 px-2 rounded-lg">
+                        <select value={order.status} onChange={(e) => handleStatusUpdate(String(order._id || order.id), e.target.value)} className="deco-select text-[10px] py-1 px-2 rounded-lg">
                           {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                       </td>
                       <td className="px-3 py-3">
-                        <button onClick={() => handleDeleteOrder(order._id || order.id)} className="deco-btn deco-btn-sm deco-btn-crimson" style={{ minHeight: '28px', padding: '4px 10px', fontSize: '9px' }}>
+                        <button onClick={() => handleDeleteOrder(String(order._id || order.id))} className="deco-btn deco-btn-sm deco-btn-crimson" style={{ minHeight: '28px', padding: '4px 10px', fontSize: '9px' }}>
                           Delete
                         </button>
                       </td>

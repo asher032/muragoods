@@ -18,8 +18,8 @@ const SEGMENTS = [
 ];
 const SPIN_COST = 15;
 const SEGMENT_ANGLE = 360 / SEGMENTS.length;
-const RADIUS = 130;
-const SVG_SIZE = RADIUS * 2 + 20;
+const RADIUS = 150;
+const SVG_SIZE = RADIUS * 2 + 40;
 const CX = SVG_SIZE / 2;
 const CY = SVG_SIZE / 2;
 
@@ -36,7 +36,7 @@ function segmentPath(index: number) {
 
 function textPos(index: number) {
   const mid = ((index + 0.5) * SEGMENT_ANGLE - 90) * (Math.PI / 180);
-  const r = RADIUS * 0.65;
+  const r = RADIUS * 0.62;
   return { x: CX + r * Math.cos(mid), y: CY + r * Math.sin(mid), rot: (index + 0.5) * SEGMENT_ANGLE };
 }
 
@@ -128,13 +128,13 @@ export default function SpinWheelPage() {
                 return (
                   <g key={i}>
                     <path d={segmentPath(i)} fill={seg.color} stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
-                    <text x={t.x} y={t.y} textAnchor="middle" dominantBaseline="central" fill={seg.textColor} fontSize="10" fontWeight="bold" fontFamily="var(--font-arcade)" transform={`rotate(${t.rot}, ${t.x}, ${t.y})`}>{seg.label}</text>
+                    <text x={t.x} y={t.y} textAnchor="middle" dominantBaseline="central" fill={seg.textColor} fontSize="12" fontWeight="bold" fontFamily="var(--font-arcade)" transform={`rotate(${t.rot}, ${t.x}, ${t.y})`}>{seg.label}</text>
                   </g>
                 );
               })}
-              <circle cx={CX} cy={CY} r="22" fill="var(--mario-bg)" stroke="#ffd60a" strokeWidth="3" />
-              <circle cx={CX} cy={CY} r="16" fill="rgba(255,214,10,0.15)" />
-              <text x={CX} y={CY} textAnchor="middle" dominantBaseline="central" fill="#ffd60a" fontSize="14" fontWeight="bold">SPIN</text>
+              <circle cx={CX} cy={CY} r="26" fill="var(--mario-bg)" stroke="#ffd60a" strokeWidth="3" />
+              <circle cx={CX} cy={CY} r="18" fill="rgba(255,214,10,0.15)" />
+              <text x={CX} y={CY} textAnchor="middle" dominantBaseline="central" fill="#ffd60a" fontSize="16" fontWeight="bold">SPIN</text>
             </svg>
           </div>
         </div>

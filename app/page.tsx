@@ -129,6 +129,34 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ─── Quick Highlights ──────────────────────────────── */}
+      <section className="px-4 py-8 sm:px-8">
+        <div className="mario-container">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Link href="/menu" className="stagger-1">
+              <div className="highlight-card" style={{ background: 'linear-gradient(135deg, rgba(6,214,160,0.12), rgba(255,214,10,0.08))' }}>
+                <div className="highlight-content">
+                  <span style={{ fontSize: '40px', marginBottom: '12px' }} className="float-anim">🍕</span>
+                  <h3 className="font-arcade text-sm text-mario-yellow mb-1">ORDER NOW</h3>
+                  <p className="text-xs text-mario-text-muted mb-3">Browse our full food menu — Musubi, Churros, Coffee Jelly, Cookies & more!</p>
+                  <span className="font-arcade text-[9px] text-emerald-400" style={{ letterSpacing: '0.1em' }}>EXPLORE →</span>
+                </div>
+              </div>
+            </Link>
+            <Link href="/unsent" className="stagger-2">
+              <div className="highlight-card" style={{ background: 'linear-gradient(135deg, rgba(123,47,247,0.12), rgba(255,100,150,0.08))' }}>
+                <div className="highlight-content">
+                  <span style={{ fontSize: '40px', marginBottom: '12px' }} className="float-anim">✉️</span>
+                  <h3 className="font-arcade text-sm text-mario-yellow mb-1">LETTERS</h3>
+                  <p className="text-xs text-mario-text-muted mb-3">The Unsent Project — write anonymous letters, read what others left behind.</p>
+                  <span className="font-arcade text-[9px] text-purple-400" style={{ letterSpacing: '0.1em' }}>OPEN ARCHIVE →</span>
+                </div>
+              </div>
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* ─── Featured Power-Ups ──────────────────────────────── */}
       <section className="px-4 py-12 sm:px-8">
         <div className="mario-container">
