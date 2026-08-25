@@ -42,7 +42,11 @@ export async function GET(req: NextRequest) {
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
-    if (!res.ok) throw new Error('Spotify search failed');
+    if (!res.ok) {
+      const errText = await res.text();
+      // Spotify requires premium for API search - return gracefully
+      return NextResponse.json({ success: true, tracks: [], message: 'Search unavailable. Paste a Spotify link instead.' });
+    }
 
     const data = await res.json();
     const tracks = (data.tracks?.items || []).map((track: Record<string, unknown>) => ({
@@ -60,8 +64,8 @@ export async function GET(req: NextRequest) {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Search failed';
     // If Spotify is not configured, return empty results gracefully
-    if (message.includes('credentials not configured')) {
-      return NextResponse.json({ success: true, tracks: [], message: 'Spotify not configured. Paste a Spotify link instead.' });
+    if (message.includes('credentials not configured') || message.includes('Spotify search failed')) {
+      return NextResponse.json({ success: true, tracks: [], message: 'Search unavailable. Paste a Spotify link instead.' });
     }
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }

@@ -39,6 +39,8 @@ export default function CreateSongMessage() {
   const [playingPreview, setPlayingPreview] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [spotifyLinkInput, setSpotifyLinkInput] = useState('');
+  const [spotifyLinkError, setSpotifyLinkError] = useState('');
 
   useEffect(() => { setTimeout(() => setLoaded(true), 100); }, []);
 
@@ -48,6 +50,29 @@ export default function CreateSongMessage() {
       if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     };
   }, []);
+
+  const handlePasteSpotifyLink = () => {
+    const url = spotifyLinkInput.trim();
+    if (!url) return;
+    // Extract track ID from Spotify URL
+    const trackMatch = url.match(/track\/([a-zA-Z0-9]+)/);
+    if (!trackMatch) { setSpotifyLinkError('Invalid Spotify link. Please paste a track URL.'); return; }
+    const trackId = trackMatch[1];
+    // Create a track object from the URL
+    const track: Track = {
+      id: trackId,
+      title: 'Unknown Song',
+      artist: 'Unknown Artist',
+      album: '',
+      artwork: '',
+      previewUrl: '',
+      spotifyUrl: `https://open.spotify.com/track/${trackId}`,
+      duration: 0,
+    };
+    setSelectedTrack(track);
+    setSpotifyLinkInput('');
+    setSpotifyLinkError('');
+  };
 
   const searchSongs = useCallback(async (query: string) => {
     if (!query.trim()) { setSearchResults([]); return; }
@@ -232,7 +257,14 @@ export default function CreateSongMessage() {
                   {searching && <span style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', color: '#1ed760', animation: 'pulse 1s ease infinite' }}>⏳</span>}
                 </div>
                 {searchQuery && !searching && searchResults.length === 0 && (
-                  <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginTop: '8px', textAlign: 'center' }}>No results. Try a different search or paste a Spotify link below.</p>
+                  <div style={{ marginTop: '12px', padding: '16px', background: 'rgba(30,215,96,0.04)', border: '1px solid rgba(30,215,96,0.15)', borderRadius: '12px', textAlign: 'center' }}>
+                    <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginBottom: '10px' }}>No results found. You can paste a Spotify link instead:</p>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input value={spotifyLinkInput} onChange={e => { setSpotifyLinkInput(e.target.value); setSpotifyLinkError(''); }} placeholder="https://open.spotify.com/track/..." style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(30,215,96,0.2)', borderRadius: '10px', padding: '10px 12px', color: '#fff', fontSize: '12px', fontFamily: 'inherit', outline: 'none' }} />
+                      <button onClick={handlePasteSpotifyLink} disabled={!spotifyLinkInput} style={{ padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(30,215,96,0.3)', background: spotifyLinkInput ? 'rgba(30,215,96,0.15)' : 'rgba(255,255,255,0.03)', color: '#1ed760', fontFamily: 'var(--font-arcade)', fontSize: '9px', cursor: spotifyLinkInput ? 'pointer' : 'not-allowed' }}>Use Link</button>
+                    </div>
+                    {spotifyLinkError && <p style={{ fontSize: '10px', color: '#e63946', marginTop: '8px' }}>{spotifyLinkError}</p>}
+                  </div>
                 )}
                 {searchResults.length > 0 && (
                   <div style={{ marginTop: '12px', maxHeight: '360px', overflowY: 'auto', display: 'grid', gap: '6px' }}>
@@ -256,7 +288,15 @@ export default function CreateSongMessage() {
                     ))}
                   </div>
                 )}
-                <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.25)', marginTop: '10px', textAlign: 'center' }}>Powered by Spotify · 30-second previews available</p>
+                <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '12px' }}>
+                  <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginBottom: '8px', textAlign: 'center' }}>Or paste a Spotify link directly:</p>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input value={spotifyLinkInput} onChange={e => { setSpotifyLinkInput(e.target.value); setSpotifyLinkError(''); }} placeholder="https://open.spotify.com/track/..." style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(30,215,96,0.2)', borderRadius: '10px', padding: '10px 12px', color: '#fff', fontSize: '12px', fontFamily: 'inherit', outline: 'none' }} />
+                    <button onClick={handlePasteSpotifyLink} disabled={!spotifyLinkInput} style={{ padding: '10px 14px', borderRadius: '10px', border: '1px solid rgba(30,215,96,0.3)', background: spotifyLinkInput ? 'rgba(30,215,96,0.15)' : 'rgba(255,255,255,0.03)', color: '#1ed760', fontFamily: 'var(--font-arcade)', fontSize: '9px', cursor: spotifyLinkInput ? 'pointer' : 'not-allowed' }}>Use Link</button>
+                  </div>
+                  {spotifyLinkError && <p style={{ fontSize: '10px', color: '#e63946', marginTop: '6px', textAlign: 'center' }}>{spotifyLinkError}</p>}
+                </div>
+                <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.2)', marginTop: '8px', textAlign: 'center' }}>Powered by Spotify</p>
               </div>
             )}
           </div>
