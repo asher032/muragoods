@@ -204,9 +204,12 @@ export async function analyzeCode(
   if (!apiKey) return 'Gemini API key not configured.';
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({
         contents: [{
           role: 'user',
@@ -215,6 +218,7 @@ export async function analyzeCode(
         generationConfig: { temperature: 0.3, maxOutputTokens: 1024 },
       }),
     });
+    clearTimeout(timeout);
 
     if (!response.ok) return 'Analysis failed.';
     const data = await response.json() as GeminiResponse;

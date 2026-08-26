@@ -165,13 +165,13 @@ function parseCommand(input: string): { intent: Intent; action: string; params: 
   if (/\b(hello|hi|hey|good morning|good afternoon|good evening)\b/.test(lower)) {
     return { intent: 'INFORMATION', action: 'greeting', params };
   }
-  if (/\b(help|what can you do|capabilities|commands)\b/.test(lower)) {
+  if (/^(help|what can you do|capabilities|commands)$/.test(lower)) {
     return { intent: 'INFORMATION', action: 'help', params };
   }
-  if (/\b(who are you|what are you|your name)\b/.test(lower)) {
+  if (/^(who are you|what are you|your name)$/.test(lower)) {
     return { intent: 'INFORMATION', action: 'identity', params };
   }
-  if (/\b(thanks?|thank you)\b/.test(lower)) {
+  if (/^(thanks?|thank you|ty|thx)$/.test(lower)) {
     return { intent: 'INFORMATION', action: 'thanks', params };
   }
 
