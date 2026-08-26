@@ -187,7 +187,7 @@ function parseCommand(input: string): { intent: Intent; action: string; params: 
   }
 
   // ─── COMMON QUERIES (let AI handle) ──────────────────────
-  if (/\b(hello|hi|hey|good morning|good afternoon|good evening)\b/.test(lower)) {
+  if (/^(hello|hi|hey|good morning|good afternoon|good evening|sup|yo|what's up|whats up)$/.test(lower)) {
     return { intent: 'INFORMATION', action: 'greeting', params };
   }
   if (/^(help|what can you do|capabilities|commands)$/.test(lower)) {
