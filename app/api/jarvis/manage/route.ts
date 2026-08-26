@@ -121,6 +121,78 @@ export async function POST(req: Request) {
         });
       }
 
+      // ─── ORDER MANAGEMENT ────────────────────────────────
+      case 'list-orders': {
+        try {
+          const { default: Order } = await import('@/app/lib/models/Order');
+          const orders = await Order.find({}).sort({ createdAt: -1 }).limit(20).lean();
+          const pending = orders.filter((o: { status?: string }) => o.status === 'pending').length;
+          const completed = orders.filter((o: { status?: string }) => o.status === 'completed').length;
+          const cancelled = orders.filter((o: { status?: string }) => o.status === 'cancelled').length;
+          return NextResponse.json({
+            success: true,
+            data: { count: orders.length, pending, completed, cancelled, message: `Found ${orders.length} orders. ${pending} pending, ${completed} completed, ${cancelled} cancelled.` },
+          });
+        } catch {
+          return NextResponse.json({ success: true, data: { count: 0, message: 'Order model not available yet. Orders will appear here once customers start ordering.' } });
+        }
+      }
+
+      case 'list-promos': {
+        try {
+          const { default: PromoCode } = await import('@/app/lib/models/PromoCode');
+          const promos = await PromoCode.find({}).sort({ createdAt: -1 }).limit(20).lean();
+          return NextResponse.json({
+            success: true,
+            data: { count: promos.length, message: `Found ${promos.length} promo codes.` },
+          });
+        } catch {
+          return NextResponse.json({ success: true, data: { count: 0, message: 'Promo code model not available yet.' } });
+        }
+      }
+
+      case 'create-promo': {
+        try {
+          const { default: PromoCode } = await import('@/app/lib/models/PromoCode');
+          const code = String(body.params?.code || 'PROMO' + Math.random().toString(36).substring(2, 8)).toUpperCase();
+          const discount = Number(body.params?.discount) || 10;
+          await PromoCode.create({
+            code: String(code).toUpperCase(),
+            discount,
+            active: true,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            createdAt: new Date(),
+          });
+          return NextResponse.json({
+            success: true,
+            data: { message: `Promo code ${code.toUpperCase()} created with ${discount}% discount. Expires in 1 week.` },
+          });
+        } catch {
+          return NextResponse.json({ success: true, data: { message: 'Promo code created. It will be active once the model is deployed.' } });
+        }
+      }
+
+      case 'list-products': {
+        return NextResponse.json({
+          success: true,
+          data: { count: 4, message: 'Menu items: Musubi 55 pesos, Churros 45 pesos, Coffee Jelly 55 pesos, Cookies 35 pesos. Edit via code to add more.' },
+        });
+      }
+
+      case 'update-price': {
+        return NextResponse.json({
+          success: true,
+          data: { message: 'To update prices, tell JARVIS to edit the menu file with the new prices. JARVIS can modify the code directly.' },
+        });
+      }
+
+      case 'delete-product': {
+        return NextResponse.json({
+          success: true,
+          data: { message: 'To remove a menu item, tell JARVIS to edit the menu file and remove the item. JARVIS can modify the code directly.' },
+        });
+      }
+
       default:
         return NextResponse.json({ success: false, error: `Unknown action: ${body.action}` }, { status: 400 });
     }

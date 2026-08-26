@@ -100,7 +100,7 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
     if (open && messages.length === 0) {
       const h = new Date().getHours();
       const g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-      const roleText = isAdmin ? 'Commander. All systems online. Full administrative access granted.' : 'All systems online. How can I help?';
+      const roleText = isAdmin ? 'Hey! I\'m online. What do you need?' : 'Hey! I\'m here. What can I help with?';
       setMessages([{
         id: 'w', role: 'jarvis',
         text: `${g}, ${roleText}`,
@@ -113,7 +113,26 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
   useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 400); }, [open]);
 
-  // ─── Speech Recognition ─────────────────────────────────
+  // ─── Continuous conversation mode ────────────────────────
+  const continuousModeRef = useRef(false);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const stopSpeakingRef = useCallback(() => {
+    if (currentAudioRef.current) { currentAudioRef.current.pause(); currentAudioRef.current = null; }
+    window.speechSynthesis?.cancel();
+    setSpeaking(false);
+  }, []);
+
+  // ─── Start listening ─────────────────────────────────────
+  const startListening = useCallback(() => {
+    if (!recognitionRef.current) return;
+    try {
+      recognitionRef.current.start();
+      setListening(true);
+    } catch { /* already started */ }
+  }, []);
+
+  // ─── Speech Recognition (continuous conversation) ────────
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -125,21 +144,41 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
     rec.onresult = (ev: SpeechRecognitionEvent) => {
       const transcript = ev.results[0][0].transcript;
       setListening(false);
+      // If JARVIS is speaking, interrupt it
+      if (speaking) stopSpeakingRef();
       handleSend(transcript);
     };
     rec.onerror = (ev: SpeechRecognitionErrorEvent) => {
       setListening(false);
-      if (ev.error === 'not-allowed') {
-        // Silent fail — user denied mic
-      } else if (ev.error === 'no-speech') {
-        // No speech, just stop
+      if (continuousModeRef.current && ev.error !== 'not-allowed' && ev.error !== 'aborted') {
+        setTimeout(() => {
+          if (continuousModeRef.current) startListening();
+        }, 500);
       }
     };
-    rec.onend = () => setListening(false);
+    rec.onend = () => {
+      setListening(false);
+      if (continuousModeRef.current) {
+        setTimeout(() => {
+          if (continuousModeRef.current && !processing) startListening();
+        }, 300);
+      }
+    };
     recognitionRef.current = rec;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [speaking, processing, stopSpeakingRef, startListening]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── ElevenLabs TTS ─────────────────────────────────────
+  const onSpeechEnd = useCallback(() => {
+    setSpeaking(false);
+    setCurrentAudio(null);
+    // In continuous mode, restart listening after JARVIS finishes speaking
+    if (continuousModeRef.current) {
+      setTimeout(() => {
+        if (continuousModeRef.current) startListening();
+      }, 400);
+    }
+  }, [startListening]);
+
   const speak = useCallback(async (text: string) => {
     if (!voiceEnabled) return;
     try {
@@ -158,9 +197,10 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
         setSpeaking(true);
         const audio = new Audio(`data:audio/mpeg;base64,${data.audio}`);
         setCurrentAudio(audio);
-        audio.onended = () => { setSpeaking(false); setCurrentAudio(null); };
-        audio.onerror = () => { setSpeaking(false); setCurrentAudio(null); };
-        await audio.play().catch(() => setSpeaking(false));
+        currentAudioRef.current = audio;
+        audio.onended = onSpeechEnd;
+        audio.onerror = onSpeechEnd;
+        await audio.play().catch(onSpeechEnd);
         return;
       }
 
@@ -168,22 +208,18 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
       if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(clean);
-        u.rate = 1;
-        u.pitch = 0.85;
+        u.rate = 1.05;
+        u.pitch = 0.9;
         u.onstart = () => setSpeaking(true);
-        u.onend = () => setSpeaking(false);
+        u.onend = onSpeechEnd;
         window.speechSynthesis.speak(u);
       }
     } catch {
       setSpeaking(false);
     }
-  }, [voiceEnabled]);
+  }, [voiceEnabled, onSpeechEnd]);
 
-  const stopSpeaking = useCallback(() => {
-    if (currentAudio) { currentAudio.pause(); setCurrentAudio(null); }
-    window.speechSynthesis?.cancel();
-    setSpeaking(false);
-  }, [currentAudio]);
+  const stopSpeaking = stopSpeakingRef;
 
   // ─── Screen context ─────────────────────────────────────
   const getScreenContext = useCallback(() => {
@@ -222,8 +258,10 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
           setSpeaking(true);
           const audio = new Audio(`data:audio/mpeg;base64,${result.data.tts}`);
           setCurrentAudio(audio);
-          audio.onended = () => { setSpeaking(false); setCurrentAudio(null); };
-          audio.play().catch(() => setSpeaking(false));
+          currentAudioRef.current = audio;
+          audio.onended = onSpeechEnd;
+          audio.onerror = onSpeechEnd;
+          audio.play().catch(onSpeechEnd);
         } else {
           speak(result.data.response);
         }
@@ -234,15 +272,18 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
           return u;
         });
 
-        // Execute actions
+        // Execute actions — instant, no delay
         const a = result.data.action;
         const p = result.data.actionParams;
         if (a === 'navigate' && p?.path && p.path !== '#') {
-          setTimeout(() => { router.push(p.path); onClose(); }, 1500);
+          continuousModeRef.current = false;
+          setTimeout(() => { router.push(p.path); onClose(); }, 800);
         } else if (a === 'logout') {
-          setTimeout(() => { localStorage.removeItem('user'); router.push('/login'); onClose(); }, 1500);
+          continuousModeRef.current = false;
+          setTimeout(() => { localStorage.removeItem('user'); router.push('/login'); onClose(); }, 800);
         } else if (a === 'search' && p?.query) {
-          setTimeout(() => { router.push(`/untold-words?q=${encodeURIComponent(p.query)}`); onClose(); }, 1500);
+          continuousModeRef.current = false;
+          setTimeout(() => { router.push(`/untold-words?q=${encodeURIComponent(p.query)}`); onClose(); }, 800);
         } else if (a === 'health-check') {
           try {
             const sr = await fetch('/api/jarvis/status');
@@ -266,31 +307,31 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
     processMessage(msg);
   }, [input, processing, processMessage]);
 
-  // ─── Voice toggle ───────────────────────────────────────
+  // ─── Voice toggle (tap to start conversation, tap to stop) ──
   const toggleVoice = useCallback(async () => {
     if (!recognitionRef.current) {
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'Voice is not supported in this browser. Use Chrome or Edge.', timestamp: new Date() }]);
       return;
     }
+    // If already listening, stop continuous mode
     if (listening) {
+      continuousModeRef.current = false;
       recognitionRef.current.stop();
       setListening(false);
       return;
     }
+    // Request mic permission
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'Microphone access denied. Please allow mic access in browser settings.', timestamp: new Date() }]);
       return;
     }
+    // Stop any ongoing speech and start continuous conversation
     stopSpeaking();
-    try {
-      recognitionRef.current.start();
-      setListening(true);
-    } catch {
-      setListening(false);
-    }
-  }, [listening, stopSpeaking]);
+    continuousModeRef.current = true;
+    startListening();
+  }, [listening, stopSpeaking, startListening]);
 
   // ─── Camera ─────────────────────────────────────────────
   const startCamera = useCallback(async () => {

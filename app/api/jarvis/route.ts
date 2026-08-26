@@ -86,6 +86,31 @@ function parseCommand(input: string): { intent: Intent; action: string; params: 
     params.instruction = input;
     return { intent: 'MANAGE', action: 'add-product', params };
   }
+  if (/\b(list|show|view|get|check)\b.*\b(orders?|pending|completed|cancelled)\b/.test(lower)) {
+    return { intent: 'MANAGE', action: 'list-orders', params };
+  }
+  if (/\b(list|show|view|get)\b.*\b(promo|discount|code|coupon)\b/.test(lower)) {
+    return { intent: 'MANAGE', action: 'list-promos', params };
+  }
+  if (/\b(create|generate|make|new)\b.*\b(promo|discount|code|coupon)\b/.test(lower)) {
+    params.instruction = input;
+    const codeMatch = lower.match(/code\s+(\S+)/);
+    if (codeMatch) params.code = codeMatch[1];
+    const discountMatch = lower.match(/(\d+)\s*%/);
+    if (discountMatch) params.discount = discountMatch[1];
+    return { intent: 'MANAGE', action: 'create-promo', params };
+  }
+  if (/\b(list|show|view|get|check)\b.*\b(products?|menu|food|items?)\b/.test(lower)) {
+    return { intent: 'MANAGE', action: 'list-products', params };
+  }
+  if (/\b(update|change|edit|set)\b.*\b(price|prices|cost)\b/.test(lower)) {
+    params.instruction = input;
+    return { intent: 'MANAGE', action: 'update-price', params };
+  }
+  if (/\b(delete|remove)\b.*\b(product|menu item|food item)\b/.test(lower)) {
+    params.instruction = input;
+    return { intent: 'MANAGE', action: 'delete-product', params };
+  }
 
   // ─── OPERATOR ────────────────────────────────────────────
   if (/\b(health check|check website|system status|run diagnostics)\b/.test(lower)) {
@@ -372,13 +397,25 @@ export async function POST(req: Request) {
         if (manageData.success) {
           const d = manageData.data;
           if (parsed.action === 'list-users') {
-            result.response = `**${d.count} Users:**\n\n${d.users.map((u: { name: string; email: string; coins: number }) => `• ${u.name} (${u.email}) — ${u.coins} coins`).join('\n')}`;
+            result.response = `${d.count} users found. ${d.users.map((u: { name: string; email: string; coins: number }) => `${u.name} has ${u.coins} coins`).join('. ')}.`;
           } else if (parsed.action === 'site-stats') {
-            result.response = `**Site Stats:**\n\n👥 Total Users: ${d.totalUsers}\n🪙 Total Coins: ${d.totalCoins}\n⏱️ Uptime: ${Math.round(d.uptime)}s\n💾 Memory: ${d.memoryUsage}`;
+            result.response = `Site stats: ${d.totalUsers} users, ${d.totalCoins} total coins distributed. Uptime is ${Math.round(d.uptime)} seconds. Memory usage: ${d.memoryUsage}.`;
           } else if (parsed.action === 'update-user-coins') {
-            result.response = `Updated **${d.name}**'s coins to ${d.coins}. ✅`;
+            result.response = `Done! Updated ${d.name}'s coins to ${d.coins}.`;
           } else if (parsed.action === 'delete-user') {
-            result.response = `Deleted user **${d.deleted}**. ✅`;
+            result.response = `Done! Deleted user ${d.deleted}.`;
+          } else if (parsed.action === 'list-orders') {
+            result.response = d.message || `Found ${d.count || 0} orders.`;
+          } else if (parsed.action === 'list-promos') {
+            result.response = d.message || `Found ${d.count || 0} promo codes.`;
+          } else if (parsed.action === 'create-promo') {
+            result.response = d.message || `Promo code created successfully.`;
+          } else if (parsed.action === 'list-products') {
+            result.response = d.message || `Found ${d.count || 0} products on the menu.`;
+          } else if (parsed.action === 'update-price') {
+            result.response = d.message || `Price updated successfully.`;
+          } else if (parsed.action === 'delete-product') {
+            result.response = d.message || `Product removed from the menu.`;
           }
         } else {
           result.response = `Management error: ${manageData.error}`;
