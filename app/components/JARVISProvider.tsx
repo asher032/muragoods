@@ -29,7 +29,6 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
   const openJarvis = useCallback(() => setIsOpen(true), []);
   const closeJarvis = useCallback(() => setIsOpen(false), []);
 
-  // Check admin status
   useEffect(() => {
     try {
       const userStr = localStorage.getItem('user');
@@ -40,7 +39,6 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
     } catch { /* empty */ }
   }, []);
 
-  // Keyboard shortcut: Ctrl+/ or Cmd+/
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === '/') {
