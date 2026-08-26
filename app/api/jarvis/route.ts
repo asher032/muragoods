@@ -317,7 +317,7 @@ export async function POST(req: Request) {
             `● Database: ${s.systems.database.status === 'online' ? '✅' : '❌'} ${s.systems.database.latency}\n` +
             `● Frontend: ✅ ONLINE\n` +
             `● Email: ${s.systems.email.providers.join(', ') || 'none'}\n` +
-            `● AI: ✅ Gemini 2.0 Flash\n` +
+            `● AI: ✅ Gemini 3.6 Flash\n` +
             `● TTS: ✅ ElevenLabs\n\n` +
             `Deployment: ${s.deployment.status} on ${s.deployment.platform}`;
           result.cards = [
@@ -411,7 +411,7 @@ export async function GET() {
       status: 'online',
       name: 'JARVIS',
       version: '4.0.0',
-      ai: 'Gemini 2.0 Flash',
+      ai: 'Gemini 3.6 Flash',
       tts: 'ElevenLabs',
       capabilities: [
         'NAVIGATION', 'SEARCH', 'INFORMATION', 'CREATION', 'ACTION',

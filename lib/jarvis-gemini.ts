@@ -2,7 +2,7 @@
 // Primary intelligence: Google Gemini 2.0 Flash
 // Handles: conversations, code editing, website management, autonomous reasoning
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent';
 
 interface GeminiContent {
   role: 'user' | 'model';

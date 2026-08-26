@@ -912,7 +912,7 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
           background: 'rgba(0,5,15,0.8)',
         }}>
           <div style={{ display: 'flex', gap: 16 }}>
-            <span style={{ color: 'rgba(0,229,255,0.3)', fontSize: 9 }}>AI: GEMINI 2.0 FLASH</span>
+            <span style={{ color: 'rgba(0,229,255,0.3)', fontSize: 9 }}>AI: GEMINI 3.6 FLASH</span>
             <span style={{ color: 'rgba(0,229,255,0.3)', fontSize: 9 }}>TTS: ELEVENLABS</span>
             <span style={{ color: 'rgba(0,255,136,0.3)', fontSize: 9 }}>● CONNECTED</span>
           </div>
