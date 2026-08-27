@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import User from '@/app/lib/models/User';
 import JarvisMemory from '@/app/lib/models/JarvisMemory';
-import { askGemini, clearGeminiHistory } from '@/lib/jarvis-gemini';
+import { askJarvisAI, clearJarvisHistory } from '@/lib/jarvis-ai';
 
 
 const ADMIN_EMAILS = ['muragoods0@gmail.com', 'mhaxthedog@gmail.com'];
@@ -326,14 +326,10 @@ export async function POST(req: Request) {
 
     // For unknown/complex queries, use Gemini AI
     if (parsed.intent === 'UNKNOWN' || (parsed.intent === 'INFORMATION' && !['greeting', 'help', 'identity', 'thanks'].includes(parsed.action))) {
-      const aiResult = await askGemini(body.message, body.userId, body.screenContext || undefined, userName || undefined, isAdminUser);
+      const aiResult = await askJarvisAI(body.message, body.userId, body.screenContext || undefined, userName || undefined);
       if (aiResult.isAI && aiResult.response) {
         result.response = aiResult.response;
         result.intent = 'INFORMATION';
-        if (aiResult.action && aiResult.actionParams) {
-          result.action = aiResult.action;
-          result.actionParams = aiResult.actionParams;
-        }
       }
     }
 
@@ -354,7 +350,7 @@ export async function POST(req: Request) {
 
     // Handle clear history
     if (parsed.intent === 'SYSTEM' && parsed.action === 'clear-history') {
-      clearGeminiHistory(body.userId);
+      clearJarvisHistory(body.userId);
       result.response = `Conversation cleared. Starting fresh, ${userName || 'Commander'}.`;
     }
 

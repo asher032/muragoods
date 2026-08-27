@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readFile, writeFile, readdir, stat } from 'fs/promises';
 import { join, relative } from 'path';
-import { analyzeCode, generateCodeChange } from '@/lib/jarvis-gemini';
+import { analyzeCode, generateCodeChange } from '@/lib/jarvis-ai';
 
 // Admin-only endpoint for code editing
 const ADMIN_EMAILS = ['muragoods0@gmail.com', 'mhaxthedog@gmail.com'];
