@@ -199,6 +199,23 @@ function parseCommand(input: string): { intent: Intent; action: string; params: 
     return { intent: 'SYSTEM', action: 'clear-history', params };
   }
 
+  // ─── FOOD QUERIES (fast pattern matching) ────────────────
+  if (/\b(musubi|churros?|coffee jelly|cookies?)\b/.test(lower) && /\b(how much|price|cost|expensive|cheap|menu|order|buy|get|want|like|recommend|best|favorite)\b/.test(lower)) {
+    return { intent: 'INFORMATION', action: 'menu-info', params };
+  }
+  if (/\b(food|menu|eat|hungry|snack|lunch|dinner|breakfast)\b/.test(lower) && /\b(how much|price|cost|what|recommend|best|suggest|order|buy|want)\b/.test(lower)) {
+    return { intent: 'INFORMATION', action: 'menu-info', params };
+  }
+  if (/\b(games?|play|entertainment|flappy|memory|mystery)\b/.test(lower) && /\b(what|how|list|show|tell|which|available|can i)\b/.test(lower)) {
+    return { intent: 'INFORMATION', action: 'games-info', params };
+  }
+  if (/\b(points?|coins?|rewards?|balance|earn|spend|redeem)\b/.test(lower) && /\b(how|what|explain|tell|work|get|use|can i)\b/.test(lower)) {
+    return { intent: 'INFORMATION', action: 'points-info', params };
+  }
+  if (/\b(confession|letter|untold|anonymous|song|send)\b/.test(lower) && /\b(what|how|tell|explain|create|write|make|can i)\b/.test(lower)) {
+    return { intent: 'INFORMATION', action: 'untold-info', params };
+  }
+
   // ─── COMMON QUERIES (let AI handle) ──────────────────────
   if (/^(hello|hi|hey|good morning|good afternoon|good evening|sup|yo|what's up|whats up)$/.test(lower)) {
     return { intent: 'INFORMATION', action: 'greeting', params };
@@ -261,6 +278,10 @@ function quickResponse(parsed: { intent: Intent; action: string; params: Record<
       if (parsed.action === 'help') return { response: `I can navigate, search, create content, manage your account, edit code, and more. Just speak naturally!`, intent: 'INFORMATION', timestamp: ts };
       if (parsed.action === 'identity') return { response: `I'm JARVIS — your intelligent AI assistant. I can navigate, search, create, edit code, manage the website, and think autonomously.`, intent: 'INFORMATION', timestamp: ts };
       if (parsed.action === 'thanks') return { response: `Always here to help, ${name}. 😊`, intent: 'INFORMATION', timestamp: ts };
+      if (parsed.action === 'menu-info') return { response: `We have four items on the menu. Musubi is fifty five pesos, Churros are forty five, Coffee Jelly is fifty five, and Cookies are thirty five. All freshly made on campus! Want me to open the menu so you can order?`, intent: 'INFORMATION', action: 'navigate', actionParams: { path: '/menu' }, timestamp: ts };
+      if (parsed.action === 'games-info') return { response: `We have three games. Memory Match where you flip cards to find pairs, Flappy Bird the classic, and the Mystery Box where you spend ten coins for a chance to win prizes. Which one sounds fun?`, intent: 'INFORMATION', timestamp: ts };
+      if (parsed.action === 'points-info') return { response: `You earn one coin for every peso you spend on food. You can also get coins from daily check ins, playing games, referring friends for fifty coins each, or spinning the mystery box for ten coins. Want me to take you to your points page?`, intent: 'INFORMATION', action: 'navigate', actionParams: { path: '/points' }, timestamp: ts };
+      if (parsed.action === 'untold-info') return { response: `Untold Words is where you can express feelings anonymously. You can write a confession, create a digital love letter, or send a song with a message. Everything is posted to the public gallery unless you choose to keep it private. Want me to open it for you?`, intent: 'INFORMATION', action: 'navigate', actionParams: { path: '/untold-words' }, timestamp: ts };
       return { response: `Let me look into that.`, intent: 'INFORMATION', timestamp: ts };
     default:
       return { response: `Thinking...`, intent: 'UNKNOWN', timestamp: ts };
