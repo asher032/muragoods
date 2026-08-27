@@ -273,24 +273,84 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
 
   const startRecording = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      micStreamRef.current = stream;
-      micStreamRefForStop.current = stream;
-      audioChunksRef.current = [];
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
-      const recorder = new MediaRecorder(stream, { mimeType });
-      mediaRecorderRef.current = recorder;
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
-      recorder.onstop = () => handleRecordingStop();
-      recorder.start();
-      isRecordingRef.current = true;
-      setListening(true);
-      recordingTimerRef.current = setTimeout(() => { if (isRecordingRef.current) stopRecording(); }, 15000);
+      // Check actual permission state first (browser may have changed it since page load)
+      let micState: PermissionState = 'prompt';
+      try {
+        const permStatus = await navigator.permissions.query({ name: 'microphone' } as PermissionDescriptor);
+        micState = permStatus.state;
+      } catch { /* Permissions API not supported, just try getUserMedia */ }
+
+      // If browser says 'granted' but getUserMedi failed before, try fresh request
+      if (micState === 'granted') {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          micStreamRef.current = stream;
+          micStreamRefForStop.current = stream;
+          audioChunksRef.current = [];
+          const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+          const recorder = new MediaRecorder(stream, { mimeType });
+          mediaRecorderRef.current = recorder;
+          recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+          recorder.onstop = () => handleRecordingStop();
+          recorder.start();
+          isRecordingRef.current = true;
+          setListening(true);
+          recordingTimerRef.current = setTimeout(() => { if (isRecordingRef.current) stopRecording(); }, 15000);
+          return;
+        } catch {
+          // getUserMedia failed even though permissions say granted
+          // Fall through to request new permission
+        }
+      }
+
+      // If 'prompt', request permission (this shows the browser dialog)
+      if (micState === 'prompt') {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micStreamRef.current = stream;
+        micStreamRefForStop.current = stream;
+        audioChunksRef.current = [];
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+        const recorder = new MediaRecorder(stream, { mimeType });
+        mediaRecorderRef.current = recorder;
+        recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+        recorder.onstop = () => handleRecordingStop();
+        recorder.start();
+        isRecordingRef.current = true;
+        setListening(true);
+        recordingTimerRef.current = setTimeout(() => { if (isRecordingRef.current) stopRecording(); }, 15000);
+        return;
+      }
+
+      // If 'denied' — try getUserMedia anyway (browser might have been toggled ON since last check)
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micStreamRef.current = stream;
+        micStreamRefForStop.current = stream;
+        audioChunksRef.current = [];
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+        const recorder = new MediaRecorder(stream, { mimeType });
+        mediaRecorderRef.current = recorder;
+        recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+        recorder.onstop = () => handleRecordingStop();
+        recorder.start();
+        isRecordingRef.current = true;
+        setListening(true);
+        recordingTimerRef.current = setTimeout(() => { if (isRecordingRef.current) stopRecording(); }, 15000);
+        return;
+      } catch {
+        // Truly denied — show the error
+      }
+
+      // All attempts failed — show error with retry option
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'jarvis',
+        text: "🎤 Microphone access is blocked. Try this:\n\n1. Click the 🔒 lock icon in your address bar\n2. Set Microphone to ✅ Allow\n3. Refresh the page\n4. Click the 🎤 button again\n\nOr just type your command below!",
+        timestamp: new Date(),
+      }]);
     } catch (err: unknown) {
       const errStr = String(err);
-      if (errStr.includes('NotAllowedError') || errStr.includes('Permission')) {
-        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: '🎤 Microphone access needed! Please click the 🔒 lock icon in your browser address bar → Microphone → Allow, then try again.', timestamp: new Date() }]);
-      } else if (errStr.includes('NotFoundError')) {
+      if (errStr.includes('NotFoundError')) {
         setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'No microphone found. Please connect a microphone and try again.', timestamp: new Date() }]);
       } else {
         setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'Could not start recording. Try typing your command instead!', timestamp: new Date() }]);
