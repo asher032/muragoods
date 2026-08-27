@@ -64,13 +64,28 @@ async function subscribeToPush(): Promise<boolean> {
   }
 }
 
+const ADMIN_EMAILS = ['muragoods0@gmail.com', 'mhaxthedog@gmail.com'];
+
+function isAdminUser(): boolean {
+  try {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return false;
+    const user = JSON.parse(userStr);
+    return ADMIN_EMAILS.includes(user.email);
+  } catch { return false; }
+}
+
 export function NotificationSetup() {
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [supported, setSupported] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
+    // Only show for admin users
+    setIsAdmin(isAdminUser());
+
     // Register service worker immediately
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').then((reg) => {
@@ -92,9 +107,9 @@ export function NotificationSetup() {
           });
         });
       }
-      // Show prompt after 3 seconds if not yet decided
-      if (Notification.permission === 'default') {
-        const timer = setTimeout(() => setShowPrompt(true), 3000);
+      // Show prompt after 5 seconds if admin and not yet decided
+      if (Notification.permission === 'default' && isAdminUser()) {
+        const timer = setTimeout(() => setShowPrompt(true), 5000);
         return () => clearTimeout(timer);
       }
     }
@@ -156,29 +171,29 @@ export function NotificationSetup() {
     return () => window.removeEventListener('request-notification-permission', handler);
   }, [isSubscribed]);
 
-  if (!supported || !showPrompt) return null;
+  if (!supported || !showPrompt || !isAdmin) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 max-w-sm">
-      <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-4 rounded-xl shadow-[0_0_20px_rgba(212,175,55,0.2)]">
-        <div className="flex items-start gap-3">
-          <span className="text-2xl">🔔</span>
+    <div className="fixed bottom-20 right-4 z-40 max-w-xs">
+      <div className="border border-[var(--gold)] bg-[var(--charcoal)] p-3 rounded-lg shadow-[0_0_12px_rgba(212,175,55,0.15)]">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">🔔</span>
           <div className="flex-1">
-            <p className="text-[10px] text-[var(--gold-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>
-              Stay Updated
+            <p className="text-[9px] text-[var(--gold-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>
+              Order Alerts
             </p>
-            <p className="text-xs text-[var(--cream-muted)] mt-1">
-              Get real-time push notifications for orders — even when the browser is closed!
+            <p className="text-[10px] text-[var(--cream-muted)] mt-0.5">
+              Get notified when new orders come in.
             </p>
-            <div className="flex gap-2 mt-3">
-              <button onClick={requestPermission} className="deco-btn deco-btn-sm deco-btn-gold rounded-lg text-[9px]" style={{ fontFamily: 'var(--font-arcade)' }}>
-                Enable
-              </button>
-              <button onClick={() => setShowPrompt(false)} className="deco-btn deco-btn-sm deco-btn-dark rounded-lg text-[9px]" style={{ fontFamily: 'var(--font-arcade)' }}>
-                Later
-              </button>
-            </div>
           </div>
+        </div>
+        <div className="flex gap-2 mt-2">
+          <button onClick={requestPermission} className="deco-btn deco-btn-sm deco-btn-gold rounded-lg text-[8px] px-3 py-1.5" style={{ fontFamily: 'var(--font-arcade)' }}>
+            Enable
+          </button>
+          <button onClick={() => setShowPrompt(false)} className="text-[8px] px-3 py-1.5 rounded-lg border border-white/10 text-[var(--pewter)] hover:text-white transition-colors" style={{ fontFamily: 'var(--font-arcade)' }}>
+            Later
+          </button>
         </div>
       </div>
     </div>
