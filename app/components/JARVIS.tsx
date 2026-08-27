@@ -148,34 +148,55 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
       if (speaking) stopSpeakingRef();
       handleSend(transcript);
     };
+    const permissionDeniedRef = { current: false };
     rec.onerror = (ev: SpeechRecognitionErrorEvent) => {
       setListening(false);
-      if (ev.error === 'not-allowed') {
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: 'jarvis',
-          text: 'Microphone permission was denied. Please click the 🔒 lock icon in your browser address bar → Microphone → Allow, then click the 🎤 button again.',
-          timestamp: new Date(),
-        }]);
+      if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
+        // STOP continuous mode immediately to prevent spam loop
+        continuousModeRef.current = false;
+        // Only show the message ONCE
+        if (!permissionDeniedRef.current) {
+          permissionDeniedRef.current = true;
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: 'jarvis',
+            text: 'Microphone permission denied. Please go to your browser address bar, click the lock icon, set Microphone to Allow, then refresh the page and click the 🎤 button again.',
+            timestamp: new Date(),
+          }]);
+        }
       } else if (ev.error === 'network') {
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: 'jarvis',
-          text: 'Voice recognition needs internet. Check your connection and try again.',
-          timestamp: new Date(),
-        }]);
-      } else if (continuousModeRef.current && ev.error !== 'aborted') {
-        // Auto-restart for other errors (no-speech, audio-capture, etc.)
+        continuousModeRef.current = false;
+        if (!permissionDeniedRef.current) {
+          permissionDeniedRef.current = true;
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: 'jarvis',
+            text: 'Voice recognition needs internet. Check your connection and try again.',
+            timestamp: new Date(),
+          }]);
+        }
+      } else if (ev.error === 'no-speech') {
+        // Silent — user just didnt say anything, restart quietly
+        if (continuousModeRef.current) {
+          setTimeout(() => {
+            if (continuousModeRef.current) startListening();
+          }, 500);
+        }
+      } else if (ev.error === 'aborted') {
+        // User or code stopped it — do nothing
+      } else if (continuousModeRef.current) {
+        // Other errors — retry once
         setTimeout(() => {
           if (continuousModeRef.current) startListening();
-        }, 500);
+        }, 1000);
       }
     };
     rec.onend = () => {
       setListening(false);
-      if (continuousModeRef.current) {
+      // Only restart if continuous mode is on AND no permission error
+      if (continuousModeRef.current && !permissionDeniedRef.current) {
         setTimeout(() => {
-          if (continuousModeRef.current && !processing) startListening();
+          if (continuousModeRef.current && !permissionDeniedRef.current && !processing) startListening();
         }, 300);
       }
     };
@@ -315,7 +336,13 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
   }, [input, processing, processMessage]);
 
   // ─── Voice toggle (tap to start conversation, tap to stop) ──
+  const micCooldownRef = useRef(false);
   const toggleVoice = useCallback(async () => {
+    // Prevent spam clicking
+    if (micCooldownRef.current) return;
+    micCooldownRef.current = true;
+    setTimeout(() => { micCooldownRef.current = false; }, 2000);
+
     if (!recognitionRef.current) {
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'Voice is not supported in this browser. Try Chrome or Edge for the best experience.', timestamp: new Date() }]);
       return;
@@ -329,7 +356,7 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
     }
     // Stop any ongoing speech first
     stopSpeaking();
-    // Try to start SpeechRecognition directly (it handles its own mic permission)
+    // Try to start SpeechRecognition directly
     try {
       continuousModeRef.current = true;
       recognitionRef.current.start();
@@ -337,20 +364,12 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
     } catch (err: unknown) {
       continuousModeRef.current = false;
       const errStr = String(err);
-      if (errStr.includes('NotAllowedError') || errStr.includes('not-allowed')) {
-        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'Microphone permission denied. Please go to your browser settings, find this site, and allow microphone access. Then refresh the page and try again.', timestamp: new Date() }]);
-      } else if (errStr.includes('NotFoundError') || errStr.includes('no-speech')) {
+      if (errStr.includes('NotAllowedError') || errStr.includes('not-allowed') || errStr.includes('InvalidState')) {
+        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'Microphone permission denied. Please go to your browser address bar, click the lock icon, set Microphone to Allow, then refresh the page.', timestamp: new Date() }]);
+      } else if (errStr.includes('NotFoundError')) {
         setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'No microphone detected. Please connect a microphone and try again.', timestamp: new Date() }]);
       } else {
-        // Unknown error — try requesting getUserMedia first as fallback
-        try {
-          await navigator.mediaDevices.getUserMedia({ audio: true });
-          continuousModeRef.current = true;
-          recognitionRef.current.start();
-          setListening(true);
-        } catch {
-          setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'Could not start voice recognition. Please check your microphone and browser settings, then try again.', timestamp: new Date() }]);
-        }
+        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'Could not start voice. Please refresh the page and try again.', timestamp: new Date() }]);
       }
     }
   }, [listening, stopSpeaking]);
