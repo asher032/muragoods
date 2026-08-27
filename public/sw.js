@@ -1,8 +1,8 @@
 // Muragoods Service Worker v2 — Full PWA with Offline Menu Browsing
-const CACHE_NAME = 'muragoods-v2';
-const CACHE_NAME_STATIC = 'muragoods-static-v2';
-const CACHE_NAME_MENU = 'muragoods-menu-v2';
-const CACHE_NAME_API = 'muragoods-api-v2';
+const CACHE_NAME = 'muragoods-v3';
+const CACHE_NAME_STATIC = 'muragoods-static-v3';
+const CACHE_NAME_MENU = 'muragoods-menu-v3';
+const CACHE_NAME_API = 'muragoods-api-v3';
 
 // Static assets to pre-cache on install
 const PRECACHE_URLS = [
