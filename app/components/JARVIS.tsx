@@ -108,6 +108,24 @@ export function JARVIS({ open, onClose, isFullPage }: { open: boolean; onClose: 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
   useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 400); }, [open]);
 
+  // ─── Auto-request mic after refresh ─────────────────────
+  useEffect(() => {
+    if (!open) return;
+    const shouldRequestMic = sessionStorage.getItem('jarvisRequestMic');
+    if (shouldRequestMic) {
+      sessionStorage.removeItem('jarvisRequestMic');
+      // Small delay to let the page fully render
+      setTimeout(async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          startRecording(stream);
+        } catch {
+          setMicBlocked(true);
+        }
+      }, 500);
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── Stop speaking ──────────────────────────────────────
   const stopSpeakingRef = useCallback(() => {
     if (currentAudioRef.current) { currentAudioRef.current.pause(); currentAudioRef.current = null; }
@@ -426,19 +444,31 @@ export function JARVIS({ open, onClose, isFullPage }: { open: boolean; onClose: 
           <div style={{ margin: '0 16px 10px', padding: '12px 16px', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(255,68,68,0.1), rgba(255,170,0,0.1))', border: '1px solid rgba(255,170,0,0.3)' }}>
             <p style={{ fontSize: '11px', color: '#ffaa00', marginBottom: '8px', fontFamily: 'monospace' }}>🎤 MICROPHONE ACCESS NEEDED</p>
             <p style={{ fontSize: '10px', color: '#ccc', marginBottom: '10px', lineHeight: '1.5' }}>
-              Click the button below to grant microphone access. The browser will show a permission popup — click <strong>Allow</strong>.
+              The browser has mic access blocked. Here's how to fix it:
             </p>
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ fontSize: '10px', color: '#aaa', marginBottom: '10px', lineHeight: '1.8', paddingLeft: '12px' }}>
+              <p>1. Click the <strong style={{ color: '#ffaa00' }}>🔒 lock icon</strong> in the address bar (left of the URL)</p>
+              <p>2. Find <strong style={{ color: '#ffaa00' }}>Microphone</strong> in the list</p>
+              <p>3. Toggle it to <strong style={{ color: '#00ff88' }}>✅ Allow</strong></p>
+              <p>4. Click <strong style={{ color: '#00e5ff' }}>🔄 Refresh & Try Again</strong> below</p>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button onClick={() => {
+                sessionStorage.setItem('jarvisRequestMic', 'true');
+                window.location.reload();
+              }} style={{ padding: '8px 16px', borderRadius: '8px', background: 'rgba(0,229,255,0.2)', border: '1px solid #00e5ff', color: '#00e5ff', fontSize: '10px', cursor: 'pointer', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                🔄 Refresh & Try Again
+              </button>
               <button onClick={async () => {
                 try {
                   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                   startRecording(stream);
                   setMicBlocked(false);
                 } catch {
-                  setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: '❌ Still blocked. Please go to the 🔒 lock icon in your address bar → Microphone → Allow, then refresh the page.', timestamp: new Date() }]);
+                  // Stay on the banner — user needs to toggle in Chrome settings first
                 }
-              }} style={{ padding: '8px 16px', borderRadius: '8px', background: 'rgba(255,170,0,0.2)', border: '1px solid #ffaa00', color: '#ffaa00', fontSize: '10px', cursor: 'pointer', fontFamily: 'monospace', fontWeight: 'bold' }}>
-                🎤 GRANT MICROPHONE ACCESS
+              }} style={{ padding: '8px 16px', borderRadius: '8px', background: 'rgba(255,170,0,0.2)', border: '1px solid #ffaa00', color: '#ffaa00', fontSize: '10px', cursor: 'pointer', fontFamily: 'monospace' }}>
+                🎤 Try Now
               </button>
               <button onClick={() => setMicBlocked(false)} style={{ padding: '8px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#888', fontSize: '10px', cursor: 'pointer' }}>
                 Dismiss
