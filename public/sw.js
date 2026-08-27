@@ -243,11 +243,18 @@ self.addEventListener('push', (event) => {
 
 // ─── Notification Click ────────────────────────────────────────
 self.addEventListener('notificationclick', (event) => {
+  const action = event.action;
   event.notification.close();
-  const url = event.notification.data || '/';
+
+  // Handle notification actions
+  let url = event.notification.data || '/';
+  if (action === 'dismiss') return;
+  if (action === 'view' || action === 'open') {
+    url = event.notification.data || '/';
+  }
 
   event.waitUntil(
-    self.clients.matchAll({ type: 'window' }).then((clientList) => {
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       // Focus existing window if open
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
@@ -258,6 +265,21 @@ self.addEventListener('notificationclick', (event) => {
       }
       // Open new window
       self.clients.openWindow(url);
+    })
+  );
+});
+
+// ─── Push Subscription Management ──────────────────────────────
+self.addEventListener('pushsubscriptionchange', (event) => {
+  // Re-subscribe when subscription expires
+  event.waitUntil(
+    self.registration.pushManager.subscribe(event.oldSubscription.options).then((subscription) => {
+      // Notify the server about the new subscription
+      return fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscription: subscription.toJSON() }),
+      });
     })
   );
 });

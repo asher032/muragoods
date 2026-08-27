@@ -58,6 +58,7 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const micStreamRef = useRef<MediaStream | null>(null);
+  const micStreamRefForStop = useRef<MediaStream | null>(null);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const coreRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -116,7 +117,7 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
   useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 400); }, [open]);
 
-  // ─── Continuous conversation mode ────────────────────────
+  // ─── Voice system (MediaRecorder + Groq Whisper) ────────
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const isRecordingRef = useRef(false);
 
@@ -138,65 +139,7 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
     } catch { return null; }
   }, []);
 
-  const handleRecordingStop = useCallback(async () => {
-    setListening(false);
-    if (audioChunksRef.current.length === 0) return;
-    const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-    audioChunksRef.current = [];
-    if (audioBlob.size < 100) return;
-    setProcessing(true);
-    const text = await transcribeAudio(audioBlob);
-    setProcessing(false);
-    if (text) handleSend(text);
-  }, [transcribeAudio]);
-
-  const stopRecording = useCallback(() => {
-    if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') return;
-    isRecordingRef.current = false;
-    mediaRecorderRef.current.stop();
-    micStreamRef.current?.getTracks().forEach(t => t.stop());
-    micStreamRef.current = null;
-    if (recordingTimerRef.current) { clearTimeout(recordingTimerRef.current); recordingTimerRef.current = null; }
-  }, []);
-
-  const startRecording = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      micStreamRef.current = stream;
-      audioChunksRef.current = [];
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
-      mediaRecorderRef.current = recorder;
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
-      recorder.onstop = () => handleRecordingStop();
-      recorder.start();
-      isRecordingRef.current = true;
-      setListening(true);
-      recordingTimerRef.current = setTimeout(() => { if (isRecordingRef.current) stopRecording(); }, 15000);
-    } catch (err: unknown) {
-      const errStr = String(err);
-      if (errStr.includes('NotAllowedError') || errStr.includes('Permission')) {
-        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'Microphone access denied. Please allow microphone in your browser settings and refresh the page.', timestamp: new Date() }]);
-      } else {
-        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'Could not access microphone. Please check your device and try again.', timestamp: new Date() }]);
-      }
-    }
-  }, [stopRecording, handleRecordingStop]);
-
-  // ─── Mic button handler ─────────────────────────────────
-  const micCooldownRef = useRef(false);
-  const toggleVoice = useCallback(async () => {
-    if (micCooldownRef.current) return;
-    micCooldownRef.current = true;
-    setTimeout(() => { micCooldownRef.current = false; }, 1500);
-    if (isRecordingRef.current) {
-      await stopRecording();
-    } else {
-      stopSpeakingRef();
-      await startRecording();
-    }
-  }, [stopRecording, startRecording, stopSpeakingRef]);
-
-  // ─── ElevenLabs TTS ─────────────────────────────────────
+  // ElevenLabs TTS
   const onSpeechEnd = useCallback(() => {
     setSpeaking(false);
     setCurrentAudio(null);
@@ -219,6 +162,7 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
         await audio.play().catch(onSpeechEnd);
         return;
       }
+      // Fallback to browser TTS
       if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(clean);
@@ -227,79 +171,71 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
         u.onend = onSpeechEnd;
         window.speechSynthesis.speak(u);
       }
-    } catch { setSpeaking(false); }
+    } catch {
+      // Fallback to browser TTS
+      if (window.speechSynthesis) {
+        const u = new SpeechSynthesisUtterance(text.replace(/[*#\n]/g, ' ').replace(/\s+/g, ' ').trim());
+        u.rate = 1.05; u.pitch = 0.9;
+        u.onstart = () => setSpeaking(true);
+        u.onend = onSpeechEnd;
+        window.speechSynthesis.speak(u);
+      }
+    }
   }, [voiceEnabled, onSpeechEnd]);
 
-  const stopSpeaking = useCallback(() => {
-    if (currentAudioRef.current) { currentAudioRef.current.pause(); currentAudioRef.current = null; }
-    window.speechSynthesis?.cancel();
-    setSpeaking(false);
-  }, []);
   // ─── Screen context ─────────────────────────────────────
-  const getScreenContext = useCallback(() => {
-    try {
-      return `Page: ${document.title} (${window.location.pathname})\nContent: ${document.body?.innerText?.substring(0, 800) || ''}`;
-    } catch { return undefined; }
+  const getScreenContext = useCallback((): string => {
+    if (typeof document === 'undefined') return '';
+    const el = document.querySelector('main');
+    if (!el) return '';
+    return el.innerText.substring(0, 2000);
   }, []);
 
   // ─── Process message ────────────────────────────────────
   const processMessage = useCallback(async (text: string) => {
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', text, timestamp: new Date() };
+    setMessages(prev => [...prev, userMsg]);
     setProcessing(true);
-    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', text, timestamp: new Date() }]);
-    setCommandHistory(prev => [{ command: text, result: '', timestamp: new Date().toISOString() }, ...prev].slice(0, 50));
 
     try {
       const screenContext = getScreenContext();
       const res = await fetch('/api/jarvis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, userId, email: userEmail, screenContext }),
+        body: JSON.stringify({ message: text, userId, email: userEmail, screenContext, conversationHistory: messages.slice(-10) }),
       });
-      const result = await res.json();
+      const data = await res.json();
 
-      if (result.success) {
-        const msg: Message = {
-          id: (Date.now() + 1).toString(), role: 'jarvis',
-          text: result.data.response, intent: result.data.intent,
-          action: result.data.action, actionParams: result.data.actionParams,
-          cards: result.data.cards, buttons: result.data.buttons,
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, msg]);
+      const jarvisMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'jarvis',
+        text: data.response || 'I had trouble processing that. Can you try again?',
+        intent: data.intent,
+        action: data.action,
+        actionParams: data.actionParams,
+        cards: data.cards,
+        buttons: data.buttons,
+        timestamp: new Date(),
+      };
 
-        // Speak via ElevenLabs TTS (non-blocking)
-        speak(result.data.response);
+      setMessages(prev => [...prev, jarvisMsg]);
 
-        setCommandHistory(prev => {
-          const u = [...prev];
-          if (u.length > 0) u[0] = { ...u[0], result: result.data.response.substring(0, 200) };
-          return u;
-        });
-
-        // Execute actions — instant, no delay
-        const a = result.data.action;
-        const p = result.data.actionParams;
-        if (a === 'navigate' && p?.path && p.path !== '#') {
-                    setTimeout(() => { router.push(p.path); onClose(); }, 800);
-        } else if (a === 'logout') {
-                    setTimeout(() => { localStorage.removeItem('user'); router.push('/login'); onClose(); }, 800);
-        } else if (a === 'search' && p?.query) {
-                    setTimeout(() => { router.push(`/untold-words?q=${encodeURIComponent(p.query)}`); onClose(); }, 800);
-        } else if (a === 'health-check') {
-          try {
-            const sr = await fetch('/api/jarvis/status');
-            const sd = await sr.json();
-            if (sd.success) setSystemStatus(sd.data);
-          } catch { /* empty */ }
-        } else if (a === 'camera') {
-          setPanel('operator');
-        }
+      // Navigate if needed
+      if (data.action === 'navigate' && data.actionParams?.path) {
+        setTimeout(() => router.push(data.actionParams!.path), 500);
       }
+
+      // Save to command history
+      setCommandHistory(prev => [{ command: text, result: jarvisMsg.text.substring(0, 100), timestamp: new Date().toISOString() }, ...prev].slice(0, 50));
+
+      // Speak response
+      speak(jarvisMsg.text);
     } catch {
-      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'jarvis', text: 'Connection lost. Please try again.', timestamp: new Date() }]);
+      const errMsg: Message = { id: (Date.now() + 1).toString(), role: 'jarvis', text: 'Connection issue. Please try again.', timestamp: new Date() };
+      setMessages(prev => [...prev, errMsg]);
     }
     setProcessing(false);
-  }, [userId, userEmail, getScreenContext, router, onClose, speak]);
+  }, [userId, userEmail, getScreenContext, router, messages, speak]);
 
   const handleSend = useCallback((text?: string) => {
     const msg = (text || input).trim();
@@ -308,7 +244,71 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
     processMessage(msg);
   }, [input, processing, processMessage]);
 
-  // ─── Voice toggle (tap to start conversation, tap to stop) ──
+  // Ref for handleSend to use in voice callbacks
+  const handleSendRef = useRef(handleSend);
+  handleSendRef.current = handleSend;
+
+  const stopRecording = useCallback(() => {
+    if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') return;
+    isRecordingRef.current = false;
+    mediaRecorderRef.current.stop();
+    micStreamRefForStop.current?.getTracks().forEach(t => t.stop());
+    micStreamRefForStop.current = null;
+    if (recordingTimerRef.current) { clearTimeout(recordingTimerRef.current); recordingTimerRef.current = null; }
+  }, []);
+
+  const handleRecordingStop = useCallback(async () => {
+    setListening(false);
+    if (audioChunksRef.current.length === 0) return;
+    const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+    audioChunksRef.current = [];
+    if (audioBlob.size < 100) return;
+    setProcessing(true);
+    const text = await transcribeAudio(audioBlob);
+    setProcessing(false);
+    if (text) handleSendRef.current(text);
+  }, [transcribeAudio]);
+
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micStreamRef.current = stream;
+      micStreamRefForStop.current = stream;
+      audioChunksRef.current = [];
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+      const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      recorder.onstop = () => handleRecordingStop();
+      recorder.start();
+      isRecordingRef.current = true;
+      setListening(true);
+      recordingTimerRef.current = setTimeout(() => { if (isRecordingRef.current) stopRecording(); }, 15000);
+    } catch (err: unknown) {
+      const errStr = String(err);
+      if (errStr.includes('NotAllowedError') || errStr.includes('Permission')) {
+        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: '🎤 Microphone access needed! Please click the 🔒 lock icon in your browser address bar → Microphone → Allow, then try again.', timestamp: new Date() }]);
+      } else if (errStr.includes('NotFoundError')) {
+        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'No microphone found. Please connect a microphone and try again.', timestamp: new Date() }]);
+      } else {
+        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'Could not start recording. Try typing your command instead!', timestamp: new Date() }]);
+      }
+    }
+  }, [stopRecording, handleRecordingStop]);
+
+  // ─── Mic button handler ─────────────────────────────────
+  const micCooldownRef = useRef(false);
+  const toggleVoice = useCallback(async () => {
+    if (micCooldownRef.current) return;
+    micCooldownRef.current = true;
+    setTimeout(() => { micCooldownRef.current = false; }, 1500);
+    if (isRecordingRef.current) {
+      await stopRecording();
+    } else {
+      stopSpeakingRef();
+      await startRecording();
+    }
+  }, [stopRecording, startRecording, stopSpeakingRef]);
 
   // ─── Camera ─────────────────────────────────────────────
   const startCamera = useCallback(async () => {
@@ -362,26 +362,28 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
       const res = await fetch('/api/jarvis/code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: userEmail, filePath: selectedFile, instruction: editInstruction }),
+        body: JSON.stringify({ action: 'edit', email: userEmail, path: selectedFile, instruction: editInstruction }),
       });
       const data = await res.json();
       if (data.success) {
-        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: `Code updated: ${data.data.explanation}. ${data.data.linesChanged} lines written.`, timestamp: new Date() }]);
+        setFileContent(data.data.content);
         setEditInstruction('');
-        loadFileContent(selectedFile);
+        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: `Updated ${selectedFile} successfully.`, timestamp: new Date() }]);
       } else {
         setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: `Edit failed: ${data.error}`, timestamp: new Date() }]);
       }
-    } catch {
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'Could not connect to code editing API.', timestamp: new Date() }]);
-    }
+    } catch { /* empty */ }
     setEditLoading(false);
-  }, [selectedFile, editInstruction, userEmail, loadFileContent]);
+  }, [selectedFile, editInstruction, userEmail]);
 
   // ─── Management ─────────────────────────────────────────
   const loadSiteStats = useCallback(async () => {
     try {
-      const res = await fetch(`/api/jarvis/manage?action=site-stats&email=${userEmail}`);
+      const res = await fetch(`/api/jarvis/manage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'site-stats', email: userEmail }),
+      });
       const data = await res.json();
       if (data.success) setSiteStats(data.data);
     } catch { /* empty */ }
@@ -389,75 +391,58 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
 
   const loadUsers = useCallback(async () => {
     try {
-      const res = await fetch('/api/jarvis/manage', {
+      const res = await fetch(`/api/jarvis/manage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: userEmail, action: 'list-users' }),
+        body: JSON.stringify({ action: 'list-users', email: userEmail }),
       });
       const data = await res.json();
       if (data.success) setUserList(data.data.users);
     } catch { /* empty */ }
   }, [userEmail]);
 
-  // ─── Memory delete ──────────────────────────────────────
-  const deleteMemory = useCallback(async (id: string) => {
-    if (!userId) return;
-    await fetch(`/api/jarvis/memory?userId=${userId}&id=${id}`, { method: 'DELETE' });
-    setMemories(prev => prev.filter(m => m._id !== id));
+  const loadMemories = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/jarvis/memory?userId=${userId || 'anonymous'}`);
+      const data = await res.json();
+      if (data.success) setMemories(data.memories || []);
+    } catch { /* empty */ }
   }, [userId]);
 
-  // ─── Action handler ─────────────────────────────────────
-  const handleAction = useCallback((action: string, params?: Record<string, string>) => {
-    if (action === 'navigate' && params?.path) { router.push(params.path); onClose(); }
-    else if (action === 'camera') { setPanel('operator'); }
-    else if (action === 'upload-image') { fileInputRef.current?.click(); }
-    else if (action === 'health-check') { processMessage('Run health check'); }
-  }, [router, onClose, processMessage]);
-
-  // ─── Render markdown-lite ───────────────────────────────
-  const renderText = useCallback((text: string) => {
-    return text.split('\n').map((line, i) => {
-      if (line.startsWith('```')) return null;
-      const parts = line.split(/(\*\*[^*]+\*\*)/g);
-      return (
-        <p key={i} style={{ margin: '4px 0', lineHeight: 1.6, fontSize: '13px' }}>
-          {parts.map((p, j) => {
-            if (p.startsWith('**') && p.endsWith('**')) {
-              return <strong key={j} style={{ color: '#00e5ff' }}>{p.slice(2, -2)}</strong>;
-            }
-            return <span key={j}>{p}</span>;
-          })}
-        </p>
-      );
-    });
-  }, []);
-
-  // ─── Reset chat ────────────────────────────────────────
+  // ─── Reset chat ─────────────────────────────────────────
   const resetChat = useCallback(() => {
     setMessages([]);
     setCommandHistory([]);
-    setMemories([]);
-    setSystemStatus(null);
-    // Re-add welcome message
     const h = new Date().getHours();
     const g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-    setTimeout(() => {
-      setMessages([{
-        id: 'w', role: 'jarvis',
-        text: `${g}! Chat cleared. What can I help with?`,
-        intent: 'INFORMATION', timestamp: new Date(),
-      }]);
-    }, 100);
+    setMessages([{
+      id: 'w2', role: 'jarvis',
+      text: `${g}, Commander. What can I help you with?`,
+      intent: 'INFORMATION', timestamp: new Date(),
+    }]);
   }, []);
 
-  // ─── Initialize code panel ──────────────────────────────
+  // ─── Panel effects ──────────────────────────────────────
   useEffect(() => {
+    if (!open) return;
+    if (open && panel === 'chat' && messages.length <= 1) { /* already handled */ }
+    if (open && panel === 'memory') loadMemories();
     if (open && panel === 'code' && isAdmin) loadCodeFiles();
     if (open && panel === 'manage' && isAdmin) { loadSiteStats(); loadUsers(); }
-    if (open && panel === 'memory' && userId) {
-      fetch(`/api/jarvis/memory?userId=${userId}`).then(r => r.json()).then(d => { if (d.success) setMemories(d.data); }).catch(() => {});
-    }
-  }, [open, panel, isAdmin, userId, loadCodeFiles, loadSiteStats, loadUsers]);
+  }, [open, panel, isAdmin]);
+
+  // ─── Keyboard shortcut ──────────────────────────────────
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+        e.preventDefault();
+        if (open) onClose(); else onClose(); // toggle handled by provider
+      }
+      if (e.key === 'Escape' && open) onClose();
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -465,501 +450,185 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
   const orbColor = listening ? '#ff4444' : speaking ? '#00ff88' : processing ? '#ffaa00' : '#00e5ff';
 
   return (
-    <>
-      <style jsx global>{`
-        @keyframes jarvis-scan { from { transform: translateY(-100%); } to { transform: translateY(100%); } }
-        @keyframes jarvis-pulse { 0%, 100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(1.08); opacity: 1; } }
-        @keyframes jarvis-orbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes jarvis-fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes jarvis-glow { 0%, 100% { box-shadow: 0 0 20px rgba(0,229,255,0.2); } 50% { box-shadow: 0 0 40px rgba(0,229,255,0.4); } }
-        @keyframes jarvis-wave { 0%, 100% { height: 4px; } 50% { height: 20px; } }
-      `}</style>
-
-      <div style={{
-        position: 'fixed', inset: 0, zIndex: 9999,
-        background: 'radial-gradient(ellipse at center, rgba(0,10,30,0.97) 0%, rgba(0,0,0,0.99) 100%)',
-        display: 'flex', flexDirection: 'column',
-        animation: 'jarvis-fade-in 0.4s ease-out',
-        fontFamily: "'Courier New', monospace",
-      }}>
-        {/* ─── Top Bar ─────────────────────────────────── */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '12px 20px', borderBottom: '1px solid rgba(0,229,255,0.15)',
-          background: 'rgba(0,10,20,0.8)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#00ff88', boxShadow: '0 0 8px #00ff88' }} />
-            <span style={{ color: '#00e5ff', fontSize: 14, letterSpacing: '0.2em', fontWeight: 600 }}>
-              J.A.R.V.I.S
-            </span>
-            <span style={{ color: 'rgba(0,229,255,0.4)', fontSize: 10, letterSpacing: '0.1em' }}>v4.0</span>
+    <div className="jarvis-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="jarvis-panel" style={{ position: 'fixed', bottom: 0, right: 0, width: '100%', height: '100%', maxWidth: '480px', maxHeight: '100vh', zIndex: 9999, display: 'flex', flexDirection: 'column', background: 'linear-gradient(180deg, #0a0e1a 0%, #0d1220 50%, #111827 100%)', borderLeft: '1px solid rgba(0,229,255,0.15)', boxShadow: '-10px 0 40px rgba(0,0,0,0.5)', fontFamily: 'system-ui, -apple-system, sans-serif', color: '#e0e0e0', overflow: 'hidden' }}>
+        {/* ─── Top Bar ────────────────────────────────── */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid rgba(0,229,255,0.1)', background: 'rgba(0,0,0,0.3)', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: orbColor, boxShadow: `0 0 8px ${orbColor}` }} />
+            <span style={{ fontFamily: 'monospace', fontSize: '11px', color: orbColor, letterSpacing: '0.1em' }}>J.A.R.V.I.S</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <span style={{ color: 'rgba(0,229,255,0.5)', fontSize: 11 }}>{currentTime}</span>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {(['chat', 'memory', 'history', 'privacy', 'code', 'manage'] as Panel[]).map(p => (
-                <button key={p} onClick={() => setPanel(p)} style={{
-                  padding: '4px 10px', borderRadius: 4, border: `1px solid ${panel === p ? '#00e5ff' : 'rgba(0,229,255,0.15)'}`,
-                  background: panel === p ? 'rgba(0,229,255,0.15)' : 'transparent',
-                  color: panel === p ? '#00e5ff' : 'rgba(0,229,255,0.4)', fontSize: 10, cursor: 'pointer',
-                  letterSpacing: '0.1em', textTransform: 'uppercase',
-                }}>
-                  {p === 'chat' ? '💬' : p === 'memory' ? '🧠' : p === 'history' ? '📜' : p === 'privacy' ? '🔒' : p === 'code' ? '💻' : '⚙️'}
-                </button>
-              ))}
-            </div>
-            <button onClick={resetChat} title="Reset Chat" style={{
-              width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(255,170,0,0.3)',
-              background: 'rgba(255,170,0,0.1)', color: '#ffaa00', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12,
-            }}>↺</button>
-            <button onClick={onClose} style={{
-              width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(255,68,68,0.3)',
-              background: 'rgba(255,68,68,0.1)', color: '#ff4444', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14,
-            }}>×</button>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <button onClick={resetChat} style={{ padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,200,0,0.1)', border: '1px solid rgba(255,200,0,0.2)', color: '#ffc800', fontSize: '11px', cursor: 'pointer' }} title="Reset Chat">↺</button>
+            <button onClick={() => setPanel('chat')} style={{ padding: '4px 8px', borderRadius: '6px', background: panel === 'chat' ? 'rgba(0,229,255,0.15)' : 'transparent', border: '1px solid rgba(0,229,255,0.2)', color: '#00e5ff', fontSize: '11px', cursor: 'pointer' }}>💬</button>
+            <button onClick={() => setPanel('memory')} style={{ padding: '4px 8px', borderRadius: '6px', background: panel === 'memory' ? 'rgba(0,229,255,0.15)' : 'transparent', border: '1px solid rgba(0,229,255,0.2)', color: '#00e5ff', fontSize: '11px', cursor: 'pointer' }}>🧠</button>
+            {isAdmin && <button onClick={() => setPanel('code')} style={{ padding: '4px 8px', borderRadius: '6px', background: panel === 'code' ? 'rgba(0,255,136,0.15)' : 'transparent', border: '1px solid rgba(0,255,136,0.2)', color: '#00ff88', fontSize: '11px', cursor: 'pointer' }}>💻</button>}
+            {isAdmin && <button onClick={() => setPanel('manage')} style={{ padding: '4px 8px', borderRadius: '6px', background: panel === 'manage' ? 'rgba(255,170,0,0.15)' : 'transparent', border: '1px solid rgba(255,170,0,0.2)', color: '#ffaa00', fontSize: '11px', cursor: 'pointer' }}>⚙️</button>}
+            <button onClick={onClose} style={{ padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,68,68,0.1)', border: '1px solid rgba(255,68,68,0.2)', color: '#ff4444', fontSize: '11px', cursor: 'pointer' }}>✕</button>
           </div>
         </div>
 
-        {/* ─── Main Content ────────────────────────────── */}
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          {/* ─── Left: AI Core + Voice ──────────────────── */}
-          <div style={{
-            width: 200, display: 'flex', flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', borderRight: '1px solid rgba(0,229,255,0.1)',
-            background: 'rgba(0,5,15,0.5)', padding: 20,
-          }}>
-            {/* Orb */}
-            <div ref={coreRef} onClick={toggleVoice} style={{
-              width: 120, height: 120, borderRadius: '50%', cursor: 'pointer',
-              position: 'relative', marginBottom: 20,
-            }}>
-              {/* Outer ring */}
-              <div style={{
-                position: 'absolute', inset: -8, borderRadius: '50%',
-                border: `2px solid ${orbColor}33`,
-                animation: 'jarvis-orbit 8s linear infinite',
-              }} />
-              {/* Orbit ring */}
-              <div style={{
-                position: 'absolute', inset: -16, borderRadius: '50%',
-                border: `1px dashed ${orbColor}22`,
-                animation: 'jarvis-orbit 15s linear infinite reverse',
-              }} />
-              {/* Core */}
-              <div style={{
-                position: 'absolute', inset: 0, borderRadius: '50%',
-                background: `radial-gradient(circle at ${50 + mousePos.x * 20}% ${50 + mousePos.y * 20}%, ${orbColor}, ${orbColor}88, #001a33)`,
-                boxShadow: `0 0 30px ${orbColor}66, 0 0 60px ${orbColor}22, inset 0 0 20px rgba(255,255,255,0.1)`,
-                animation: orbState ? 'jarvis-pulse 1s ease-in-out infinite' : 'jarvis-pulse 3s ease-in-out infinite',
-                transition: 'background 0.3s, box-shadow 0.3s',
-              }} />
-              {/* Center dot */}
-              <div style={{
-                position: 'absolute', inset: '40%', borderRadius: '50%',
-                background: `radial-gradient(circle, white, ${orbColor})`,
-                opacity: orbState ? 1 : 0.6,
-              }} />
-              {/* Particles */}
-              {[0, 1, 2, 3].map(i => (
-                <div key={i} style={{
-                  position: 'absolute',
-                  top: `${15 + Math.sin(i * 1.5) * 35}%`,
-                  left: `${15 + Math.cos(i * 1.5) * 35}%`,
-                  width: 3, height: 3, borderRadius: '50%',
-                  background: orbColor,
-                  opacity: 0.4 + (i * 0.15),
-                  animation: `jarvis-pulse ${2 + i * 0.5}s ease-in-out infinite ${i * 0.3}s`,
-                }} />
-              ))}
-            </div>
+        {/* ─── Status Bar ─────────────────────────────── */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.2)', flexShrink: 0 }}>
+          <span style={{ fontFamily: 'monospace', fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>{currentTime}</span>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <span style={{ fontFamily: 'monospace', fontSize: '9px', color: orbColor }}>{orbState ? orbState.toUpperCase() : 'STANDBY'}</span>
+            <span style={{ fontFamily: 'monospace', fontSize: '9px', color: isAdmin ? '#00ff88' : '#ffaa00' }}>{isAdmin ? 'ADMIN ACCESS' : 'USER MODE'}</span>
+          </div>
+        </div>
 
-            {/* Status */}
-            <div style={{ textAlign: 'center', marginBottom: 16 }}>
-              <div style={{ color: orbColor, fontSize: 11, letterSpacing: '0.15em', marginBottom: 4 }}>
-                {listening ? '🔴 LISTENING' : speaking ? '🟢 SPEAKING' : processing ? '🟡 THINKING' : '🔵 STANDBY'}
-              </div>
-              <div style={{ color: 'rgba(0,229,255,0.3)', fontSize: 9, letterSpacing: '0.1em' }}>
-                {isAdmin ? 'ADMIN ACCESS' : 'USER MODE'}
-              </div>
-            </div>
-
-            {/* Voice button */}
-            <button onClick={toggleVoice} style={{
-              width: 48, height: 48, borderRadius: '50%',
-              border: `2px solid ${listening ? '#ff4444' : '#00e5ff'}`,
-              background: listening ? 'rgba(255,68,68,0.2)' : 'rgba(0,229,255,0.1)',
-              color: listening ? '#ff4444' : '#00e5ff',
-              cursor: 'pointer', fontSize: 20,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              animation: listening ? 'jarvis-pulse 1s ease-in-out infinite' : 'none',
-            }}>
-              🎤
-            </button>
-            <span style={{ color: 'rgba(0,229,255,0.3)', fontSize: 9, marginTop: 6 }}>
-              {listening ? 'Tap to stop' : 'Tap to speak'}
+        {/* ─── Core Animation ──────────────────────────── */}
+        <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', padding: '16px', flexShrink: 0 }}>
+          <div ref={coreRef} onClick={toggleVoice} style={{ width: '80px', height: '80px', borderRadius: '50%', background: `radial-gradient(circle at ${50 + mousePos.x * 20}% ${50 + mousePos.y * 20}%, ${orbColor}, ${orbColor}44, transparent)`, boxShadow: `0 0 40px ${orbColor}44, 0 0 80px ${orbColor}22`, cursor: 'pointer', transition: 'all 0.3s', animation: listening ? 'jarvis-pulse 1s ease-in-out infinite' : speaking ? 'jarvis-pulse 0.5s ease-in-out infinite' : processing ? 'jarvis-pulse 1.5s ease-in-out infinite' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: '24px' }}>{listening ? '🎤' : speaking ? '🔊' : processing ? '⏳' : '🤖'}</span>
+          </div>
+          <div style={{ position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontFamily: 'monospace', fontSize: '9px', color: orbColor }}>
+              {listening ? '🔴 LISTENING' : speaking ? '🟢 SPEAKING' : processing ? '🟡 THINKING' : '🔵 STANDBY'}
             </span>
+          </div>
+        </div>
 
-            {/* Quick actions */}
-            <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
-              {[
-                { label: '🍽️ Menu', cmd: 'Open the menu' },
-                { label: '🪙 Points', cmd: 'Check my balance' },
-                { label: '✉️ Letters', cmd: 'Open untold words' },
-                { label: '🎁 Mystery Box', cmd: 'Open mystery box' },
-                { label: '📊 Status', cmd: 'Run health check' },
-              ].map(q => (
-                <button key={q.label} onClick={() => processMessage(q.cmd)} style={{
-                  padding: '6px 10px', borderRadius: 4,
-                  border: '1px solid rgba(0,229,255,0.1)', background: 'rgba(0,229,255,0.05)',
-                  color: 'rgba(0,229,255,0.6)', fontSize: 10, cursor: 'pointer',
-                  textAlign: 'left', transition: 'all 0.2s',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = '#00e5ff44'; e.currentTarget.style.color = '#00e5ff'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(0,229,255,0.1)'; e.currentTarget.style.color = 'rgba(0,229,255,0.6)'; }}
-                >{q.label}</button>
-              ))}
+        {/* ─── Quick Actions ──────────────────────────── */}
+        <div style={{ display: 'flex', gap: '6px', padding: '0 16px 10px', justifyContent: 'center', flexWrap: 'wrap', flexShrink: 0 }}>
+          <button onClick={toggleVoice} style={{ padding: '6px 12px', borderRadius: '8px', border: `1px solid ${listening ? '#ff4444' : 'rgba(0,229,255,0.2)'}`, background: listening ? 'rgba(255,68,68,0.2)' : 'rgba(0,229,255,0.1)', color: listening ? '#ff4444' : '#00e5ff', fontSize: '10px', cursor: 'pointer', fontFamily: 'monospace', animation: listening ? 'jarvis-pulse 1s ease-in-out infinite' : 'none' }}>
+            🎤 {listening ? 'Stop' : 'Speak'}
+          </button>
+          <button onClick={() => { stopSpeakingRef(); }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: '#aaa', fontSize: '10px', cursor: 'pointer' }}>
+            🔇 Mute
+          </button>
+          {isAdmin && <button onClick={startCamera} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(0,255,136,0.2)', background: 'rgba(0,255,136,0.1)', color: '#00ff88', fontSize: '10px', cursor: 'pointer' }}>📷 Camera</button>}
+          <button onClick={() => setVoiceEnabled(!voiceEnabled)} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(255,200,0,0.2)', background: voiceEnabled ? 'rgba(255,200,0,0.1)' : 'rgba(255,255,255,0.05)', color: voiceEnabled ? '#ffc800' : '#666', fontSize: '10px', cursor: 'pointer' }}>
+            {voiceEnabled ? '🔊 Voice On' : '🔇 Voice Off'}
+          </button>
+        </div>
+
+        {/* ─── Camera View ──────────────────────────────── */}
+        {cameraStream && (
+          <div style={{ position: 'relative', margin: '0 16px 10px', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(0,255,136,0.3)' }}>
+            <video ref={videoRef} autoPlay playsInline style={{ width: '100%', borderRadius: '12px' }} />
+            <canvas ref={canvasRef} style={{ display: 'none' }} />
+            <div style={{ position: 'absolute', bottom: '10px', left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: '8px' }}>
+              <button onClick={capturePhoto} style={{ padding: '8px 16px', borderRadius: '8px', background: 'rgba(0,255,136,0.2)', border: '1px solid #00ff88', color: '#00ff88', cursor: 'pointer' }}>📸 Capture</button>
+              <button onClick={stopCamera} style={{ padding: '8px 16px', borderRadius: '8px', background: 'rgba(255,68,68,0.2)', border: '1px solid #ff4444', color: '#ff4444', cursor: 'pointer' }}>✕ Close</button>
             </div>
           </div>
+        )}
 
-          {/* ─── Right: Panel Content ───────────────────── */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            {panel === 'chat' && (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                {/* Messages */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
-                  {messages.map(msg => (
-                    <div key={msg.id} style={{
-                      marginBottom: 12, animation: 'jarvis-fade-in 0.3s ease-out',
-                      display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                    }}>
-                      <div style={{
-                        maxWidth: '80%', padding: '10px 14px', borderRadius: 8,
-                        background: msg.role === 'user' ? 'rgba(0,229,255,0.1)' : 'rgba(0,20,40,0.6)',
-                        border: `1px solid ${msg.role === 'user' ? 'rgba(0,229,255,0.2)' : 'rgba(0,229,255,0.08)'}`,
-                      }}>
-                        <div style={{ color: msg.role === 'user' ? '#00e5ff' : 'rgba(255,255,255,0.85)', fontSize: 13, lineHeight: 1.5 }}>
-                          {renderText(msg.text)}
-                        </div>
-                        {/* Action buttons */}
-                        {msg.buttons && msg.buttons.length > 0 && (
-                          <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                            {msg.buttons.map((b, i) => (
-                              <button key={i} onClick={() => handleAction(b.action, b.actionParams)} style={{
-                                padding: '4px 10px', borderRadius: 4,
-                                border: '1px solid rgba(0,229,255,0.3)', background: 'rgba(0,229,255,0.1)',
-                                color: '#00e5ff', fontSize: 11, cursor: 'pointer',
-                              }}>{b.label}</button>
-                            ))}
-                          </div>
-                        )}
-                        {/* Cards */}
-                        {msg.cards && msg.cards.length > 0 && (
-                          <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            {msg.cards.map((c, i) => (
-                              <div key={i} onClick={() => c.action && handleAction(c.action, c.actionParams)} style={{
-                                padding: '8px 12px', borderRadius: 6, cursor: c.action ? 'pointer' : 'default',
-                                border: '1px solid rgba(0,229,255,0.15)', background: 'rgba(0,229,255,0.05)',
-                              }}>
-                                <div style={{ color: '#00e5ff', fontSize: 12, fontWeight: 600 }}>{c.title}</div>
-                                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, marginTop: 2 }}>{c.description}</div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {processing && (
-                    <div style={{ display: 'flex', gap: 4, padding: '8px 14px' }}>
-                      {[0, 1, 2].map(i => (
-                        <div key={i} style={{
-                          width: 6, height: 6, borderRadius: '50%', background: '#00e5ff',
-                          animation: `jarvis-wave 1s ease-in-out infinite ${i * 0.15}s`,
-                        }} />
+        {/* ─── Messages ────────────────────────────────── */}
+        {panel === 'chat' && (
+          <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px', display: 'flex', flexDirection: 'column', gap: '12px', minHeight: 0 }}>
+            {messages.map(msg => (
+              <div key={msg.id} style={{ display: 'flex', flexDirection: msg.role === 'user' ? 'row-reverse' : 'row', gap: '8px' }}>
+                <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: msg.role === 'user' ? 'rgba(255,200,0,0.15)' : `rgba(0,229,255,0.15)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '12px' }}>
+                  {msg.role === 'user' ? '👤' : '🤖'}
+                </div>
+                <div style={{ maxWidth: '80%', padding: '10px 14px', borderRadius: msg.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px', background: msg.role === 'user' ? 'rgba(255,200,0,0.08)' : 'rgba(0,229,255,0.06)', border: `1px solid ${msg.role === 'user' ? 'rgba(255,200,0,0.15)' : 'rgba(0,229,255,0.1)'}` }}>
+                  <p style={{ fontSize: '13px', lineHeight: '1.6', color: '#e0e0e0', margin: 0, whiteSpace: 'pre-wrap' }}>{msg.text}</p>
+                  {msg.buttons && msg.buttons.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+                      {msg.buttons.map((btn, i) => (
+                        <button key={i} onClick={() => { if (btn.action === 'navigate' && btn.actionParams?.path) router.push(btn.actionParams.path); else handleSend(btn.label); }} style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(0,229,255,0.3)', background: 'rgba(0,229,255,0.1)', color: '#00e5ff', fontSize: '10px', cursor: 'pointer' }}>
+                          {btn.label}
+                        </button>
                       ))}
                     </div>
                   )}
-                  <div ref={messagesEndRef} />
                 </div>
-
-                {/* Input */}
-                <div style={{
-                  padding: '12px 20px', borderTop: '1px solid rgba(0,229,255,0.1)',
-                  display: 'flex', gap: 10, alignItems: 'center',
-                  background: 'rgba(0,10,20,0.5)',
-                }}>
-                  <input
-                    ref={inputRef}
-                    value={input}
-                    onChange={e => setInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleSend()}
-                    placeholder={listening ? 'Listening...' : 'Type a command or question...'}
-                    style={{
-                      flex: 1, padding: '10px 14px', borderRadius: 6,
-                      border: `1px solid ${listening ? '#ff4444' : 'rgba(0,229,255,0.2)'}`,
-                      background: 'rgba(0,10,20,0.6)', color: 'white', fontSize: 13,
-                      outline: 'none', fontFamily: "'Courier New', monospace",
-                    }}
-                  />
-                  {speaking && (
-                    <button onClick={stopSpeaking} style={{
-                      width: 36, height: 36, borderRadius: '50%', border: '1px solid #ff4444',
-                      background: 'rgba(255,68,68,0.1)', color: '#ff4444', cursor: 'pointer', fontSize: 14,
-                    }}>⏹</button>
-                  )}
-                  <button onClick={() => handleSend()} disabled={!input.trim() || processing} style={{
-                    width: 36, height: 36, borderRadius: '50%',
-                    border: '1px solid #00e5ff', background: 'rgba(0,229,255,0.15)',
-                    color: '#00e5ff', cursor: 'pointer', fontSize: 16,
-                    opacity: (!input.trim() || processing) ? 0.3 : 1,
-                  }}>→</button>
-                  <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }}
-                    onChange={e => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = ev => { setUploadedImage(ev.target?.result as string); processMessage('Analyze this image'); };
-                      reader.readAsDataURL(file);
-                    }} />
+              </div>
+            ))}
+            {processing && (
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(0,229,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>🤖</div>
+                <div style={{ padding: '10px 14px', borderRadius: '12px 12px 12px 2px', background: 'rgba(0,229,255,0.06)', border: '1px solid rgba(0,229,255,0.1)' }}>
+                  <span style={{ fontSize: '12px', color: '#00e5ff', fontFamily: 'monospace' }}>Thinking{processing ? '...' : ''}</span>
                 </div>
               </div>
             )}
+            <div ref={messagesEndRef} />
+          </div>
+        )}
 
-            {/* ─── Memory Panel ──────────────────────────── */}
-            {panel === 'memory' && (
-              <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-                <h3 style={{ color: '#00e5ff', fontSize: 14, marginBottom: 16, letterSpacing: '0.1em' }}>🧠 MEMORY CENTER</h3>
-                {memories.length === 0 ? (
-                  <p style={{ color: 'rgba(0,229,255,0.3)', fontSize: 12 }}>No memories stored. Tell me something to remember.</p>
-                ) : memories.map(m => (
-                  <div key={m._id} style={{
-                    padding: 10, marginBottom: 8, borderRadius: 6,
-                    border: '1px solid rgba(0,229,255,0.1)', background: 'rgba(0,229,255,0.03)',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  }}>
-                    <div>
-                      <div style={{ color: '#00e5ff', fontSize: 12, fontWeight: 600 }}>{m.key}</div>
-                      <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>{m.value}</div>
-                    </div>
-                    <button onClick={() => deleteMemory(m._id)} style={{
-                      padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(255,68,68,0.2)',
-                      background: 'transparent', color: '#ff4444', cursor: 'pointer', fontSize: 10,
-                    }}>✕</button>
-                  </div>
-                ))}
+        {/* ─── Memory Panel ────────────────────────────── */}
+        {panel === 'memory' && (
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+            <h3 style={{ fontFamily: 'monospace', fontSize: '12px', color: '#00e5ff', marginBottom: '12px' }}>🧠 MEMORY</h3>
+            {memories.length === 0 ? (
+              <p style={{ fontSize: '11px', color: '#666' }}>No memories saved yet. I&apos;ll remember things you tell me!</p>
+            ) : memories.map(m => (
+              <div key={m._id} style={{ padding: '8px 12px', borderRadius: '8px', background: 'rgba(0,229,255,0.05)', border: '1px solid rgba(0,229,255,0.1)', marginBottom: '8px' }}>
+                <p style={{ fontSize: '11px', color: '#00e5ff', fontFamily: 'monospace' }}>{m.key}</p>
+                <p style={{ fontSize: '12px', color: '#ccc', marginTop: '4px' }}>{m.value}</p>
               </div>
-            )}
+            ))}
+          </div>
+        )}
 
-            {/* ─── History Panel ─────────────────────────── */}
-            {panel === 'history' && (
-              <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-                <h3 style={{ color: '#00e5ff', fontSize: 14, marginBottom: 16, letterSpacing: '0.1em' }}>📜 COMMAND HISTORY</h3>
-                {commandHistory.length === 0 ? (
-                  <p style={{ color: 'rgba(0,229,255,0.3)', fontSize: 12 }}>No commands yet.</p>
-                ) : commandHistory.map((c, i) => (
-                  <div key={i} style={{
-                    padding: 10, marginBottom: 8, borderRadius: 6,
-                    border: '1px solid rgba(0,229,255,0.08)', background: 'rgba(0,229,255,0.02)',
-                  }}>
-                    <div style={{ color: '#00e5ff', fontSize: 12, fontWeight: 600 }}>{c.command}</div>
-                    {c.result && <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, marginTop: 4 }}>{c.result}</div>}
-                    <div style={{ color: 'rgba(0,229,255,0.2)', fontSize: 9, marginTop: 4 }}>
-                      {new Date(c.timestamp).toLocaleTimeString()}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* ─── Privacy Panel ─────────────────────────── */}
-            {panel === 'privacy' && (
-              <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-                <h3 style={{ color: '#00e5ff', fontSize: 14, marginBottom: 16, letterSpacing: '0.1em' }}>🔒 PRIVACY CENTER</h3>
-                {[
-                  { label: 'Voice Output', value: voiceEnabled, toggle: () => setVoiceEnabled(!voiceEnabled) },
-                  { label: 'Memory', value: true, toggle: () => {} },
-                  { label: 'Screen Context', value: true, toggle: () => {} },
-                ].map(s => (
-                  <div key={s.label} style={{
-                    padding: 12, marginBottom: 8, borderRadius: 6,
-                    border: '1px solid rgba(0,229,255,0.1)', display: 'flex',
-                    justifyContent: 'space-between', alignItems: 'center',
-                  }}>
-                    <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>{s.label}</span>
-                    <button onClick={s.toggle} style={{
-                      padding: '4px 12px', borderRadius: 4, border: 'none',
-                      background: s.value ? 'rgba(0,255,136,0.2)' : 'rgba(255,68,68,0.2)',
-                      color: s.value ? '#00ff88' : '#ff4444', cursor: 'pointer', fontSize: 10,
-                    }}>{s.value ? 'ON' : 'OFF'}</button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* ─── Code Panel (Admin only) ──────────────── */}
-            {panel === 'code' && isAdmin && (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                <div style={{ padding: '12px 20px', borderBottom: '1px solid rgba(0,229,255,0.1)' }}>
-                  <h3 style={{ color: '#00e5ff', fontSize: 14, letterSpacing: '0.1em', margin: 0 }}>💻 CODE EDITOR</h3>
-                </div>
-                <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-                  {/* File tree */}
-                  <div style={{ width: 220, overflowY: 'auto', borderRight: '1px solid rgba(0,229,255,0.08)', padding: 10 }}>
-                    <button onClick={() => loadCodeFiles()} style={{
-                      width: '100%', padding: 6, marginBottom: 8, borderRadius: 4,
-                      border: '1px solid rgba(0,229,255,0.2)', background: 'rgba(0,229,255,0.05)',
-                      color: '#00e5ff', cursor: 'pointer', fontSize: 10,
-                    }}>🔄 Refresh</button>
-                    {codeFiles.map(f => (
-                      <div key={f.path} onClick={() => !f.isDirectory && loadFileContent(f.path)} style={{
-                        padding: '4px 8px', marginBottom: 2, borderRadius: 4, cursor: f.isDirectory ? 'default' : 'pointer',
-                        background: selectedFile === f.path ? 'rgba(0,229,255,0.15)' : 'transparent',
-                        color: f.isDirectory ? '#ffaa00' : selectedFile === f.path ? '#00e5ff' : 'rgba(255,255,255,0.5)',
-                        fontSize: 11, fontFamily: 'monospace',
-                      }}>
-                        {f.isDirectory ? '📁' : '📄'} {f.name}
-                      </div>
-                    ))}
-                  </div>
-                  {/* Editor */}
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    {selectedFile && (
-                      <div style={{ padding: '8px 12px', borderBottom: '1px solid rgba(0,229,255,0.08)', color: '#00e5ff', fontSize: 11, fontFamily: 'monospace' }}>
-                        📄 {selectedFile}
-                      </div>
-                    )}
-                    <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
-                      <pre style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontFamily: 'monospace', whiteSpace: 'pre-wrap', margin: 0 }}>
-                        {fileContent || 'Select a file to view its contents.'}
-                      </pre>
-                    </div>
-                    {selectedFile && (
-                      <div style={{ padding: 12, borderTop: '1px solid rgba(0,229,255,0.1)' }}>
-                        <input value={editInstruction} onChange={e => setEditInstruction(e.target.value)}
-                          placeholder="Describe the change you want..."
-                          onKeyDown={e => e.key === 'Enter' && applyCodeEdit()}
-                          style={{
-                            width: '100%', padding: 8, borderRadius: 4,
-                            border: '1px solid rgba(0,229,255,0.2)', background: 'rgba(0,10,20,0.6)',
-                            color: 'white', fontSize: 12, outline: 'none', marginBottom: 8,
-                          }} />
-                        <button onClick={applyCodeEdit} disabled={editLoading || !editInstruction}
-                          style={{
-                            padding: '6px 16px', borderRadius: 4, border: '1px solid #00e5ff',
-                            background: 'rgba(0,229,255,0.15)', color: '#00e5ff', cursor: 'pointer',
-                            fontSize: 11, opacity: editLoading || !editInstruction ? 0.3 : 1,
-                          }}>
-                          {editLoading ? '⏳ Applying...' : '⚡ Apply Change'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ─── Management Panel (Admin only) ────────── */}
-            {panel === 'manage' && isAdmin && (
-              <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-                <h3 style={{ color: '#00e5ff', fontSize: 14, marginBottom: 16, letterSpacing: '0.1em' }}>⚙️ WEBSITE MANAGEMENT</h3>
-                {siteStats && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
-                    {[
-                      { label: 'Total Users', value: siteStats.totalUsers, icon: '👥' },
-                      { label: 'Total Coins', value: siteStats.totalCoins, icon: '🪙' },
-                      { label: 'Uptime', value: `${Math.round((siteStats.uptime as number) || 0)}s`, icon: '⏱️' },
-                    ].map(s => (
-                      <div key={s.label} style={{
-                        padding: 12, borderRadius: 6,
-                        border: '1px solid rgba(0,229,255,0.15)', background: 'rgba(0,229,255,0.05)',
-                        textAlign: 'center',
-                      }}>
-                        <div style={{ fontSize: 20, marginBottom: 4 }}>{s.icon}</div>
-                        <div style={{ color: '#00e5ff', fontSize: 18, fontWeight: 700 }}>{String(s.value)}</div>
-                        <div style={{ color: 'rgba(0,229,255,0.4)', fontSize: 9, letterSpacing: '0.1em' }}>{s.label.toUpperCase()}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <h4 style={{ color: 'rgba(0,229,255,0.6)', fontSize: 12, marginBottom: 10 }}>USERS</h4>
-                {userList.map(u => (
-                  <div key={u.userId} style={{
-                    padding: 10, marginBottom: 6, borderRadius: 6,
-                    border: '1px solid rgba(0,229,255,0.08)', display: 'flex',
-                    justifyContent: 'space-between', alignItems: 'center',
-                  }}>
-                    <div>
-                      <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>{u.name}</div>
-                      <div style={{ color: 'rgba(0,229,255,0.3)', fontSize: 10 }}>{u.email}</div>
-                    </div>
-                    <div style={{ color: '#ffaa00', fontSize: 12 }}>🪙 {u.coins}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* ─── Operator Panel ───────────────────────── */}
-            {panel === 'operator' && (
-              <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-                <h3 style={{ color: '#00e5ff', fontSize: 14, marginBottom: 16, letterSpacing: '0.1em' }}>🔧 OPERATOR MODE</h3>
-                {systemStatus ? (
-                  <div style={{ padding: 12, borderRadius: 6, border: '1px solid rgba(0,229,255,0.15)', background: 'rgba(0,229,255,0.05)' }}>
-                    <pre style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
-                      {JSON.stringify(systemStatus, null, 2)}
-                    </pre>
-                  </div>
-                ) : (
-                  <div>
-                    <p style={{ color: 'rgba(0,229,255,0.4)', fontSize: 12 }}>No diagnostics yet.</p>
-                    <button onClick={() => processMessage('Run health check')} style={{
-                      padding: '8px 16px', borderRadius: 6, border: '1px solid #00e5ff',
-                      background: 'rgba(0,229,255,0.1)', color: '#00e5ff', cursor: 'pointer', fontSize: 12,
-                    }}>📊 Run Health Check</button>
-                  </div>
-                )}
-                {/* Camera section */}
-                <div style={{ marginTop: 20 }}>
-                  <h4 style={{ color: 'rgba(0,229,255,0.6)', fontSize: 12, marginBottom: 10 }}>📸 CAMERA</h4>
-                  {cameraStream ? (
-                    <div>
-                      <video ref={videoRef} style={{ width: '100%', maxHeight: 300, borderRadius: 6, background: 'black' }} />
-                      <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-                        <button onClick={capturePhoto} style={{ padding: '6px 12px', borderRadius: 4, border: '1px solid #00e5ff', background: 'rgba(0,229,255,0.1)', color: '#00e5ff', cursor: 'pointer', fontSize: 11 }}>📸 Capture</button>
-                        <button onClick={stopCamera} style={{ padding: '6px 12px', borderRadius: 4, border: '1px solid #ff4444', background: 'rgba(255,68,68,0.1)', color: '#ff4444', cursor: 'pointer', fontSize: 11 }}>✕ Close</button>
-                      </div>
-                      <canvas ref={canvasRef} style={{ display: 'none' }} />
-                    </div>
-                  ) : (
-                    <button onClick={startCamera} style={{
-                      padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(0,229,255,0.2)',
-                      background: 'rgba(0,229,255,0.05)', color: 'rgba(0,229,255,0.6)', cursor: 'pointer', fontSize: 11,
-                    }}>📷 Open Camera</button>
-                  )}
-                  {uploadedImage && (
-                    <img src={uploadedImage} alt="Uploaded" style={{ marginTop: 10, maxWidth: '100%', borderRadius: 6, maxHeight: 200 }} />
-                  )}
-                </div>
+        {/* ─── Code Panel ──────────────────────────────── */}
+        {panel === 'code' && isAdmin && (
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+            <h3 style={{ fontFamily: 'monospace', fontSize: '12px', color: '#00ff88', marginBottom: '12px' }}>💻 CODE EDITOR</h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '12px' }}>
+              {codeFiles.map(f => (
+                <button key={f.path} onClick={() => loadFileContent(f.path)} style={{ padding: '4px 8px', borderRadius: '4px', background: selectedFile === f.path ? 'rgba(0,255,136,0.2)' : 'rgba(255,255,255,0.05)', border: `1px solid ${selectedFile === f.path ? '#00ff88' : 'rgba(255,255,255,0.1)'}`, color: selectedFile === f.path ? '#00ff88' : '#aaa', fontSize: '9px', cursor: 'pointer', fontFamily: 'monospace' }}>
+                  {f.name}
+                </button>
+              ))}
+            </div>
+            {selectedFile && (
+              <div>
+                <pre style={{ background: 'rgba(0,0,0,0.4)', padding: '12px', borderRadius: '8px', fontSize: '10px', overflowX: 'auto', maxHeight: '200px', overflowY: 'auto', color: '#ccc', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>{fileContent.substring(0, 3000)}</pre>
+                <textarea value={editInstruction} onChange={e => setEditInstruction(e.target.value)} placeholder="Tell me what to change in this file..." style={{ width: '100%', marginTop: '8px', padding: '8px', borderRadius: '8px', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(0,255,136,0.2)', color: '#ccc', fontSize: '11px', resize: 'vertical', minHeight: '60px' }} />
+                <button onClick={applyCodeEdit} disabled={editLoading || !editInstruction} style={{ marginTop: '8px', padding: '6px 16px', borderRadius: '6px', background: editLoading ? 'rgba(0,255,136,0.05)' : 'rgba(0,255,136,0.15)', border: '1px solid #00ff88', color: '#00ff88', fontSize: '10px', cursor: editLoading ? 'not-allowed' : 'pointer' }}>
+                  {editLoading ? '⏳ Applying...' : '✨ Apply Edit'}
+                </button>
               </div>
             )}
           </div>
-        </div>
+        )}
 
-        {/* ─── Bottom Status Bar ────────────────────────── */}
-        <div style={{
-          padding: '6px 20px', borderTop: '1px solid rgba(0,229,255,0.1)',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          background: 'rgba(0,5,15,0.8)',
-        }}>
-          <div style={{ display: 'flex', gap: 16 }}>
-            <span style={{ color: 'rgba(0,229,255,0.3)', fontSize: 9 }}>AI: GEMINI 3.6 FLASH</span>
-            <span style={{ color: 'rgba(0,229,255,0.3)', fontSize: 9 }}>TTS: ELEVENLABS</span>
-            <span style={{ color: 'rgba(0,255,136,0.3)', fontSize: 9 }}>● CONNECTED</span>
+        {/* ─── Manage Panel ────────────────────────────── */}
+        {panel === 'manage' && isAdmin && (
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+            <h3 style={{ fontFamily: 'monospace', fontSize: '12px', color: '#ffaa00', marginBottom: '12px' }}>⚙️ MANAGEMENT</h3>
+            {siteStats && (
+              <div style={{ padding: '12px', borderRadius: '8px', background: 'rgba(255,170,0,0.05)', border: '1px solid rgba(255,170,0,0.1)', marginBottom: '12px' }}>
+                <p style={{ fontFamily: 'monospace', fontSize: '10px', color: '#ffaa00' }}>SITE STATS</p>
+                <pre style={{ fontSize: '10px', color: '#ccc', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>{JSON.stringify(siteStats, null, 2)}</pre>
+              </div>
+            )}
+            <p style={{ fontFamily: 'monospace', fontSize: '10px', color: '#ffaa00', marginBottom: '8px' }}>USERS ({userList.length})</p>
+            {userList.map(u => (
+              <div key={u.userId} style={{ padding: '8px 12px', borderRadius: '8px', background: 'rgba(255,170,0,0.05)', border: '1px solid rgba(255,170,0,0.1)', marginBottom: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <p style={{ fontSize: '11px', color: '#ccc' }}>{u.name || u.email}</p>
+                  <p style={{ fontSize: '9px', color: '#666' }}>{u.email}</p>
+                </div>
+                <span style={{ fontFamily: 'monospace', fontSize: '10px', color: '#ffc800' }}>🪙 {u.coins}</span>
+              </div>
+            ))}
           </div>
-          <span style={{ color: 'rgba(0,229,255,0.2)', fontSize: 9 }}>MURAGOODS AI OS</span>
-        </div>
+        )}
+
+        {/* ─── Input ────────────────────────────────────── */}
+        {panel === 'chat' && (
+          <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.3)', flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} placeholder={listening ? 'Listening...' : 'Type a command or question...'} style={{ flex: 1, padding: '10px 14px', borderRadius: '10px', border: `1px solid ${listening ? '#ff4444' : 'rgba(0,229,255,0.2)'}`, background: 'rgba(0,0,0,0.4)', color: '#e0e0e0', fontSize: '13px', outline: 'none' }} />
+              <button onClick={() => handleSend()} disabled={!input.trim() || processing} style={{ padding: '10px 14px', borderRadius: '10px', background: input.trim() ? 'rgba(0,229,255,0.15)' : 'rgba(255,255,255,0.05)', border: '1px solid rgba(0,229,255,0.2)', color: input.trim() ? '#00e5ff' : '#555', cursor: input.trim() ? 'pointer' : 'not-allowed', fontSize: '13px' }}>
+                ➤
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: '6px', marginTop: '8px', justifyContent: 'center' }}>
+              {['Open menu', 'My orders', 'Play games', 'Check points'].map(cmd => (
+                <button key={cmd} onClick={() => handleSend(cmd)} style={{ padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#888', fontSize: '9px', cursor: 'pointer' }}>
+                  {cmd}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
-    </>
+    </div>
   );
 }
