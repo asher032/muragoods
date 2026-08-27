@@ -100,7 +100,7 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
     if (open && messages.length === 0) {
       const h = new Date().getHours();
       const g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-      const roleText = isAdmin ? 'Hey! I\'m online. What do you need?' : 'Hey! I\'m here. What can I help with?';
+      const roleText = isAdmin ? 'Hey! I\'m online. Click the 🎤 to start talking, or just type!' : 'Hey! I\'m here. Click the 🎤 to start talking, or just type!';
       setMessages([{
         id: 'w', role: 'jarvis',
         text: `${g}, ${roleText}`,
@@ -150,7 +150,22 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
     };
     rec.onerror = (ev: SpeechRecognitionErrorEvent) => {
       setListening(false);
-      if (continuousModeRef.current && ev.error !== 'not-allowed' && ev.error !== 'aborted') {
+      if (ev.error === 'not-allowed') {
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'jarvis',
+          text: 'Microphone permission was denied. Please click the 🔒 lock icon in your browser address bar → Microphone → Allow, then click the 🎤 button again.',
+          timestamp: new Date(),
+        }]);
+      } else if (ev.error === 'network') {
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'jarvis',
+          text: 'Voice recognition needs internet. Check your connection and try again.',
+          timestamp: new Date(),
+        }]);
+      } else if (continuousModeRef.current && ev.error !== 'aborted') {
+        // Auto-restart for other errors (no-speech, audio-capture, etc.)
         setTimeout(() => {
           if (continuousModeRef.current) startListening();
         }, 500);
@@ -167,24 +182,22 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
     recognitionRef.current = rec;
   }, [speaking, processing, stopSpeakingRef, startListening]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─── Auto-listen when JARVIS opens ──────────────────────
+  // ─── Auto-listen when JARVIS opens (on second+ open) ────
+  const hasRequestedMicRef = useRef(false);
   useEffect(() => {
     if (!open) return;
-    const timer = setTimeout(async () => {
+    // On first open, show friendly prompt. On subsequent opens, auto-listen if mic was already granted.
+    if (!hasRequestedMicRef.current) {
+      // First time — show prompt, wait for user to click mic
+      hasRequestedMicRef.current = true;
+      return;
+    }
+    // Subsequent opens — auto-listen (mic permission already granted from first click)
+    const timer = setTimeout(() => {
       if (!recognitionRef.current) return;
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        continuousModeRef.current = true;
-        startListening();
-      } catch {
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: 'jarvis',
-          text: 'I need microphone access to hear you. Click the 🎤 button or allow mic in your browser settings. You can also type commands!',
-          timestamp: new Date(),
-        }]);
-      }
-    }, 800);
+      continuousModeRef.current = true;
+      startListening();
+    }, 500);
     return () => clearTimeout(timer);
   }, [open, startListening]);
 
@@ -331,11 +344,16 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
       setListening(false);
       return;
     }
-    // Request mic permission
+    // Request mic permission (this is a user gesture, so it will work)
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch {
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'Microphone access denied. Please allow mic access in browser settings.', timestamp: new Date() }]);
+    } catch (err: unknown) {
+      const msg = err instanceof DOMException && err.name === 'NotAllowedError'
+        ? 'Microphone access was denied. Please click the lock icon in your browser address bar → Microphone → Allow, then try again.'
+        : err instanceof DOMException && err.name === 'NotFoundError'
+        ? 'No microphone found. Please connect a microphone and try again.'
+        : 'Could not access microphone. Please check your browser settings and try again.';
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: msg, timestamp: new Date() }]);
       return;
     }
     // Stop any ongoing speech and start continuous conversation
