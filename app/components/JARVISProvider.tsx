@@ -29,16 +29,25 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
   const openJarvis = useCallback(() => setIsOpen(true), []);
   const closeJarvis = useCallback(() => setIsOpen(false), []);
 
+  // Check admin status (listen for login/logout across tabs)
   useEffect(() => {
-    try {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        setIsAdmin(ADMIN_EMAILS.includes(user.email));
-      }
-    } catch { /* empty */ }
+    const checkAdmin = () => {
+      try {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          setIsAdmin(ADMIN_EMAILS.includes(user.email));
+        } else {
+          setIsAdmin(false);
+        }
+      } catch { setIsAdmin(false); }
+    };
+    checkAdmin();
+    window.addEventListener('storage', checkAdmin);
+    return () => window.removeEventListener('storage', checkAdmin);
   }, []);
 
+  // Keyboard shortcut: Ctrl+/ or Cmd+/
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === '/') {

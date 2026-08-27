@@ -167,6 +167,27 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
     recognitionRef.current = rec;
   }, [speaking, processing, stopSpeakingRef, startListening]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ─── Auto-listen when JARVIS opens ──────────────────────
+  useEffect(() => {
+    if (!open) return;
+    const timer = setTimeout(async () => {
+      if (!recognitionRef.current) return;
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        continuousModeRef.current = true;
+        startListening();
+      } catch {
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'jarvis',
+          text: 'I need microphone access to hear you. Click the 🎤 button or allow mic in your browser settings. You can also type commands!',
+          timestamp: new Date(),
+        }]);
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [open, startListening]);
+
   // ─── ElevenLabs TTS ─────────────────────────────────────
   const onSpeechEnd = useCallback(() => {
     setSpeaking(false);

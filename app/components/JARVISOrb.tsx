@@ -12,13 +12,20 @@ export function JARVISOrb() {
   const orbRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    try {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        setIsAdmin(ADMIN_EMAILS.includes(user.email));
-      }
-    } catch { /* empty */ }
+    const checkAdmin = () => {
+      try {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          setIsAdmin(ADMIN_EMAILS.includes(user.email));
+        } else {
+          setIsAdmin(false);
+        }
+      } catch { setIsAdmin(false); }
+    };
+    checkAdmin();
+    window.addEventListener('storage', checkAdmin);
+    return () => window.removeEventListener('storage', checkAdmin);
   }, []);
 
   useEffect(() => {

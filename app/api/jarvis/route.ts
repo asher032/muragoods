@@ -7,6 +7,19 @@ import { askGemini, clearGeminiHistory } from '@/lib/jarvis-gemini';
 
 const ADMIN_EMAILS = ['muragoods0@gmail.com', 'mhaxthedog@gmail.com'];
 
+// Verify admin status against database (not just client email)
+async function verifyAdmin(email?: string): Promise<boolean> {
+  if (!email) return false;
+  // Quick check against known admin list first
+  if (ADMIN_EMAILS.includes(email)) return true;
+  // Database check for additional admins
+  try {
+    await dbConnect();
+    const user = await User.findOne({ email, role: 'admin' }).lean();
+    return !!user;
+  } catch { return false; }
+}
+
 // ─── Types ───────────────────────────────────────────────────
 type Intent = 'NAVIGATION' | 'SEARCH' | 'INFORMATION' | 'CREATION' | 'ACTION' | 'SYSTEM' | 'SCREEN_CONTEXT' | 'AGENT' | 'MEMORY' | 'OPERATOR' | 'CODE_EDIT' | 'MANAGE' | 'UNKNOWN';
 
@@ -269,7 +282,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Message required' }, { status: 400 });
     }
 
-    const isAdminUser = !!body.email && ADMIN_EMAILS.includes(body.email);
+    const isAdminUser = await verifyAdmin(body.email);
 
     // Get user info
     let userName: string | null = null;
