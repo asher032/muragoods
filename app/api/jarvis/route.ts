@@ -230,6 +230,27 @@ function parseCommand(input: string): { intent: Intent; action: string; params: 
     return { intent: 'INFORMATION', action: 'thanks', params };
   }
 
+  // ─── JOKE / FUN (no AI needed) ──────────────────────────
+  if (/\b(joke|funny|laugh|make me laugh|humor|comedy)\b/.test(lower)) {
+    return { intent: 'INFORMATION', action: 'joke', params };
+  }
+
+  // ─── EMOTIONAL (no AI needed) ───────────────────────────
+  if (/\b(sad|depressed|down|unhappy|feeling low|heartbreak|crying|upset|lonely|miss someone|broken heart|hurt)\b/.test(lower)) {
+    return { intent: 'INFORMATION', action: 'empathy', params };
+  }
+  if (/\b(happy|great|amazing|wonderful|excited|awesome|best day)\b/.test(lower)) {
+    return { intent: 'INFORMATION', action: 'celebrate', params };
+  }
+  if (/\b(nervous|anxious|worried|stressed|scared|afraid|exam|test tomorrow)\b/.test(lower)) {
+    return { intent: 'INFORMATION', action: 'reassure', params };
+  }
+
+  // ─── RECOMMENDATIONS (no AI needed) ─────────────────────
+  if (/\b(what should i (eat|order|get)|recommend|suggest|best item|favorite)\b/.test(lower)) {
+    return { intent: 'INFORMATION', action: 'recommend', params };
+  }
+
   return { intent: 'UNKNOWN', action: 'unknown', params: { original: input } };
 }
 
@@ -282,6 +303,45 @@ function quickResponse(parsed: { intent: Intent; action: string; params: Record<
       if (parsed.action === 'games-info') return { response: `We have three games. Memory Match where you flip cards to find pairs, Flappy Bird the classic, and the Mystery Box where you spend ten coins for a chance to win prizes. Which one sounds fun?`, intent: 'INFORMATION', timestamp: ts };
       if (parsed.action === 'points-info') return { response: `You earn half a coin (0.5) for every peso you spend on food. You can also get coins from daily check ins, playing games, referring friends for fifty coins each, or spinning the mystery box for ten coins. Want me to take you to your points page?`, intent: 'INFORMATION', action: 'navigate', actionParams: { path: '/points' }, timestamp: ts };
       if (parsed.action === 'untold-info') return { response: `Untold Words is where you can express feelings anonymously. You can write a confession, create a digital love letter, or send a song with a message. Everything is posted to the public gallery unless you choose to keep it private. Want me to open it for you?`, intent: 'INFORMATION', action: 'navigate', actionParams: { path: '/untold-words' }, timestamp: ts };
+      // Jokes
+      if (parsed.action === 'joke') {
+        const jokes = [
+          `Why did the cookie go to therapy? Because it felt crummy and needed a little dough-counseling! 😄`,
+          `What do you call a musubi that tells jokes? A laughter roll! 🍙😂`,
+          `Why did the coffee jelly break up with the churros? Because it found someone butter! 😆`,
+          `How do you organize a space party? You planet! 🪐`,
+          `Why don't scientists trust atoms? Because they make up everything! ⚛️😄`,
+          `What do you call a fake noodle? An impasta! 🍝`,
+          `Why did the scarecrow win an award? He was outstanding in his field! 🌾`,
+        ];
+        return { response: jokes[Math.floor(Math.random() * jokes.length)], intent: 'INFORMATION', timestamp: ts };
+      }
+      // Empathy
+      if (parsed.action === 'empathy') {
+        const responses = [
+          `I'm really sorry you're feeling down, ${name}. I'm here for you. Want to talk about it, or should we brighten the mood with a tasty snack or a fun game?`,
+          `Hey, it's okay to feel this way. You're not alone. Would you like me to recommend something delicious from the menu, or maybe play a game to take your mind off things?`,
+          `I hear you, and your feelings are valid. Sometimes a warm musubi or a sweet coffee jelly can help. Want me to take you to the menu?`,
+        ];
+        return { response: responses[Math.floor(Math.random() * responses.length)], intent: 'INFORMATION', timestamp: ts };
+      }
+      // Celebration
+      if (parsed.action === 'celebrate') {
+        return { response: `That's amazing, ${name}! 🎉 I'm glad you're having a great day! Want to celebrate with some food or play a game?`, intent: 'INFORMATION', timestamp: ts };
+      }
+      // Reassurance
+      if (parsed.action === 'reassure') {
+        return { response: `Take a deep breath, ${name}. You've got this! 💪 A quick break with some food or a game can help reset your mind. Want me to help?`, intent: 'INFORMATION', timestamp: ts };
+      }
+      // Recommendations
+      if (parsed.action === 'recommend') {
+        const recs = [
+          `Based on what's popular, I'd recommend the Musubi — it's our signature item at just fifty-five pesos! 🍙`,
+          `If you're feeling something sweet, go for the Coffee Jelly — it's a crowd favorite! Or the Mini Churros for something crispy! 🍮`,
+          `You can't go wrong with our Cookies — freshly baked at only thirty-five pesos! 🍪`,
+        ];
+        return { response: recs[Math.floor(Math.random() * recs.length)], intent: 'INFORMATION', action: 'navigate', actionParams: { path: '/menu' }, timestamp: ts };
+      }
       return { response: `Let me look into that.`, intent: 'INFORMATION', timestamp: ts };
     default:
       return { response: `I am not sure I understand that one. Could you rephrase it? I can help with food orders, points, games, letters, navigation, or just chat!`, intent: 'UNKNOWN', timestamp: ts };
