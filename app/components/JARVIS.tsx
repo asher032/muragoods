@@ -253,18 +253,8 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
         };
         setMessages(prev => [...prev, msg]);
 
-        // Use ElevenLabs TTS from response or generate
-        if (result.data.tts) {
-          setSpeaking(true);
-          const audio = new Audio(`data:audio/mpeg;base64,${result.data.tts}`);
-          setCurrentAudio(audio);
-          currentAudioRef.current = audio;
-          audio.onended = onSpeechEnd;
-          audio.onerror = onSpeechEnd;
-          audio.play().catch(onSpeechEnd);
-        } else {
-          speak(result.data.response);
-        }
+        // Speak via ElevenLabs TTS (non-blocking)
+        speak(result.data.response);
 
         setCommandHistory(prev => {
           const u = [...prev];

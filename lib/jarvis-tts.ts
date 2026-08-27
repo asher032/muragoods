@@ -12,8 +12,8 @@ export interface TTSOptions {
 }
 
 // ─── Default voice settings ──────────────────────────────────
-const DEFAULT_VOICE = 'wDsJlOXPqcvIUKdLXjDs'; // User's custom voice
-const DEFAULT_MODEL = 'eleven_monolingual_v1'; // Most stable model
+const DEFAULT_VOICE = 'CwhRBWXzGAHq8TQ4Fs17'; // Roger - Laid-back, Casual, Resonant
+const DEFAULT_MODEL = 'eleven_turbo_v2_5'; // Fastest model
 
 // ─── Generate TTS audio ──────────────────────────────────────
 export async function generateSpeech(

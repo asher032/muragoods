@@ -3,7 +3,7 @@ import dbConnect from '@/app/lib/mongodb';
 import User from '@/app/lib/models/User';
 import JarvisMemory from '@/app/lib/models/JarvisMemory';
 import { askGemini, clearGeminiHistory } from '@/lib/jarvis-gemini';
-import { generateSpeech } from '@/lib/jarvis-tts';
+
 
 const ADMIN_EMAILS = ['muragoods0@gmail.com', 'mhaxthedog@gmail.com'];
 
@@ -425,14 +425,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // Generate ElevenLabs TTS audio
-    try {
-      const ttsResult = await generateSpeech(result.response);
-      if (ttsResult.success && ttsResult.audioBase64) {
-        result.tts = ttsResult.audioBase64;
-      }
-    } catch { /* TTS is optional */ }
-
+    // Return response immediately — frontend handles TTS separately for speed
     return NextResponse.json({ success: true, data: result });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'JARVIS error';
