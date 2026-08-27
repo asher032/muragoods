@@ -64,7 +64,7 @@ function parseCommand(input: string): { intent: Intent; action: string; params: 
   }
 
   // ─── WEBSITE MANAGEMENT (admin only) ─────────────────────
-  if (/\b(list|show|get|view)\b.*\b(users?|members?|accounts?)\b/.test(lower)) {
+  if (/\b(list all|show all|get all|view all|list users|show users)\b.*\b(users?|members?|accounts?)\b/.test(lower)) {
     return { intent: 'MANAGE', action: 'list-users', params };
   }
   if (/\b(user|site|website)\b.*\b(stats?|analytics|numbers|counts?)\b/.test(lower)) {
@@ -86,10 +86,10 @@ function parseCommand(input: string): { intent: Intent; action: string; params: 
     params.instruction = input;
     return { intent: 'MANAGE', action: 'add-product', params };
   }
-  if (/\b(list|show|view|get|check)\b.*\b(orders?|pending|completed|cancelled)\b/.test(lower)) {
+  if (/\b(list all|show all|view all|get all|check all)\b.*\b(orders?|pending|completed|cancelled)\b/.test(lower)) {
     return { intent: 'MANAGE', action: 'list-orders', params };
   }
-  if (/\b(list|show|view|get)\b.*\b(promo|discount|code|coupon)\b/.test(lower)) {
+  if (/\b(list all|show all|view all|get all)\b.*\b(promo|discount|code|coupon)s?\b/.test(lower)) {
     return { intent: 'MANAGE', action: 'list-promos', params };
   }
   if (/\b(create|generate|make|new)\b.*\b(promo|discount|code|coupon)\b/.test(lower)) {
@@ -100,7 +100,7 @@ function parseCommand(input: string): { intent: Intent; action: string; params: 
     if (discountMatch) params.discount = discountMatch[1];
     return { intent: 'MANAGE', action: 'create-promo', params };
   }
-  if (/\b(list|show|view|get|check)\b.*\b(products?|menu|food|items?)\b/.test(lower)) {
+  if (/\b(list all|show all|view all|get all|check all)\b.*\b(products?|menu items?|food items?)\b/.test(lower)) {
     return { intent: 'MANAGE', action: 'list-products', params };
   }
   if (/\b(update|change|edit|set)\b.*\b(price|prices|cost)\b/.test(lower)) {
