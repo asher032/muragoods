@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useCoins } from '@/app/hooks/useCoins';
@@ -123,7 +123,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         {/* JARVIS Button (admin only) */}
         {isAdmin && (
           <div style={{ padding: '12px 24px' }}>
-            <button onClick={() => { openJarvis(); onClose(); }} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid rgba(0,180,255,0.3)', background: 'linear-gradient(135deg, rgba(0,180,255,0.1), rgba(0,100,255,0.05))', color: '#00b4ff', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'all 0.2s' }}>
+            <button onClick={() => { window.location.href = '/jarvis'; onClose(); }} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid rgba(0,180,255,0.3)', background: 'linear-gradient(135deg, rgba(0,180,255,0.1), rgba(0,100,255,0.05))', color: '#00b4ff', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'all 0.2s' }}>
               🤖 JARVIS AI
             </button>
           </div>

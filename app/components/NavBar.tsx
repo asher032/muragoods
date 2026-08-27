@@ -108,7 +108,7 @@ export function NavBar({ pageLabel, cartCount }: NavBarProps) {
 
           {/* Right: JARVIS (admin only) + Bell + Cart */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {isAdmin && <button onClick={openJarvis} title="JARVIS AI (Ctrl+/)" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '34px', height: '34px', borderRadius: '10px', background: 'rgba(0,180,255,0.08)', border: '1px solid rgba(0,180,255,0.2)', cursor: 'pointer', transition: 'all 0.2s', color: '#00b4ff', fontSize: '14px' }}>🤖</button>}
+            {isAdmin && <button onClick={() => router.push('/jarvis')} title="JARVIS AI" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '34px', height: '34px', borderRadius: '10px', background: 'rgba(0,180,255,0.08)', border: '1px solid rgba(0,180,255,0.2)', cursor: 'pointer', transition: 'all 0.2s', color: '#00b4ff', fontSize: '14px' }}>🤖</button>}
             {isLoggedIn && <NotificationBell />}
             {isLoggedIn && cartCount !== undefined && cartCount > 0 && (
               <Link href="/checkout" style={{
