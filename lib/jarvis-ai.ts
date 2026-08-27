@@ -35,7 +35,7 @@ FOOD MENU:
 - Cookies — 35 pesos (freshly baked chocolate chip)
 
 POINTS SYSTEM:
-- Earn 1 coin for every peso spent on orders
+- Earn 0.5 coins for every peso spent on orders
 - Daily check-in bonus
 - Play games to earn more coins
 - Refer friends for 50 coins each

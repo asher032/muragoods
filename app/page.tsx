@@ -119,10 +119,10 @@ export default function Home() {
               )}
             </div>
 
-            {/* Mario pixel art */}
+            {/* Logo */}
             <div className="flex justify-center">
-              <div className="relative w-32 h-32">
-                <Image src="/images/hero-musubi.png" alt="Muragoods" fill className="object-contain" />
+              <div className="relative w-48 h-48 sm:w-56 sm:h-56">
+                <Image src="/images/muragoods-logo.png" alt="Muragoods" fill className="object-contain drop-shadow-[0_0_30px_rgba(255,214,10,0.3)]" />
               </div>
             </div>
           </div>
