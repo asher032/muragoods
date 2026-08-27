@@ -100,7 +100,7 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
     if (open && messages.length === 0) {
       const h = new Date().getHours();
       const g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-      const roleText = isAdmin ? 'Hey! I\'m online. Click the 🎤 to start talking, or just type!' : 'Hey! I\'m here. Click the 🎤 to start talking, or just type!';
+      const roleText = isAdmin ? 'Hey! I\'m online. Tap the 🎤 mic button to start talking, or type a command below.' : 'Hey! I\'m here. Tap the 🎤 mic button to start talking, or type a command below.';
       setMessages([{
         id: 'w', role: 'jarvis',
         text: `${g}, ${roleText}`,
@@ -182,24 +182,7 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
     recognitionRef.current = rec;
   }, [speaking, processing, stopSpeakingRef, startListening]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─── Auto-listen when JARVIS opens (on second+ open) ────
-  const hasRequestedMicRef = useRef(false);
-  useEffect(() => {
-    if (!open) return;
-    // On first open, show friendly prompt. On subsequent opens, auto-listen if mic was already granted.
-    if (!hasRequestedMicRef.current) {
-      // First time — show prompt, wait for user to click mic
-      hasRequestedMicRef.current = true;
-      return;
-    }
-    // Subsequent opens — auto-listen (mic permission already granted from first click)
-    const timer = setTimeout(() => {
-      if (!recognitionRef.current) return;
-      continuousModeRef.current = true;
-      startListening();
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [open, startListening]);
+
 
   // ─── ElevenLabs TTS ─────────────────────────────────────
   const onSpeechEnd = useCallback(() => {
@@ -334,33 +317,43 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
   // ─── Voice toggle (tap to start conversation, tap to stop) ──
   const toggleVoice = useCallback(async () => {
     if (!recognitionRef.current) {
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'Voice is not supported in this browser. Use Chrome or Edge.', timestamp: new Date() }]);
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'Voice is not supported in this browser. Try Chrome or Edge for the best experience.', timestamp: new Date() }]);
       return;
     }
-    // If already listening, stop continuous mode
+    // If already listening, stop
     if (listening) {
       continuousModeRef.current = false;
       recognitionRef.current.stop();
       setListening(false);
       return;
     }
-    // Request mic permission (this is a user gesture, so it will work)
-    try {
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (err: unknown) {
-      const msg = err instanceof DOMException && err.name === 'NotAllowedError'
-        ? 'Microphone access was denied. Please click the lock icon in your browser address bar → Microphone → Allow, then try again.'
-        : err instanceof DOMException && err.name === 'NotFoundError'
-        ? 'No microphone found. Please connect a microphone and try again.'
-        : 'Could not access microphone. Please check your browser settings and try again.';
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: msg, timestamp: new Date() }]);
-      return;
-    }
-    // Stop any ongoing speech and start continuous conversation
+    // Stop any ongoing speech first
     stopSpeaking();
-    continuousModeRef.current = true;
-    startListening();
-  }, [listening, stopSpeaking, startListening]);
+    // Try to start SpeechRecognition directly (it handles its own mic permission)
+    try {
+      continuousModeRef.current = true;
+      recognitionRef.current.start();
+      setListening(true);
+    } catch (err: unknown) {
+      continuousModeRef.current = false;
+      const errStr = String(err);
+      if (errStr.includes('NotAllowedError') || errStr.includes('not-allowed')) {
+        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'Microphone permission denied. Please go to your browser settings, find this site, and allow microphone access. Then refresh the page and try again.', timestamp: new Date() }]);
+      } else if (errStr.includes('NotFoundError') || errStr.includes('no-speech')) {
+        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'No microphone detected. Please connect a microphone and try again.', timestamp: new Date() }]);
+      } else {
+        // Unknown error — try requesting getUserMedia first as fallback
+        try {
+          await navigator.mediaDevices.getUserMedia({ audio: true });
+          continuousModeRef.current = true;
+          recognitionRef.current.start();
+          setListening(true);
+        } catch {
+          setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: 'Could not start voice recognition. Please check your microphone and browser settings, then try again.', timestamp: new Date() }]);
+        }
+      }
+    }
+  }, [listening, stopSpeaking]);
 
   // ─── Camera ─────────────────────────────────────────────
   const startCamera = useCallback(async () => {
