@@ -209,20 +209,22 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
       const jarvisMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: 'jarvis',
-        text: data.response || 'I had trouble processing that. Can you try again?',
-        intent: data.intent,
-        action: data.action,
-        actionParams: data.actionParams,
-        cards: data.cards,
-        buttons: data.buttons,
+        text: data.data?.response || data.response || 'I had trouble processing that. Can you try again?',
+        intent: data.data?.intent || data.intent,
+        action: data.data?.action || data.action,
+        actionParams: data.data?.actionParams || data.actionParams,
+        cards: data.data?.cards || data.cards,
+        buttons: data.data?.buttons || data.buttons,
         timestamp: new Date(),
       };
 
       setMessages(prev => [...prev, jarvisMsg]);
 
       // Navigate if needed
-      if (data.action === 'navigate' && data.actionParams?.path) {
-        setTimeout(() => router.push(data.actionParams!.path), 500);
+      const action = data.data?.action || data.action;
+      const actionParams = data.data?.actionParams || data.actionParams;
+      if (action === 'navigate' && actionParams?.path) {
+        setTimeout(() => router.push(actionParams.path), 500);
       }
 
       // Save to command history
