@@ -152,9 +152,12 @@ export async function askJarvisAI(
     const data = await response.json() as GroqResponse;
     const aiResponse = data.choices?.[0]?.message?.content || '';
 
-    if (!aiResponse) return { response: '', isAI: false };
+    if (!aiResponse) {
+      // Don't add failed responses to history — they corrupt future conversations
+      return { response: '', isAI: false };
+    }
 
-    // Update conversation history
+    // Update conversation history (only with successful responses)
     history.push({ role: 'user', content: userMessage });
     history.push({ role: 'assistant', content: aiResponse });
     if (history.length > 20) history.splice(0, history.length - 20);
