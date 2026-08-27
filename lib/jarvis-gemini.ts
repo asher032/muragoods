@@ -216,6 +216,10 @@ export async function askGemini(
     if (!response.ok) {
       const err = await response.text();
       console.error('[JARVIS Gemini] Error:', response.status, err);
+      // Rate limited — return a helpful fallback instead of empty
+      if (response.status === 429) {
+        return { response: '', isAI: false };
+      }
       return { response: '', isAI: false };
     }
 

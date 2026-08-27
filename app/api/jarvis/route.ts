@@ -284,7 +284,7 @@ function quickResponse(parsed: { intent: Intent; action: string; params: Record<
       if (parsed.action === 'untold-info') return { response: `Untold Words is where you can express feelings anonymously. You can write a confession, create a digital love letter, or send a song with a message. Everything is posted to the public gallery unless you choose to keep it private. Want me to open it for you?`, intent: 'INFORMATION', action: 'navigate', actionParams: { path: '/untold-words' }, timestamp: ts };
       return { response: `Let me look into that.`, intent: 'INFORMATION', timestamp: ts };
     default:
-      return { response: `Thinking...`, intent: 'UNKNOWN', timestamp: ts };
+      return { response: `I am not sure I understand that one. Could you rephrase it? I can help with food orders, points, games, letters, navigation, or just chat!`, intent: 'UNKNOWN', timestamp: ts };
   }
 }
 
