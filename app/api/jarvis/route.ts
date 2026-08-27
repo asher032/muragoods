@@ -344,7 +344,7 @@ function quickResponse(parsed: { intent: Intent; action: string; params: Record<
       }
       return { response: `Let me look into that.`, intent: 'INFORMATION', timestamp: ts };
     default:
-      return { response: `I am not sure I understand that one. Could you rephrase it? I can help with food orders, points, games, letters, navigation, or just chat!`, intent: 'UNKNOWN', timestamp: ts };
+      return { response: `Let me look into that for you.`, intent: 'UNKNOWN', timestamp: ts };
   }
 }
 
@@ -384,11 +384,21 @@ export async function POST(req: Request) {
     // Quick response for known intents
     let result = quickResponse(parsed, userName);
 
-    // For unknown/complex queries, use Gemini AI
+    // For unknown/complex queries, use AI
     if (parsed.intent === 'UNKNOWN' || (parsed.intent === 'INFORMATION' && !['greeting', 'help', 'identity', 'thanks'].includes(parsed.action))) {
       const aiResult = await askJarvisAI(body.message, body.userId, body.screenContext || undefined, userName || undefined);
       if (aiResult.isAI && aiResult.response) {
         result.response = aiResult.response;
+        result.intent = 'INFORMATION';
+      } else {
+        // AI failed (rate limited or error) — give helpful fallback instead of 'I am not sure'
+        const name = userName || 'Commander';
+        const fallbacks = [
+          `I'm having a quick connection issue, ${name}. Could you try rephrasing that? I can help with food orders, points, games, letters, or just chat!`,
+          `Sorry ${name}, I didn't catch that clearly. Try asking about our menu, games, points, or Untold Words!`,
+          `My AI brain is momentarily busy, ${name}. Try a simpler question like 'what's on the menu' or 'how do I earn coins'?`,
+        ];
+        result.response = fallbacks[Math.floor(Math.random() * fallbacks.length)];
         result.intent = 'INFORMATION';
       }
     }
