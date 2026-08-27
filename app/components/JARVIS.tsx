@@ -484,6 +484,24 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
     });
   }, []);
 
+  // ─── Reset chat ────────────────────────────────────────
+  const resetChat = useCallback(() => {
+    setMessages([]);
+    setCommandHistory([]);
+    setMemories([]);
+    setSystemStatus(null);
+    // Re-add welcome message
+    const h = new Date().getHours();
+    const g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+    setTimeout(() => {
+      setMessages([{
+        id: 'w', role: 'jarvis',
+        text: `${g}! Chat cleared. What can I help with?`,
+        intent: 'INFORMATION', timestamp: new Date(),
+      }]);
+    }, 100);
+  }, []);
+
   // ─── Initialize code panel ──────────────────────────────
   useEffect(() => {
     if (open && panel === 'code' && isAdmin) loadCodeFiles();
@@ -543,6 +561,11 @@ export function JARVIS({ open, onClose }: { open: boolean; onClose: () => void }
                 </button>
               ))}
             </div>
+            <button onClick={resetChat} title="Reset Chat" style={{
+              width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(255,170,0,0.3)',
+              background: 'rgba(255,170,0,0.1)', color: '#ffaa00', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12,
+            }}>↺</button>
             <button onClick={onClose} style={{
               width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(255,68,68,0.3)',
               background: 'rgba(255,68,68,0.1)', color: '#ff4444', cursor: 'pointer',
