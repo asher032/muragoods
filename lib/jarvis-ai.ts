@@ -116,6 +116,8 @@ export async function askJarvisAI(
     conversationHistories.set(historyKey, []);
   }
   const history = conversationHistories.get(historyKey)!;
+  // Clean up corrupted history (entries with empty assistant responses)
+  const cleanHistory = history.filter(m => !(m.role === 'assistant' && !m.content.trim()));
 
   // Build system prompt with context
   let systemPrompt = JARVIS_SYSTEM;
@@ -124,7 +126,7 @@ export async function askJarvisAI(
 
   const messages: ChatMessage[] = [
     { role: 'system', content: systemPrompt },
-    ...history.slice(-10),
+    ...cleanHistory.slice(-8),
     { role: 'user', content: userMessage },
   ];
 
