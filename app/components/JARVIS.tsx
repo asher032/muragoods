@@ -37,6 +37,7 @@ export function JARVIS({ open, onClose, isFullPage }: { open: boolean; onClose: 
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [micBlocked, setMicBlocked] = useState(false);
 
   // Code editing state
   const [codeFiles, setCodeFiles] = useState<Array<{ name: string; path: string; isDirectory: boolean; size: number }>>([]);
@@ -98,7 +99,7 @@ export function JARVIS({ open, onClose, isFullPage }: { open: boolean; onClose: 
     if (open && messages.length === 0) {
       const h = new Date().getHours();
       const g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-      const roleText = isAdmin ? 'What can I help you with?' : 'How can I help?';
+      const roleText = isAdmin ? 'Tap the 🎤 button below to talk to me, or just type a message.' : 'How can I help?';
       setMessages([{ id: 'w', role: 'jarvis', text: `${g}, Commander. ${roleText}`, intent: 'INFORMATION', timestamp: new Date() }]);
     }
   }, [open, messages.length, isAdmin]);
@@ -237,9 +238,9 @@ export function JARVIS({ open, onClose, isFullPage }: { open: boolean; onClose: 
     setProcessing(false);
   }, []);
 
-  const startRecording = useCallback(async () => {
+  const startRecording = useCallback(async (existingStream?: MediaStream) => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = existingStream || await navigator.mediaDevices.getUserMedia({ audio: true });
       micStreamRef.current = stream;
       audioChunksRef.current = [];
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
@@ -251,22 +252,22 @@ export function JARVIS({ open, onClose, isFullPage }: { open: boolean; onClose: 
       isRecordingRef.current = true;
       setListening(true);
       recordingTimerRef.current = setTimeout(() => { if (isRecordingRef.current) stopRecording(); }, 15000);
-    } catch {
-      // Mic failed — store flag and refresh page for clean permission state
-      sessionStorage.setItem('jarvisAutoMic', 'true');
-      window.location.reload();
+    } catch (err: unknown) {
+      const errStr = String(err);
+      const isDenied = errStr.includes('NotAllowedError') || errStr.includes('Permission') || errStr.includes('denied');
+      const isNoDevice = errStr.includes('NotFoundError');
+      const msg = isNoDevice
+        ? '❌ No microphone found. Please connect a microphone and try again.'
+        : isDenied
+          ? 'blocked'
+          : '❌ Could not access microphone. Please check your device settings.';
+      if (msg === 'blocked') {
+        setMicBlocked(true);
+      } else {
+        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: msg, timestamp: new Date() }]);
+      }
     }
   }, [stopRecording, handleRecordingStop]);
-
-  // ─── Auto-mic after page refresh ────────────────────────
-  useEffect(() => {
-    if (!open) return;
-    const shouldAutoMic = sessionStorage.getItem('jarvisAutoMic');
-    if (shouldAutoMic) {
-      sessionStorage.removeItem('jarvisAutoMic');
-      setTimeout(() => { startRecording(); }, 800);
-    }
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Mic button ─────────────────────────────────────────
   const micCooldownRef = useRef(false);
@@ -419,6 +420,32 @@ export function JARVIS({ open, onClose, isFullPage }: { open: boolean; onClose: 
             {voiceEnabled ? '🔊 Voice On' : '🔇 Voice Off'}
           </button>
         </div>
+
+        {/* ─── Mic Permission Banner ────────────────────── */}
+        {micBlocked && (
+          <div style={{ margin: '0 16px 10px', padding: '12px 16px', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(255,68,68,0.1), rgba(255,170,0,0.1))', border: '1px solid rgba(255,170,0,0.3)' }}>
+            <p style={{ fontSize: '11px', color: '#ffaa00', marginBottom: '8px', fontFamily: 'monospace' }}>🎤 MICROPHONE ACCESS NEEDED</p>
+            <p style={{ fontSize: '10px', color: '#ccc', marginBottom: '10px', lineHeight: '1.5' }}>
+              Click the button below to grant microphone access. The browser will show a permission popup — click <strong>Allow</strong>.
+            </p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={async () => {
+                try {
+                  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                  startRecording(stream);
+                  setMicBlocked(false);
+                } catch {
+                  setMessages(prev => [...prev, { id: Date.now().toString(), role: 'jarvis', text: '❌ Still blocked. Please go to the 🔒 lock icon in your address bar → Microphone → Allow, then refresh the page.', timestamp: new Date() }]);
+                }
+              }} style={{ padding: '8px 16px', borderRadius: '8px', background: 'rgba(255,170,0,0.2)', border: '1px solid #ffaa00', color: '#ffaa00', fontSize: '10px', cursor: 'pointer', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                🎤 GRANT MICROPHONE ACCESS
+              </button>
+              <button onClick={() => setMicBlocked(false)} style={{ padding: '8px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#888', fontSize: '10px', cursor: 'pointer' }}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ─── Camera View ──────────────────────────────── */}
         {cameraStream && (
