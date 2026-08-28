@@ -48,6 +48,7 @@ export async function POST() {
       ...o,
       userId: 'seed-historical',
       phone: '09XX-XXX-XXXX',
+      deliveryDate: (o.createdAt as Date).toISOString().split('T')[0],
       pointsEarned: Math.floor(o.total * 0.5),
       statusHistory: [{ status: 'Delivered', timestamp: o.createdAt, note: 'Historical order' }],
     }));
