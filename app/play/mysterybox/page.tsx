@@ -21,112 +21,27 @@ interface Prize {
 }
 
 const prizes: Prize[] = [
-  {
-    id: 'coins_5',
-    label: '+5 Coins',
-    description: 'A small coin bonus added to your balance!',
-    type: 'coins',
-    value: 5,
-    icon: <Icon name="coin" size={20} />,
-    rarity: 'common',
-    color: 'var(--gold)',
-  },
-  {
-    id: 'coins_10',
-    label: '+10 Coins',
-    description: 'You earned back what you spent — free box!',
-    type: 'coins',
-    value: 10,
-    icon: <Icon name="coin" size={20} />,
-    rarity: 'common',
-    color: 'var(--gold-bright)',
-  },
-  {
-    id: 'coins_15',
-    label: '+15 Coins',
-    description: 'A nice chunk of coins for your next order!',
-    type: 'coins',
-    value: 15,
-    icon: <Icon name="coin" size={20} />,
-    rarity: 'common',
-    color: 'var(--gold-bright)',
-  },
-  {
-    id: 'discount_10',
-    label: '10% OFF',
-    description: 'Use code MYSTERY10 at checkout for 10% off your next order!',
-    type: 'discount',
-    value: 10,
-    icon: '🏷️',
-    rarity: 'rare',
-    color: 'var(--emerald-bright)',
-  },
-  {
-    id: 'discount_15',
-    label: '15% OFF',
-    description: 'Use code MYSTERY15 at checkout for 15% off your next order!',
-    type: 'discount',
-    value: 15,
-    icon: '🏷️',
-    rarity: 'rare',
-    color: 'var(--emerald-bright)',
-  },
-  {
-    id: 'coins_25',
-    label: '+25 Coins',
-    description: 'Big coin drop! Stack these for premium rewards!',
-    type: 'coins',
-    value: 25,
-    icon: '💰',
-    rarity: 'rare',
-    color: 'var(--gold-bright)',
-  },
-  {
-    id: 'discount_20',
-    label: '20% OFF',
-    description: 'Use code MYSTERY20 at checkout for 20% off your next order!',
-    type: 'discount',
-    value: 20,
-    icon: '🏷️',
-    rarity: 'rare',
-    color: 'var(--emerald-bright)',
-  },
-  {
-    id: 'jackpot_50',
-    label: 'JACKPOT! +50',
-    description: 'MEGA JACKPOT! 50 bonus coins added to your balance!',
-    type: 'jackpot',
-    value: 50,
-    icon: '⭐',
-    rarity: 'legendary',
-    color: 'var(--gold-bright)',
-  },
-  {
-    id: 'free_musubi',
-    label: 'FREE MUSUBI',
-    description: 'Use code FREEMUSUBI for a free Regular Musubi on your next order!',
-    type: 'discount',
-    value: 40,
-    icon: '🍙',
-    rarity: 'legendary',
-    color: 'var(--gold-bright)',
-  },
-  {
-    id: 'coins_8',
-    label: '+8 Coins',
-    description: 'A little something for your coin collection!',
-    type: 'coins',
-    value: 8,
-    icon: <Icon name="coin" size={20} />,
-    rarity: 'common',
-    color: 'var(--gold)',
-  },
+  // Common coins
+  { id: 'coins_5', label: '+5 Coins', description: 'A small coin bonus added to your balance!', type: 'coins', value: 5, icon: <Icon name="coin" size={20} />, rarity: 'common', color: 'var(--gold)' },
+  { id: 'coins_8', label: '+8 Coins', description: 'A little something for your coin collection!', type: 'coins', value: 8, icon: <Icon name="coin" size={20} />, rarity: 'common', color: 'var(--gold)' },
+  { id: 'coins_10', label: '+10 Coins', description: 'You earned back what you spent — free box!', type: 'coins', value: 10, icon: <Icon name="coin" size={20} />, rarity: 'common', color: 'var(--gold-bright)' },
+  { id: 'coins_15', label: '+15 Coins', description: 'A nice chunk of coins for your next order!', type: 'coins', value: 15, icon: <Icon name="coin" size={20} />, rarity: 'common', color: 'var(--gold-bright)' },
+  // Coupons — MUCH more common now
+  { id: 'discount_10', label: '10% OFF', description: 'Use code MYSTERY10 at checkout for 10% off your next order!', type: 'discount', value: 10, icon: <Icon name="cart" size={20} />, rarity: 'rare', color: 'var(--emerald-bright)' },
+  { id: 'discount_15', label: '15% OFF', description: 'Use code MYSTERY15 at checkout for 15% off your next order!', type: 'discount', value: 15, icon: <Icon name="cart" size={20} />, rarity: 'rare', color: 'var(--emerald-bright)' },
+  { id: 'free_shipping', label: 'FREE SHIPPING', description: 'Use code FREESHIP at checkout for free delivery!', type: 'discount', value: 50, icon: <Icon name="box" size={20} />, rarity: 'rare', color: 'var(--emerald-bright)' },
+  { id: 'discount_20', label: '20% OFF', description: 'Use code MYSTERY20 at checkout for 20% off your next order!', type: 'discount', value: 20, icon: <Icon name="cart" size={20} />, rarity: 'rare', color: 'var(--emerald-bright)' },
+  { id: 'coins_25', label: '+25 Coins', description: 'Big coin drop! Stack these for premium rewards!', type: 'coins', value: 25, icon: <Icon name="coin" size={20} />, rarity: 'rare', color: 'var(--gold-bright)' },
+  // Legendary
+  { id: 'free_musubi', label: 'FREE MUSUBI', description: 'Use code FREEMUSUBI for a free Regular Musubi on your next order!', type: 'discount', value: 40, icon: <Icon name="food" size={20} />, rarity: 'legendary', color: 'var(--gold-bright)' },
+  { id: 'jackpot_50', label: 'JACKPOT! +50', description: 'MEGA JACKPOT! 50 bonus coins added to your balance!', type: 'jackpot', value: 50, icon: <Icon name="star" size={20} />, rarity: 'legendary', color: 'var(--gold-bright)' },
 ];
 
-// Weighted random selection — LEGENDARIES ARE EXTREMELY RARE
-// Common: 66%, Rare: 31%, Legendary: ~1.3%
+// Weighted random selection
+// Common: 45%, Rare (coupons+coins_25): 53%, Legendary: ~2%
+// Coupons appear ~40% of the time total!
 function rollPrize(): Prize {
-  const weights = [28, 22, 16, 10, 8, 8, 5, 0.5, 0.3, 2.2]; // total ~100
+  const weights = [14, 12, 10, 9, 12, 10, 8, 10, 8, 2, 5]; // total ~100
   const rand = Math.random() * 100;
   let cumulative = 0;
   for (let i = 0; i < prizes.length; i++) {
@@ -138,9 +53,9 @@ function rollPrize(): Prize {
 
 // Legendary tier: ultra-rare drops that require extreme luck
 const LEGENDARY_TIERS = [
-  { id: 'mythic', label: '👑 MYTHIC DROP', description: '1 in 500 chance. The rarest thing in MuraGoods.', chance: '1/500', icon: '👑', color: '#ff6b35' },
-  { id: 'legendary', label: '★ LEGENDARY', description: '1 in 77 chance. Extremely lucky!', chance: '1/77', icon: '⭐', color: '#ffd60a' },
-  { id: 'epic', label: '💎 EPIC', description: '1 in 25 chance. Very fortunate!', chance: '1/25', icon: '💎', color: '#a855f7' },
+  { id: 'mythic', label: 'MYTHIC DROP', description: '1 in 500 chance. The rarest thing in MuraGoods.', chance: '1/500', icon: <Icon name="trophy" size={20} />, color: '#ff6b35' },
+  { id: 'legendary', label: 'LEGENDARY', description: '1 in 77 chance. Extremely lucky!', chance: '1/77', icon: <Icon name="star" size={20} />, color: '#ffd60a' },
+  { id: 'epic', label: 'EPIC', description: '1 in 25 chance. Very fortunate!', chance: '1/25', icon: <Icon name="fire" size={20} />, color: '#a855f7' },
 ];
 
 const rarityLabels: Record<string, string> = {
@@ -272,6 +187,7 @@ export default function MysteryBoxPage() {
           discount_15: 'MYSTERY15',
           discount_20: 'MYSTERY20',
           free_musubi: 'FREEMUSUBI',
+          free_shipping: 'FREESHIP',
         };
         const code = codeMap[prize.id];
         if (code) {
@@ -382,9 +298,9 @@ export default function MysteryBoxPage() {
                     </>
                   ) : (
                     <>
-                      {/* Opening animation — light burst */}
+                      {/* Opening animation — mystery loader */}
                       <div className="mystery-burst" />
-                      <div className="text-4xl animate-spin">✨</div>
+                      <div className="custom-loader" />
                     </>
                   )}
                 </div>
@@ -481,10 +397,10 @@ export default function MysteryBoxPage() {
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-8">
             {[
-              { label: 'Opened', value: String(totalOpened), icon: '📦' },
+              { label: 'Opened', value: String(totalOpened), icon: <Icon name="box" size={16} /> },
               { label: 'Spent', value: `${totalSpent}`, icon: <Icon name="coin" size={20} /> },
-              { label: 'Balance', value: String(coins), icon: '💰' },
-              { label: 'Legendaries', value: String(legendaryCount), icon: '⭐' },
+              { label: 'Balance', value: String(coins), icon: <Icon name="coin" size={16} /> },
+              { label: 'Legendaries', value: String(legendaryCount), icon: <Icon name="star" size={16} /> },
               { label: 'Best Streak', value: String(maxStreak), icon: '🔥' },
             ].map(stat => (
               <div key={stat.label} className="power-card p-4 text-center rounded-xl">

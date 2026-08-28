@@ -207,7 +207,7 @@ export default function Home() {
       {/* ═══════════════════════════════════════════════════════
           HERO SECTION — Full viewport with parallax
           ═══════════════════════════════════════════════════════ */}
-      <section ref={heroRef} className="relative overflow-hidden" style={{ minHeight: '100vh' }}>
+      <section ref={heroRef} className="relative overflow-hidden dot-pattern" style={{ minHeight: '100vh' }}>
         {/* LightBloom Background */}
         <div className="absolute inset-0 z-0">
           <LightBloom
