@@ -66,7 +66,7 @@ const features = [
     tagColor: 'var(--emerald-bright)',
   },
   {
-    icon: '🏆',
+    icon: <Icon name="trophy" size={32} />,
     title: 'Achievements',
     desc: 'Unlock badges for milestones like First Order, Big Spender, and Trivia Master!',
     link: '/achievements',
@@ -74,7 +74,7 @@ const features = [
     tagColor: 'var(--gold-bright)',
   },
   {
-    icon: '🏆',
+    icon: <Icon name="trophy" size={32} />,
     title: 'Leaderboard',
     desc: 'See who\'s the top spender on campus! Climb the ranks by placing more orders.',
     link: '/leaderboard',
