@@ -123,7 +123,7 @@ export default function CheckoutPage() {
     const found = savedCodes.find((c) => c.code === code);
     if (!found) { setDiscountError('You haven\'t won this code yet. Open a Mystery Box to earn discount codes!'); return; }
     // Check ₱100 minimum order
-    if (subtotal < 100) { setDiscountError('Minimum order of ₱100 required to use discount codes.'); return; }
+    if (subtotal < 50) { setDiscountError('Minimum order of ₱50 required to use discount codes.'); return; }
     // Check 1 week expiration
     const wonDate = new Date(found.wonAt);
     const oneWeekMs = 7 * 24 * 60 * 60 * 1000;

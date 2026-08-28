@@ -25,7 +25,7 @@ const earnMethods = [
 
 const spendMethods = [
   { icon: <Icon name="gift" size={20} />, title: 'Mystery Box', desc: 'Spend 10 coins for a chance to win coins, discounts, or a free musubi', link: '/play/mysterybox', coins: '-10', color: 'var(--crimson)' },
-  { icon: '🏪', title: 'Rewards Shop', desc: 'Redeem coins for free food, vouchers, and special perks (3,000 - 50,000 coins)', link: '/rewards', coins: '3K-50K', color: 'var(--gold-bright)' },
+  { icon: '🏪', title: 'Rewards Shop', desc: 'Redeem coins for free food, vouchers, and special perks (100 - 2,000 coins)', link: '/rewards', coins: '100-2K', color: 'var(--gold-bright)' },
 ];
 
 export default function PointsPage() {
@@ -185,11 +185,24 @@ export default function PointsPage() {
           </div>
 
           {/* ─── Quick Actions ────────────────────────────── */}
-          <div className="mt-8 text-center">
-            <div className="flex flex-wrap gap-3 justify-center">
-              <Link href="/menu" className="deco-btn deco-btn-gold rounded-xl">🛒 Order & Earn</Link>
-              <Link href="/play/checkin" className="deco-btn deco-btn-crimson rounded-xl">📅 Check In</Link>
-              <Link href="/play/trivia" className="deco-btn rounded-xl">🧠 Play Trivia</Link>
+          <div className="mt-8">
+            <p className="font-arcade text-[10px] text-mario-yellow uppercase tracking-widest mb-3 text-center">Quick Actions</p>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { href: '/menu', icon: <Icon name="food" size={22} />, label: 'Order Food', color: '#06d6a0' },
+                { href: '/play/checkin', icon: <Icon name="calendar" size={22} />, label: 'Check In', color: '#ffd60a' },
+                { href: '/play/trivia', icon: <Icon name="question" size={22} />, label: 'Trivia', color: '#e63946' },
+                { href: '/play/mysterybox', icon: <Icon name="gift" size={22} />, label: 'Mystery Box', color: '#c896ff' },
+                { href: '/rewards', icon: <Icon name="star" size={22} />, label: 'Rewards', color: '#4895ef' },
+                { href: '/play/refer', icon: '👥', label: 'Refer Friend', color: '#06d6a0' },
+              ].map(action => (
+                <Link key={action.href} href={action.href} className="group block text-center p-4 rounded-xl border border-white/8 bg-mario-bg-card hover:border-white/20 hover:bg-white/5 transition-all duration-200">
+                  <div className="flex justify-center mb-2 group-hover:scale-110 transition-transform">
+                    {typeof action.icon === 'string' ? <span className="text-xl">{action.icon}</span> : action.icon}
+                  </div>
+                  <p className="font-arcade text-[9px] text-mario-text group-hover:text-mario-yellow transition-colors uppercase leading-tight">{action.label}</p>
+                </Link>
+              ))}
             </div>
           </div>
         </div>

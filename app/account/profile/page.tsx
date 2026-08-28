@@ -326,31 +326,30 @@ export default function AccountProfilePage() {
 
             {/* Perks */}
             {perks.length > 0 && (
-              <div style={{ width: '100%', borderTop: '1px solid rgba(255,214,10,0.1)', paddingTop: '16px' }}>
-                <p style={{
-                  fontFamily: 'var(--font-arcade)',
-                  fontSize: '8px',
-                  color: 'var(--mario-yellow)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.1em',
-                  marginBottom: '8px',
-                }}>Your Perks</p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              <div className="w-full border-t border-white/10 pt-4 mt-4">
+                <p className="font-arcade text-[10px] text-mario-yellow uppercase tracking-widest mb-3">Your Perks</p>
+                <div className="flex flex-wrap gap-2">
                   {perks.map((perk, i) => (
-                    <span key={i} style={{
-                      fontFamily: 'var(--font-arcade)',
-                      fontSize: '8px',
-                      padding: '4px 10px',
-                      borderRadius: '6px',
-                      border: perk.redeemed ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(255,214,10,0.25)',
-                      background: perk.redeemed ? 'rgba(255,255,255,0.03)' : 'rgba(255,214,10,0.1)',
-                      color: perk.redeemed ? 'var(--mario-text-muted)' : 'var(--mario-yellow)',
-                      opacity: perk.redeemed ? 0.5 : 1,
-                    }}>
-                      {perk.perkId === 'gold_member' ? '👑 ' : '🏷️ '}{perk.perkName} {perk.redeemed ? '(Used)' : ''}
-                    </span>
+                    <button key={i} onClick={async () => {
+                      if (!confirm(`Remove perk "${perk.perkName}"?`)) return;
+                      try {
+                        await fetch(`/api/perks?email=${encodeURIComponent(user?.email || '')}&perkId=${perk.perkId}`, { method: 'DELETE' });
+                        setPerks(prev => prev.filter(p => p.perkId !== perk.perkId));
+                      } catch { /* empty */ }
+                    }}
+                    className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-arcade text-[9px] transition-all ${
+                      perk.redeemed
+                        ? 'border-white/10 bg-white/3 text-mario-text-muted opacity-50 cursor-default'
+                        : 'border-mario-yellow/30 bg-mario-yellow/10 text-mario-yellow hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400 cursor-pointer'
+                    }`}
+                    title={perk.redeemed ? 'Already used' : 'Click to remove'}>
+                      {perk.perkId === 'gold_member' ? '👑' : '🏷️'}
+                      <span>{perk.perkName}</span>
+                      {perk.redeemed ? <span className="text-[7px] opacity-60">(Used)</span> : <span className="text-[8px] opacity-0 group-hover:opacity-100 transition-opacity">✕</span>}
+                    </button>
                   ))}
                 </div>
+                <p className="text-[8px] text-mario-text-muted mt-2">Tap a perk to remove it</p>
               </div>
             )}
           </div>
@@ -396,45 +395,22 @@ export default function AccountProfilePage() {
         </div>
 
         {/* Quick Actions */}
-        <div style={{ marginTop: '24px' }}>
-          <p style={{
-            fontFamily: 'var(--font-arcade)',
-            fontSize: '8px',
-            color: 'var(--mario-yellow)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-            marginBottom: '10px',
-          }}>Quick Actions</p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+        <div className="mt-6">
+          <p className="font-arcade text-[10px] text-mario-yellow uppercase tracking-widest mb-3">Quick Actions</p>
+          <div className="grid grid-cols-3 gap-3">
             {[
-              { href: '/menu', icon: <Icon name="food" size={16} />, label: 'Order Food' },
-              { href: '/points', icon: <Icon name="coin" size={16} />, label: 'My Points' },
-              { href: '/rewards', icon: '🏪', label: 'Rewards' },
-              { href: '/orders', icon: <Icon name="clipboard" size={16} />, label: 'Orders' },
-              { href: '/support', icon: <Icon name="chat" size={16} />, label: 'Support' },
-              { href: '/favorites', icon: <Icon name="heart" size={16} color="#e63946" />, label: 'Favorites' },
+              { href: '/menu', icon: <Icon name="food" size={22} />, label: 'Order Food', color: '#06d6a0' },
+              { href: '/points', icon: <Icon name="coin" size={22} />, label: 'My Points', color: '#ffd60a' },
+              { href: '/rewards', icon: <Icon name="gift" size={22} />, label: 'Rewards', color: '#4895ef' },
+              { href: '/orders', icon: <Icon name="box" size={22} />, label: 'My Orders', color: '#e63946' },
+              { href: '/support', icon: <Icon name="chat" size={22} />, label: 'Support', color: '#c896ff' },
+              { href: '/favorites', icon: <Icon name="heart" size={22} color="#e63946" />, label: 'Favorites', color: '#ff006e' },
             ].map(action => (
-              <Link key={action.href} href={action.href} style={{
-                display: 'block',
-                background: 'var(--mario-bg-card)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '12px',
-                padding: '16px 8px',
-                textAlign: 'center',
-                textDecoration: 'none',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,214,10,0.3)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
-              >
-                {action.icon}
-                <p style={{
-                  fontFamily: 'var(--font-arcade)',
-                  fontSize: '7px',
-                  color: 'var(--mario-text)',
-                  marginTop: '6px',
-                  textTransform: 'uppercase',
-                }}>{action.label}</p>
+              <Link key={action.href} href={action.href} className="group block text-center p-4 rounded-xl border border-white/8 bg-mario-bg-card hover:border-white/20 hover:bg-white/5 transition-all duration-200">
+                <div className="flex justify-center mb-2 group-hover:scale-110 transition-transform">
+                  {action.icon}
+                </div>
+                <p className="font-arcade text-[9px] text-mario-text group-hover:text-mario-yellow transition-colors uppercase leading-tight">{action.label}</p>
               </Link>
             ))}
           </div>

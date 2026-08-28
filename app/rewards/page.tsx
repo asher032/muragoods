@@ -18,16 +18,17 @@ interface Reward {
 
 const rewards: Reward[] = [
   // Discount Vouchers
-  { id: 'free_shipping', name: 'Free Shipping Voucher', description: 'Free delivery for your next order outside DWCL.', cost: 6000, icon: '🚚', category: 'Vouchers' },
-  { id: 'voucher_50', name: '₱50 Off Voucher', description: 'Get ₱50 off your next order. Minimum order ₱100.', cost: 8000, icon: '🏷️', category: 'Vouchers' },
-  { id: 'double_points', name: '2x Points (Next Order)', description: 'Earn double coins on your next order for 24 hours.', cost: 10000, icon: '✨', category: 'Vouchers' },
-  { id: 'voucher_100', name: '₱100 Off Voucher', description: 'Get ₱100 off your next order. Minimum order ₱200.', cost: 15000, icon: '🏷️', category: 'Vouchers' },
+  { id: 'free_shipping', name: 'Free Shipping Voucher', description: 'Free delivery for your next order outside DWCL.', cost: 300, icon: '🚚', category: 'Vouchers' },
+  { id: 'voucher_10', name: '₱10 Off Voucher', description: 'Get ₱10 off your next order. No minimum.', cost: 200, icon: '🏷️', category: 'Vouchers' },
+  { id: 'voucher_50', name: '₱50 Off Voucher', description: 'Get ₱50 off your next order. Minimum order ₱75.', cost: 600, icon: '🏷️', category: 'Vouchers' },
+  { id: 'double_points', name: '2x Points (Next Order)', description: 'Earn double coins on your next order for 24 hours.', cost: 500, icon: '✨', category: 'Vouchers' },
+  { id: 'free_musubi', name: 'Free Musubi', description: 'Get a free regular musubi on your next order.', cost: 100, icon: '🍙', category: 'Vouchers' },
 
   // Special Perks
-  { id: 'priority_order', name: 'Priority Order', description: 'Skip the queue — your order gets prepared first.', cost: 12000, icon: '⚡', category: 'Perks' },
-  { id: 'mystery_upgrade', name: 'Mystery Box Upgrade', description: 'Your next mystery box is guaranteed Rare or above.', cost: 20000, icon: <Icon name="gift" size={20} />, category: 'Perks' },
-  { id: 'custom_shoutout', name: 'Shoutout on Instagram', description: 'Get a personalized shoutout on the Muragoods Instagram page.', cost: 25000, icon: '📱', category: 'Perks' },
-  { id: 'gold_member', name: 'Gold Member Badge', description: 'Permanent gold badge on your profile — shows you\'re a top supporter. Perks: priority support, exclusive early access to new items, and a special gold border on your profile.', cost: 50000, icon: '👑', category: 'Perks' },
+  { id: 'priority_order', name: 'Priority Order', description: 'Skip the queue — your order gets prepared first.', cost: 400, icon: '⚡', category: 'Perks' },
+  { id: 'mystery_upgrade', name: 'Mystery Box Upgrade', description: 'Your next mystery box is guaranteed Rare or above.', cost: 800, icon: <Icon name="gift" size={20} />, category: 'Perks' },
+  { id: 'custom_shoutout', name: 'Shoutout on Instagram', description: 'Get a personalized shoutout on the Muragoods Instagram page.', cost: 1000, icon: '📱', category: 'Perks' },
+  { id: 'gold_member', name: 'Gold Member Badge', description: 'Permanent gold badge on your profile — shows you\'re a top supporter. Perks: priority support, exclusive early access to new items, and a special gold border on your profile.', cost: 2000, icon: '👑', category: 'Perks' },
 ];
 
 const categoryEmojis: Record<string, string> = {
