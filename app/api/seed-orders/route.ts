@@ -35,7 +35,7 @@ export async function POST(request: Request) {
 
     // Delete old seed data if reset requested
     if (reset) {
-      await Order.deleteMany({ userId: { $regex: '^seed-user-' } });
+      await Order.deleteMany({ userId: { $regex: '^seed-' } });
     }
 
     // Check if seed data already exists
