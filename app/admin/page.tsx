@@ -266,8 +266,8 @@ export default function AdminPage() {
                       <td className="px-3 py-3">
                         <div className="text-xs text-[var(--gold-bright)]">₱{order.total}</div>
                         <div className="text-[11px] text-[var(--pewter)] hidden sm:block">{order.items.join(', ')}</div>
-                        {(order.instaPayScreenshotUrl || order.gcashScreenshotUrl) && (
-                          <button onClick={() => setPreviewReceipt(order.instaPayScreenshotUrl || order.gcashScreenshotUrl || '')} className="text-[11px] text-[var(--crimson)] underline hover:text-[var(--gold-bright)] transition-colors">
+                        {(order.gcashScreenshotUrl || order.gcashScreenshotUrl) && (
+                          <button onClick={() => setPreviewReceipt(order.gcashScreenshotUrl || order.gcashScreenshotUrl || '')} className="text-[11px] text-[var(--crimson)] underline hover:text-[var(--gold-bright)] transition-colors">
                             View Receipt
                           </button>
                         )}

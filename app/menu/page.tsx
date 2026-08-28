@@ -482,28 +482,32 @@ export default function MenuPage() {
                           <span style={{ width: '28px', textAlign: 'center', fontSize: '12px', fontWeight: 700, color: 'var(--mario-text)' }}>{quickAddQty[product.id] || 1}</span>
                           <button onClick={() => updateQuickQty(product.id, 1)} style={{ width: '32px', height: '34px', background: 'rgba(255,255,255,0.05)', border: 'none', color: 'var(--mario-green)', fontSize: '14px', cursor: 'pointer', fontWeight: 700 }}>+</button>
                         </div>
-                        <button
-                          onClick={() => {
-                            if (!isLoggedIn) { setShowLoginPrompt(true); return; }
-                            addToCart(product, product.variants[0].id, quickAddQty[product.id] || 1);
-                          }}
-                          style={{
-                            flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid var(--mario-green-dark)',
-                            background: 'rgba(6,214,160,0.15)', color: 'var(--mario-green)', fontSize: '10px', fontWeight: 700,
-                            cursor: 'pointer', fontFamily: 'var(--font-arcade)', boxShadow: '0 2px 0 var(--mario-green-dark)',
-                            transition: 'all 0.15s',
-                          }}>
-                          + ADD
-                        </button>
-                        <button
-                          onClick={() => openVariantModal(product)}
-                          style={{
-                            width: '34px', height: '34px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)',
-                            background: 'rgba(255,255,255,0.05)', color: 'var(--mario-text-muted)', fontSize: '14px',
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          }}>
-                          ⋯
-                        </button>
+                        {product.variants.length > 1 ? (
+                          <button
+                            onClick={() => openVariantModal(product)}
+                            style={{
+                              flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid var(--mario-yellow-dark, rgba(255,214,10,0.3))',
+                              background: 'rgba(255,214,10,0.12)', color: 'var(--mario-yellow)', fontSize: '10px', fontWeight: 700,
+                              cursor: 'pointer', fontFamily: 'var(--font-arcade)', boxShadow: '0 2px 0 rgba(255,214,10,0.2)',
+                              transition: 'all 0.15s',
+                            }}>
+                            🛒 CHOOSE & ADD
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              if (!isLoggedIn) { setShowLoginPrompt(true); return; }
+                              addToCart(product, product.variants[0].id, quickAddQty[product.id] || 1);
+                            }}
+                            style={{
+                              flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid var(--mario-green-dark)',
+                              background: 'rgba(6,214,160,0.15)', color: 'var(--mario-green)', fontSize: '10px', fontWeight: 700,
+                              cursor: 'pointer', fontFamily: 'var(--font-arcade)', boxShadow: '0 2px 0 var(--mario-green-dark)',
+                              transition: 'all 0.15s',
+                            }}>
+                            🛒 ADD
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <button disabled style={{

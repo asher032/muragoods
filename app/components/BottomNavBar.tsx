@@ -7,36 +7,30 @@ import { useCoins } from '@/app/hooks/useCoins';
 
 const tabs = [
   { href: '/', label: 'Home', icon: (active: boolean) => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#ffd60a' : '#888'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-      <polyline points="9 22 9 12 15 12 15 22"/>
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill={active ? '#ffd60a' : '#888'} viewBox="0 0 16 16">
+      <path d="M8.186 1.113a.5.5 0 0 0-.372 0L1.846 3.5l2.404.961L10.404 2zm3.564 1.426L5.596 5 8 5.961 14.154 3.5zm3.25 1.7-6.5 2.6v7.922l6.5-2.6V4.24zM7.5 14.762V6.838L1 4.239v7.923zM7.443.184a1.5 1.5 0 0 1 1.114 0l7.129 2.852A.5.5 0 0 1 16 3.5v8.662a1 1 0 0 1-.629.928l-7.185 2.874a.5.5 0 0 1-.372 0L.63 13.09a1 1 0 0 1-.63-.928V3.5a.5.5 0 0 1 .314-.464z"/>
     </svg>
   )},
   { href: '/menu', label: 'Menu', icon: (active: boolean) => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#ffd60a' : '#888'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
-      <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
-      <line x1="6" y1="1" x2="6" y2="4"/>
-      <line x1="10" y1="1" x2="10" y2="4"/>
-      <line x1="14" y1="1" x2="14" y2="4"/>
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill={active ? '#ffd60a' : '#888'} viewBox="0 0 16 16">
+      <path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6"/>
+      <path d="M13.997 5.17a5 5 0 0 0-8.101-4.09A5 5 0 0 0 1.28 9.342a5 5 0 0 0 8.336 5.109 3.5 3.5 0 0 0 5.201-4.065 3.001 3.001 0 0 0-.822-5.216zm-1-.034a1 1 0 0 0 .668.977 2.001 2.001 0 0 1 .547 3.478 1 1 0 0 0-.341 1.113 2.5 2.5 0 0 1-3.715 2.905 1 1 0 0 0-1.262.152 4 4 0 0 1-6.67-4.087 1 1 0 0 0-.2-1 4 4 0 0 1 3.693-6.61 1 1 0 0 0 .8-.2 4 4 0 0 1 6.48 3.273z"/>
     </svg>
   )},
   { href: '/entertainment', label: 'Play', icon: (active: boolean) => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#ffd60a' : '#888'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="5 3 19 12 5 21 5 3"/>
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill={active ? '#ffd60a' : '#888'} viewBox="0 0 16 16">
+      <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
+      <path d="M8 13.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11m0 .5A6 6 0 1 0 8 2a6 6 0 0 0 0 12"/>
     </svg>
   )},
   { href: '/orders', label: 'Orders', icon: (active: boolean) => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#ffd60a' : '#888'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-      <line x1="3" y1="6" x2="21" y2="6"/>
-      <path d="M16 10a4 4 0 0 1-8 0"/>
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill={active ? '#ffd60a' : '#888'} viewBox="0 0 16 16">
+      <path d="M8.186 1.113a.5.5 0 0 0-.372 0L1.846 3.5l2.404.961L10.404 2zm3.564 1.426L5.596 5 8 5.961 14.154 3.5zm3.25 1.7-6.5 2.6v7.922l6.5-2.6V4.24zM7.5 14.762V6.838L1 4.239v7.923zM7.443.184a1.5 1.5 0 0 1 1.114 0l7.129 2.852A.5.5 0 0 1 16 3.5v8.662a1 1 0 0 1-.629.928l-7.185 2.874a.5.5 0 0 1-.372 0L.63 13.09a1 1 0 0 1-.63-.928V3.5a.5.5 0 0 1 .314-.464z"/>
     </svg>
   )},
   { href: '/account/profile', label: 'Profile', icon: (active: boolean) => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#ffd60a' : '#888'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-      <circle cx="12" cy="7" r="4"/>
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill={active ? '#ffd60a' : '#888'} viewBox="0 0 16 16">
+      <path d="M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6"/>
     </svg>
   )},
 ];

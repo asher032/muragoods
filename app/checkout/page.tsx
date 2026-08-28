@@ -20,7 +20,7 @@ const timeSlotOptions = [
   { value: 'evening', label: 'Evening', time: '5:00 PM – 8:00 PM', icon: '🌙' },
 ];
 
-type PaymentMethod = 'InstaPay' | 'Cash on Delivery';
+type PaymentMethod = 'GCash' | 'Cash on Delivery';
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -31,9 +31,9 @@ export default function CheckoutPage() {
   const [deliveryService, setDeliveryService] = useState('DWCL Pickup — Free');
   const [customOrderDate, setCustomOrderDate] = useState('');
   const [timeSlot, setTimeSlot] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('InstaPay');
-  const [instaPayRef, setInstaPayRef] = useState('');
-  const [instaPayFile, setInstaPayFile] = useState<File | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('GCash');
+  const [gcashRef, setGCashRef] = useState('');
+  const [gcashFile, setGCashFile] = useState<File | null>(null);
   const [mapAddress, setMapAddress] = useState('');
   const [latitude, setLatitude] = useState('13.1550');
   const [longitude, setLongitude] = useState('123.7450');
@@ -68,7 +68,7 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (location !== 'DWCL' && location !== 'Daraga' && paymentMethod === 'Cash on Delivery') {
-      setPaymentMethod('InstaPay');
+      setPaymentMethod('GCash');
     }
   }, [location, paymentMethod]);
 
@@ -92,7 +92,7 @@ export default function CheckoutPage() {
   const isDwcl = location === 'DWCL';
   const isCustom = location === 'Custom';
   const isDaraga = location === 'Daraga';
-  const isInstaPay = paymentMethod === 'InstaPay';
+  const isGCash = paymentMethod === 'GCash';
   const restrictedItems = cartItems.filter(item => dwclOnlyProducts.includes(item.id) && !isDwcl && !isDaraga);
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = cartItems.reduce((sum, item) => sum + (item.selectedVariant?.price || 0) * item.quantity, 0);
@@ -122,6 +122,8 @@ export default function CheckoutPage() {
     const savedCodes = JSON.parse(localStorage.getItem('muragoods_discount_codes') || '[]') as { code: string; label: string; wonAt: string }[];
     const found = savedCodes.find((c) => c.code === code);
     if (!found) { setDiscountError('You haven\'t won this code yet. Open a Mystery Box to earn discount codes!'); return; }
+    // Check ₱100 minimum order
+    if (subtotal < 100) { setDiscountError('Minimum order of ₱100 required to use discount codes.'); return; }
     // Check 1 week expiration
     const wonDate = new Date(found.wonAt);
     const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
@@ -207,8 +209,8 @@ export default function CheckoutPage() {
     const phoneDigits = phone.replace(/[\s\-()+]/g, '');
     if (!phoneDigits || phoneDigits.length < 10 || phoneDigits.length > 15) { setError('Please enter a valid contact number (10-15 digits).'); return; }
     if (!isDwcl && !isCustom && !mapAddress) { setError('Please select your delivery location on the map'); return; }
-    if (!customOrderDate) { setError('Please enter your preferred order date'); return; }      if (isInstaPay) {
-      if (!instaPayRef.trim() || instaPayRef.trim().length < 5) { setError('Please enter a valid InstaPay reference number.'); return; }
+    if (!customOrderDate) { setError('Please enter your preferred order date'); return; }      if (isGCash) {
+      if (!gcashRef.trim() || gcashRef.trim().length < 5) { setError('Please enter a valid GCash reference number.'); return; }
     }
     setIsSubmitting(true);
     const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -230,7 +232,7 @@ export default function CheckoutPage() {
     formData.append('pointsEarned', String(pointsEarned));
     if (discountApplied) { formData.append('discountCode', discountApplied.code); formData.append('discountAmount', String(discountAmount)); }
     if (promoApplied) { formData.append('promoCode', promoApplied.code); formData.append('promoDiscount', String(promoDiscountAmount)); }
-    if (isInstaPay) { formData.append('instaPayRefNumber', instaPayRef); formData.append('instaPayScreenshot', instaPayFile!); }
+    if (isGCash) { formData.append('gcashRefNumber', gcashRef); formData.append('gcashScreenshot', gcashFile!); }
     try {
       const res = await fetch('/api/orders', { method: 'POST', body: formData });
       const result = await res.json();
@@ -424,13 +426,13 @@ export default function CheckoutPage() {
                 <div className="checkout-title">PAYMENT</div>
                 <div className="cart-steps">
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <button type="button" onClick={() => setPaymentMethod('InstaPay')}
+                    <button type="button" onClick={() => setPaymentMethod('GCash')}
                       style={{
-                        padding: '16px 12px', borderRadius: '8px', border: isInstaPay ? '1px solid #ffd60a' : '1px solid #2e2e2e',
-                        background: isInstaPay ? 'rgba(255,214,10,0.08)' : '#333', color: '#fff', cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s'
+                        padding: '16px 12px', borderRadius: '8px', border: isGCash ? '1px solid #ffd60a' : '1px solid #2e2e2e',
+                        background: isGCash ? 'rgba(255,214,10,0.08)' : '#333', color: '#fff', cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s'
                       }}>
                       <div style={{ fontSize: '20px', marginBottom: '6px' }}>🏦</div>
-                      <p style={{ fontSize: '11px', fontWeight: 600 }}>InstaPay</p>
+                      <p style={{ fontSize: '11px', fontWeight: 600 }}>GCash</p>
                       <p style={{ fontSize: '9px', color: '#bbb', marginTop: '4px' }}>QR + proof required</p>
                     </button>
                     <button type="button" onClick={() => (isDwcl || isDaraga) && setPaymentMethod('Cash on Delivery')} disabled={!isDwcl && !isDaraga}
@@ -446,19 +448,19 @@ export default function CheckoutPage() {
                     </button>
                   </div>
 
-                  {isInstaPay && (
+                  {isGCash && (
                     <div style={{ marginTop: '12px' }}>
-                      {/* InstaPay Card */}
+                      {/* GCash Card */}
                       <div style={{ background: 'linear-gradient(135deg, #1a365d, #2563eb)', borderRadius: '16px', overflow: 'hidden', marginBottom: '14px' }}>
                         <div style={{ padding: '16px 20px 12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 800, color: '#1a365d' }}>G</div>
                           <div>
-                            <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '13px', color: '#fff', fontWeight: 700 }}>InstaPay</p>
+                            <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '13px', color: '#fff', fontWeight: 700 }}>GCash</p>
                           </div>
                         </div>
                         <div style={{ padding: '0 20px 20px' }}>
                           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <img src="/images/instapay-qr.png" alt="InstaPay QR Code" style={{ width: '200px', maxWidth: '100%', height: 'auto', borderRadius: '8px' }} />
+                            <img src="/images/gcash-qr.png" alt="GCash QR Code" style={{ width: '200px', maxWidth: '100%', height: 'auto', borderRadius: '8px' }} />
                             <p style={{ fontSize: '10px', color: '#888', marginTop: '8px' }}>Scan this QR code using any bank app</p>
                             <p style={{ fontSize: '10px', color: '#888' }}>Fees may apply.</p>
                           </div>
@@ -470,21 +472,21 @@ export default function CheckoutPage() {
                       </div>
 
                       <div style={{ marginBottom: '10px', background: 'rgba(255,214,10,0.06)', border: '1px solid rgba(255,214,10,0.15)', borderRadius: '8px', padding: '10px 12px' }}>
-                        <p style={{ fontSize: '10px', color: '#ffd60a', fontWeight: 600 }}>📋 After paying, enter your InstaPay reference number below</p>
+                        <p style={{ fontSize: '10px', color: '#ffd60a', fontWeight: 600 }}>📋 After paying, enter your GCash reference number below</p>
                       </div>
                       <div style={{ marginBottom: '10px' }}>
                         <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--mario-text)', marginBottom: '6px' }}>Reference Number *</p>
-                        <input type="text" value={instaPayRef} onChange={(e) => setInstaPayRef(e.target.value)} placeholder="e.g. 1234567890123" className="input_field" required={isInstaPay} />
+                        <input type="text" value={gcashRef} onChange={(e) => setGCashRef(e.target.value)} placeholder="e.g. 1234567890123" className="input_field" required={isGCash} />
                       </div>
                       <div>
                         <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--mario-text)', marginBottom: '6px' }}>Upload Screenshot (optional)</p>
-                        <input type="file" accept="image/*" onChange={(e) => setInstaPayFile(e.target.files?.[0] || null)} className="input_file" />
+                        <input type="file" accept="image/*" onChange={(e) => setGCashFile(e.target.files?.[0] || null)} className="input_file" />
                         <p style={{ fontSize: '9px', color: 'var(--mario-text-muted)', marginTop: '4px' }}>Optional: helps us verify your payment faster</p>
                       </div>
                     </div>
                   )}
 
-                  {!isInstaPay && (
+                  {!isGCash && (
                     <div style={{ marginTop: '12px', background: 'rgba(6,214,160,0.06)', border: '1px solid rgba(6,214,160,0.2)', borderRadius: '12px', padding: '16px' }}>
                       <p style={{ fontSize: '11px', fontWeight: 600, color: '#06d6a0' }}>💵 Cash on Delivery</p>
                       <p style={{ fontSize: '12px', color: '#fff', marginTop: '6px' }}>{isDwcl ? 'Pay in cash when you pick up your order. No payment proof needed!' : 'Pay in cash when delivered. No payment proof needed!'}</p>
@@ -623,10 +625,10 @@ export default function CheckoutPage() {
             <div style={{ padding: '30px 20px', textAlign: 'center' }}>
               <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(6,214,160,0.15)', border: '1px solid rgba(6,214,160,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '20px', color: '#06d6a0' }}>✓</div>
               <p style={{ color: '#fff', fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
-                {isInstaPay ? 'Message @muragoods_ on Instagram to confirm!' : 'Pay cash when you pick up!'}
+                {isGCash ? 'Message @muragoods_ on Instagram to confirm!' : 'Pay cash when you pick up!'}
               </p>
               <p style={{ fontSize: '11px', color: '#ffd60a', marginBottom: '20px' }}>🪙 Earn {pointsEarned} coins after delivery!</p>
-              {isInstaPay && (
+              {isGCash && (
                 <a href="https://www.instagram.com/muragoods_/" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '10px', background: '#555', borderRadius: '5px', color: '#fff', fontSize: '11px', fontWeight: 600, textDecoration: 'none', marginBottom: '10px' }}>
                   Open Instagram @muragoods_
                 </a>

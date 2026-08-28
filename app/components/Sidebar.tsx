@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useCoins } from '@/app/hooks/useCoins';
-import { useJarvis } from '@/app/components/JARVISProvider';
+
 
 interface SidebarProps {
   open: boolean;
@@ -45,7 +45,7 @@ const navItems = [
 export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { coins } = useCoins();
-  const { openJarvis, isAdmin } = useJarvis();
+
   const [user, setUser] = useState<{ name?: string; email?: string } | null>(null);
 
   useEffect(() => {
@@ -120,14 +120,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           </div>
         ))}
 
-        {/* JARVIS Button (admin only) */}
-        {isAdmin && (
-          <div style={{ padding: '12px 24px' }}>
-            <button onClick={() => { window.location.href = '/jarvis'; onClose(); }} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid rgba(0,180,255,0.3)', background: 'linear-gradient(135deg, rgba(0,180,255,0.1), rgba(0,100,255,0.05))', color: '#00b4ff', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'all 0.2s' }}>
-              🤖 JARVIS AI
-            </button>
-          </div>
-        )}
+
 
         {/* Footer */}
         <div style={{ padding: '20px 24px', borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: '12px' }}>

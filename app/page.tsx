@@ -62,7 +62,7 @@ export default function Home() {
                 text="WELCOME TO MURAGOODS"
                 tag="h1"
                 mediaType="image"
-                src="/images/mario-hero.png"
+                src="/images/mario-waving.png"
                 fillScale={1.3}
                 parallax={30}
                 drift={15}
@@ -122,7 +122,7 @@ export default function Home() {
             {/* Mario Hero */}
             <div className="flex justify-center">
               <div className="relative w-64 h-64 sm:w-80 sm:h-80">
-                <Image src="/images/mario-hero.png" alt="Muragoods" fill className="object-contain drop-shadow-[0_0_30px_rgba(255,214,10,0.3)]" priority />
+                <Image src="/images/mario-waving.png" alt="Muragoods" fill className="object-contain drop-shadow-[0_0_30px_rgba(255,214,10,0.3)]" priority />
               </div>
             </div>
           </div>
