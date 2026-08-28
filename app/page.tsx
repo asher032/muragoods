@@ -6,6 +6,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { NavBar } from '@/app/components/NavBar';
 import dynamic from 'next/dynamic';
 import { useScrollPosition, useScrollReveal, useMousePosition, useElementMouse, useCountUp } from '@/app/components/useScrollEffects';
+import { Icon } from '@/app/components/Icon';
 
 const LightBloom = dynamic(() => import('@/app/components/ui/LightBloom'), { ssr: false });
 const MaskedHeading = dynamic(() => import('@/app/components/ui/MaskedHeading'), { ssr: false });
@@ -145,12 +146,23 @@ function ParallaxSection({ children, speed = 0.3, className = '' }: {
 
 /* ─── Marquee Banner ────────────────────────────────────── */
 function MarqueeBanner() {
-  const items = ['🍕 ORDER NOW', '🪙 EARN COINS', '🎮 PLAY GAMES', '💌 SEND LETTERS', '☕ COFFEE JELLY', '🍪 COOKIES', '⭐ RATED 4.9', '🚀 FREE DELIVERY'];
+  const items = [
+    { text: 'ORDER NOW', icon: <Icon name="food" size={12} /> },
+    { text: 'EARN COINS', icon: <Icon name="coin" size={12} /> },
+    { text: 'PLAY GAMES', icon: <Icon name="game" size={12} /> },
+    { text: 'SEND LETTERS', icon: <Icon name="envelope" size={12} /> },
+    { text: 'COFFEE JELLY', icon: <Icon name="food" size={12} /> },
+    { text: 'COOKIES', icon: <Icon name="food" size={12} /> },
+    { text: 'RATED 4.9', icon: <Icon name="star" size={12} /> },
+    { text: 'FREE DELIVERY', icon: <Icon name="box" size={12} /> },
+  ];
   return (
     <div className="overflow-hidden py-4 border-y border-white/5">
       <div className="marquee-track flex items-center gap-8 whitespace-nowrap" style={{ width: 'max-content' }}>
         {[...items, ...items, ...items, ...items].map((item, i) => (
-          <span key={i} className="font-arcade text-[9px] text-mario-text-muted/50 tracking-wider">{item}</span>
+          <span key={i} className="flex items-center gap-2 font-arcade text-[9px] text-mario-text-muted/50 tracking-wider">
+            {item.icon} {item.text}
+          </span>
         ))}
       </div>
     </div>
@@ -192,10 +204,10 @@ export default function Home() {
   ];
 
   const features = [
-    { icon: '🍕', title: 'Fresh Food', desc: 'Made to order with love', color: '#06d6a0', link: '/menu' },
-    { icon: '🪙', title: 'Earn Coins', desc: '0.5 coins per peso spent', color: '#ffd60a', link: '/points' },
-    { icon: '🎮', title: 'Play Games', desc: 'Win rewards & prizes', color: '#4895ef', link: '/entertainment' },
-    { icon: '💌', title: 'Untold Words', desc: 'Send anonymous confessions', color: '#c896ff', link: '/untold-words' },
+    { icon: <Icon name="food" size={28} />, title: 'Fresh Food', desc: 'Made to order with love', color: '#06d6a0', link: '/menu' },
+    { icon: <Icon name="coin" size={28} />, title: 'Earn Coins', desc: '0.5 coins per peso spent', color: '#ffd60a', link: '/points' },
+    { icon: <Icon name="game" size={28} />, title: 'Play Games', desc: 'Win rewards & prizes', color: '#4895ef', link: '/entertainment' },
+    { icon: <Icon name="envelope" size={28} />, title: 'Untold Words', desc: 'Send anonymous confessions', color: '#c896ff', link: '/untold-words' },
   ];
 
   return (
@@ -553,7 +565,7 @@ export default function Home() {
             ].map((t, i) => (
               <Reveal key={i} delay={i * 0.15}>
                 <div className="mario-card p-6 spotlight-card h-full" style={{ '--mouse-x': '50%', '--mouse-y': '50%' } as React.CSSProperties}>
-                  <div className="text-mario-yellow text-sm mb-3">{'⭐'.repeat(t.stars)}</div>
+                  <div className="flex gap-1 mb-3">{Array.from({ length: t.stars }, (_, i) => <Icon key={i} name="star" size={14} color="#ffd60a" />)}</div>
                   <p className="text-mario-text text-sm mb-4 italic">&ldquo;{t.text}&rdquo;</p>
                   <p className="font-arcade text-[8px] text-mario-text-muted tracking-wider">— {t.name}</p>
                 </div>
@@ -569,8 +581,8 @@ export default function Home() {
       <footer className="border-t border-white/5 py-12 text-center relative z-10">
         <Reveal>
           <div className="flex justify-center gap-4 mb-4">
-            {['🍕', '🪙', '🎮', '💌', '⭐'].map((e, i) => (
-              <span key={i} className="heart-bounce text-xl" style={{ animationDelay: `${i * 0.15}s` }}>{e}</span>
+            {[<Icon key="food" name="food" size={18} />, <Icon key="coin" name="coin" size={18} />, <Icon key="game" name="game" size={18} />, <Icon key="envelope" name="envelope" size={18} />, <Icon key="star" name="star" size={18} />].map((icon, i) => (
+              <span key={i} className="heart-bounce" style={{ animationDelay: `${i * 0.15}s` }}>{icon}</span>
             ))}
           </div>
           <p className="font-arcade text-[8px] text-mario-text-muted tracking-widest uppercase mb-2">
