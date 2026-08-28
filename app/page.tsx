@@ -165,12 +165,17 @@ export default function Home() {
   const heroRef = useRef<HTMLElement>(null);
   const [heroVisible, setHeroVisible] = useState(true);
   const [showContent, setShowContent] = useState(false);
+  const [stats, setStats] = useState({ totalOrders: 0, happyCustomers: 0, menuItems: 0, avgRating: 0 });
 
   useEffect(() => {
     const user = localStorage.getItem('user');
     if (user) setIsLoggedIn(true);
-    // Delay content reveal for cinematic entrance
     const timer = setTimeout(() => setShowContent(true), 300);
+    // Fetch real stats
+    fetch('/api/stats')
+      .then(r => r.json())
+      .then(d => { if (d.success && d.data) setStats(d.data); })
+      .catch(() => {});
     return () => clearTimeout(timer);
   }, []);
 
@@ -250,7 +255,7 @@ export default function Home() {
                   text="WELCOME TO MURAGOODS"
                   tag="h1"
                   mediaType="image"
-                  src="/images/mario-waving.png"
+                  src="/images/muragoods-logo.png"
                   fillScale={1.3}
                   parallax={30}
                   drift={15}
@@ -351,10 +356,10 @@ export default function Home() {
       <section className="px-4 py-16 sm:px-8">
         <div className="mario-container">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <Reveal delay={0}><StatCounter value={500} suffix="+" label="Orders Served" /></Reveal>
-            <Reveal delay={0.1}><StatCounter value={150} suffix="+" label="Happy Customers" /></Reveal>
-            <Reveal delay={0.2}><StatCounter value={12} label="Menu Items" /></Reveal>
-            <Reveal delay={0.3}><StatCounter value={49} label="Avg Rating" suffix="/10" /></Reveal>
+            <Reveal delay={0}><StatCounter value={stats.totalOrders || 1} suffix="+" label="Orders Served" /></Reveal>
+            <Reveal delay={0.1}><StatCounter value={stats.happyCustomers || 1} suffix="+" label="Happy Customers" /></Reveal>
+            <Reveal delay={0.2}><StatCounter value={stats.menuItems || 12} label="Menu Items" /></Reveal>
+            <Reveal delay={0.3}><StatCounter value={Math.round((stats.avgRating || 4.9) * 10)} label="Avg Rating" suffix="/10" /></Reveal>
           </div>
         </div>
       </section>
