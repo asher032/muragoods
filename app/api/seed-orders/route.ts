@@ -26,27 +26,35 @@ const SEED_ORDERS = [
   { customer: 'Gella A.', items: ['Coffee Jelly', 'Cookies', 'Musubi'], total: 80, status: 'Delivered', zone: 'Zone 3', address: 'Commerce building', payment: 'GCash', deliveryType: 'Delivery', createdAt: new Date('2026-08-20') },
 ];
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     await dbConnect();
 
+    const url = new URL(request.url);
+    const reset = url.searchParams.get('reset') === 'true';
+
+    // Delete old seed data if reset requested
+    if (reset) {
+      await Order.deleteMany({ userId: { $regex: '^seed-user-' } });
+    }
+
     // Check if seed data already exists
     const existingCount = await Order.countDocuments({
-      createdAt: { $lt: new Date('2026-08-24') }
+      userId: { $regex: '^seed-user-' }
     });
 
-    if (existingCount >= 20) {
+    if (existingCount >= 20 && !reset) {
       return NextResponse.json({
         success: true,
-        message: `Seed data already exists (${existingCount} historical orders found). Skipping.`,
+        message: `Seed data already exists (${existingCount} historical orders found). Pass ?reset=true to re-seed.`,
         existingCount,
       });
     }
 
     // Insert seed orders
-    const orders = SEED_ORDERS.map(o => ({
+    const orders = SEED_ORDERS.map((o, i) => ({
       ...o,
-      userId: 'seed-historical',
+      userId: `seed-user-${i + 1}`,
       phone: '09XX-XXX-XXXX',
       deliveryDate: (o.createdAt as Date).toISOString().split('T')[0],
       pointsEarned: Math.floor(o.total * 0.5),
