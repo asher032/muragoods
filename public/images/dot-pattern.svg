@@ -1,25 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="60" height="60">
-  <rect width="60" height="60" fill="#0a0a18"/>
-  <circle cx="10" cy="10" r="3" fill="rgba(255,214,10,0.6)"/>
-  <circle cx="30" cy="10" r="2" fill="rgba(255,214,10,0.4)"/>
-  <circle cx="50" cy="10" r="2.5" fill="rgba(255,214,10,0.5)"/>
-  <circle cx="10" cy="30" r="2" fill="rgba(6,214,160,0.4)"/>
-  <circle cx="30" cy="30" r="3.5" fill="rgba(255,214,10,0.7)"/>
-  <circle cx="50" cy="30" r="2" fill="rgba(72,149,239,0.4)"/>
-  <circle cx="10" cy="50" r="2.5" fill="rgba(72,149,239,0.35)"/>
-  <circle cx="30" cy="50" r="2" fill="rgba(255,214,10,0.45)"/>
-  <circle cx="50" cy="50" r="3" fill="rgba(255,214,10,0.55)"/>
-  <circle cx="5" cy="20" r="1" fill="rgba(255,255,255,0.12)"/>
-  <circle cx="45" cy="45" r="1.2" fill="rgba(255,255,255,0.1)"/>
-  <circle cx="20" cy="40" r="0.9" fill="rgba(255,255,255,0.08)"/>
-  <circle cx="40" cy="15" r="1.1" fill="rgba(255,255,255,0.1)"/>
-  <circle cx="55" cy="35" r="0.8" fill="rgba(255,255,255,0.12)"/>
-  <circle cx="15" cy="55" r="1" fill="rgba(255,255,255,0.09)"/>
-  <circle cx="35" cy="25" r="0.7" fill="rgba(255,255,255,0.08)"/>
-  <circle cx="25" cy="5" r="1.1" fill="rgba(255,255,255,0.1)"/>
-  <circle cx="45" cy="55" r="0.9" fill="rgba(255,255,255,0.11)"/>
-  <circle cx="5" cy="45" r="1" fill="rgba(255,255,255,0.08)"/>
-  <circle cx="55" cy="5" r="0.8" fill="rgba(255,255,255,0.1)"/>
-  <circle cx="20" cy="20" r="0.6" fill="rgba(255,255,255,0.07)"/>
-  <circle cx="40" cy="40" r="0.7" fill="rgba(255,255,255,0.09)"/>
+  <rect width="60" height="60" fill="#ffd60a"/>
+  <circle cx="10" cy="10" r="3" fill="rgba(255,224,102,0.8)"/>
+  <circle cx="30" cy="10" r="2" fill="rgba(255,200,0,0.7)"/>
+  <circle cx="50" cy="10" r="2.5" fill="rgba(255,224,102,0.75)"/>
+  <circle cx="10" cy="30" r="2" fill="rgba(255,200,0,0.7)"/>
+  <circle cx="30" cy="30" r="3.5" fill="rgba(255,230,60,0.9)"/>
+  <circle cx="50" cy="30" r="2" fill="rgba(255,200,0,0.7)"/>
+  <circle cx="10" cy="50" r="2.5" fill="rgba(255,224,102,0.75)"/>
+  <circle cx="30" cy="50" r="2" fill="rgba(255,200,0,0.7)"/>
+  <circle cx="50" cy="50" r="3" fill="rgba(255,224,102,0.8)"/>
+  <circle cx="5" cy="20" r="1" fill="rgba(255,255,255,0.2)"/>
+  <circle cx="45" cy="45" r="1.2" fill="rgba(255,255,255,0.18)"/>
+  <circle cx="20" cy="40" r="0.9" fill="rgba(255,255,255,0.15)"/>
+  <circle cx="40" cy="15" r="1.1" fill="rgba(255,255,255,0.18)"/>
+  <circle cx="55" cy="35" r="0.8" fill="rgba(255,255,255,0.2)"/>
+  <circle cx="15" cy="55" r="1" fill="rgba(255,255,255,0.15)"/>
+  <circle cx="35" cy="25" r="0.7" fill="rgba(255,255,255,0.12)"/>
+  <circle cx="25" cy="5" r="1.1" fill="rgba(255,255,255,0.18)"/>
+  <circle cx="45" cy="55" r="0.9" fill="rgba(255,255,255,0.17)"/>
+  <circle cx="5" cy="45" r="1" fill="rgba(255,255,255,0.15)"/>
+  <circle cx="55" cy="5" r="0.8" fill="rgba(255,255,255,0.18)"/>
+  <circle cx="20" cy="20" r="0.6" fill="rgba(255,255,255,0.12)"/>
+  <circle cx="40" cy="40" r="0.7" fill="rgba(255,255,255,0.15)"/>
 </svg>
