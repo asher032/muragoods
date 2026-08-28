@@ -248,29 +248,22 @@ export default function Home() {
               </div>
             </Reveal>
 
-            {/* Masked Heading */}
+            {/* Gold Heading */}
             <Reveal delay={0.2}>
               <div className="mb-6">
-                <MaskedHeading
-                  text="WELCOME TO MURAGOODS"
-                  tag="h1"
-                  mediaType="image"
-                  src="/images/dot-pattern.svg"
-                  fillScale={2}
-                  parallax={20}
-                  drift={10}
-                  brightness={1.4}
-                  saturation={1.2}
-                  reveal="rise"
-                  trigger="view"
-                  duration={1.2}
-                  stagger={0.08}
-                  align="center"
-                  weight={900}
-                  tracking={-0.02}
-                  textScale={0.08}
-                  style={{ color: 'transparent' }}
-                />
+                <h1
+                  className="font-arcade text-[clamp(2rem,8vw,5rem)] leading-tight tracking-tight text-center"
+                  style={{
+                    background: 'linear-gradient(180deg, #ffe066 0%, #ffd60a 40%, #f59e0b 70%, #d4a017 100%)',
+                    WebkitBackgroundClip: 'text',
+                    backgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    filter: 'drop-shadow(0 0 20px rgba(255,214,10,0.4)) drop-shadow(0 2px 4px rgba(0,0,0,0.5))',
+                    textShadow: 'none',
+                  }}
+                >
+                  WELCOME TO MURAGOODS
+                </h1>
               </div>
             </Reveal>
 
