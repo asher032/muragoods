@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useCoins } from '@/app/hooks/useCoins';
+import { Icon } from '@/app/components/Icon';
 
 const BOX_COST = 10;
 
@@ -14,7 +15,7 @@ interface Prize {
   description: string;
   type: 'coins' | 'discount' | 'jackpot';
   value: number;
-  icon: string;
+  icon: React.ReactNode;
   rarity: 'common' | 'rare' | 'legendary';
   color: string;
 }
@@ -26,7 +27,7 @@ const prizes: Prize[] = [
     description: 'A small coin bonus added to your balance!',
     type: 'coins',
     value: 5,
-    icon: '🪙',
+    icon: <Icon name="coin" size={20} />,
     rarity: 'common',
     color: 'var(--gold)',
   },
@@ -36,7 +37,7 @@ const prizes: Prize[] = [
     description: 'You earned back what you spent — free box!',
     type: 'coins',
     value: 10,
-    icon: '🪙',
+    icon: <Icon name="coin" size={20} />,
     rarity: 'common',
     color: 'var(--gold-bright)',
   },
@@ -46,7 +47,7 @@ const prizes: Prize[] = [
     description: 'A nice chunk of coins for your next order!',
     type: 'coins',
     value: 15,
-    icon: '🪙',
+    icon: <Icon name="coin" size={20} />,
     rarity: 'common',
     color: 'var(--gold-bright)',
   },
@@ -116,7 +117,7 @@ const prizes: Prize[] = [
     description: 'A little something for your coin collection!',
     type: 'coins',
     value: 8,
-    icon: '🪙',
+    icon: <Icon name="coin" size={20} />,
     rarity: 'common',
     color: 'var(--gold)',
   },
@@ -481,7 +482,7 @@ export default function MysteryBoxPage() {
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-8">
             {[
               { label: 'Opened', value: String(totalOpened), icon: '📦' },
-              { label: 'Spent', value: `${totalSpent}`, icon: '🪙' },
+              { label: 'Spent', value: `${totalSpent}`, icon: <Icon name="coin" size={20} /> },
               { label: 'Balance', value: String(coins), icon: '💰' },
               { label: 'Legendaries', value: String(legendaryCount), icon: '⭐' },
               { label: 'Best Streak', value: String(maxStreak), icon: '🔥' },

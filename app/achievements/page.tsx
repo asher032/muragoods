@@ -5,12 +5,13 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useCoins } from '@/app/hooks/useCoins';
+import { Icon } from '@/app/components/Icon';
 
 interface Badge {
   id: string;
   name: string;
   description: string;
-  icon: string;
+  icon: React.ReactNode;
   requirement: string;
   unlocked: boolean;
   progress: number;
@@ -20,7 +21,7 @@ interface Badge {
 
 const ALL_BADGES: Omit<Badge, 'unlocked' | 'progress'>[] = [
   // Orders
-  { id: 'first_order', name: 'First Blood', description: 'Place your first order', icon: '🎮', requirement: '1 order', category: 'orders', maxProgress: 1 },
+  { id: 'first_order', name: 'First Blood', description: 'Place your first order', icon: <Icon name="game" size={20} />, requirement: '1 order', category: 'orders', maxProgress: 1 },
   { id: 'orders_5', name: 'Regular Player', description: 'Place 5 orders', icon: '🎯', requirement: '5 orders', category: 'orders', maxProgress: 5 },
   { id: 'orders_10', name: 'Power User', description: 'Place 10 orders', icon: '⚡', requirement: '10 orders', category: 'orders', maxProgress: 10 },
   { id: 'orders_25', name: 'Elite Warrior', description: 'Place 25 orders', icon: '🏆', requirement: '25 orders', category: 'orders', maxProgress: 25 },
@@ -35,13 +36,13 @@ const ALL_BADGES: Omit<Badge, 'unlocked' | 'progress'>[] = [
   // Streak
   { id: 'streak_3', name: 'Hat Trick', description: 'Order 3 days in a row', icon: '🔥', requirement: '3-day streak', category: 'streak', maxProgress: 3 },
   { id: 'streak_7', name: 'On Fire', description: 'Order 7 days in a row', icon: '🌟', requirement: '7-day streak', category: 'streak', maxProgress: 7 },
-  { id: 'checkin_7', name: 'Dedicated', description: 'Check in 7 days in a row', icon: '📅', requirement: '7-day check-in', category: 'streak', maxProgress: 7 },
+  { id: 'checkin_7', name: 'Dedicated', description: 'Check in 7 days in a row', icon: <Icon name="calendar" size={20} />, requirement: '7-day check-in', category: 'streak', maxProgress: 7 },
 
   // Social
   { id: 'first_review', name: 'Critic', description: 'Leave your first review', icon: '⭐', requirement: '1 review', category: 'social', maxProgress: 1 },
   { id: 'reviews_5', name: 'Food Critic', description: 'Leave 5 reviews', icon: '📝', requirement: '5 reviews', category: 'social', maxProgress: 5 },
   { id: 'referral_1', name: 'Recruiter', description: 'Refer 1 friend', icon: '🤝', requirement: '1 referral', category: 'social', maxProgress: 1 },
-  { id: 'unsent_1', name: 'Poet', description: 'Write your first unsent letter', icon: '💌', requirement: '1 letter', category: 'social', maxProgress: 1 },
+  { id: 'unsent_1', name: 'Poet', description: 'Write your first unsent letter', icon: <Icon name="envelope" size={20} />, requirement: '1 letter', category: 'social', maxProgress: 1 },
 
   // Special
   { id: 'trivia_master', name: 'Trivia Master', description: 'Get 100% on trivia', icon: '🧠', requirement: 'Perfect trivia score', category: 'special', maxProgress: 1 },
@@ -50,11 +51,11 @@ const ALL_BADGES: Omit<Badge, 'unlocked' | 'progress'>[] = [
   { id: 'night_owl', name: 'Night Owl', description: 'Order after 8 PM', icon: '🦉', requirement: 'Evening order', category: 'special', maxProgress: 1 },
 ];
 
-const categoryLabels: Record<string, { label: string; icon: string }> = {
-  orders: { label: 'Orders', icon: '📦' },
+const categoryLabels: Record<string, { label: string; icon: React.ReactNode }> = {
+  orders: { label: 'Orders', icon: <Icon name="box" size={20} /> },
   spending: { label: 'Spending', icon: '💰' },
   streak: { label: 'Streaks', icon: '🔥' },
-  social: { label: 'Social', icon: '💬' },
+  social: { label: 'Social', icon: <Icon name="chat" size={20} /> },
   special: { label: 'Special', icon: '✨' },
 };
 

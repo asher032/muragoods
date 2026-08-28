@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useCoins } from '@/app/hooks/useCoins';
+import { Icon } from '@/app/components/Icon';
 
 // ─── Question Bank ──────────────────────────────────────────
 interface Question {
@@ -292,10 +293,10 @@ export default function TriviaPage() {
                   { icon: '❤️', text: `Normal: ${MAX_LIVES} lives · Legendary: ${MAX_LIVES_LEGENDARY} life` },
                   { icon: '⏱️', text: `Normal: ${QUESTION_TIME}s per question · Legendary: ${QUESTION_TIME_LEGENDARY}s` },
                   { icon: '🔥', text: 'Build streaks for bonus coins (2+ correct in a row)' },
-                  { icon: '🪙', text: 'Normal: 3-8 coins/question · Legendary: 3x multiplier!' },
+                  { icon: <Icon name="coin" size={20} />, text: 'Normal: 3-8 coins/question · Legendary: 3x multiplier!' },
                   { icon: '💀', text: 'Legendary mode: only hard questions, 1 life, 8s timer' },
                 ].map(item => (
-                  <div key={item.icon} className="flex items-center gap-3">
+                  <div key={item.text} className="flex items-center gap-3">
                     <span className="text-lg">{item.icon}</span>
                     <p className="text-sm text-[var(--cream-muted)]">{item.text}</p>
                   </div>

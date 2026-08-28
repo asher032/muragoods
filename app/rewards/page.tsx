@@ -5,13 +5,14 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useCoins } from '@/app/hooks/useCoins';
+import { Icon } from '@/app/components/Icon';
 
 interface Reward {
   id: string;
   name: string;
   description: string;
   cost: number;
-  icon: string;
+  icon: React.ReactNode;
   category: string;
 }
 
@@ -24,7 +25,7 @@ const rewards: Reward[] = [
 
   // Special Perks
   { id: 'priority_order', name: 'Priority Order', description: 'Skip the queue — your order gets prepared first.', cost: 12000, icon: '⚡', category: 'Perks' },
-  { id: 'mystery_upgrade', name: 'Mystery Box Upgrade', description: 'Your next mystery box is guaranteed Rare or above.', cost: 20000, icon: '🎁', category: 'Perks' },
+  { id: 'mystery_upgrade', name: 'Mystery Box Upgrade', description: 'Your next mystery box is guaranteed Rare or above.', cost: 20000, icon: <Icon name="gift" size={20} />, category: 'Perks' },
   { id: 'custom_shoutout', name: 'Shoutout on Instagram', description: 'Get a personalized shoutout on the Muragoods Instagram page.', cost: 25000, icon: '📱', category: 'Perks' },
   { id: 'gold_member', name: 'Gold Member Badge', description: 'Permanent gold badge on your profile — shows you\'re a top supporter. Perks: priority support, exclusive early access to new items, and a special gold border on your profile.', cost: 50000, icon: '👑', category: 'Perks' },
 ];

@@ -6,10 +6,11 @@ import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { PixelDivider } from '@/app/components/PixelDivider';
 import { useCoins } from '@/app/hooks/useCoins';
+import { Icon } from '@/app/components/Icon';
 
 const features = [
   {
-    icon: '📅',
+    icon: <Icon name="calendar" size={24} />,
     title: 'Daily Check-In',
     desc: 'Log in every day to earn 5-50 coins. Build a 7-day streak for massive rewards!',
     link: '/play/checkin',
@@ -41,7 +42,7 @@ const features = [
     tagColor: 'var(--crimson)',
   },
   {
-    icon: '🎁',
+    icon: <Icon name="gift" size={24} />,
     title: 'Mystery Box',
     desc: 'Spend 10 coins to open a mystery box. Win bonus coins, discount codes, or even a free musubi!',
     link: '/play/mysterybox',
@@ -57,7 +58,7 @@ const features = [
     tagColor: 'var(--gold)',
   },
   {
-    icon: '🛒',
+    icon: <Icon name="cart" size={24} />,
     title: 'Group Order',
     desc: 'Order together with classmates! Create a shared cart, add items, and split the bill.',
     link: '/group-order',
@@ -81,7 +82,7 @@ const features = [
     tagColor: 'var(--gold-bright)',
   },
   {
-    icon: '🪙',
+    icon: <Icon name="coin" size={24} />,
     title: 'My Points',
     desc: 'Check your coin balance, see ways to earn and spend, and view your transaction history.',
     link: '/points',
@@ -134,7 +135,7 @@ export default function EntertainmentPage() {
               >
                 {/* Icon + Tag */}
                 <div className="flex items-start justify-between mb-4">
-                  <div className="text-4xl">{feature.icon}</div>
+                  {feature.icon}
                   <span
                     className="text-[8px] px-3 py-1 rounded-lg border"
                     style={{

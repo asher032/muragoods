@@ -5,14 +5,15 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useCoins } from '@/app/hooks/useCoins';
+import { Icon } from '@/app/components/Icon';
 
 const dayRewards = [
-  { day: 1, coins: 5, label: 'Day 1', icon: '🪙' },
-  { day: 2, coins: 8, label: 'Day 2', icon: '🪙' },
-  { day: 3, coins: 10, label: 'Day 3', icon: '🪙' },
-  { day: 4, coins: 12, label: 'Day 4', icon: '🪙' },
-  { day: 5, coins: 15, label: 'Day 5', icon: '🪙' },
-  { day: 6, coins: 20, label: 'Day 6', icon: '🪙' },
+  { day: 1, coins: 5, label: 'Day 1', icon: <Icon name="coin" size={20} /> },
+  { day: 2, coins: 8, label: 'Day 2', icon: <Icon name="coin" size={20} /> },
+  { day: 3, coins: 10, label: 'Day 3', icon: <Icon name="coin" size={20} /> },
+  { day: 4, coins: 12, label: 'Day 4', icon: <Icon name="coin" size={20} /> },
+  { day: 5, coins: 15, label: 'Day 5', icon: <Icon name="coin" size={20} /> },
+  { day: 6, coins: 20, label: 'Day 6', icon: <Icon name="coin" size={20} /> },
   { day: 7, coins: 50, label: 'MEGA DAY', icon: '⭐' },
 ];
 

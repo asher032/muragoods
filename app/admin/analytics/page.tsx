@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
+import { Icon } from '@/app/components/Icon';
 
 interface AnalyticsData {
   summary: {
@@ -92,14 +93,14 @@ export default function AnalyticsPage() {
               <div className="grid gap-4 grid-cols-2 lg:grid-cols-6 mb-8">
                 {[
                   { label: 'Total Revenue', value: `₱${data.summary.totalRevenue.toLocaleString()}`, icon: '💰', color: 'var(--gold-bright)' },
-                  { label: 'Total Orders', value: String(data.summary.totalOrders), icon: '📦', color: 'var(--cream)' },
+                  { label: 'Total Orders', value: String(data.summary.totalOrders), icon: <Icon name="box" size={16} />, color: 'var(--cream)' },
                   { label: 'Avg Order', value: `₱${data.summary.avgOrderValue}`, icon: '📈', color: 'var(--gold)' },
                   { label: 'Active', value: String(data.summary.activeOrders), icon: '⏳', color: 'var(--gold-bright)' },
                   { label: 'Delivered', value: String(data.summary.delivered), icon: '✅', color: 'var(--emerald-bright)' },
                   { label: 'Cancelled', value: String(data.summary.cancelled), icon: '✖', color: 'var(--crimson)' },
                 ].map(card => (
                   <div key={card.label} className="power-card p-4 text-center rounded-xl">
-                    <span className="text-xl">{card.icon}</span>
+                    {card.icon}
                     <p className="text-[8px] text-[var(--gold)] uppercase mt-2" style={{ fontFamily: 'var(--font-arcade)' }}>{card.label}</p>
                     <p className="text-lg mt-1" style={{ fontFamily: 'var(--font-arcade)', color: card.color }}>{card.value}</p>
                   </div>

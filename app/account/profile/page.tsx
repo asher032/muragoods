@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { type Order } from '@/app/lib/muragoods-data';
 import { NavBar } from '@/app/components/NavBar';
+import { Icon } from '@/app/components/Icon';;
 import { CoinBalance } from '@/app/components/CoinBalance';
 import { useCoins } from '@/app/hooks/useCoins';
 import { AnimatedProgressBar } from '@/app/components/AnimatedProgressBar';
@@ -364,7 +365,7 @@ export default function AccountProfilePage() {
           marginTop: '20px',
         }}>
           {[
-            { label: 'Orders', value: String(activeOrders.length), icon: '📦', color: 'var(--mario-text)' },
+            { label: 'Orders', value: String(activeOrders.length), icon: <Icon name="box" size={16} />, color: 'var(--mario-text)' },
             { label: 'Delivered', value: String(deliveredCount), icon: '✅', color: 'var(--mario-green)' },
             { label: 'Active', value: String(activeCount), icon: '⏳', color: 'var(--mario-yellow)' },
             { label: 'Spent', value: `₱${totalSpent.toLocaleString()}`, icon: '💰', color: 'var(--mario-yellow)' },
@@ -376,7 +377,7 @@ export default function AccountProfilePage() {
               padding: '16px 8px',
               textAlign: 'center',
             }}>
-              <span style={{ fontSize: '18px' }}>{stat.icon}</span>
+              {stat.icon}
               <p style={{
                 fontFamily: 'var(--font-arcade)',
                 fontSize: '7px',
@@ -406,12 +407,12 @@ export default function AccountProfilePage() {
           }}>Quick Actions</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
             {[
-              { href: '/menu', icon: '🍕', label: 'Order Food' },
-              { href: '/points', icon: '🪙', label: 'My Points' },
+              { href: '/menu', icon: <Icon name="food" size={16} />, label: 'Order Food' },
+              { href: '/points', icon: <Icon name="coin" size={16} />, label: 'My Points' },
               { href: '/rewards', icon: '🏪', label: 'Rewards' },
-              { href: '/orders', icon: '📋', label: 'Orders' },
-              { href: '/support', icon: '💬', label: 'Support' },
-              { href: '/favorites', icon: '❤️', label: 'Favorites' },
+              { href: '/orders', icon: <Icon name="clipboard" size={16} />, label: 'Orders' },
+              { href: '/support', icon: <Icon name="chat" size={16} />, label: 'Support' },
+              { href: '/favorites', icon: <Icon name="heart" size={16} color="#e63946" />, label: 'Favorites' },
             ].map(action => (
               <Link key={action.href} href={action.href} style={{
                 display: 'block',
@@ -426,7 +427,7 @@ export default function AccountProfilePage() {
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,214,10,0.3)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
               >
-                <span style={{ fontSize: '18px' }}>{action.icon}</span>
+                {action.icon}
                 <p style={{
                   fontFamily: 'var(--font-arcade)',
                   fontSize: '7px',

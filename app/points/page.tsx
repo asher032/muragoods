@@ -7,6 +7,7 @@ import { NavBar } from '@/app/components/NavBar';
 import { PixelDivider } from '@/app/components/PixelDivider';
 import { CoinBalance } from '@/app/components/CoinBalance';
 import { useCoins } from '@/app/hooks/useCoins';
+import { Icon } from '@/app/components/Icon';
 
 interface Transaction {
   type: 'earn' | 'spend';
@@ -16,14 +17,14 @@ interface Transaction {
 }
 
 const earnMethods = [
-  { icon: '🛒', title: 'Place an Order', desc: 'Earn 0.5 coins per peso spent on every order', link: '/menu', coins: '0.5x', color: 'var(--gold)' },
-  { icon: '📅', title: 'Daily Check-In', desc: 'Log in daily for 5-50 coins over 7 days', link: '/play/checkin', coins: '5-50', color: 'var(--emerald-bright)' },
+  { icon: <Icon name="cart" size={20} />, title: 'Place an Order', desc: 'Earn 0.5 coins per peso spent on every order', link: '/menu', coins: '0.5x', color: 'var(--gold)' },
+  { icon: <Icon name="calendar" size={20} />, title: 'Daily Check-In', desc: 'Log in daily for 5-50 coins over 7 days', link: '/play/checkin', coins: '5-50', color: 'var(--emerald-bright)' },
   { icon: '🧠', title: 'Trivia Challenge', desc: 'Answer campus questions for 5-15 coins each', link: '/play/trivia', coins: '5-15', color: 'var(--crimson)' },
   { icon: '👥', title: 'Refer a Friend', desc: 'Invite friends and earn 50 coins per referral', link: '/play/refer', coins: '50', color: 'var(--gold-bright)' },
 ];
 
 const spendMethods = [
-  { icon: '🎁', title: 'Mystery Box', desc: 'Spend 10 coins for a chance to win coins, discounts, or a free musubi', link: '/play/mysterybox', coins: '-10', color: 'var(--crimson)' },
+  { icon: <Icon name="gift" size={20} />, title: 'Mystery Box', desc: 'Spend 10 coins for a chance to win coins, discounts, or a free musubi', link: '/play/mysterybox', coins: '-10', color: 'var(--crimson)' },
   { icon: '🏪', title: 'Rewards Shop', desc: 'Redeem coins for free food, vouchers, and special perks (3,000 - 50,000 coins)', link: '/rewards', coins: '3K-50K', color: 'var(--gold-bright)' },
 ];
 

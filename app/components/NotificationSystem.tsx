@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
+import { Icon } from '@/app/components/Icon';
 
 export type NotificationType = 'info' | 'success' | 'warning' | 'error' | 'support' | 'order';
 
@@ -109,13 +110,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 }
 
 function Toast({ notification, onDismiss }: { notification: Notification; onDismiss: () => void }) {
-  const colors: Record<NotificationType, { bg: string; border: string; icon: string; text: string }> = {
+  const colors: Record<NotificationType, { bg: string; border: string; icon: React.ReactNode; text: string }> = {
     info: { bg: 'rgba(72,149,239,0.12)', border: 'rgba(72,149,239,0.3)', icon: 'ℹ️', text: '#4895ef' },
     success: { bg: 'rgba(6,214,160,0.12)', border: 'rgba(6,214,160,0.3)', icon: '✅', text: '#06d6a0' },
     warning: { bg: 'rgba(255,214,10,0.12)', border: 'rgba(255,214,10,0.3)', icon: '⚠️', text: '#ffd60a' },
     error: { bg: 'rgba(230,57,70,0.12)', border: 'rgba(230,57,70,0.3)', icon: '❌', text: '#e63946' },
-    support: { bg: 'rgba(114,9,183,0.12)', border: 'rgba(114,9,183,0.3)', icon: '💬', text: '#7209b7' },
-    order: { bg: 'rgba(251,133,0,0.12)', border: 'rgba(251,133,0,0.3)', icon: '📦', text: '#fb8500' },
+    support: { bg: 'rgba(114,9,183,0.12)', border: 'rgba(114,9,183,0.3)', icon: <Icon name="chat" size={16} />, text: '#7209b7' },
+    order: { bg: 'rgba(251,133,0,0.12)', border: 'rgba(251,133,0,0.3)', icon: <Icon name="box" size={16} />, text: '#fb8500' },
   };
 
   const c = colors[notification.type];
@@ -137,7 +138,7 @@ function Toast({ notification, onDismiss }: { notification: Notification; onDism
         backdropFilter: 'blur(16px)',
       }}
     >
-      <span style={{ fontSize: '18px', flexShrink: 0 }}>{c.icon}</span>
+      {c.icon}
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ fontSize: '11px', fontWeight: 700, color: c.text, fontFamily: 'var(--font-arcade)', marginBottom: '2px' }}>{notification.title}</p>
         <p style={{ fontSize: '11px', color: 'var(--mario-text-muted)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>{notification.message}</p>

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { NavBar } from '@/app/components/NavBar';
 import { CoinBalance } from '@/app/components/CoinBalance';
+import { Icon } from '@/app/components/Icon';
 
 export default function HubPage() {
   const [user, setUser] = useState<{ name?: string; email?: string } | null>(null);
@@ -23,29 +24,29 @@ export default function HubPage() {
   const sections = [
     {
       title: 'Profile',
-      icon: '👤',
+      icon: <Icon name="person" size={24} />,
       description: 'View your profile, ID, stats, and account settings.',
       color: 'var(--mario-blue)',
       bgColor: 'rgba(72,149,239,0.1)',
       borderColor: 'rgba(72,149,239,0.2)',
       href: '/account/profile',
       items: [
-        { label: 'My Profile', href: '/account/profile', icon: '👤' },
-        { label: 'My Orders', href: '/orders', icon: '📦' },
-        { label: 'Order History', href: '/orders', icon: '📋' },
-        { label: 'Support', href: '/support', icon: '💬' },
+        { label: 'My Profile', href: '/account/profile', icon: <Icon name="person" size={24} /> },
+        { label: 'My Orders', href: '/orders', icon: <Icon name="box" size={16} /> },
+        { label: 'Order History', href: '/orders', icon: <Icon name="clipboard" size={16} /> },
+        { label: 'Support', href: '/support', icon: <Icon name="chat" size={16} /> },
       ],
     },
     {
       title: 'Letters & Confessions',
-      icon: '💌',
+      icon: <Icon name="envelope" size={24} />,
       description: 'A collection of messages and letters that people write but never send.',
       color: 'var(--mario-pink)',
       bgColor: 'rgba(255,0,110,0.1)',
       borderColor: 'rgba(255,0,110,0.2)',
       href: '/archive',
       items: [
-        { label: 'Open Archive', href: '/unsent', icon: '💌' },
+        { label: 'Open Archive', href: '/unsent', icon: <Icon name="envelope" size={24} /> },
         { label: 'Submit a Letter', href: '/unsent/submit', icon: '✏️' },
         { label: 'My Submissions', href: '/unsent/mine', icon: '📚' },
         { label: 'Coming Soon...', href: '#', icon: '🔜' },
@@ -53,32 +54,32 @@ export default function HubPage() {
     },
     {
       title: 'Food Menu',
-      icon: '🍕',
+      icon: <Icon name="food" size={24} />,
       description: 'Browse our delicious campus food and drinks.',
       color: 'var(--mario-yellow)',
       bgColor: 'rgba(255,214,10,0.1)',
       borderColor: 'rgba(255,214,10,0.2)',
       href: '/menu',
       items: [
-        { label: 'Full Menu', href: '/menu', icon: '🍕' },
-        { label: 'Favorites', href: '/favorites', icon: '❤️' },
-        { label: 'Cart', href: '/checkout', icon: '🛒' },
+        { label: 'Full Menu', href: '/menu', icon: <Icon name="food" size={24} /> },
+        { label: 'Favorites', href: '/favorites', icon: <Icon name="heart" size={16} color="#e63946" /> },
+        { label: 'Cart', href: '/checkout', icon: <Icon name="cart" size={16} /> },
         { label: 'Rewards Shop', href: '/rewards', icon: '🏪' },
       ],
     },
     {
       title: 'Points & Rewards',
-      icon: '🪙',
+      icon: <Icon name="coin" size={24} />,
       description: 'Earn coins, redeem rewards, and track your balance.',
       color: 'var(--mario-green)',
       bgColor: 'rgba(6,214,160,0.1)',
       borderColor: 'rgba(6,214,160,0.2)',
       href: '/points',
       items: [
-        { label: 'My Points', href: '/points', icon: '🪙' },
+        { label: 'My Points', href: '/points', icon: <Icon name="coin" size={24} /> },
         { label: 'Rewards Shop', href: '/rewards', icon: '🏪' },
-        { label: 'Leaderboard', href: '/leaderboard', icon: '🏆' },
-        { label: 'Play Games', href: '/entertainment', icon: '🎮' },
+        { label: 'Leaderboard', href: '/leaderboard', icon: <Icon name="trophy" size={16} /> },
+        { label: 'Play Games', href: '/entertainment', icon: <Icon name="game" size={16} /> },
       ],
     },
   ];
@@ -175,7 +176,7 @@ export default function HubPage() {
                 borderBottom: `1px solid ${section.borderColor}`,
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                  <span style={{ fontSize: '24px' }}>{section.icon}</span>
+                  {section.icon}
                   <h2 style={{
                     fontFamily: 'var(--font-arcade)',
                     fontSize: '11px',
@@ -214,7 +215,7 @@ export default function HubPage() {
                       e.currentTarget.style.background = 'transparent';
                     }}
                   >
-                    <span style={{ fontSize: '16px' }}>{item.icon}</span>
+                    {item.icon}
                     <span style={{ flex: 1 }}>{item.label}</span>
                     <span style={{ color: 'var(--mario-text-muted)', fontSize: '12px' }}>→</span>
                   </Link>
