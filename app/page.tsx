@@ -2,35 +2,207 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { NavBar } from '@/app/components/NavBar';
 import dynamic from 'next/dynamic';
+import { useScrollPosition, useScrollReveal, useMousePosition, useElementMouse, useCountUp } from '@/app/components/useScrollEffects';
 
 const LightBloom = dynamic(() => import('@/app/components/ui/LightBloom'), { ssr: false });
 const MaskedHeading = dynamic(() => import('@/app/components/ui/MaskedHeading'), { ssr: false });
 const AnimatedButton = dynamic(() => import('@/app/components/ui/AnimatedButton'), { ssr: false });
 
+/* ─── Scroll Reveal Wrapper ─────────────────────────────── */
+function Reveal({ children, className = '', delay = 0, direction = 'up' }: {
+  children: React.ReactNode; className?: string; delay?: number;
+  direction?: 'up' | 'left' | 'right' | 'scale';
+}) {
+  const { ref, visible } = useScrollReveal();
+  const dirClass = direction === 'left' ? 'scroll-reveal-left'
+    : direction === 'right' ? 'scroll-reveal-right'
+    : direction === 'scale' ? 'scroll-reveal-scale'
+    : 'scroll-reveal';
+  return (
+    <div ref={ref} className={`${dirClass} ${visible ? 'visible' : ''} ${className}`}
+      style={{ transitionDelay: `${delay}s` }}>
+      {children}
+    </div>
+  );
+}
+
+/* ─── Floating Particles Background ─────────────────────── */
+function Particles({ count = 20 }: { count?: number }) {
+  const particles = useMemo(() => Array.from({ length: count }, (_, i) => ({
+    id: i,
+    left: `${Math.random() * 100}%`,
+    size: 2 + Math.random() * 4,
+    duration: 15 + Math.random() * 25,
+    delay: Math.random() * 20,
+    opacity: 0.1 + Math.random() * 0.3,
+    color: ['#ffd60a', '#06d6a0', '#4895ef', '#e63946', '#7209b7'][Math.floor(Math.random() * 5)],
+  })), [count]);
+
+  return (
+    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+      {particles.map(p => (
+        <div key={p.id} className="particle" style={{
+          left: p.left,
+          width: p.size,
+          height: p.size,
+          borderRadius: '50%',
+          background: p.color,
+          opacity: p.opacity,
+          animation: `particleFloat ${p.duration}s linear ${p.delay}s infinite`,
+          filter: `blur(${p.size > 4 ? 1 : 0}px)`,
+        }} />
+      ))}
+    </div>
+  );
+}
+
+/* ─── Scroll Progress Bar ───────────────────────────────── */
+function ScrollProgress({ percent }: { percent: number }) {
+  return <div className="scroll-progress" style={{ width: `${percent}%` }} />;
+}
+
+/* ─── Scroll-Down Indicator ─────────────────────────────── */
+function ScrollDown({ visible }: { visible: boolean }) {
+  if (!visible) return null;
+  return (
+    <div className="scroll-indicator absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 opacity-70">
+      <span className="font-arcade text-[7px] text-mario-text-muted tracking-widest uppercase">Scroll</span>
+      <svg width="20" height="28" viewBox="0 0 20 28" fill="none">
+        <rect x="1" y="1" width="18" height="26" rx="9" stroke="rgba(255,214,10,0.4)" strokeWidth="2" />
+        <circle cx="10" cy="8" r="2" fill="rgba(255,214,10,0.8)">
+          <animate attributeName="cy" values="8;16;8" dur="1.5s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="1;0.3;1" dur="1.5s" repeatCount="indefinite" />
+        </circle>
+      </svg>
+    </div>
+  );
+}
+
+/* ─── Spotlight Card ────────────────────────────────────── */
+function SpotlightCard({ children, className = '', href = '#', bgStyle }: {
+  children: React.ReactNode; className?: string; href?: string; bgStyle?: React.CSSProperties;
+}) {
+  const { ref, pos } = useElementMouse();
+  return (
+    <Link href={href}>
+      <div ref={ref} className={`spotlight-card ${className}`}
+        style={{ '--mouse-x': `${pos.x}%`, '--mouse-y': `${pos.y}%`, ...bgStyle } as React.CSSProperties}>
+        {children}
+      </div>
+    </Link>
+  );
+}
+
+/* ─── Animated Stat Counter ─────────────────────────────── */
+function StatCounter({ value, label, suffix = '' }: { value: number; label: string; suffix?: string }) {
+  const { count, ref } = useCountUp(value, 2000);
+  return (
+    <div ref={ref} className="text-center">
+      <div className="font-arcade text-2xl sm:text-3xl text-mario-yellow neon-text mb-2">
+        {count}{suffix}
+      </div>
+      <div className="font-arcade text-[8px] text-mario-text-muted tracking-widest uppercase">{label}</div>
+    </div>
+  );
+}
+
+/* ─── Parallax Section ──────────────────────────────────── */
+function ParallaxSection({ children, speed = 0.3, className = '' }: {
+  children: React.ReactNode; speed?: number; className?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [offset, setOffset] = useState(0);
+
+  useEffect(() => {
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        if (!ref.current) { ticking = false; return; }
+        const rect = ref.current.getBoundingClientRect();
+        const center = rect.top + rect.height / 2;
+        const viewCenter = window.innerHeight / 2;
+        setOffset((center - viewCenter) * speed);
+        ticking = false;
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [speed]);
+
+  return (
+    <div ref={ref} className={className}>
+      <div className="parallax-layer" style={{ transform: `translateY(${offset}px)` }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Marquee Banner ────────────────────────────────────── */
+function MarqueeBanner() {
+  const items = ['🍕 ORDER NOW', '🪙 EARN COINS', '🎮 PLAY GAMES', '💌 SEND LETTERS', '☕ COFFEE JELLY', '🍪 COOKIES', '⭐ RATED 4.9', '🚀 FREE DELIVERY'];
+  return (
+    <div className="overflow-hidden py-4 border-y border-white/5">
+      <div className="marquee-track flex items-center gap-8 whitespace-nowrap" style={{ width: 'max-content' }}>
+        {[...items, ...items, ...items, ...items].map((item, i) => (
+          <span key={i} className="font-arcade text-[9px] text-mario-text-muted/50 tracking-wider">{item}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main Page ─────────────────────────────────────────── */
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { scrollY, scrollPercent, direction } = useScrollPosition();
+  const mouse = useMousePosition();
+  const heroRef = useRef<HTMLElement>(null);
+  const [heroVisible, setHeroVisible] = useState(true);
+  const [showContent, setShowContent] = useState(false);
 
   useEffect(() => {
     const user = localStorage.getItem('user');
     if (user) setIsLoggedIn(true);
+    // Delay content reveal for cinematic entrance
+    const timer = setTimeout(() => setShowContent(true), 300);
+    return () => clearTimeout(timer);
   }, []);
 
+  // Hide scroll indicator after scrolling
+  useEffect(() => {
+    if (scrollY > 100) setHeroVisible(false);
+  }, [scrollY]);
+
   const featuredProducts = [
-    { name: 'Musubi', image: '/images/product-musubi.png', price: '₱40', desc: 'Regular / With Egg / With Flakes' },
-    { name: 'Mini Churros', image: '/images/product-churros.png', price: '₱70', desc: 'Cinnamon Sugar / Option 2' },
-    { name: 'Coffee Jelly', image: '/images/product-coffee-jelly.png', price: '₱15', desc: 'Classic / Premium' },
-    { name: 'Cookies', image: '/images/product-cookies.png', price: '₱25', desc: 'Regular / Cookies & Cream' },
+    { name: 'Musubi', image: '/images/product-musubi.png', price: '₱40', desc: 'Regular / With Egg / With Flakes', color: '#06d6a0' },
+    { name: 'Mini Churros', image: '/images/product-churros.png', price: '₱70', desc: 'Cinnamon Sugar / Option 2', color: '#ffd60a' },
+    { name: 'Coffee Jelly', image: '/images/product-coffee-jelly.png', price: '₱15', desc: 'Classic / Premium', color: '#4895ef' },
+    { name: 'Cookies', image: '/images/product-cookies.png', price: '₱25', desc: 'Regular / Cookies & Cream', color: '#e63946' },
+  ];
+
+  const features = [
+    { icon: '🍕', title: 'Fresh Food', desc: 'Made to order with love', color: '#06d6a0' },
+    { icon: '🪙', title: 'Earn Coins', desc: '0.5 coins per peso spent', color: '#ffd60a' },
+    { icon: '🎮', title: 'Play Games', desc: 'Win rewards & prizes', color: '#4895ef' },
+    { icon: '💌', title: 'Untold Words', desc: 'Send anonymous confessions', color: '#c896ff' },
   ];
 
   return (
     <main className="mario-bg min-h-screen">
       <NavBar />
+      <Particles count={25} />
+      <ScrollProgress percent={scrollPercent} />
 
-      {/* ─── Hero Section with LightBloom ──────────────────── */}
-      <section className="relative overflow-hidden" style={{ minHeight: '70vh' }}>
+      {/* ═══════════════════════════════════════════════════════
+          HERO SECTION — Full viewport with parallax
+          ═══════════════════════════════════════════════════════ */}
+      <section ref={heroRef} className="relative overflow-hidden" style={{ minHeight: '100vh' }}>
         {/* LightBloom Background */}
         <div className="absolute inset-0 z-0">
           <LightBloom
@@ -47,158 +219,367 @@ export default function Home() {
           />
         </div>
 
+        {/* Parallax floating elements */}
+        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-20 left-[10%] text-4xl opacity-20 float-anim" style={{ animationDelay: '0s' }}>🪙</div>
+          <div className="absolute top-32 right-[15%] text-3xl opacity-15 float-anim" style={{ animationDelay: '1s' }}>⭐</div>
+          <div className="absolute bottom-40 left-[20%] text-2xl opacity-10 float-anim" style={{ animationDelay: '2s' }}>🍄</div>
+          <div className="absolute top-[60%] right-[8%] text-3xl opacity-15 float-anim" style={{ animationDelay: '0.5s' }}>✨</div>
+        </div>
+
         {/* Hero Content */}
-        <div className="relative z-10 px-4 pt-20 pb-16 sm:px-8">
+        <div className="relative z-10 px-4 pt-24 pb-20 sm:px-8 flex flex-col items-center justify-center min-h-screen"
+          style={{
+            opacity: showContent ? 1 : 0,
+            transform: showContent ? 'translateY(0)' : 'translateY(30px)',
+            transition: 'opacity 1s cubic-bezier(0.16, 1, 0.3, 1), transform 1s cubic-bezier(0.16, 1, 0.3, 1)',
+          }}>
           <div className="mario-container text-center">
             {/* Coin badge */}
-            <div className="mb-8 inline-flex items-center gap-2 mario-badge mario-badge-gold">
-              <span className="coin-float">🪙</span>
-              <span>EARN 2X COINS ON TODAY&apos;S ORDERS!</span>
-            </div>
+            <Reveal delay={0.1}>
+              <div className="mb-6 inline-flex items-center gap-2 mario-badge mario-badge-gold">
+                <span className="coin-float">🪙</span>
+                <span>EARN 0.5 COINS PER PESO SPENT!</span>
+              </div>
+            </Reveal>
 
             {/* Masked Heading */}
-            <div className="mb-6">
-              <MaskedHeading
-                text="WELCOME TO MURAGOODS"
-                tag="h1"
-                mediaType="image"
-                src="/images/mario-waving.png"
-                fillScale={1.3}
-                parallax={30}
-                drift={15}
-                brightness={1.2}
-                saturation={1.1}
-                reveal="rise"
-                trigger="view"
-                duration={1.2}
-                stagger={0.08}
-                align="center"
-                weight={900}
-                tracking={-0.02}
-                textScale={0.08}
-                style={{ color: 'transparent' }}
-              />
-            </div>
+            <Reveal delay={0.2}>
+              <div className="mb-6">
+                <MaskedHeading
+                  text="WELCOME TO MURAGOODS"
+                  tag="h1"
+                  mediaType="image"
+                  src="/images/mario-waving.png"
+                  fillScale={1.3}
+                  parallax={30}
+                  drift={15}
+                  brightness={1.2}
+                  saturation={1.1}
+                  reveal="rise"
+                  trigger="view"
+                  duration={1.2}
+                  stagger={0.08}
+                  align="center"
+                  weight={900}
+                  tracking={-0.02}
+                  textScale={0.08}
+                  style={{ color: 'transparent' }}
+                />
+              </div>
+            </Reveal>
 
             {/* Subtitle */}
-            <p className="text-mario-yellow font-arcade text-sm sm:text-base mb-3">
-              MUSUBI · CHURROS · COFFEE JELLY · COOKIES
-            </p>
-            <p className="text-mario-text-muted text-base mb-8 max-w-lg mx-auto">
-              Fuel your adventure with iconic campus treats and power-ups delivered straight to your door!
-            </p>
+            <Reveal delay={0.35}>
+              <p className="text-mario-yellow font-arcade text-sm sm:text-base mb-3">
+                MUSUBI · CHURROS · COFFEE JELLY · COOKIES
+              </p>
+            </Reveal>
+            <Reveal delay={0.4}>
+              <p className="text-mario-text-muted text-base mb-8 max-w-lg mx-auto">
+                Fuel your adventure with iconic campus treats and power-ups delivered straight to your door!
+              </p>
+            </Reveal>
 
             {/* Animated Buttons */}
-            <div className="flex flex-wrap justify-center gap-4 mb-12">
-              <Link href="/menu">
-                <AnimatedButton
-                  className="px-8 py-3 font-arcade text-sm"
-                  style={{ background: 'rgba(6,214,160,0.15)', borderColor: 'rgba(6,214,160,0.3)', color: '#06d6a0' }}
-                >
-                  🍕 ORDER NOW
-                </AnimatedButton>
-              </Link>
-              {isLoggedIn ? (
-                <Link href="/orders">
+            <Reveal delay={0.5}>
+              <div className="flex flex-wrap justify-center gap-4 mb-12">
+                <Link href="/menu">
                   <AnimatedButton
                     className="px-8 py-3 font-arcade text-sm"
-                    style={{ background: 'rgba(255,214,10,0.15)', borderColor: 'rgba(255,214,10,0.3)', color: '#ffd60a' }}
+                    style={{ background: 'rgba(6,214,160,0.15)', borderColor: 'rgba(6,214,160,0.3)', color: '#06d6a0' }}
                   >
-                    📦 VIEW ORDERS
+                    🍕 ORDER NOW
                   </AnimatedButton>
                 </Link>
-              ) : (
-                <Link href="/login">
-                  <AnimatedButton
-                    className="px-8 py-3 font-arcade text-sm"
-                    style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: '#e8e8f0' }}
-                  >
-                    🎮 PLAY NOW
-                  </AnimatedButton>
-                </Link>
-              )}
-            </div>
-
-            {/* Mario Hero */}
-            <div className="flex justify-center">
-              <div className="relative w-64 h-64 sm:w-80 sm:h-80">
-                <Image src="/images/mario-waving.png" alt="Muragoods" fill className="object-contain drop-shadow-[0_0_30px_rgba(255,214,10,0.3)]" priority />
+                {isLoggedIn ? (
+                  <Link href="/orders">
+                    <AnimatedButton
+                      className="px-8 py-3 font-arcade text-sm"
+                      style={{ background: 'rgba(255,214,10,0.15)', borderColor: 'rgba(255,214,10,0.3)', color: '#ffd60a' }}
+                    >
+                      📦 VIEW ORDERS
+                    </AnimatedButton>
+                  </Link>
+                ) : (
+                  <Link href="/login">
+                    <AnimatedButton
+                      className="px-8 py-3 font-arcade text-sm"
+                      style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: '#e8e8f0' }}
+                    >
+                      🎮 PLAY NOW
+                    </AnimatedButton>
+                  </Link>
+                )}
               </div>
-            </div>
+            </Reveal>
+
+            {/* Mario Hero — 3D tilt */}
+            <Reveal delay={0.6} direction="scale">
+              <div className="hero-tilt flex justify-center"
+                style={{
+                  transform: `perspective(800px) rotateY(${(mouse.x - 0.5) * 10}deg) rotateX(${(mouse.y - 0.5) * -8}deg)`,
+                }}>
+                <div className="relative w-64 h-64 sm:w-80 sm:h-80">
+                  <Image src="/images/mario-waving.png" alt="Muragoods" fill className="object-contain drop-shadow-[0_0_30px_rgba(255,214,10,0.3)]" priority />
+                </div>
+              </div>
+            </Reveal>
+          </div>
+
+          <ScrollDown visible={heroVisible} />
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════
+          WAVE DIVIDER
+          ═══════════════════════════════════════════════════════ */}
+      <div className="wave-divider relative z-10 -mt-1">
+        <svg viewBox="0 0 1200 60" preserveAspectRatio="none" style={{ fill: 'rgba(255,214,10,0.03)' }}>
+          <path d="M0,0 C300,60 900,0 1200,40 L1200,60 L0,60 Z" />
+        </svg>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════
+          MARQUEE BANNER
+          ═══════════════════════════════════════════════════════ */}
+      <MarqueeBanner />
+
+      {/* ═══════════════════════════════════════════════════════
+          STATS SECTION — Counters
+          ═══════════════════════════════════════════════════════ */}
+      <section className="px-4 py-16 sm:px-8">
+        <div className="mario-container">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            <Reveal delay={0}><StatCounter value={500} suffix="+" label="Orders Served" /></Reveal>
+            <Reveal delay={0.1}><StatCounter value={150} suffix="+" label="Happy Customers" /></Reveal>
+            <Reveal delay={0.2}><StatCounter value={12} label="Menu Items" /></Reveal>
+            <Reveal delay={0.3}><StatCounter value={49} label="Avg Rating" suffix="/10" /></Reveal>
           </div>
         </div>
       </section>
 
-      {/* ─── Quick Highlights ──────────────────────────────── */}
+      {/* ═══════════════════════════════════════════════════════
+          QUICK HIGHLIGHTS — Spotlight Cards
+          ═══════════════════════════════════════════════════════ */}
       <section className="px-4 py-8 sm:px-8">
         <div className="mario-container">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Link href="/menu" className="stagger-1">
-              <div className="highlight-card" style={{ background: 'linear-gradient(135deg, rgba(6,214,160,0.12), rgba(255,214,10,0.08))' }}>
+          <Reveal>
+            <div className="mb-8 text-center">
+              <h2 className="mario-title text-lg sm:text-xl">Explore Muragoods</h2>
+              <div className="h-0.5 w-20 bg-gradient-to-r from-transparent via-mario-yellow to-transparent mx-auto mt-3" />
+            </div>
+          </Reveal>
+          <div className="grid gap-6 sm:grid-cols-2">
+            <Reveal delay={0.1}>
+              <SpotlightCard href="/menu" className="highlight-card block" bgStyle={{ background: 'linear-gradient(135deg, rgba(6,214,160,0.12), rgba(255,214,10,0.08))' }}>
                 <div className="highlight-content">
-                  <span style={{ fontSize: '40px', marginBottom: '12px' }} className="float-anim">🍕</span>
-                  <h3 className="font-arcade text-sm text-mario-yellow mb-1">ORDER NOW</h3>
+                  <span className="text-5xl mb-4 float-anim block">🍕</span>
+                  <h3 className="font-arcade text-sm text-mario-yellow mb-2">ORDER NOW</h3>
                   <p className="text-xs text-mario-text-muted mb-3">Browse our full food menu — Musubi, Churros, Coffee Jelly, Cookies & more!</p>
                   <span className="font-arcade text-[9px] text-emerald-400" style={{ letterSpacing: '0.1em' }}>EXPLORE →</span>
                 </div>
-              </div>
-            </Link>
-            <Link href="/untold-words" className="stagger-2">
-              <div className="highlight-card" style={{ background: 'linear-gradient(135deg, rgba(123,47,247,0.12), rgba(255,100,150,0.08))' }}>
+              </SpotlightCard>
+            </Reveal>
+            <Reveal delay={0.2}>
+              <SpotlightCard href="/untold-words" className="highlight-card block" bgStyle={{ background: 'linear-gradient(135deg, rgba(123,47,247,0.12), rgba(255,100,150,0.08))' }}>
                 <div className="highlight-content">
-                  <span style={{ fontSize: '40px', marginBottom: '12px' }} className="float-anim">✉️</span>
-                  <h3 className="font-arcade text-sm text-mario-yellow mb-1">UNTOLD WORDS</h3>
+                  <span className="text-5xl mb-4 float-anim block">✉️</span>
+                  <h3 className="font-arcade text-sm text-mario-yellow mb-2">UNTOLD WORDS</h3>
                   <p className="text-xs text-mario-text-muted mb-3">Some things are easier to say through a letter, a confession, or a song.</p>
                   <span className="font-arcade text-[9px]" style={{ color: '#c896ff', letterSpacing: '0.1em' }}>EXPLORE NOW →</span>
                 </div>
-              </div>
-            </Link>
+              </SpotlightCard>
+            </Reveal>
           </div>
         </div>
       </section>
 
-      {/* ─── Featured Power-Ups ──────────────────────────────── */}
-      <section className="px-4 py-12 sm:px-8">
+      {/* ═══════════════════════════════════════════════════════
+          PARALLAX SECTION — Features
+          ═══════════════════════════════════════════════════════ */}
+      <ParallaxSection speed={0.15} className="px-4 py-16 sm:px-8">
         <div className="mario-container">
-          <div className="mb-8 text-center">
-            <h2 className="mario-title text-xl sm:text-2xl lg:text-3xl">Featured Power-Ups</h2>
-            <div className="h-0.5 w-24 bg-gradient-to-r from-transparent via-mario-yellow to-transparent mx-auto mt-4" />
-          </div>
-
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-            {featuredProducts.map((item) => (
-              <div key={item.name} className="mario-card group">
-                <div className="relative h-48 bg-mario-bg-light border-b border-white/5 overflow-hidden">
-                  <Image src={item.image} alt={item.name} fill className="object-contain p-4 transition-transform group-hover:scale-110 duration-300" />
+          <Reveal>
+            <div className="mb-10 text-center">
+              <h2 className="mario-title text-lg sm:text-xl">Why Muragoods?</h2>
+              <div className="h-0.5 w-20 bg-gradient-to-r from-transparent via-mario-yellow to-transparent mx-auto mt-3" />
+            </div>
+          </Reveal>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {features.map((feat, i) => (
+              <Reveal key={feat.title} delay={i * 0.1}>
+                <div className="mario-card p-6 text-center group spotlight-card"
+                  style={{ '--mouse-x': '50%', '--mouse-y': '50%' } as React.CSSProperties}>
+                  <div className="text-4xl mb-4 group-hover:scale-125 transition-transform duration-300">{feat.icon}</div>
+                  <h3 className="font-arcade text-xs mb-2" style={{ color: feat.color }}>{feat.title}</h3>
+                  <p className="text-xs text-mario-text-muted">{feat.desc}</p>
                 </div>
-                <div className="p-5">
-                  <h3 className="font-arcade text-xs text-mario-yellow mb-2">{item.name}</h3>
-                  <p className="text-xs text-mario-text-muted mb-4">{item.desc}</p>
-                  <div className="flex items-center justify-between">
-                    <span className="coin-price">{item.price}</span>
-                    <Link href="/menu">
-                      <AnimatedButton
-                        className="px-4 py-2 font-arcade text-[9px]"
-                        style={{ background: 'rgba(6,214,160,0.15)', borderColor: 'rgba(6,214,160,0.3)', color: '#06d6a0' }}
-                      >
-                        + ADD
-                      </AnimatedButton>
-                    </Link>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </ParallaxSection>
+
+      {/* ═══════════════════════════════════════════════════════
+          WAVE DIVIDER
+          ═══════════════════════════════════════════════════════ */}
+      <div className="wave-divider relative z-10">
+        <svg viewBox="0 0 1200 60" preserveAspectRatio="none" style={{ fill: 'rgba(6,214,160,0.03)' }}>
+          <path d="M0,40 C200,0 400,60 600,20 C800,-20 1000,50 1200,10 L1200,60 L0,60 Z" />
+        </svg>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════
+          FEATURED PRODUCTS — 3D Tilt Cards
+          ═══════════════════════════════════════════════════════ */}
+      <section className="px-4 py-16 sm:px-8">
+        <div className="mario-container">
+          <Reveal>
+            <div className="mb-10 text-center">
+              <h2 className="mario-title text-lg sm:text-xl">Featured Power-Ups</h2>
+              <div className="h-0.5 w-20 bg-gradient-to-r from-transparent via-mario-yellow to-transparent mx-auto mt-3" />
+              <p className="text-mario-text-muted text-sm mt-4">Our most loved treats, ready for your next adventure</p>
+            </div>
+          </Reveal>
+
+          <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-4">
+            {featuredProducts.map((item, i) => (
+              <Reveal key={item.name} delay={i * 0.12}>
+                <div className="product-3d mario-card group spotlight-card"
+                  style={{ '--mouse-x': '50%', '--mouse-y': '50%' } as React.CSSProperties}>
+                  <div className="relative h-48 bg-mario-bg-light border-b border-white/5 overflow-hidden">
+                    <Image src={item.image} alt={item.name} fill className="object-contain p-4 transition-transform group-hover:scale-110 duration-500" />
+                    {/* Glow overlay on hover */}
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                      style={{ background: `radial-gradient(circle at center, ${item.color}15 0%, transparent 70%)` }} />
+                  </div>
+                  <div className="p-5 relative z-10">
+                    <h3 className="font-arcade text-xs mb-2" style={{ color: item.color }}>{item.name}</h3>
+                    <p className="text-xs text-mario-text-muted mb-4">{item.desc}</p>
+                    <div className="flex items-center justify-between">
+                      <span className="coin-price text-sm">{item.price}</span>
+                      <Link href="/menu">
+                        <AnimatedButton
+                          className="px-4 py-2 font-arcade text-[9px]"
+                          style={{ background: `${item.color}20`, borderColor: `${item.color}50`, color: item.color }}
+                        >
+                          + ADD
+                        </AnimatedButton>
+                      </Link>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </Reveal>
             ))}
           </div>
         </div>
       </section>
 
+      {/* ═══════════════════════════════════════════════════════
+          BIG CTA — Cinematic Full-Width
+          ═══════════════════════════════════════════════════════ */}
+      <ParallaxSection speed={0.2}>
+        <section className="relative px-4 py-20 sm:px-8 overflow-hidden">
+          {/* Background glow */}
+          <div className="absolute inset-0 z-0">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full"
+              style={{ background: 'radial-gradient(circle, rgba(255,214,10,0.08) 0%, transparent 70%)' }} />
+          </div>
 
+          <div className="mario-container relative z-10 text-center">
+            <Reveal direction="scale">
+              <div className="text-6xl sm:text-8xl mb-6">🎮</div>
+            </Reveal>
+            <Reveal delay={0.1}>
+              <h2 className="mario-title text-xl sm:text-3xl mb-4 neon-text">
+                Ready to Level Up?
+              </h2>
+            </Reveal>
+            <Reveal delay={0.2}>
+              <p className="text-mario-text-muted text-sm sm:text-base max-w-xl mx-auto mb-8">
+                Join hundreds of happy customers enjoying fresh, delicious treats delivered with love.
+                Every order earns you coins to unlock rewards!
+              </p>
+            </Reveal>
+            <Reveal delay={0.3}>
+              <div className="flex flex-wrap justify-center gap-4">
+                <Link href="/menu">
+                  <AnimatedButton
+                    className="px-10 py-4 font-arcade text-sm"
+                    style={{ background: 'rgba(6,214,160,0.2)', borderColor: 'rgba(6,214,160,0.4)', color: '#06d6a0' }}
+                  >
+                    🍕 ORDER NOW
+                  </AnimatedButton>
+                </Link>
+                <Link href="/entertainment">
+                  <AnimatedButton
+                    className="px-10 py-4 font-arcade text-sm"
+                    style={{ background: 'rgba(72,149,239,0.2)', borderColor: 'rgba(72,149,239,0.4)', color: '#4895ef' }}
+                  >
+                    🎮 PLAY GAMES
+                  </AnimatedButton>
+                </Link>
+                <Link href="/untold-words">
+                  <AnimatedButton
+                    className="px-10 py-4 font-arcade text-sm"
+                    style={{ background: 'rgba(200,150,255,0.2)', borderColor: 'rgba(200,150,255,0.4)', color: '#c896ff' }}
+                  >
+                    💌 UNTOLD WORDS
+                  </AnimatedButton>
+                </Link>
+              </div>
+            </Reveal>
+          </div>
+        </section>
+      </ParallaxSection>
 
-      {/* ─── Footer ─────────────────────────────────────────── */}
-      <footer className="border-t border-white/5 py-8 text-center">
-        <p className="font-arcade text-[8px] text-mario-text-muted tracking-widest uppercase">
-          © 2026 Muragoods — World 1-1 Food
-        </p>
+      {/* ═══════════════════════════════════════════════════════
+          TESTIMONIAL / SOCIAL PROOF
+          ═══════════════════════════════════════════════════════ */}
+      <section className="px-4 py-16 sm:px-8 border-t border-white/5">
+        <div className="mario-container">
+          <Reveal>
+            <div className="mb-10 text-center">
+              <h2 className="mario-title text-lg sm:text-xl">What People Say</h2>
+              <div className="h-0.5 w-20 bg-gradient-to-r from-transparent via-mario-yellow to-transparent mx-auto mt-3" />
+            </div>
+          </Reveal>
+          <div className="grid gap-6 sm:grid-cols-3">
+            {[
+              { text: "The musubi is absolutely fire 🔥 Best campus food ever!", name: "Student A", stars: 5 },
+              { text: "Coffee jelly hit different at 2AM during finals week 💜", name: "Student B", stars: 5 },
+              { text: "Ordered churros for the whole barkada. Zero regrets 🍩", name: "Student C", stars: 5 },
+            ].map((t, i) => (
+              <Reveal key={i} delay={i * 0.15}>
+                <div className="mario-card p-6 spotlight-card h-full" style={{ '--mouse-x': '50%', '--mouse-y': '50%' } as React.CSSProperties}>
+                  <div className="text-mario-yellow text-sm mb-3">{'⭐'.repeat(t.stars)}</div>
+                  <p className="text-mario-text text-sm mb-4 italic">&ldquo;{t.text}&rdquo;</p>
+                  <p className="font-arcade text-[8px] text-mario-text-muted tracking-wider">— {t.name}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════
+          FOOTER
+          ═══════════════════════════════════════════════════════ */}
+      <footer className="border-t border-white/5 py-12 text-center relative z-10">
+        <Reveal>
+          <div className="flex justify-center gap-4 mb-4">
+            {['🍕', '🪙', '🎮', '💌', '⭐'].map((e, i) => (
+              <span key={i} className="heart-bounce text-xl" style={{ animationDelay: `${i * 0.15}s` }}>{e}</span>
+            ))}
+          </div>
+          <p className="font-arcade text-[8px] text-mario-text-muted tracking-widest uppercase mb-2">
+            © 2026 Muragoods — World 1-1 Food
+          </p>
+          <p className="text-[10px] text-mario-text-muted/50">
+            Made with 💛 for hungry adventurers
+          </p>
+        </Reveal>
       </footer>
     </main>
   );
