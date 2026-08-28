@@ -553,8 +553,8 @@ export default function MenuPage() {
               <button
                 onClick={() => {
                   if (!isLoggedIn) { setShowLoginPrompt(true); setShowDetailModal(null); return; }
-                  addToCart(showDetailModal, showDetailModal.variants[0].id, quickAddQty[showDetailModal.id] || 1);
                   setShowDetailModal(null);
+                  openVariantModal(showDetailModal);
                 }}
                 disabled={!isProductAvailable(showDetailModal)}
                 style={{
