@@ -192,10 +192,10 @@ export default function Home() {
   ];
 
   const features = [
-    { icon: '🍕', title: 'Fresh Food', desc: 'Made to order with love', color: '#06d6a0' },
-    { icon: '🪙', title: 'Earn Coins', desc: '0.5 coins per peso spent', color: '#ffd60a' },
-    { icon: '🎮', title: 'Play Games', desc: 'Win rewards & prizes', color: '#4895ef' },
-    { icon: '💌', title: 'Untold Words', desc: 'Send anonymous confessions', color: '#c896ff' },
+    { icon: '🍕', title: 'Fresh Food', desc: 'Made to order with love', color: '#06d6a0', link: '/menu' },
+    { icon: '🪙', title: 'Earn Coins', desc: '0.5 coins per peso spent', color: '#ffd60a', link: '/points' },
+    { icon: '🎮', title: 'Play Games', desc: 'Win rewards & prizes', color: '#4895ef', link: '/entertainment' },
+    { icon: '💌', title: 'Untold Words', desc: 'Send anonymous confessions', color: '#c896ff', link: '/untold-words' },
   ];
 
   return (
@@ -407,12 +407,14 @@ export default function Home() {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {features.map((feat, i) => (
               <Reveal key={feat.title} delay={i * 0.1}>
-                <div className="mario-card p-6 text-center group spotlight-card"
-                  style={{ '--mouse-x': '50%', '--mouse-y': '50%' } as React.CSSProperties}>
-                  <div className="text-4xl mb-4 group-hover:scale-125 transition-transform duration-300">{feat.icon}</div>
-                  <h3 className="font-arcade text-xs mb-2" style={{ color: feat.color }}>{feat.title}</h3>
-                  <p className="text-xs text-mario-text-muted">{feat.desc}</p>
-                </div>
+                <Link href={feat.link}>
+                  <div className="mario-card p-6 text-center group spotlight-card cursor-pointer hover:border-white/20"
+                    style={{ '--mouse-x': '50%', '--mouse-y': '50%' } as React.CSSProperties}>
+                    <div className="text-4xl mb-4 group-hover:scale-125 transition-transform duration-300">{feat.icon}</div>
+                    <h3 className="font-arcade text-xs mb-2" style={{ color: feat.color }}>{feat.title}</h3>
+                    <p className="text-xs text-mario-text-muted">{feat.desc}</p>
+                  </div>
+                </Link>
               </Reveal>
             ))}
           </div>
