@@ -420,10 +420,10 @@ export default function Home() {
             {features.map((feat, i) => (
               <Reveal key={feat.title} delay={i * 0.1}>
                 <Link href={feat.link}>
-                  <div className="mario-card p-6 text-center group spotlight-card cursor-pointer hover:border-white/20"
+                  <div className="mario-card p-6 text-center group spotlight-card cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
                     style={{ '--mouse-x': '50%', '--mouse-y': '50%' } as React.CSSProperties}>
-                    <div className="text-4xl mb-4 group-hover:scale-125 transition-transform duration-300">{feat.icon}</div>
-                    <h3 className="font-arcade text-xs mb-2" style={{ color: feat.color }}>{feat.title}</h3>
+                    <div className="mb-4 transition-all duration-300 group-hover:scale-110 group-hover:drop-shadow-[0_0_8px_var(--feat-color)]" style={{ '--feat-color': feat.color } as React.CSSProperties}>{feat.icon}</div>
+                    <h3 className="font-arcade text-xs mb-2 transition-colors duration-300" style={{ color: feat.color }}>{feat.title}</h3>
                     <p className="text-xs text-mario-text-muted">{feat.desc}</p>
                   </div>
                 </Link>
