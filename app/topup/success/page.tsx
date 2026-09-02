@@ -152,8 +152,8 @@ function SuccessContent() {
             ['Payment Status', paymentStatus],
             ['Top-Up Status', topUpStatus],
           ].map(([label, value]) => (
-            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #222' }}>
-              <span style={{ fontSize: '10px', color: '#888' }}>{label}</span>
+            <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #222' }}>
+              <span style={{ fontSize: '10px', color: '#888' }}>{String(label)}</span>
               <span style={{ fontSize: '10px', color: '#fff', fontWeight: 600, textAlign: 'right', maxWidth: '60%' }}>{String(value)}</span>
             </div>
           ))}

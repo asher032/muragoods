@@ -122,13 +122,13 @@ export default function TrackOrderPage() {
                 ['Amount', `₱${order.finalAmount}`],
                 ['Transaction ID', order.transactionId],
                 ['Payment Method', order.paymentMethod],
-                ['Payment Status', <span key="ps" style={{ color: getPaymentStatusColor(paymentStatus), fontWeight: 600 }}>{paymentStatus}</span>],
-                ['Top-Up Status', <span key="ts" style={{ color: getTopUpStatusColor(topUpStatus), fontWeight: 600 }}>{topUpStatus}</span>],
+                ['Payment Status', <span key="ps" style={{ color: getPaymentStatusColor(paymentStatus as any), fontWeight: 600 }}>{paymentStatus}</span>],
+                ['Top-Up Status', <span key="ts" style={{ color: getTopUpStatusColor(topUpStatus as any), fontWeight: 600 }}>{topUpStatus}</span>],
                 ['Created', new Date(order.createdAt as string).toLocaleString()],
               ].map(([label, value]) => (
                 <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #222' }}>
                   <span style={{ fontSize: '10px', color: '#888' }}>{String(label)}</span>
-                  <span style={{ fontSize: '10px', color: '#fff' }}>{value}</span>
+                  <span style={{ fontSize: '10px', color: '#fff' }}>{String(value)}</span>
                 </div>
               ))}
             </div>

@@ -103,8 +103,8 @@ export default function AdminPaymentsPage() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {filtered.map((order) => {
-              const payStatus = order.paymentStatus as string;
-              const tuStatus = order.topUpStatus as string;
+              const payStatus = String(order.paymentStatus || 'pending') as 'pending' | 'processing' | 'paid' | 'failed' | 'expired' | 'cancelled' | 'refund_pending' | 'refund_processing' | 'refunded' | 'refund_failed';
+              const tuStatus = String(order.topUpStatus || 'pending') as 'pending' | 'processing' | 'completed' | 'failed' | 'manual_review';
               const accountDetails = (order.accountDetails || {}) as Record<string, string>;
               const isSelected = selectedOrder?.orderId === order.orderId;
 
@@ -151,14 +151,14 @@ export default function AdminPaymentsPage() {
                           ['Retries', String(order.retryCount)],
                           ['Session', String(order.paymongoSessionId || 'N/A')],
                         ].map(([label, value]) => (
-                          <div key={label}>
-                            <p style={{ color: '#888', marginBottom: '2px' }}>{label}</p>
-                            <p style={{ color: '#ccc' }}>{value}</p>
+                          <div key={String(label)}>
+                            <p style={{ color: '#888', marginBottom: '2px' }}>{String(label)}</p>
+                            <p style={{ color: '#ccc' }}>{String(value)}</p>
                           </div>
                         ))}
                       </div>
 
-                      {order.adminNotes && (
+                      {String(order.adminNotes || '') && (
                         <div style={{ marginTop: '8px', padding: '8px', background: 'rgba(255,214,10,0.05)', borderRadius: '6px' }}>
                           <p style={{ fontSize: '9px', color: '#888' }}>Admin Notes: {String(order.adminNotes)}</p>
                         </div>
