@@ -547,55 +547,6 @@ export default function Home() {
       </ParallaxSection>
 
       {/* ═══════════════════════════════════════════════════════
-          GAME TOP-UP SECTION
-          ═══════════════════════════════════════════════════════ */}
-      <section className="px-4 py-16 sm:px-8 border-t border-white/5">
-        <div className="mario-container">
-          <Reveal>
-            <div className="mb-10 text-center">
-              <h2 className="mario-title text-lg sm:text-xl">🎮 Game Top-Up</h2>
-              <p className="text-xs text-mario-text-muted mt-2">Instant top-up for your favorite games</p>
-              <div className="h-0.5 w-20 bg-gradient-to-r from-transparent via-mario-yellow to-transparent mx-auto mt-3" />
-            </div>
-          </Reveal>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              { icon: '⚔️', name: 'Mobile Legends', currency: 'Diamonds', color: '#1a365d', link: '/topup' },
-              { icon: '🔫', name: 'PUBG Mobile', currency: 'UC', color: '#1a1a2e', link: '/topup' },
-              { icon: '🌟', name: 'Genshin Impact', currency: 'Genesis Crystals', color: '#2d1b69', link: '/topup' },
-              { icon: '🎯', name: 'COD Mobile', currency: 'CP', color: '#2d2d2d', link: '/topup' },
-              { icon: '💥', name: 'VALORANT', currency: 'VP', color: '#ff4655', link: '/topup' },
-              { icon: '🔥', name: 'Free Fire', currency: 'Diamonds', color: '#cc3300', link: '/topup' },
-            ].map((game, i) => (
-              <Reveal key={game.name} delay={i * 0.08}>
-                <Link href={game.link}>
-                  <div className="mario-card p-5 spotlight-card cursor-pointer group transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
-                    style={{ '--mouse-x': '50%', '--mouse-y': '50%', borderColor: 'transparent' } as React.CSSProperties}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xl" style={{ background: `${game.color}44` }}>
-                        {game.icon}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-white truncate">{game.name}</p>
-                        <p className="text-[9px] text-mario-text-muted">{game.currency} · Top Up →</p>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              </Reveal>
-            ))}
-          </div>
-          <Reveal delay={0.3}>
-            <div className="text-center mt-8">
-              <Link href="/topup" className="inline-block px-6 py-3 rounded-lg border border-mario-yellow/30 bg-mario-yellow/10 text-mario-yellow text-xs font-arcade hover:bg-mario-yellow/20 transition-all">
-                VIEW ALL GAMES →
-              </Link>
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════════════════════
           FOOTER
           ═══════════════════════════════════════════════════════ */}
       <footer className="border-t border-white/5 py-12 text-center relative z-10">
