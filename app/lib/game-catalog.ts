@@ -24,11 +24,11 @@ export interface GamePackage {
 
 // Helper to calculate margin
 export function getMargin(pkg: GamePackage): number {
-  return pkg.price - pkg.costPrice;
+  return pkg.costPrice != null ? pkg.price - pkg.costPrice : 0;
 }
 
 export function getMarginPercent(pkg: GamePackage): number {
-  return pkg.costPrice > 0 ? Math.round(((pkg.price - pkg.costPrice) / pkg.costPrice) * 100) : 0;
+  return (pkg.costPrice != null && pkg.costPrice > 0) ? Math.round(((pkg.price - pkg.costPrice) / pkg.costPrice) * 100) : 0;
 }
 
 export type GameCategory = 'Mobile' | 'PC' | 'Gift Cards' | 'Vouchers';
