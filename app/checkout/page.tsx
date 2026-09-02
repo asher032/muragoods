@@ -20,7 +20,7 @@ const timeSlotOptions = [
   { value: 'evening', label: 'Evening', time: '5:00 PM – 8:00 PM', icon: '🌙' },
 ];
 
-type PaymentMethod = 'GCash' | 'PayMongo' | 'Cash on Delivery';
+type PaymentMethod = 'GCash' | 'Cash on Delivery';
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -39,7 +39,6 @@ export default function CheckoutPage() {
   const [longitude, setLongitude] = useState('123.7450');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [paymongoLoading, setPaymongoLoading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState('');
   const [receiptData, setReceiptData] = useState<{ items: { name: string; quantity: number; price: number; variant?: string }[]; subtotal: number; deliveryFee: number; total: number; discount: number } | null>(null);
@@ -94,7 +93,6 @@ export default function CheckoutPage() {
   const isCustom = location === 'Custom';
   const isDaraga = location === 'Daraga';
   const isGCash = paymentMethod === 'GCash';
-  const isPayMongo = paymentMethod === 'PayMongo';
   const restrictedItems = cartItems.filter(item => dwclOnlyProducts.includes(item.id) && !isDwcl && !isDaraga);
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = cartItems.reduce((sum, item) => sum + (item.selectedVariant?.price || 0) * item.quantity, 0);
@@ -266,60 +264,6 @@ export default function CheckoutPage() {
     } catch { setError('Failed to place order.'); } finally { setIsSubmitting(false); }
   };
 
-  const handlePayMongo = async () => {
-    setError('');
-    if (cartItems.length === 0) { setError('Your cart is empty!'); return; }
-    if (!phone || phone.replace(/[\s\-()+]/g, '').length < 10) { setError('Please enter a valid contact number.'); return; }
-    setPaymongoLoading(true);
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    try {
-      const res = await fetch('/api/paymongo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: cartItems.map(item => ({
-            name: item.name,
-            variant: item.selectedVariant?.name,
-            price: item.selectedVariant?.price || 0,
-            quantity: item.quantity,
-          })),
-          total,
-          customerName: user.name || user.email,
-          customerEmail: user.email,
-          customerPhone: phone,
-          deliveryAddress: mapAddress || 'DWCL Pickup',
-          deliveryZone: location,
-          deliveryDate: customOrderDate,
-          deliveryTimeSlot: timeSlot,
-          deliveryService,
-          discountCode: discountApplied?.code,
-          discountAmount,
-          promoCode: promoApplied?.code,
-          promoDiscountAmount,
-          pointsEarned,
-          paymentMethods: ['gcash', 'card', 'qrph'],
-        }),
-      });
-      const result = await res.json();
-      if (result.success && result.data.checkoutUrl) {
-        // Save cart info so we can restore if needed
-        localStorage.setItem('paymongo_pending_cart', JSON.stringify({
-          cart, total, location, phone, customOrderDate, timeSlot, deliveryService,
-          mapAddress, latitude, longitude, discountApplied: discountApplied?.code,
-          promoApplied: promoApplied?.code,
-        }));
-        // Redirect to PayMongo hosted checkout
-        window.location.href = result.data.checkoutUrl;
-      } else {
-        setError(result.error || 'Failed to create payment session. Please try again.');
-      }
-    } catch {
-      setError('Failed to connect to payment service. Please try again.');
-    } finally {
-      setPaymongoLoading(false);
-    }
-  };
-
   const updateCartQty = (cartKey: string, delta: number) => {
     setCart(prev => {
       const next = { ...prev };
@@ -481,75 +425,32 @@ export default function CheckoutPage() {
               <div className="checkout-card" style={{ marginTop: '12px' }}>
                 <div className="checkout-title">PAYMENT</div>
                 <div className="cart-steps">
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-                    {/* PayMongo Online — Recommended */}
-                    <button type="button" onClick={() => setPaymentMethod('PayMongo')}
-                      style={{
-                        padding: '16px 10px', borderRadius: '8px', border: isPayMongo ? '1px solid #ffd60a' : '1px solid #2e2e2e',
-                        background: isPayMongo ? 'rgba(255,214,10,0.08)' : '#333', color: '#fff', cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s', position: 'relative'
-                      }}>
-                      <div style={{ position: 'absolute', top: '-6px', right: '-6px', background: '#06d6a0', color: '#000', fontSize: '7px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', fontFamily: 'var(--font-arcade)' }}>BEST</div>
-                      <div style={{ fontSize: '20px', marginBottom: '6px' }}>💳</div>
-                      <p style={{ fontSize: '11px', fontWeight: 600 }}>Online Pay</p>
-                      <p style={{ fontSize: '9px', color: '#bbb', marginTop: '4px' }}>GCash · Card · QR</p>
-                    </button>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                     <button type="button" onClick={() => setPaymentMethod('GCash')}
                       style={{
-                        padding: '16px 10px', borderRadius: '8px', border: isGCash ? '1px solid #ffd60a' : '1px solid #2e2e2e',
+                        padding: '16px 12px', borderRadius: '8px', border: isGCash ? '1px solid #ffd60a' : '1px solid #2e2e2e',
                         background: isGCash ? 'rgba(255,214,10,0.08)' : '#333', color: '#fff', cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s'
                       }}>
                       <div style={{ fontSize: '20px', marginBottom: '6px' }}>🏦</div>
                       <p style={{ fontSize: '11px', fontWeight: 600 }}>GCash</p>
-                      <p style={{ fontSize: '9px', color: '#bbb', marginTop: '4px' }}>QR + proof</p>
+                      <p style={{ fontSize: '9px', color: '#bbb', marginTop: '4px' }}>QR + proof required</p>
                     </button>
                     <button type="button" onClick={() => (isDwcl || isDaraga) && setPaymentMethod('Cash on Delivery')} disabled={!isDwcl && !isDaraga}
                       style={{
-                        padding: '16px 10px', borderRadius: '8px',
+                        padding: '16px 12px', borderRadius: '8px',
                         border: !isDwcl && !isDaraga ? '1px solid #2e2e2e' : paymentMethod === 'Cash on Delivery' ? '1px solid #06d6a0' : '1px solid #2e2e2e',
                         background: !isDwcl && !isDaraga ? '#2a2a2a' : paymentMethod === 'Cash on Delivery' ? 'rgba(6,214,160,0.08)' : '#333',
                         color: !isDwcl && !isDaraga ? '#555' : '#fff', cursor: !isDwcl && !isDaraga ? 'not-allowed' : 'pointer', textAlign: 'center', transition: 'all 0.2s', opacity: !isDwcl && !isDaraga ? 0.4 : 1
                       }}>
                       <div style={{ fontSize: '20px', marginBottom: '6px' }}>💵</div>
-                      <p style={{ fontSize: '11px', fontWeight: 600 }}>Cash</p>
-                      <p style={{ fontSize: '9px', color: '#bbb', marginTop: '4px' }}>{isDwcl ? 'Pickup' : isDaraga ? 'Daraga' : 'N/A'}</p>
+                      <p style={{ fontSize: '11px', fontWeight: 600 }}>Cash on Delivery</p>
+                      <p style={{ fontSize: '9px', color: '#bbb', marginTop: '4px' }}>{isDwcl ? 'DWCL pickup' : isDaraga ? 'Daraga/Legazpi' : 'Unavailable'}</p>
                     </button>
                   </div>
 
-                  {/* PayMongo Online Payment Panel */}
-                  {isPayMongo && (
-                    <div style={{ marginTop: '12px' }}>
-                      <div style={{ background: 'linear-gradient(135deg, #1a1a2e, #16213e)', borderRadius: '16px', overflow: 'hidden', marginBottom: '14px' }}>
-                        <div style={{ padding: '16px 20px 12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg, #6c5ce7, #a29bfe)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', color: '#fff', fontWeight: 800 }}>P</div>
-                          <div>
-                            <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '13px', color: '#fff', fontWeight: 700 }}>PayMongo</p>
-                            <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)' }}>Secure online payment</p>
-                          </div>
-                        </div>
-                        <div style={{ padding: '0 20px 20px' }}>
-                          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                            {['GCash', 'Credit Card', 'QRPh'].map(method => (
-                              <div key={method} style={{ flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '10px 8px', textAlign: 'center' }}>
-                                <p style={{ fontSize: '10px', color: '#ffd60a', fontWeight: 600 }}>{method}</p>
-                              </div>
-                            ))}
-                          </div>
-                          <div style={{ background: 'rgba(6,214,160,0.08)', border: '1px solid rgba(6,214,160,0.2)', borderRadius: '8px', padding: '10px 12px', marginBottom: '12px' }}>
-                            <p style={{ fontSize: '10px', color: '#06d6a0', fontWeight: 600 }}>🔒 Encrypted & secure — powered by PayMongo</p>
-                          </div>
-                          <button type="button" onClick={handlePayMongo} disabled={paymongoLoading || cartItems.length === 0}
-                            style={{ width: '100%', padding: '14px', background: paymongoLoading ? '#555' : 'linear-gradient(135deg, #6c5ce7, #a29bfe)', border: 'none', borderRadius: '10px', color: '#fff', fontSize: '13px', fontWeight: 700, fontFamily: 'var(--font-arcade)', cursor: paymongoLoading ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}>
-                            {paymongoLoading ? 'CREATING SESSION...' : `PAY ₱${total} NOW →`}
-                          </button>
-                          <p style={{ fontSize: '9px', color: '#888', textAlign: 'center', marginTop: '8px' }}>You&apos;ll be redirected to PayMongo to complete payment</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* GCash Manual Panel */}
                   {isGCash && (
                     <div style={{ marginTop: '12px' }}>
+                      {/* GCash Card */}
                       <div style={{ background: 'linear-gradient(135deg, #1a365d, #2563eb)', borderRadius: '16px', overflow: 'hidden', marginBottom: '14px' }}>
                         <div style={{ padding: '16px 20px 12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 800, color: '#1a365d' }}>G</div>
@@ -569,6 +470,7 @@ export default function CheckoutPage() {
                           </div>
                         </div>
                       </div>
+
                       <div style={{ marginBottom: '10px', background: 'rgba(255,214,10,0.06)', border: '1px solid rgba(255,214,10,0.15)', borderRadius: '8px', padding: '10px 12px' }}>
                         <p style={{ fontSize: '10px', color: '#ffd60a', fontWeight: 600 }}>📋 After paying, enter your GCash reference number below</p>
                       </div>
@@ -584,8 +486,7 @@ export default function CheckoutPage() {
                     </div>
                   )}
 
-                  {/* Cash on Delivery Panel */}
-                  {paymentMethod === 'Cash on Delivery' && (
+                  {!isGCash && (
                     <div style={{ marginTop: '12px', background: 'rgba(6,214,160,0.06)', border: '1px solid rgba(6,214,160,0.2)', borderRadius: '12px', padding: '16px' }}>
                       <p style={{ fontSize: '11px', fontWeight: 600, color: '#06d6a0' }}>💵 Cash on Delivery</p>
                       <p style={{ fontSize: '12px', color: '#fff', marginTop: '6px' }}>{isDwcl ? 'Pay in cash when you pick up your order. No payment proof needed!' : 'Pay in cash when delivered. No payment proof needed!'}</p>
@@ -708,7 +609,7 @@ export default function CheckoutPage() {
               <div className="checkout-footer">
                 <div className="price">₱{total}</div>
                 <button type="submit" disabled={cartItems.length === 0 || isSubmitting} className="checkout-btn" style={{ opacity: cartItems.length === 0 || isSubmitting ? 0.5 : 1 }}>
-                  {isSubmitting ? 'PLACING...' : isPayMongo ? 'CONTINUE TO PAY →' : 'CHECKOUT →'}
+                  {isSubmitting ? 'PLACING...' : 'CHECKOUT →'}
                 </button>
               </div>
             </>
