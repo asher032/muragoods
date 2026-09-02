@@ -202,5 +202,127 @@ export async function sendPasswordResetEmail(to: string, code: string, userName:
   }
 }
 
+export async function sendTopUpReceiptEmail(params: {
+  to: string;
+  orderId: string;
+  transactionId: string;
+  gameName: string;
+  gameIcon: string;
+  accountDetails: Record<string, string>;
+  packageName: string;
+  packageCurrency: string;
+  packageAmount: number;
+  amount: number;
+  paymentMethod: string;
+  createdAt: Date;
+}) {
+  const { to, orderId, transactionId, gameName, gameIcon, accountDetails, packageName, packageCurrency, packageAmount, amount, paymentMethod, createdAt } = params;
+  const accountStr = Object.entries(accountDetails).filter(([,v]) => v).map(([k, v]) => `${k}: ${v}`).join(' / ');
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { margin: 0; padding: 0; background: #0f0f1a; font-family: 'Segoe UI', Arial, sans-serif; }
+        .container { max-width: 480px; margin: 0 auto; padding: 40px 20px; }
+        .card { background: #1e1e32; border: 2px solid #06d6a0; border-radius: 16px; overflow: hidden; }
+        .header { background: rgba(6,214,160,0.08); padding: 24px; text-align: center; border-bottom: 2px solid rgba(6,214,160,0.2); }
+        .logo { font-size: 28px; color: #ffd60a; font-weight: 900; letter-spacing: 4px; }
+        .body { padding: 24px; color: #e8e8f0; }
+        .success-badge { background: rgba(6,214,160,0.15); border: 1px solid rgba(6,214,160,0.3); border-radius: 12px; padding: 12px; text-align: center; margin: 16px 0; }
+        .success-badge p { color: #06d6a0; font-size: 14px; font-weight: 700; margin: 0; }
+        .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .detail-label { font-size: 12px; color: #9090a8; }
+        .detail-value { font-size: 12px; color: #e8e8f0; font-weight: 600; text-align: right; }
+        .total-row { display: flex; justify-content: space-between; padding: 14px 0; margin-top: 8px; border-top: 2px solid rgba(255,214,10,0.2); }
+        .total-label { font-size: 13px; color: #ffd60a; font-weight: 700; }
+        .total-value { font-size: 18px; color: #ffd60a; font-weight: 900; }
+        .track-btn { display: block; text-align: center; padding: 14px; background: linear-gradient(135deg, #ffd60a, #f59e0b); color: #000; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 14px; margin: 20px 0; letter-spacing: 1px; }
+        .note { font-size: 12px; color: #707090; text-align: center; margin-top: 16px; line-height: 1.5; }
+        .footer { padding: 16px 24px; text-align: center; border-top: 1px solid rgba(255,255,255,0.08); }
+        .footer p { font-size: 11px; color: #707090; margin: 4px 0; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="card">
+          <div class="header">
+            <div style="font-size: 36px; margin-bottom: 8px;">${gameIcon}</div>
+            <div class="logo">MURAGOODS</div>
+            <p style="font-size: 12px; color: #9090a8; margin-top: 4px; letter-spacing: 2px;">TOP-UP RECEIPT</p>
+          </div>
+          <div class="body">
+            <div class="success-badge">
+              <p>✓ Payment Successful</p>
+              <p style="font-size: 11px; color: #9090a8; margin-top: 4px;">Your top-up is being processed</p>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Game</span>
+              <span class="detail-value">${gameIcon} ${gameName}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Account</span>
+              <span class="detail-value">${accountStr}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Package</span>
+              <span class="detail-value">${packageName}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Amount</span>
+              <span class="detail-value">${packageAmount} ${packageCurrency}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Payment Method</span>
+              <span class="detail-value">${paymentMethod}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Order ID</span>
+              <span class="detail-value" style="font-family: monospace; font-size: 11px;">${orderId}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Transaction ID</span>
+              <span class="detail-value" style="font-family: monospace; font-size: 11px;">${transactionId}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Date</span>
+              <span class="detail-value">${createdAt.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+            <div class="total-row">
+              <span class="total-label">TOTAL PAID</span>
+              <span class="total-value">₱${amount}</span>
+            </div>
+            <a href="https://muragoods.vercel.app/topup/track" class="track-btn">Track Your Order →</a>
+            <p class="note">
+              Your top-up will be delivered automatically. If you have any issues, contact us at muragoods.vercel.app/support<br>
+              or reply to this email.
+            </p>
+          </div>
+          <div class="footer">
+            <p style="color: #ffd60a; font-weight: 700;">MURAGOODS</p>
+            <p>Campus Power-Up Food</p>
+            <p>muragoods.vercel.app</p>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    const result = await sendEmail({
+      to,
+      subject: `🎮 Top-Up Receipt — ${gameName} ${packageName}`,
+      html,
+      text: `Top-Up Receipt\n\nGame: ${gameName}\nAccount: ${accountStr}\nPackage: ${packageName} (${packageAmount} ${packageCurrency})\nAmount: ₱${amount}\nPayment: ${paymentMethod}\nOrder: ${orderId}\n\nTrack: https://muragoods.vercel.app/topup/track\n\n— Muragoods`,
+    });
+    console.log(`[Email] Top-up receipt sent via ${result.provider}: ${result.success}`);
+    return result.success;
+  } catch (error) {
+    console.error('[Email] Failed to send top-up receipt:', error);
+    return false;
+  }
+}
+
 // Re-export for backwards compatibility
 export { getAvailableProviders } from './email-providers';

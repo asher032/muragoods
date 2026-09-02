@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import crypto from 'crypto';
 import { GAMES } from '@/app/lib/game-catalog';
+import { sendTopUpReceiptEmail } from '@/lib/email';
 
 const PAYMONGO_SECRET = process.env.PAYMONGO_SECRET_KEY || '';
 const PAYMONGO_BASE = 'https://api.paymongo.com/v1';
@@ -175,6 +176,17 @@ export async function POST(req: NextRequest) {
 
     // Cash on delivery or PayMongo failed — order is pending
     await order.save();
+
+    // Send receipt email for COD (immediate)
+    if (customerEmail) {
+      sendTopUpReceiptEmail({
+        to: customerEmail, orderId, transactionId,
+        gameName: game.name, gameIcon: game.icon, accountDetails,
+        packageName: pkg.name, packageCurrency: pkg.currency, packageAmount: pkg.amount,
+        amount: pkg.price, paymentMethod, createdAt: new Date(),
+      }).catch(e => console.error('[Email] Receipt failed:', e));
+    }
+
     return NextResponse.json({
       success: true,
       data: {
