@@ -10,6 +10,7 @@ import { NotificationProvider } from "@/app/components/NotificationSystem";
 import { OrderNotificationPoller } from "@/app/components/OrderNotifications";
 import { BottomNavBar } from "@/app/components/BottomNavBar";
 import { CookieNotice } from "@/app/components/CookieNotice";
+import { PageTransition } from "@/app/components/PageTransition";
 
 
 const pressStart = Press_Start_2P({
@@ -83,7 +84,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className={`${pressStart.variable} ${josefin.variable}`} style={{ fontFamily: "var(--font-body)" }}>
         <NotificationProvider>
           <AppLoader>
-            {children}
+            <PageTransition>
+              {children}
+            </PageTransition>
             <BottomNavBar />
             <CookieNotice />
           </AppLoader>
