@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { NavBar } from '@/app/components/NavBar';
-import { GAMES, type Game, type GamePackage } from '@/app/lib/game-catalog';
+import { GAMES, type Game, type GamePackage, getMargin, getMarginPercent } from '@/app/lib/game-catalog';
 
 export default function AdminGamesPage() {
   const router = useRouter();
@@ -32,6 +32,32 @@ export default function AdminGamesPage() {
 
         {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '20px' }}>
+          {/* Earnings Summary */}
+          {(() => {
+            const allPackages = games.flatMap(g => g.packages);
+            const totalRevenue = allPackages.reduce((s, p) => s + p.price, 0);
+            const totalCost = allPackages.reduce((s, p) => s + (p.costPrice || 0), 0);
+            const totalMargin = totalRevenue - totalCost;
+            const avgMargin = allPackages.length > 0 ? Math.round(totalMargin / allPackages.length) : 0;
+            return (
+              <div style={{ background: 'linear-gradient(135deg, rgba(6,214,160,0.06), rgba(255,214,10,0.04))', borderRadius: '10px', padding: '16px', border: '1px solid rgba(6,214,160,0.15)', marginBottom: '16px' }}>
+                <p style={{ fontSize: '9px', color: '#888', fontFamily: 'var(--font-arcade)', marginBottom: '10px' }}>💰 EARNINGS OVERVIEW</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                  {[
+                    { label: 'Revenue (all)', value: `₱${totalRevenue.toLocaleString()}`, color: '#fff' },
+                    { label: 'Cost (all)', value: `₱${totalCost.toLocaleString()}`, color: '#888' },
+                    { label: 'Total Margin', value: `₱${totalMargin.toLocaleString()}`, color: '#06d6a0' },
+                    { label: 'Avg Margin/Item', value: `₱${avgMargin}`, color: '#ffd60a' },
+                  ].map(s => (
+                    <div key={s.label} style={{ textAlign: 'center' }}>
+                      <p style={{ fontSize: '14px', fontWeight: 900, color: s.color, fontFamily: 'var(--font-arcade)' }}>{s.value}</p>
+                      <p style={{ fontSize: '8px', color: '#888', marginTop: '2px' }}>{s.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           {[
             { label: 'Total Games', value: games.length, color: '#fff' },
             { label: 'Active', value: games.filter(g => g.active).length, color: '#06d6a0' },
@@ -98,7 +124,11 @@ export default function AdminGamesPage() {
                           {pkg.badge && <span style={{ fontSize: '7px', padding: '1px 4px', borderRadius: '3px', background: 'rgba(255,214,10,0.15)', color: '#ffd60a' }}>{pkg.badge}</span>}
                         </div>
                         <p style={{ fontSize: '12px', fontWeight: 900, color: '#ffd60a', fontFamily: 'var(--font-arcade)', marginTop: '4px' }}>₱{pkg.price}</p>
-                        <p style={{ fontSize: '8px', color: '#666', marginTop: '2px' }}>{pkg.amount} {pkg.currency}</p>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
+                          <p style={{ fontSize: '8px', color: '#666' }}>{pkg.amount} {pkg.currency}</p>
+                          <p style={{ fontSize: '8px', color: '#06d6a0', fontWeight: 600 }}>+₱{getMargin(pkg)} ({getMarginPercent(pkg)}%)</p>
+                        </div>
+                        <p style={{ fontSize: '7px', color: '#555', marginTop: '1px' }}>Cost: ₱{pkg.costPrice || 0}</p>
                       </div>
                     ))}
                   </div>

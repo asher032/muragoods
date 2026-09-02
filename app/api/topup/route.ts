@@ -89,6 +89,8 @@ export async function POST(req: NextRequest) {
       packageCurrency: pkg.currency,
       packageAmount: pkg.amount,
       amount: pkg.price,
+      costPrice: pkg.costPrice || 0,
+      margin: (pkg.price) - (pkg.costPrice || 0),
       discount: 0,
       finalAmount: pkg.price,
       customerEmail,

@@ -15,10 +15,20 @@ export interface GamePackage {
   name: string;
   currency: string;
   amount: number;
-  price: number; // in PHP
+  price: number; // customer pays (PHP)
+  costPrice: number; // wholesale cost from provider (PHP)
   popular?: boolean;
-  promoPrice?: number; // discounted price
-  badge?: string; // e.g. 'BEST VALUE', 'HOT'
+  promoPrice?: number;
+  badge?: string;
+}
+
+// Helper to calculate margin
+export function getMargin(pkg: GamePackage): number {
+  return pkg.price - pkg.costPrice;
+}
+
+export function getMarginPercent(pkg: GamePackage): number {
+  return pkg.costPrice > 0 ? Math.round(((pkg.price - pkg.costPrice) / pkg.costPrice) * 100) : 0;
 }
 
 export type GameCategory = 'Mobile' | 'PC' | 'Gift Cards' | 'Vouchers';
@@ -56,13 +66,13 @@ export const GAMES: Game[] = [
       { id: 'zoneId', label: 'Zone ID', placeholder: 'e.g. 1234', type: 'number', required: true },
     ],
     packages: [
-      { id: 'ml-50', name: '50 Diamonds', currency: 'Diamonds', amount: 50, price: 49 },
+      { id: 'ml-50', name: '50 Diamonds', currency: 'Diamonds', amount: 50, price: 49, costPrice: 42 },
       { id: 'ml-100', name: '100 Diamonds', currency: 'Diamonds', amount: 100, price: 99, popular: true, badge: 'POPULAR' },
-      { id: 'ml-200', name: '200 Diamonds', currency: 'Diamonds', amount: 200, price: 199 },
-      { id: 'ml-300', name: '300 Diamonds', currency: 'Diamonds', amount: 300, price: 299 },
+      { id: 'ml-200', name: '200 Diamonds', currency: 'Diamonds', amount: 200, price: 199, costPrice: 169 },
+      { id: 'ml-300', name: '300 Diamonds', currency: 'Diamonds', amount: 300, price: 299, costPrice: 254 },
       { id: 'ml-500', name: '500 Diamonds', currency: 'Diamonds', amount: 500, price: 499, popular: true, badge: 'BEST VALUE' },
-      { id: 'ml-1000', name: '1,000 Diamonds', currency: 'Diamonds', amount: 1000, price: 999 },
-      { id: 'ml-2000', name: '2,000 Diamonds', currency: 'Diamonds', amount: 2000, price: 1999 },
+      { id: 'ml-1000', name: '1,000 Diamonds', currency: 'Diamonds', amount: 1000, price: 999, costPrice: 849 },
+      { id: 'ml-2000', name: '2,000 Diamonds', currency: 'Diamonds', amount: 2000, price: 1999, costPrice: 1699 },
       { id: 'ml-weekly', name: 'Weekly Diamond Pass', currency: 'Diamonds', amount: 60, price: 149, badge: 'DEAL' },
     ],
     idGuide: 'How to find your Mobile Legends ID',
@@ -86,12 +96,12 @@ export const GAMES: Game[] = [
       { id: 'playerId', label: 'Player ID', placeholder: 'e.g. 5123456789', type: 'number', required: true },
     ],
     packages: [
-      { id: 'pubg-60', name: '60 UC', currency: 'UC', amount: 60, price: 49 },
+      { id: 'pubg-60', name: '60 UC', currency: 'UC', amount: 60, price: 49, costPrice: 42 },
       { id: 'pubg-150', name: '150 UC', currency: 'UC', amount: 150, price: 120, popular: true, badge: 'POPULAR' },
-      { id: 'pubg-300', name: '300 UC', currency: 'UC', amount: 300, price: 240 },
+      { id: 'pubg-300', name: '300 UC', currency: 'UC', amount: 300, price: 240, costPrice: 204 },
       { id: 'pubg-600', name: '600 UC', currency: 'UC', amount: 600, price: 480, popular: true, badge: 'BEST VALUE' },
-      { id: 'pubg-1500', name: '1,500 UC', currency: 'UC', amount: 1500, price: 1200 },
-      { id: 'pubg-3000', name: '3,000 UC', currency: 'UC', amount: 3000, price: 2400 },
+      { id: 'pubg-1500', name: '1,500 UC', currency: 'UC', amount: 1500, price: 1200, costPrice: 1020 },
+      { id: 'pubg-3000', name: '3,000 UC', currency: 'UC', amount: 3000, price: 2400, costPrice: 2040 },
     ],
     idGuide: 'How to find your PUBG Mobile ID',
     idGuideSteps: [
@@ -115,12 +125,12 @@ export const GAMES: Game[] = [
       { id: 'server', label: 'Server/Region', placeholder: 'e.g. Asia', required: true },
     ],
     packages: [
-      { id: 'gi-60', name: '60 Genesis Crystals', currency: 'Genesis Crystals', amount: 60, price: 49 },
+      { id: 'gi-60', name: '60 Genesis Crystals', currency: 'Genesis Crystals', amount: 60, price: 49, costPrice: 42 },
       { id: 'gi-300', name: '300 Genesis Crystals', currency: 'Genesis Crystals', amount: 300, price: 249, popular: true, badge: 'POPULAR' },
       { id: 'gi-980', name: '980 Genesis Crystals', currency: 'Genesis Crystals', amount: 980, price: 799, badge: 'BEST VALUE' },
-      { id: 'gi-1980', name: '1,980 Genesis Crystals', currency: 'Genesis Crystals', amount: 1980, price: 1599 },
-      { id: 'gi-3280', name: '3,280 Genesis Crystals', currency: 'Genesis Crystals', amount: 3280, price: 2599 },
-      { id: 'gi-6480', name: '6,480 Genesis Crystals', currency: 'Genesis Crystals', amount: 6480, price: 4999 },
+      { id: 'gi-1980', name: '1,980 Genesis Crystals', currency: 'Genesis Crystals', amount: 1980, price: 1599, costPrice: 1359 },
+      { id: 'gi-3280', name: '3,280 Genesis Crystals', currency: 'Genesis Crystals', amount: 3280, price: 2599, costPrice: 2209 },
+      { id: 'gi-6480', name: '6,480 Genesis Crystals', currency: 'Genesis Crystals', amount: 6480, price: 4999, costPrice: 4249 },
     ],
     idGuide: 'How to find your Genshin Impact UID',
     idGuideSteps: [
@@ -143,11 +153,11 @@ export const GAMES: Game[] = [
       { id: 'playerId', label: 'Player ID', placeholder: 'e.g. 1234567890123456', type: 'number', required: true },
     ],
     packages: [
-      { id: 'cod-80', name: '80 CP', currency: 'CP', amount: 80, price: 49 },
+      { id: 'cod-80', name: '80 CP', currency: 'CP', amount: 80, price: 49, costPrice: 42 },
       { id: 'cod-220', name: '220 CP', currency: 'CP', amount: 220, price: 120, popular: true, badge: 'POPULAR' },
-      { id: 'cod-540', name: '540 CP', currency: 'CP', amount: 540, price: 299 },
+      { id: 'cod-540', name: '540 CP', currency: 'CP', amount: 540, price: 299, costPrice: 254 },
       { id: 'cod-1150', name: '1,150 CP', currency: 'CP', amount: 1150, price: 599, badge: 'BEST VALUE' },
-      { id: 'cod-2400', name: '2,400 CP', currency: 'CP', amount: 2400, price: 1200 },
+      { id: 'cod-2400', name: '2,400 CP', currency: 'CP', amount: 2400, price: 1200, costPrice: 1020 },
     ],
     idGuide: 'How to find your COD Mobile ID',
     idGuideSteps: [
@@ -169,11 +179,11 @@ export const GAMES: Game[] = [
       { id: 'playerId', label: 'Player ID', placeholder: 'e.g. 1234567890', type: 'number', required: true },
     ],
     packages: [
-      { id: 'ff-100', name: '100 Diamonds', currency: 'Diamonds', amount: 100, price: 49 },
+      { id: 'ff-100', name: '100 Diamonds', currency: 'Diamonds', amount: 100, price: 49, costPrice: 42 },
       { id: 'ff-310', name: '310 Diamonds', currency: 'Diamonds', amount: 310, price: 149, popular: true, badge: 'POPULAR' },
-      { id: 'ff-520', name: '520 Diamonds', currency: 'Diamonds', amount: 520, price: 249 },
+      { id: 'ff-520', name: '520 Diamonds', currency: 'Diamonds', amount: 520, price: 249, costPrice: 212 },
       { id: 'ff-1060', name: '1,060 Diamonds', currency: 'Diamonds', amount: 1060, price: 499, badge: 'BEST VALUE' },
-      { id: 'ff-2180', name: '2,180 Diamonds', currency: 'Diamonds', amount: 2180, price: 999 },
+      { id: 'ff-2180', name: '2,180 Diamonds', currency: 'Diamonds', amount: 2180, price: 999, costPrice: 849 },
     ],
     idGuide: 'How to find your Free Fire ID',
     idGuideSteps: [
@@ -197,11 +207,11 @@ export const GAMES: Game[] = [
       { id: 'userId', label: 'User ID (optional)', placeholder: 'e.g. 12345678', type: 'number', required: false },
     ],
     packages: [
-      { id: 'rbx-80', name: '80 Robux', currency: 'Robux', amount: 80, price: 49 },
+      { id: 'rbx-80', name: '80 Robux', currency: 'Robux', amount: 80, price: 49, costPrice: 42 },
       { id: 'rbx-160', name: '160 Robux', currency: 'Robux', amount: 160, price: 99, popular: true, badge: 'POPULAR' },
-      { id: 'rbx-400', name: '400 Robux', currency: 'Robux', amount: 400, price: 249 },
+      { id: 'rbx-400', name: '400 Robux', currency: 'Robux', amount: 400, price: 249, costPrice: 212 },
       { id: 'rbx-800', name: '800 Robux', currency: 'Robux', amount: 800, price: 499, badge: 'BEST VALUE' },
-      { id: 'rbx-1700', name: '1,700 Robux', currency: 'Robux', amount: 1700, price: 999 },
+      { id: 'rbx-1700', name: '1,700 Robux', currency: 'Robux', amount: 1700, price: 999, costPrice: 849 },
     ],
     idGuide: 'How to find your Roblox User ID',
     idGuideSteps: [
@@ -226,12 +236,12 @@ export const GAMES: Game[] = [
       { id: 'riotId', label: 'Riot ID', placeholder: 'e.g. PlayerName#TAG', required: true },
     ],
     packages: [
-      { id: 'val-100', name: '100 VP', currency: 'VP', amount: 100, price: 55 },
-      { id: 'val-200', name: '200 VP', currency: 'VP', amount: 200, price: 110 },
+      { id: 'val-100', name: '100 VP', currency: 'VP', amount: 100, price: 55, costPrice: 47 },
+      { id: 'val-200', name: '200 VP', currency: 'VP', amount: 200, price: 110, costPrice: 94 },
       { id: 'val-535', name: '535 VP', currency: 'VP', amount: 535, price: 295, popular: true, badge: 'POPULAR' },
       { id: 'val-1000', name: '1,000 VP', currency: 'VP', amount: 1000, price: 550, badge: 'BEST VALUE' },
-      { id: 'val-2050', name: '2,050 VP', currency: 'VP', amount: 2050, price: 1100 },
-      { id: 'val-5350', name: '5,350 VP', currency: 'VP', amount: 5350, price: 2900 },
+      { id: 'val-2050', name: '2,050 VP', currency: 'VP', amount: 2050, price: 1100, costPrice: 935 },
+      { id: 'val-5350', name: '5,350 VP', currency: 'VP', amount: 5350, price: 2900, costPrice: 2465 },
     ],
     idGuide: 'How to find your VALORANT Riot ID',
     idGuideSteps: [
@@ -254,10 +264,10 @@ export const GAMES: Game[] = [
       { id: 'steamUrl', label: 'Steam Profile URL or Custom URL', placeholder: 'e.g. steamcommunity.com/id/YourName', required: true },
     ],
     packages: [
-      { id: 'steam-100', name: '₱100 Wallet', currency: 'Steam Credits', amount: 100, price: 100 },
+      { id: 'steam-100', name: '₱100 Wallet', currency: 'Steam Credits', amount: 100, price: 100, costPrice: 95 },
       { id: 'steam-200', name: '₱200 Wallet', currency: 'Steam Credits', amount: 200, price: 200, popular: true, badge: 'POPULAR' },
       { id: 'steam-500', name: '₱500 Wallet', currency: 'Steam Credits', amount: 500, price: 500, badge: 'BEST VALUE' },
-      { id: 'steam-1000', name: '₱1,000 Wallet', currency: 'Steam Credits', amount: 1000, price: 1000 },
+      { id: 'steam-1000', name: '₱1,000 Wallet', currency: 'Steam Credits', amount: 1000, price: 1000, costPrice: 950 },
     ],
     idGuide: 'How to find your Steam Profile URL',
     idGuideSteps: [
@@ -281,10 +291,10 @@ export const GAMES: Game[] = [
       { id: 'email', label: 'Email for code delivery', placeholder: 'your@email.com', required: true },
     ],
     packages: [
-      { id: 'gp-100', name: '₱100 Google Play', currency: 'Credits', amount: 100, price: 100 },
+      { id: 'gp-100', name: '₱100 Google Play', currency: 'Credits', amount: 100, price: 100, costPrice: 95 },
       { id: 'gp-300', name: '₱300 Google Play', currency: 'Credits', amount: 300, price: 300, popular: true, badge: 'POPULAR' },
       { id: 'gp-500', name: '₱500 Google Play', currency: 'Credits', amount: 500, price: 500, badge: 'BEST VALUE' },
-      { id: 'gp-1000', name: '₱1,000 Google Play', currency: 'Credits', amount: 1000, price: 1000 },
+      { id: 'gp-1000', name: '₱1,000 Google Play', currency: 'Credits', amount: 1000, price: 1000, costPrice: 950 },
     ],
     idGuide: 'Google Play Gift Card is delivered via email',
     idGuideSteps: [
@@ -308,7 +318,7 @@ export const GAMES: Game[] = [
     packages: [
       { id: 'itunes-500', name: '₱500 iTunes', currency: 'Credits', amount: 500, price: 500, popular: true, badge: 'POPULAR' },
       { id: 'itunes-1000', name: '₱1,000 iTunes', currency: 'Credits', amount: 1000, price: 1000, badge: 'BEST VALUE' },
-      { id: 'itunes-2000', name: '₱2,000 iTunes', currency: 'Credits', amount: 2000, price: 2000 },
+      { id: 'itunes-2000', name: '₱2,000 iTunes', currency: 'Credits', amount: 2000, price: 2000, costPrice: 1900 },
     ],
     idGuide: 'Apple iTunes Gift Card is delivered via email',
     idGuideSteps: [

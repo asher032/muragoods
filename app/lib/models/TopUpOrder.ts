@@ -20,7 +20,9 @@ export interface ITopUpOrder extends Document {
   packageAmount: number;
 
   // Pricing
-  amount: number; // in PHP
+  amount: number; // customer pays (PHP)
+  costPrice: number; // wholesale cost from provider (PHP)
+  margin: number; // earnings per order (PHP)
   discount: number;
   finalAmount: number;
 
@@ -79,6 +81,8 @@ const TopUpOrderSchema = new Schema<ITopUpOrder>({
   packageAmount: { type: Number, required: true },
 
   amount: { type: Number, required: true },
+  costPrice: { type: Number, default: 0 },
+  margin: { type: Number, default: 0 },
   discount: { type: Number, default: 0 },
   finalAmount: { type: Number, required: true },
 
