@@ -1,9 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { NavBar } from '@/app/components/NavBar';
+import { Icon } from '@/app/components/Icon';
 import { GAMES, type Game, type GamePackage, getMargin, getMarginPercent } from '@/app/lib/game-catalog';
+
+interface ProviderStatus {
+  id: string;
+  name: string;
+  active: boolean;
+  description: string;
+}
 
 export default function AdminGamesPage() {
   const router = useRouter();
@@ -11,6 +19,25 @@ export default function AdminGamesPage() {
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [editingPackage, setEditingPackage] = useState<GamePackage | null>(null);
   const [filter, setFilter] = useState<string>('all');
+  const [providers, setProviders] = useState<ProviderStatus[]>([]);
+  const [orderStats, setOrderStats] = useState({ total: 0, completed: 0, pending: 0, failed: 0, revenue: 0, earnings: 0 });
+
+  useEffect(() => {
+    fetch('/api/topup/providers').then(r => r.json()).then(d => { if (d.success) setProviders(d.data); }).catch(() => {});
+    fetch('/api/admin/topup-orders').then(r => r.json()).then(d => {
+      if (d.success && d.data) {
+        const orders = d.data;
+        setOrderStats({
+          total: orders.length,
+          completed: orders.filter((o: Record<string, unknown>) => o.topUpStatus === 'completed').length,
+          pending: orders.filter((o: Record<string, unknown>) => o.paymentStatus === 'pending' || o.topUpStatus === 'processing').length,
+          failed: orders.filter((o: Record<string, unknown>) => o.paymentStatus === 'failed' || o.topUpStatus === 'manual_review').length,
+          revenue: orders.filter((o: Record<string, unknown>) => o.paymentStatus === 'paid' || o.paymentStatus === 'completed').reduce((s: number, o: Record<string, unknown>) => s + (Number(o.finalAmount) || 0), 0),
+          earnings: orders.filter((o: Record<string, unknown>) => o.topUpStatus === 'completed').reduce((s: number, o: Record<string, unknown>) => s + (Number(o.margin) || 0), 0),
+        });
+      }
+    }).catch(() => {});
+  }, []);
 
   // Check admin
   useState(() => {
@@ -69,6 +96,46 @@ export default function AdminGamesPage() {
               <p style={{ fontSize: '8px', color: '#888', marginTop: '4px' }}>{s.label}</p>
             </div>
           ))}
+        </div>
+
+        {/* Provider Status & Order Stats */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+          {/* Providers */}
+          <div style={{ background: '#1a1a2e', borderRadius: '12px', padding: '14px', border: '1px solid #2e2e2e' }}>
+            <p style={{ fontSize: '9px', color: '#888', fontFamily: 'var(--font-arcade)', marginBottom: '10px' }}>🔌 PROVIDERS</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {providers.map(p => (
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: p.active ? '#06d6a0' : '#e63946' }} />
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: '10px', color: '#fff', fontWeight: 600 }}>{p.name}</p>
+                    <p style={{ fontSize: '8px', color: '#888' }}>{p.description}</p>
+                  </div>
+                  <span style={{ fontSize: '8px', color: p.active ? '#06d6a0' : '#e63946', fontFamily: 'var(--font-arcade)' }}>{p.active ? 'ACTIVE' : 'INACTIVE'}</span>
+                </div>
+              ))}
+              {providers.length === 0 && <p style={{ fontSize: '9px', color: '#666' }}>Loading providers...</p>}
+            </div>
+          </div>
+          {/* Order Stats */}
+          <div style={{ background: '#1a1a2e', borderRadius: '12px', padding: '14px', border: '1px solid #2e2e2e' }}>
+            <p style={{ fontSize: '9px', color: '#888', fontFamily: 'var(--font-arcade)', marginBottom: '10px' }}>📊 ORDER STATS</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              {[
+                { label: 'Total Orders', value: orderStats.total, color: '#fff' },
+                { label: 'Completed', value: orderStats.completed, color: '#06d6a0' },
+                { label: 'Pending', value: orderStats.pending, color: '#ffd60a' },
+                { label: 'Failed', value: orderStats.failed, color: '#e63946' },
+                { label: 'Revenue', value: `₱${orderStats.revenue.toLocaleString()}`, color: '#4895ef' },
+                { label: 'Earnings', value: `₱${orderStats.earnings.toLocaleString()}`, color: '#06d6a0' },
+              ].map(s => (
+                <div key={s.label} style={{ textAlign: 'center' }}>
+                  <p style={{ fontSize: '12px', fontWeight: 900, color: s.color, fontFamily: 'var(--font-arcade)' }}>{s.value}</p>
+                  <p style={{ fontSize: '8px', color: '#888', marginTop: '2px' }}>{s.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Category Filter */}

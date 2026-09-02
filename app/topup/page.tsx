@@ -31,6 +31,10 @@ export default function TopUpPage() {
   const [showIdGuide, setShowIdGuide] = useState(false);
   const [error, setError] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [promoCode, setPromoCode] = useState('');
+  const [promoResult, setPromoResult] = useState<{ discount: number; description: string; finalAmount: number } | null>(null);
+  const [promoError, setPromoError] = useState('');
+  const [promoLoading, setPromoLoading] = useState(false);
 
   const filteredGames = useMemo(() => {
     let list = GAMES.filter(g => g.active);
@@ -65,6 +69,24 @@ export default function TopUpPage() {
   };
 
   const handlePackageSelect = (pkg: GamePackage) => { setSelectedPackage(pkg); setStep('review'); };
+
+  const handleApplyPromo = async () => {
+    if (!promoCode.trim() || !selectedPackage) return;
+    setPromoLoading(true);
+    setPromoError('');
+    setPromoResult(null);
+    try {
+      const res = await fetch('/api/topup/promo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: promoCode.trim(), orderAmount: selectedPackage.price }),
+      });
+      const result = await res.json();
+      if (result.success) setPromoResult(result.data);
+      else setPromoError(result.error || 'Invalid code');
+    } catch { setPromoError('Failed to check code'); }
+    setPromoLoading(false);
+  };
 
   const handlePay = async () => {
     if (!selectedGame || !selectedPackage || !selectedPayment) return;
@@ -394,6 +416,30 @@ export default function TopUpPage() {
                 <p style={{ fontSize: '9px', color: '#888', fontFamily: 'var(--font-arcade)' }}>TOTAL</p>
                 <p style={{ fontSize: '22px', fontWeight: 900, color: '#fff', fontFamily: 'var(--font-arcade)' }}>₱{selectedPackage.price}</p>
               </div>
+            </div>
+
+            {/* Promo Code */}
+            <div style={{ background: '#1a1a2e', borderRadius: '12px', padding: '14px', marginBottom: '16px', border: '1px solid #2e2e2e' }}>
+              <p style={{ fontSize: '10px', color: '#888', fontFamily: 'var(--font-arcade)', marginBottom: '8px' }}>HAVE A PROMO CODE?</p>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input type="text" value={promoCode} onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoResult(null); setPromoError(''); }}
+                  placeholder="Enter code" className="input_field"
+                  style={{ flex: 1, textTransform: 'uppercase', fontSize: '12px', letterSpacing: '0.05em' }} />
+                <button onClick={handleApplyPromo} disabled={promoLoading || !promoCode.trim()}
+                  style={{ padding: '8px 16px', borderRadius: '8px', background: promoLoading ? '#555' : 'rgba(255,214,10,0.15)', border: '1px solid rgba(255,214,10,0.3)', color: '#ffd60a', fontSize: '10px', fontFamily: 'var(--font-arcade)', fontWeight: 700, cursor: promoLoading ? 'not-allowed' : 'pointer' }}>
+                  {promoLoading ? '...' : 'APPLY'}
+                </button>
+              </div>
+              {promoResult && (
+                <div style={{ marginTop: '8px', padding: '8px 10px', background: 'rgba(6,214,160,0.08)', border: '1px solid rgba(6,214,160,0.2)', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Icon name="check" size={12} color="#06d6a0" />
+                    <p style={{ fontSize: '10px', color: '#06d6a0', fontWeight: 600 }}>{promoResult.description}</p>
+                  </div>
+                  <p style={{ fontSize: '9px', color: '#888', marginTop: '2px' }}>-₱{promoResult.discount} discount applied</p>
+                </div>
+              )}
+              {promoError && <p style={{ fontSize: '9px', color: '#e63946', marginTop: '6px' }}>{promoError}</p>}
             </div>
 
             {error && <div style={{ background: 'rgba(230,57,70,0.1)', border: '1px solid rgba(230,57,70,0.3)', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '11px', color: '#e63946', display: 'flex', alignItems: 'center', gap: '8px' }}>

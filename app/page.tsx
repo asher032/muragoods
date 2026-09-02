@@ -600,11 +600,6 @@ export default function Home() {
           ═══════════════════════════════════════════════════════ */}
       <footer className="border-t border-white/5 py-12 text-center relative z-10">
         <Reveal>
-          <div className="flex justify-center gap-4 mb-4">
-            {[<Icon key="food" name="food" size={18} />, <Icon key="coin" name="coin" size={18} />, <Icon key="game" name="game" size={18} />, <Icon key="envelope" name="envelope" size={18} />, <Icon key="star" name="star" size={18} />].map((icon, i) => (
-              <span key={i} className="heart-bounce" style={{ animationDelay: `${i * 0.15}s` }}>{icon}</span>
-            ))}
-          </div>
           <p className="font-arcade text-[8px] text-mario-text-muted tracking-widest uppercase mb-2">
             © 2026 Muragoods — World 1-1 Food
           </p>
