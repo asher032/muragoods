@@ -16,7 +16,7 @@ export interface GamePackage {
   currency: string;
   amount: number;
   price: number; // customer pays (PHP)
-  costPrice: number; // wholesale cost from provider (PHP)
+  costPrice?: number; // wholesale cost from provider (PHP)
   popular?: boolean;
   promoPrice?: number;
   badge?: string;
