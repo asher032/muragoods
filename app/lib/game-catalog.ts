@@ -364,6 +364,7 @@ export type PaymentStatus =
 
 export type TopUpStatus =
   | 'pending'
+  | 'pending_fulfillment'
   | 'processing'
   | 'completed'
   | 'failed'
@@ -401,6 +402,7 @@ export function getTopUpStatusColor(status: TopUpStatus): string {
   switch (status) {
     case 'completed': return '#06d6a0';
     case 'processing': return '#ffd60a';
+    case 'pending_fulfillment': return '#f59e0b';
     case 'pending': return '#888';
     case 'failed': case 'manual_review': return '#e63946';
     default: return '#888';

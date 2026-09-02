@@ -39,7 +39,7 @@ export interface ITopUpOrder extends Document {
   paymentAttempts: number;
 
   // Top-up
-  topUpStatus: 'pending' | 'processing' | 'completed' | 'failed' | 'manual_review';
+  topUpStatus: 'pending' | 'pending_fulfillment' | 'processing' | 'completed' | 'failed' | 'manual_review';
   topUpProviderRef?: string;
   topUpCompletedAt?: Date;
 

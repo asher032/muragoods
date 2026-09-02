@@ -1,7 +1,22 @@
 // ─── TopUp Provider Abstraction ────────────────────────────
-// Production-ready provider system for Muragoods Game Top-Up.
-// Each provider implements the TopUpProvider interface with their specific API calls.
-// Swap providers without rebuilding the frontend.
+// Manual Fulfillment System for Muragoods Game Top-Up.
+//
+// Real game top-up APIs (Codapay, UniPin, Codashop) require B2B
+// merchant agreements with business registration. Since Muragoods
+// doesn't have that, ALL top-ups are fulfilled manually by the admin.
+//
+// Flow:
+//   1. Customer pays via PayMongo or Cash on Delivery
+//   2. Webhook confirms payment → order marked 'pending_fulfillment'
+//   3. Admin sees order in /admin/fulfillment dashboard
+//   4. Admin manually tops up via game provider's consumer app
+//   5. Admin clicks "Fulfill" → order marked 'completed'
+//   6. Customer gets email confirmation
+//
+// To switch to automatic fulfillment in the future:
+//   - Sign up for Codapay/UniPin merchant account
+//   - Create a new provider class implementing TopUpProvider
+//   - Add it to the allProviders array below
 
 export interface ProviderAccountValidation {
   valid: boolean;
@@ -50,224 +65,103 @@ export interface TopUpProvider {
     status: 'completed' | 'failed';
     providerTransactionId: string;
   } | null>;
-  getBalance?(): Promise<number | null>;
 }
 
-// ─── Codapay / Codashop Provider ───────────────────────────
-// Real API integration for Codapay (codapay.com).
-// Requires CODAPAY_API_KEY and CODAPAY_API_SECRET in env.
-// Supports: Mobile Legends, PUBG, Genshin, Free Fire, COD, Roblox, Valorant, Steam
-// Docs: https://docs.codapay.com/
+// ─── Manual Fulfillment Provider ────────────────────────────
+// This is the ONLY active provider for Muragoods right now.
+//
+// It does NOT make any external API calls. It simply marks orders
+// as awaiting manual fulfillment. The admin then:
+//   1. Opens /admin/fulfillment
+//   2. Sees the order details (game, account ID, package)
+//   3. Manually tops up via the game's consumer app/website
+//   4. Marks the order as fulfilled in the dashboard
+//
+// No fake HTTP calls. No fabricated endpoints. Honest code.
 
-class CodapayProvider implements TopUpProvider {
-  name = 'Codapay';
-  id = 'codapay';
-  active = !!process.env.CODAPAY_API_KEY;
-  description = 'Instant delivery via Codapay — supports 50+ games';
-  supportedGames = ['mobile-legends', 'pubg-mobile', 'genshin-impact', 'cod-mobile', 'free-fire', 'roblox', 'valorant', 'steam-wallet'];
-  features = { accountValidation: true, autoTopUp: true, webhooks: true, refunds: true };
+class ManualFulfillmentProvider implements TopUpProvider {
+  name = 'Manual Fulfillment';
+  id = 'manual-fulfillment';
+  active = true; // Always active — this is the default path
+  description = 'Admin manually processes top-ups via game provider apps';
+  supportedGames = [
+    'mobile-legends', 'pubg-mobile', 'genshin-impact', 'cod-mobile',
+    'free-fire', 'roblox', 'valorant', 'steam-wallet',
+    'google-play', 'apple-itunes',
+  ];
+  features = {
+    accountValidation: false, // Can't validate without API access
+    autoTopUp: false,         // Manual — admin does it
+    webhooks: false,          // No external provider to call us
+    refunds: false,           // Admin handles refunds manually too
+  };
 
-  private baseUrl = 'https://api.codashop.com/v1';
-  private apiKey = process.env.CODAPAY_API_KEY || '';
-  private apiSecret = process.env.CODAPAY_API_SECRET || '';
-
-  private sign(params: Record<string, string>): string {
-    const crypto = require('crypto');
-    const sorted = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&');
-    return crypto.createHmac('sha256', this.apiSecret).update(sorted).digest('hex');
-  }
-
-  async validateAccount(gameId: string, accountDetails: Record<string, string>): Promise<ProviderAccountValidation> {
-    if (!this.apiKey) return { valid: true, playerName: 'Account Validated' };
-    try {
-      const params: Record<string, string> = {
-        appId: this.apiKey,
-        serviceId: gameId,
-        ...accountDetails,
-      };
-      params.signature = this.sign(params);
-      const res = await fetch(`${this.baseUrl}/account/validate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params),
-      });
-      const data = await res.json();
-      if (data.success) {
-        return { valid: true, playerName: data.playerName || 'Account Validated' };
-      }
-      return { valid: false, error: data.message || 'Account not found' };
-    } catch (e) {
-      return { valid: false, error: 'Validation service unavailable' };
-    }
-  }
-
-  async createTopUp(params: { gameId: string; packageId: string; accountDetails: Record<string, string>; orderId: string; amount: number }): Promise<ProviderTopUpResult> {
-    if (!this.apiKey) return { success: false, error: 'Codapay not configured' };
-    try {
-      const signParams: Record<string, string> = {
-        appId: this.apiKey,
-        orderId: params.orderId,
-        serviceId: params.gameId,
-        productId: params.packageId,
-        amount: String(params.amount),
-        ...params.accountDetails,
-      };
-      signParams.signature = this.sign(signParams);
-      const res = await fetch(`${this.baseUrl}/transaction`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(signParams),
-      });
-      const data = await res.json();
-      if (data.transactionId) {
-        return { success: true, providerTransactionId: data.transactionId, estimatedCompletion: 60 };
-      }
-      return { success: false, error: data.message || 'Top-up failed' };
-    } catch (e) {
-      return { success: false, error: 'Provider connection error' };
-    }
-  }
-
-  async checkTransaction(providerTransactionId: string): Promise<ProviderTransactionStatus> {
-    if (!this.apiKey) return { status: 'completed', providerTransactionId };
-    try {
-      const signParams: Record<string, string> = { appId: this.apiKey, transactionId: providerTransactionId };
-      signParams.signature = this.sign(signParams);
-      const res = await fetch(`${this.baseUrl}/transaction/status?${new URLSearchParams(signParams)}`);
-      const data = await res.json();
-      const statusMap: Record<string, 'pending' | 'processing' | 'completed' | 'failed'> = {
-        pending: 'pending', processing: 'processing', completed: 'completed', failed: 'failed',
-      };
-      return { status: statusMap[data.status] || 'pending', providerTransactionId };
-    } catch (e) {
-      return { status: 'pending', providerTransactionId };
-    }
-  }
-
-  async handleWebhook(payload: unknown): Promise<{ orderId: string; status: 'completed' | 'failed'; providerTransactionId: string } | null> {
-    const data = payload as Record<string, unknown>;
-    const orderId = String(data.orderId || '');
-    const transactionId = String(data.transactionId || '');
-    const status = data.status === 'completed' ? 'completed' : 'failed';
-    return { orderId, status: 'completed' === status ? 'completed' : 'failed', providerTransactionId: transactionId };
-  }
-}
-
-// ─── UniPin Provider ───────────────────────────────────────
-// Real API integration for UniPin (unipin.com).
-// Requires UNIPIN_API_KEY and UNIPIN_API_SECRET in env.
-// Docs: https://docs.unipin.com/
-
-class UniPinProvider implements TopUpProvider {
-  name = 'UniPin';
-  id = 'unipin';
-  active = !!process.env.UNIPIN_API_KEY;
-  description = 'Wide game coverage via UniPin — Philippines focused';
-  supportedGames = ['mobile-legends', 'pubg-mobile', 'genshin-impact', 'free-fire', 'cod-mobile', 'valorant'];
-  features = { accountValidation: true, autoTopUp: true, webhooks: true, refunds: false };
-
-  private baseUrl = 'https://api.unipin.com/v1';
-  private apiKey = process.env.UNIPIN_API_KEY || '';
-  private apiSecret = process.env.UNIPIN_API_SECRET || '';
-
-  private sign(data: string): string {
-    const crypto = require('crypto');
-    return crypto.createHmac('sha256', this.apiSecret).update(data).digest('hex');
-  }
-
-  async validateAccount(gameId: string, accountDetails: Record<string, string>): Promise<ProviderAccountValidation> {
-    if (!this.apiKey) return { valid: true, playerName: 'Account Validated' };
-    try {
-      const res = await fetch(`${this.baseUrl}/games/${gameId}/validate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': this.apiKey,
-          'X-Signature': this.sign(JSON.stringify(accountDetails)),
-        },
-        body: JSON.stringify(accountDetails),
-      });
-      const data = await res.json();
-      return { valid: data.valid, playerName: data.playerName, error: data.error };
-    } catch (e) {
-      return { valid: false, error: 'UniPin validation unavailable' };
-    }
-  }
-
-  async createTopUp(params: { gameId: string; packageId: string; accountDetails: Record<string, string>; orderId: string; amount: number }): Promise<ProviderTopUpResult> {
-    if (!this.apiKey) return { success: false, error: 'UniPin not configured' };
-    try {
-      const body = { orderId: params.orderId, gameId: params.gameId, productId: params.packageId, account: params.accountDetails, amount: params.amount };
-      const res = await fetch(`${this.baseUrl}/orders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-API-Key': this.apiKey, 'X-Signature': this.sign(JSON.stringify(body)) },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (data.orderId) return { success: true, providerTransactionId: data.orderId, estimatedCompletion: 45 };
-      return { success: false, error: data.message || 'Top-up failed' };
-    } catch (e) {
-      return { success: false, error: 'UniPin connection error' };
-    }
-  }
-
-  async checkTransaction(providerTransactionId: string): Promise<ProviderTransactionStatus> {
-    if (!this.apiKey) return { status: 'completed', providerTransactionId };
-    try {
-      const res = await fetch(`${this.baseUrl}/orders/${providerTransactionId}`, {
-        headers: { 'X-API-Key': this.apiKey },
-      });
-      const data = await res.json();
-      return { status: data.status || 'pending', providerTransactionId };
-    } catch (e) {
-      return { status: 'pending', providerTransactionId };
-    }
-  }
-
-  async handleWebhook(payload: unknown): Promise<{ orderId: string; status: 'completed' | 'failed'; providerTransactionId: string } | null> {
-    const data = payload as Record<string, unknown>;
-    return { orderId: String(data.orderId || ''), status: data.status === 'completed' ? 'completed' : 'failed', providerTransactionId: String(data.providerRef || '') };
-  }
-}
-
-// ─── Mock Provider (for development/testing) ────────────────
-
-class MockTopUpProvider implements TopUpProvider {
-  name = 'Muragoods Direct';
-  id = 'muragoods-direct';
-  active = true;
-  description = 'Development provider — simulates top-ups for testing';
-  supportedGames = ['mobile-legends', 'pubg-mobile', 'genshin-impact', 'cod-mobile', 'free-fire', 'roblox', 'valorant', 'steam-wallet', 'google-play', 'apple-itunes'];
-  features = { accountValidation: false, autoTopUp: true, webhooks: false, refunds: false };
-
+  // Account validation requires API access to the game provider.
+  // Without it, we can only pass through the data the customer entered.
   async validateAccount(_gameId: string, _accountDetails: Record<string, string>): Promise<ProviderAccountValidation> {
-    await new Promise(r => setTimeout(r, 300));
-    return { valid: true, playerName: 'Test Player' };
+    // We can't validate — just confirm the data was received
+    // Admin will verify during manual fulfillment
+    return {
+      valid: true,
+      playerName: 'Manual verification required',
+    };
   }
 
-  async createTopUp(params: { gameId: string; packageId: string; accountDetails: Record<string, string>; orderId: string; amount: number }): Promise<ProviderTopUpResult> {
-    await new Promise(r => setTimeout(r, 500));
-    return { success: true, providerTransactionId: `MOCK-${params.orderId}`, estimatedCompletion: 10 };
+  // This doesn't actually call any external API.
+  // It just returns success so the order flow continues.
+  // The real fulfillment happens in the admin dashboard.
+  async createTopUp(params: {
+    gameId: string;
+    packageId: string;
+    accountDetails: Record<string, string>;
+    orderId: string;
+    amount: number;
+  }): Promise<ProviderTopUpResult> {
+    console.log(`[ManualFulfillment] Order ${params.orderId} queued for manual processing`);
+    console.log(`[ManualFulfillment] Game: ${params.gameId}, Package: ${params.packageId}`);
+    console.log(`[ManualFulfillment] Account: ${JSON.stringify(params.accountDetails)}`);
+    console.log(`[ManualFulfillment] Admin must manually top up via game provider app`);
+
+    // Return success so the order is created and appears in the admin dashboard
+    return {
+      success: true,
+      providerTransactionId: `MANUAL-${params.orderId}`,
+      estimatedCompletion: undefined, // No estimate — depends on admin availability
+    };
   }
 
+  // Manual fulfillment doesn't have external transaction IDs to check.
+  // Status is managed entirely by the admin in the fulfillment dashboard.
   async checkTransaction(providerTransactionId: string): Promise<ProviderTransactionStatus> {
-    return { status: 'completed', providerTransactionId, completedAt: new Date() };
+    return {
+      status: 'pending',
+      providerTransactionId,
+    };
   }
 
-  async handleWebhook(payload: unknown): Promise<{ orderId: string; status: 'completed' | 'failed'; providerTransactionId: string } | null> {
-    const data = payload as Record<string, unknown>;
-    return { orderId: String(data.orderId || ''), status: 'completed', providerTransactionId: String(data.transactionId || '') };
+  // No external webhooks — the admin is the webhook.
+  async handleWebhook(_payload: unknown): Promise<null> {
+    return null;
   }
 }
 
 // ─── Provider Registry ─────────────────────────────────────
-// Priority order: Codapay > UniPin > Mock
-// Active providers are auto-detected by env vars.
+// Currently only one provider: ManualFulfillment.
+//
+// To add automatic fulfillment in the future:
+//   1. Create a new class implementing TopUpProvider
+//   2. Add it to this array BEFORE ManualFulfillmentProvider
+//   3. Set its 'active' flag based on env vars (API keys)
+//
+// Example:
+//   class CodapayProvider implements TopUpProvider { ... }
+//   const allProviders: TopUpProvider[] = [
+//     new CodapayProvider(),      // Try automatic first
+//     new ManualFulfillmentProvider(), // Fallback to manual
+//   ];
 
 const allProviders: TopUpProvider[] = [
-  new CodapayProvider(),
-  new UniPinProvider(),
-  new MockTopUpProvider(), // Fallback
+  new ManualFulfillmentProvider(),
 ];
 
 export function getActiveProviders(): TopUpProvider[] {
@@ -278,11 +172,9 @@ export function getProviderById(id: string): TopUpProvider | undefined {
   return allProviders.find(p => p.id === id);
 }
 
-export function getProviderForGame(gameId: string): TopUpProvider {
-  // Find the first active provider that supports this game
-  const active = getActiveProviders();
-  const gameProvider = active.find(p => p.supportedGames.includes(gameId));
-  return gameProvider || active[active.length - 1]; // fallback to mock
+export function getProviderForGame(_gameId: string): TopUpProvider {
+  // All games use manual fulfillment for now
+  return allProviders[0];
 }
 
 export function getProviderStatus(): Array<{ id: string; name: string; active: boolean; description: string }> {
@@ -292,16 +184,17 @@ export function getProviderStatus(): Array<{ id: string; name: string; active: b
 }
 
 // ─── Game-to-Provider Mapping ──────────────────────────────
+// All games currently use manual fulfillment.
 
 export const GAME_PROVIDER_MAP: Record<string, string[]> = {
-  'mobile-legends': ['codapay', 'unipin', 'muragoods-direct'],
-  'pubg-mobile': ['codapay', 'unipin', 'muragoods-direct'],
-  'genshin-impact': ['codapay', 'unipin', 'muragoods-direct'],
-  'cod-mobile': ['codapay', 'unipin', 'muragoods-direct'],
-  'free-fire': ['codapay', 'unipin', 'muragoods-direct'],
-  'roblox': ['codapay', 'muragoods-direct'],
-  'valorant': ['codapay', 'unipin', 'muragoods-direct'],
-  'steam-wallet': ['codapay', 'muragoods-direct'],
-  'google-play': ['muragoods-direct'],
-  'apple-itunes': ['muragoods-direct'],
+  'mobile-legends': ['manual-fulfillment'],
+  'pubg-mobile': ['manual-fulfillment'],
+  'genshin-impact': ['manual-fulfillment'],
+  'cod-mobile': ['manual-fulfillment'],
+  'free-fire': ['manual-fulfillment'],
+  'roblox': ['manual-fulfillment'],
+  'valorant': ['manual-fulfillment'],
+  'steam-wallet': ['manual-fulfillment'],
+  'google-play': ['manual-fulfillment'],
+  'apple-itunes': ['manual-fulfillment'],
 };
