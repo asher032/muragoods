@@ -1,5 +1,5 @@
-// MuraStream — Ad-Free Proxy (Fixed)
-// Surgically removes ONLY ad code while keeping player logic intact
+// MuraStream — Ad-Free Proxy
+// Simple approach: override isDemo=true so NexStream skips all ad logic
 
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -58,64 +58,34 @@ export async function GET(request: NextRequest) {
 
     let html = await res.text();
 
-    // ── SURGICAL AD REMOVAL ─────────────────────────────────────────────
-    // Instead of removing entire script blocks, remove ONLY the ad code within them
-
-    // 1. Remove the Adsterra click-shield div creation and dismiss logic
-    //    This is the block that creates the overlay and opens popup on click
+    // ── AD REMOVAL ──────────────────────────────────────────────────────
+    // NexStream shows ads when isDemo = false. Force it to true = no ads.
+    // This is the simplest and most reliable approach.
     html = html.replace(
-      /\/\/ =+[\s\S]*?ADSTERRA CLICK-SHIELD LOGIC[\s\S]*?=+\s*if\s*\(!isDemo\)\s*\{[\s\S]*?adShield\.addEventListener\('touchend'[\s\S]*?\}\s*\}/,
-      '// ADS REMOVED BY PROXY'
+      /const isDemo = _apiKey\.startsWith\('DEMO_'\);/,
+      'const isDemo = true;'
     );
 
-    // 2. Remove the Adsterra popunder script block (second <script> tag)
+    // Also replace any isDemo check that might use real key detection
+    html = html.replace(
+      /if \(!isDemo\)\s*\{/,
+      'if (false) { // ads disabled by proxy'
+    );
+
+    // Remove the popunder script block (second <script> tag with Adsterra)
     html = html.replace(
       /<script\s+type="text\/javascript">\s*\/\/\s*Adsterra[\s\S]*?<\/script>/,
-      '<!-- adsterra popunder removed -->'
+      '<!-- ads removed -->'
     );
 
-    // 3. Remove any remaining ad-related inline scripts
+    // Inject CSS to hide any remaining ad overlays
     html = html.replace(
-      /<script[^>]*>[\s\S]*?adsterra[\s\S]*?<\/script>/gi,
-      '<!-- ad script removed -->'
-    );
-
-    // 4. Remove the ad-shield-play CSS and adblock-screen CSS
-    html = html.replace(/\/\* ── Ad Shield Play Button ── \*\/[\s\S]*?\.ad-shield-play::after\s*\{[^}]*\}/, '/* ad shield css removed */');
-    html = html.replace(/\/\* ── Adblock Screen ── \*\/[\s\S]*?\.adblock-card\s*\{[^}]*\}/, '/* adblock css removed */');
-
-    // 5. Remove ad bait elements (hidden divs that detect adblockers)
-    html = html.replace(/bait\.className\s*=\s*'[^']*(?:adsbox|ad-placement|doubleclick)[^']*'/g, "bait.className = 'clean'");
-    html = html.replace(/<div[^>]*class="[^"]*(?:adsbox|ad-placement|doubleclick|ad-banner)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
-
-    // 6. Remove ad-block detection screen
-    html = html.replace(/<div[^>]*id="adblock-screen"[^>]*>[\s\S]*?<\/div>/gi, '<!-- adblock screen removed -->');
-
-    // 7. Inject CSS to hide any remaining ad elements
-    const cleanCSS = `
-      <style>
-        [class*="ad-shield"], [id*="ad-shield"], [id*="adblock-screen"],
-        [class*="adblock"], .ad-shield-play, #adblock-screen,
-        [class*="adsbox"], [class*="ad-placement"] {
-          display: none !important;
-          visibility: hidden !important;
-          opacity: 0 !important;
-          pointer-events: none !important;
-        }
-        /* Ensure video player fills the container */
-        #stream-frame, iframe, video {
-          width: 100% !important;
-          height: 100% !important;
-          border: none !important;
-        }
-      </style>
-    `;
-    html = html.replace('</head>', cleanCSS + '</head>');
-
-    // 8. Override isDemo to always skip ad logic (belt and suspenders)
-    html = html.replace(
-      'const isDemo = _apiKey.startsWith(\'DEMO_\');',
-      'const isDemo = true; // Force ad-free via proxy'
+      '</head>',
+      `<style>
+        .ad-shield-play, #adblock-screen, [class*="ad-shield"],
+        [id*="adblock"], .adblock-card { display:none!important; }
+        #stream-frame, iframe, video { width:100%!important; height:100%!important; border:none!important; }
+      </style></head>`
     );
 
     return new NextResponse(html, {
