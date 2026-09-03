@@ -12,18 +12,22 @@ export async function GET(request: NextRequest) {
   const season = searchParams.get('season') ? Number(searchParams.get('season')) : undefined;
   const episode = searchParams.get('episode') ? Number(searchParams.get('episode')) : undefined;
 
+  console.log(`[Stream API] Request: tmdbId=${tmdbId} type=${mediaType} season=${season} episode=${episode}`);
+
   if (!tmdbId || !Number.isFinite(tmdbId)) {
     return NextResponse.json({ error: 'Invalid tmdbId' }, { status: 400 });
   }
 
   try {
     const sources = await resolveVidRock(tmdbId, mediaType, season, episode);
+    console.log(`[Stream API] Resolved ${sources.length} sources`);
     return NextResponse.json({
       sources,
       first: sources.find(s => !!s.uri) || null,
     });
-  } catch (error) {
-    console.error('Stream resolution error:', error);
-    return NextResponse.json({ error: 'Failed to resolve streams' }, { status: 500 });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('[Stream API] Error:', msg);
+    return NextResponse.json({ error: 'Failed to resolve streams', detail: msg }, { status: 500 });
   }
 }

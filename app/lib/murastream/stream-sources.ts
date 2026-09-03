@@ -2,6 +2,8 @@
 // Resolves TMDB IDs to actual m3u8/mp4 stream URLs via VidRock
 // VidRock returns AES-GCM encrypted URLs that we decrypt server-side
 
+import { createDecipheriv } from 'crypto';
+
 const VIDROCK_MAIN = 'https://vidrock.net';
 // AES-GCM key from Flickv4's StreamflixService
 const STREAM_KEY = Buffer.from([
@@ -11,9 +13,6 @@ const STREAM_KEY = Buffer.from([
   0x7e, 0x9f, 0x2a, 0x5c, 0x8b, 0x1d, 0x4e, 0x7f,
 ]);
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
-
-// Use Node.js crypto for AES-GCM decryption
-const nodeCrypto = require('crypto');
 
 export interface StreamSource {
   id: string;
@@ -39,7 +38,7 @@ function decryptAesGcm(payload: string): string | null {
     if (packed.length < 28) return null;
     const nonce = packed.subarray(0, 12);
     const ciphertextAndTag = packed.subarray(12);
-    const decipher = nodeCrypto.createDecipheriv('aes-256-gcm', STREAM_KEY, nonce);
+    const decipher = createDecipheriv('aes-256-gcm', STREAM_KEY, nonce);
     decipher.setAuthTag(ciphertextAndTag.subarray(-16));
     const decrypted = Buffer.concat([
       decipher.update(ciphertextAndTag.subarray(0, -16)),
@@ -105,7 +104,6 @@ export async function resolveVidRock(
     const body: VidRockResponse = await res.json();
     if (!body || typeof body !== 'object') return [];
 
-    // Sort: English sources first
     const entries = Object.entries(body).sort(([, a], [, b]) => {
       const aEn = isEnglish(a.language, a.flag) ? 1 : 0;
       const bEn = isEnglish(b.language, b.flag) ? 1 : 0;
@@ -115,11 +113,14 @@ export async function resolveVidRock(
     const sources: StreamSource[] = [];
     for (const [name, data] of entries) {
       const packed = (data?.url || '').trim();
-      if (!packed) continue;
+      if (!packed) {
+        console.log(`[VidRock] Empty URL for: ${name}`);
+        continue;
+      }
 
       const url = decryptAesGcm(packed);
       if (!url) {
-        console.log(`[VidRock] Failed to decrypt: ${name}`);
+        console.log(`[VidRock] Decrypt failed: ${name}`);
         continue;
       }
 
@@ -137,10 +138,10 @@ export async function resolveVidRock(
         },
         subtitles: [],
       });
-      console.log(`[VidRock] Resolved: ${name} -> ${url.substring(0, 80)}...`);
+      console.log(`[VidRock] OK: ${name} -> ${url.substring(0, 60)}...`);
     }
 
-    console.log(`[VidRock] Total sources: ${sources.length}`);
+    console.log(`[VidRock] Total: ${sources.length} sources`);
     return sources;
   } catch (error) {
     console.error('[VidRock] Error:', error);
