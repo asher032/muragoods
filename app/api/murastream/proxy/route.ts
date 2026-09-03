@@ -1,6 +1,6 @@
 // MuraStream — Ad-Stripping Proxy with URL Rewriting
 // Fetches streaming embed pages, rewrites relative URLs to absolute,
-// removes ad code, and serves clean HTML with proper iframe headers
+// injects <base> tag so client-side routing works, removes ad code
 
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -12,15 +12,15 @@ const AD_SCRIPT_PATTERNS = [
   /zvaufrpq/gi,
   /superextraextra/gi,
   /nviqolho/gi,
-  /t7cpbtd6/gi,
+  /t7cpbtd/gi,
   /histats\.com/gi,
 ];
 
-// Source base URLs for rewriting relative URLs
-const SOURCE_ORIGINS: Record<string, string> = {
-  vidsrc: 'https://vsembed.ru',
-  vidking: 'https://www.vidking.net',
-  videasy: 'https://player.videasy.to',
+// Source base URLs for rewriting relative URLs + base tag
+const SOURCE_CONFIG: Record<string, { origin: string; embedPath: string }> = {
+  vidsrc: { origin: 'https://vsembed.ru', embedPath: '' },
+  vidking: { origin: 'https://www.vidking.net', embedPath: '' },
+  videasy: { origin: 'https://player.videasy.to', embedPath: '' },
 };
 
 export async function GET(request: NextRequest) {
@@ -35,7 +35,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing id' }, { status: 400 });
   }
 
-  // Build the direct embed URL
+  const config = SOURCE_CONFIG[source];
+  if (!config) {
+    return NextResponse.json({ error: 'Unknown source' }, { status: 400 });
+  }
+
+  // Build the direct embed URL for fetching
   let embedUrl = '';
   switch (source) {
     case 'vidsrc':
@@ -53,11 +58,7 @@ export async function GET(request: NextRequest) {
         ? `https://player.videasy.to/movie/${id}`
         : `https://player.videasy.to/tv/${id}/${season}/${episode}`;
       break;
-    default:
-      return NextResponse.json({ error: 'Unknown source' }, { status: 400 });
   }
-
-  const origin = SOURCE_ORIGINS[source] || '';
 
   try {
     const res = await fetch(embedUrl, {
@@ -72,117 +73,91 @@ export async function GET(request: NextRequest) {
     }
 
     let html = await res.text();
+    const { origin } = config;
 
     // ═══════════════════════════════════════════════════════════════
-    // 1. REWRITE RELATIVE URLs → ABSOLUTE URLs
-    //    This is critical — without it, the browser tries to load
-    //    /assets/player.js from muragoods.vercel.app instead of vidking.net
+    // 1. INJECT <base> TAG — Makes client-side router think it's
+    //    on the original domain. This fixes the white screen issue.
+    //    Also fixes all relative URL resolution.
     // ═══════════════════════════════════════════════════════════════
-
-    if (origin) {
-      // Rewrite src="..." for scripts, iframes, images, links
-      html = html.replace(
-        /src="\/(?!\/)/g,
-        `src="${origin}/`
-      );
-      // Rewrite href="..." for stylesheets, manifests, etc.
-      html = html.replace(
-        /href="\/(?!\/)/g,
-        `href="${origin}/`
-      );
-      // Rewrite url('...') in inline styles
-      html = html.replace(
-        /url\(['"]\/(?!\/)/g,
-        `url('${origin}/`
-      );
-      // Rewrite // protocol-relative URLs (they need https:)
-      html = html.replace(
-        /src="\/\//g,
-        `src="https://`
-      );
-      html = html.replace(
-        /href="\/\//g,
-        `href="https://`
-      );
-    }
+    html = html.replace(
+      '<head>',
+      `<head><base href="${origin}/">`
+    );
 
     // ═══════════════════════════════════════════════════════════════
-    // 2. SURGICAL AD REMOVAL
+    // 2. REWRITE PROTOCOL-RELATIVE URLS (//example.com → https://example.com)
+    // ═══════════════════════════════════════════════════════════════
+    html = html.replace(/src="\/\//g, 'src="https://');
+    html = html.replace(/href="\/\//g, 'href="https://');
+    html = html.replace(/url\(\/\//g, 'url(https://');
+
+    // ═══════════════════════════════════════════════════════════════
+    // 3. SURGICAL AD REMOVAL
     // ═══════════════════════════════════════════════════════════════
 
-    // Remove ad script tags (llvpn, adsterra, etc.)
+    // Remove ad script tags
     for (const pattern of AD_SCRIPT_PATTERNS) {
-      // Remove <script> tags that contain ad domain references
-      const scriptRegex = new RegExp(
-        `<script[^>]*>[\\s\\S]*?${pattern.source}[\\s\\S]*?<\\/script>`,
-        'gi'
+      const source = pattern.source;
+      // Remove <script> tags with ad domain in content
+      html = html.replace(
+        new RegExp(`<script[^>]*>[\\s\\S]*?${source}[\\s\\S]*?<\\/script>`, 'gi'),
+        '<!-- ad removed -->'
       );
-      html = html.replace(scriptRegex, '<!-- ad script removed -->');
-
       // Remove <script src="...adomain..."> tags
-      const srcRegex = new RegExp(
-        `<script[^>]*src=["'][^"']*${pattern.source}[^"']*["'][^>]*>[\\s\\S]*?<\\/script>`,
-        'gi'
+      html = html.replace(
+        new RegExp(`<script[^>]*src=["'][^"']*${source}[^"']*["'][^>]*>[\\s\\S]*?<\\/script>`, 'gi'),
+        '<!-- ad removed -->'
       );
-      html = html.replace(srcRegex, '<!-- ad script removed -->');
-
-      // Also handle self-closing: <script src="..." />
-      const selfCloseRegex = new RegExp(
-        `<script[^>]*src=["'][^"']*${pattern.source}[^"']*["'][^>]*/>`,
-        'gi'
+      html = html.replace(
+        new RegExp(`<script[^>]*src=["'][^"']*${source}[^"']*["'][^>]*/>`, 'gi'),
+        '<!-- ad removed -->'
       );
-      html = html.replace(selfCloseRegex, '<!-- ad script removed -->');
     }
 
     // Remove the specific inline llvpn ad pattern from VidSrc
     html = html.replace(
-      /<script>\s*\(function\(s\)\{s\.dataset\.zone=['"]\d+['"],s\.src=['"][^'"]*(?:llvpn|adsterra|zvigrat)[^'"]*['"]/gi,
-      '<!-- ad script removed -->'
+      /<script>\s*\(function\(s\)\{s\.dataset\.zone/gi,
+      '<!-- ad removed'
     );
 
-    // Remove histats tracking pixel
+    // Remove histats tracking
     html = html.replace(
       /<img[^>]*src=["'][^"']*histats\.com[^"']*["'][^>]*\/?>/gi,
       '<!-- tracking removed -->'
     );
 
     // ═══════════════════════════════════════════════════════════════
-    // 3. INJECT AD-BLOCKING SAFETY NET
+    // 4. DISABLE ADS + POPUP BLOCKER
     // ═══════════════════════════════════════════════════════════════
 
-    // For VidKing: disable ads via sessionStorage
+    // For VidKing: disable ads via sessionStorage before any scripts run
     if (source === 'vidking') {
       html = html.replace(
-        '<head>',
-        `<head><script>try{window.sessionStorage.setItem("adsEnabled","false")}catch(e){}</script>`
+        '<head><base',
+        `<head><script>try{window.sessionStorage.setItem("adsEnabled","false")}catch(e){}</script><base`
       );
     }
 
-    // Inject popup blocker and ad overlay hider BEFORE </head>
+    // Inject popup blocker and ad overlay hider
     html = html.replace(
       '</head>',
       `<script>
         (function(){
-          // Block popup ads from known ad domains
-          var _open=window.open;
+          var _o=window.open;
           window.open=function(u,t,f){
             if(typeof u==='string'&&(u.indexOf('llvpn')>-1||u.indexOf('adsterra')>-1||u.indexOf('zvigrat')>-1||u.indexOf('superextra')>-1||u.indexOf('clickunder')>-1||u.indexOf('popunder')>-1||u.indexOf('nviqolho')>-1||u.indexOf('t7cpbtd')>-1)){
               return null;
             }
-            return _open?_open.call(window,u,t,f):null;
+            return _o?_o.call(window,u,t,f):null;
           };
-          // Block mousedown popups
-          document.addEventListener('mousedown',function(e){
-            if(e.target&&e.target.closest&&e.target.closest('[data-cfasync]')){
-              e.stopPropagation();e.preventDefault();
-            }
-          },true);
         })();
       </script>
       <style>
         [class*="ad-shield"],[id*="adblock"],.adblock-card,
-        [class*="popunder"],[class*="ad-overlay"],[class*="ad-container"],
-        [data-cfasync]{display:none!important;pointer-events:none!important;}
+        [class*="popunder"],[class*="ad-overlay"],[data-cfasync]{
+          display:none!important;pointer-events:none!important;
+        }
       </style>
       </head>`
     );
