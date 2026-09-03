@@ -150,7 +150,6 @@ function WatchContent() {
             style={{ width: '100%', height: '100%', border: 'none', position: 'absolute', inset: 0 }}
             allow="autoplay; fullscreen; picture-in-picture"
             allowFullScreen
-            sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"
           />
         )}
 
