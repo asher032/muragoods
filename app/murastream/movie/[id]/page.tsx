@@ -254,7 +254,7 @@ export default function MovieDetailPage() {
                 SELECT SOURCE:
               </p>
               <div style={{ display: 'flex', gap: '6px' }}>
-                {['videasy', 'vidsrc', 'vidking'].map(src => (
+                {['nexstream', 'videasy', 'vidsrc', 'vidking'].map(src => (
                   <button
                     key={src}
                     onClick={() => setActiveSource(src)}

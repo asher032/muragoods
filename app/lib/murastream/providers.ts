@@ -13,7 +13,15 @@ export interface StreamingSource {
   params?: Record<string, string>;
 }
 
+const NEXSTREAM_KEY = process.env.NEXTSTREAM_API_KEY || '';
+
 export const STREAMING_SOURCES: StreamingSource[] = [
+  {
+    id: 'nexstream',
+    label: 'NexStream',
+    movieUrl: (id) => `https://api.codespecters.com/embed/movie/${id}?apikey=${NEXSTREAM_KEY}`,
+    tvUrl: (id, season, ep) => `https://api.codespecters.com/embed/tv/${id}/${season}/${ep}?apikey=${NEXSTREAM_KEY}`,
+  },
   {
     id: 'videasy',
     label: 'Videasy',
