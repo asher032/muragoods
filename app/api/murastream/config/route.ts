@@ -13,18 +13,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing id parameter' }, { status: 400 });
   }
 
-  const nexstreamKey = process.env.NEXTSTREAM_API_KEY || '';
-
-  // Sources that validate their page URL must use direct embed URLs.
-  // NexStream checks the URL pattern inside JS — routing through proxy breaks it.
+  // Ad-free sources only — NexStream removed (has Adsterra popunders)
+  // VidKing & Videasy are verified clean. VidSrc has minor popups.
   const sources: Record<string, { id: string; label: string; url: string }> = {
-    vidsrc: {
-      id: 'vidsrc',
-      label: 'VidSrc',
-      url: type === 'movie'
-        ? `https://vidsrc.to/embed/movie/${id}`
-        : `https://vidsrc.to/embed/tv/${id}/${season}/${episode}`,
-    },
     vidking: {
       id: 'vidking',
       label: 'VidKing',
@@ -39,20 +30,18 @@ export async function GET(request: NextRequest) {
         ? `https://player.videasy.to/movie/${id}`
         : `https://player.videasy.to/tv/${id}/${season}/${episode}`,
     },
-    ...(nexstreamKey ? {
-      nexstream: {
-        id: 'nexstream',
-        label: 'NexStream',
-        url: type === 'movie'
-          ? `https://api.codespecters.com/embed/movie/${id}?apikey=${nexstreamKey}`
-          : `https://api.codespecters.com/embed/tv/${id}/${season}/${episode}?apikey=${nexstreamKey}`,
-      },
-    } : {}),
+    vidsrc: {
+      id: 'vidsrc',
+      label: 'VidSrc',
+      url: type === 'movie'
+        ? `https://vidsrc.to/embed/movie/${id}`
+        : `https://vidsrc.to/embed/tv/${id}/${season}/${episode}`,
+    },
   };
 
-  // Default to first available source
-  const defaultKey = sources.nexstream ? 'nexstream' : 'vidsrc';
-  const activeSource = sources[defaultKey] || Object.values(sources)[0];
+  // Default to VidKing (verified zero ads)
+  const defaultKey = 'vidking';
+  const activeSource = sources[defaultKey];
 
   return NextResponse.json({
     sources,

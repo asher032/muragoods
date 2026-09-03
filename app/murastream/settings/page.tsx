@@ -13,7 +13,7 @@ type Settings = {
 };
 
 const DEFAULT_SETTINGS: Settings = {
-  defaultSource: 'videasy',
+  defaultSource: 'vidking',
   subtitleLang: 'en',
   autoplay: true,
   theme: 'dark',

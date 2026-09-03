@@ -13,20 +13,19 @@ export interface StreamingSource {
   params?: Record<string, string>;
 }
 
-const NEXSTREAM_KEY = process.env.NEXTSTREAM_API_KEY || '';
-
 export const STREAMING_SOURCES: StreamingSource[] = [
   {
-    id: 'nexstream',
-    label: 'NexStream',
-    movieUrl: (id) => `https://api.codespecters.com/embed/movie/${id}?apikey=${NEXSTREAM_KEY}`,
-    tvUrl: (id, season, ep) => `https://api.codespecters.com/embed/tv/${id}/${season}/${ep}?apikey=${NEXSTREAM_KEY}`,
+    id: 'vidking',
+    label: 'VidKing',
+    colorParam: 'color',
+    params: { autoPlay: 'true' },
+    movieUrl: (id) => `https://www.vidking.net/embed/movie/${id}?color=ffa600`,
+    tvUrl: (id, season, ep) => `https://www.vidking.net/embed/tv/${id}/${season}/${ep}?color=ffa600`,
   },
   {
     id: 'videasy',
     label: 'Videasy',
     colorParam: 'color',
-    params: { overlay: 'true' },
     movieUrl: (id) => `https://player.videasy.to/movie/${id}`,
     tvUrl: (id, season, ep) => `https://player.videasy.to/tv/${id}/${season}/${ep}`,
   },
@@ -36,14 +35,6 @@ export const STREAMING_SOURCES: StreamingSource[] = [
     langParam: 'ds_lang',
     movieUrl: (id) => `https://vidsrc.to/embed/movie/${id}`,
     tvUrl: (id, season, ep) => `https://vidsrc.to/embed/tv/${id}/${season}/${ep}`,
-  },
-  {
-    id: 'vidking',
-    label: 'Vidking',
-    colorParam: 'color',
-    params: { autoPlay: 'true' },
-    movieUrl: (id) => `https://www.vidking.net/embed/movie/${id}`,
-    tvUrl: (id, season, ep) => `https://www.vidking.net/embed/tv/${id}/${season}/${ep}`,
   },
 ];
 
@@ -78,5 +69,5 @@ export function getSourceById(id: string): StreamingSource | undefined {
 }
 
 export function getDefaultSource(): StreamingSource {
-  return STREAMING_SOURCES[0]; // Videasy
+  return STREAMING_SOURCES[0]; // VidKing (ad-free)
 }

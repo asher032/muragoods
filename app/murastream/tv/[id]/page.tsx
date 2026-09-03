@@ -65,7 +65,7 @@ export default function TvDetailPage() {
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [seasonData, setSeasonData] = useState<EpisodeData[]>([]);
   const [seasonLoading, setSeasonLoading] = useState(false);
-  const [activeSource, setActiveSource] = useState('videasy');
+  const [activeSource, setActiveSource] = useState('vidking');
   const [showTrailer, setShowTrailer] = useState(false);
 
   const fetchShow = useCallback(async () => {
@@ -224,7 +224,7 @@ export default function TvDetailPage() {
         <div style={{ marginTop: '24px' }}>
           <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '7px', color: '#666', margin: '0 0 6px' }}>SOURCE:</p>
           <div style={{ display: 'flex', gap: '6px' }}>
-            {['nexstream', 'videasy', 'vidsrc', 'vidking'].map(src => (
+            {['vidking', 'videasy', 'vidsrc'].map(src => (
               <button key={src} onClick={() => setActiveSource(src)} style={{
                 padding: '4px 10px', borderRadius: '6px',
                 border: activeSource === src ? '1px solid var(--mario-yellow)' : '1px solid rgba(255,255,255,0.1)',

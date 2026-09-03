@@ -17,7 +17,7 @@ function WatchContent() {
 
   const type = (searchParams.get('type') as 'movie' | 'tv') || 'movie';
   const id = Number(searchParams.get('id'));
-  const sourceId = searchParams.get('source') || 'nexstream';
+  const sourceId = searchParams.get('source') || 'vidking';
   const season = Number(searchParams.get('season')) || 1;
   const episode = Number(searchParams.get('episode')) || 1;
 

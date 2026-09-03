@@ -97,7 +97,7 @@ const LibrarySchema = new Schema<IMuraStreamLibrary>(
       watchedAt: { type: Date, default: Date.now },
     }],
     settings: {
-      defaultSource: { type: String, default: 'videasy' },
+      defaultSource: { type: String, default: 'vidking' },
       subtitleLang: { type: String, default: 'en' },
       autoplay: { type: Boolean, default: true },
       theme: { type: String, default: 'dark' },

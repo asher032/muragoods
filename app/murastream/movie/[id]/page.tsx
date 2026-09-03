@@ -41,7 +41,7 @@ export default function MovieDetailPage() {
   const [movie, setMovie] = useState<DetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeSource, setActiveSource] = useState('videasy');
+  const [activeSource, setActiveSource] = useState('vidking');
   const [showTrailer, setShowTrailer] = useState(false);
   const [inWatchlist, setInWatchlist] = useState(false);
   const [inFavorites, setInFavorites] = useState(false);
@@ -254,7 +254,7 @@ export default function MovieDetailPage() {
                 SELECT SOURCE:
               </p>
               <div style={{ display: 'flex', gap: '6px' }}>
-                {['nexstream', 'videasy', 'vidsrc', 'vidking'].map(src => (
+                {['vidking', 'videasy', 'vidsrc'].map(src => (
                   <button
                     key={src}
                     onClick={() => setActiveSource(src)}
