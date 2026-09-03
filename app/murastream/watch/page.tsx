@@ -34,15 +34,73 @@ function WatchContent() {
   const [title, setTitle] = useState('');
   const [activeSource, setActiveSource] = useState<Source>(SOURCES[0]);
   const [loading, setLoading] = useState(true);
+  const [showAutoPlay, setShowAutoPlay] = useState(false);
+  const [autoPlayCountdown, setAutoPlayCountdown] = useState(10);
+  const [posterPath, setPosterPath] = useState('');
 
+  // Fetch title from TMDB
   useEffect(() => {
     if (!id) return;
     const action = type === 'tv' ? 'tv_details' : 'movie_details';
     fetch(`/api/murastream/tmdb?action=${action}&id=${id}`)
       .then(r => r.json())
-      .then(data => { setTitle(type === 'tv' ? data.name : data.title); setLoading(false); })
+      .then(data => {
+        setTitle(type === 'tv' ? data.name : data.title);
+        setPosterPath(data.posterPath || '');
+        setLoading(false);
+      })
       .catch(() => { setTitle(type === 'tv' ? 'TV Show' : 'Movie'); setLoading(false); });
   }, [id, type]);
+
+  // Record to watch history when page loads
+  useEffect(() => {
+    if (!id || loading) return;
+    fetch('/api/murastream/library', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'add-history',
+        item: {
+          id,
+          mediaType: type,
+          title,
+          posterPath,
+          season: type === 'tv' ? season : undefined,
+          episode: type === 'tv' ? episode : undefined,
+        },
+      }),
+    }).catch(() => {});
+
+    // Also update continue watching
+    if (type === 'tv') {
+      fetch('/api/murastream/library', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update-continue-watching',
+          item: {
+            id,
+            mediaType: type,
+            title,
+            posterPath,
+            season,
+            episode,
+          },
+        }),
+      }).catch(() => {});
+    }
+  }, [id, type, season, episode, title, posterPath, loading]);
+
+  // Auto-play countdown for TV shows
+  useEffect(() => {
+    if (!showAutoPlay || type !== 'tv') return;
+    if (autoPlayCountdown <= 0) {
+      router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode + 1}`);
+      return;
+    }
+    const timer = setTimeout(() => setAutoPlayCountdown(prev => prev - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [showAutoPlay, autoPlayCountdown, type, id, season, episode, router]);
 
   if (!id) {
     return (
@@ -95,16 +153,81 @@ function WatchContent() {
             sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"
           />
         )}
+
+        {/* Auto-play next episode overlay */}
+        {showAutoPlay && type === 'tv' && (
+          <div style={{
+            position: 'absolute', bottom: '80px', right: '16px', zIndex: 20,
+            background: 'rgba(10,10,24,0.95)', border: '1px solid rgba(255,214,10,0.3)',
+            borderRadius: '12px', padding: '16px', width: '300px',
+            backdropFilter: 'blur(10px)',
+          }}>
+            <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px', color: 'var(--mario-yellow)', margin: '0 0 8px' }}>
+              ▶ NEXT EPISODE
+            </p>
+            <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '7px', color: '#fff', margin: '0 0 4px' }}>
+              {title} — S{season}E{episode + 1}
+            </p>
+            <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '6px', color: '#888', margin: '0 0 12px' }}>
+              Starting in {autoPlayCountdown}s...
+            </p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode + 1}`)} style={{
+                flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid var(--mario-yellow)',
+                background: 'rgba(255,214,10,0.15)', color: 'var(--mario-yellow)',
+                fontFamily: 'var(--font-arcade)', fontSize: '7px', cursor: 'pointer',
+              }}>▶ Play Now</button>
+              <button onClick={() => setShowAutoPlay(false)} style={{
+                flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)',
+                background: 'transparent', color: '#888',
+                fontFamily: 'var(--font-arcade)', fontSize: '7px', cursor: 'pointer',
+              }}>Cancel</button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Bottom bar - episode navigation for TV */}
-      {type === 'tv' && (
-        <div style={{ background: 'rgba(15,15,26,0.95)', borderTop: '1px solid rgba(255,255,255,0.05)', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
-          <button onClick={() => { if (episode > 1) router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode - 1}`); }} disabled={episode <= 1} style={{ padding: '6px 16px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)', background: episode <= 1 ? 'rgba(255,255,255,0.05)' : 'rgba(255,214,10,0.15)', color: episode <= 1 ? '#444' : 'var(--mario-yellow)', fontFamily: 'var(--font-arcade)', fontSize: '8px', cursor: episode <= 1 ? 'default' : 'pointer' }}>← Prev Ep</button>
-          <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px', color: '#888' }}>Season {season} • Episode {episode}</span>
-          <button onClick={() => router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode + 1}`)} style={{ padding: '6px 16px', borderRadius: '6px', border: '1px solid var(--mario-yellow)', background: 'rgba(255,214,10,0.15)', color: 'var(--mario-yellow)', fontFamily: 'var(--font-arcade)', fontSize: '8px', cursor: 'pointer' }}>Next Ep →</button>
+      {/* Bottom bar */}
+      <div style={{ background: 'rgba(15,15,26,0.95)', borderTop: '1px solid rgba(255,255,255,0.05)', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Link href={type === 'tv' ? `/murastream/tv/${id}` : `/murastream/movie/${id}`} style={{
+            padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)',
+            background: 'transparent', color: '#888',
+            fontFamily: 'var(--font-arcade)', fontSize: '7px', textDecoration: 'none',
+          }}>Details</Link>
+          <Link href="/murastream/library" style={{
+            padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)',
+            background: 'transparent', color: '#888',
+            fontFamily: 'var(--font-arcade)', fontSize: '7px', textDecoration: 'none',
+          }}>Library</Link>
         </div>
-      )}
+
+        {/* TV Episode Navigation */}
+        {type === 'tv' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button onClick={() => { if (episode > 1) router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode - 1}`); }} disabled={episode <= 1} style={{ padding: '4px 12px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)', background: episode <= 1 ? 'rgba(255,255,255,0.05)' : 'rgba(255,214,10,0.15)', color: episode <= 1 ? '#444' : 'var(--mario-yellow)', fontFamily: 'var(--font-arcade)', fontSize: '7px', cursor: episode <= 1 ? 'default' : 'pointer' }}>← Prev</button>
+            <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '7px', color: '#888' }}>S{season}E{episode}</span>
+            <button onClick={() => {
+              // Show auto-play overlay instead of navigating immediately
+              setShowAutoPlay(true);
+              setAutoPlayCountdown(10);
+            }} style={{ padding: '4px 12px', borderRadius: '6px', border: '1px solid var(--mario-yellow)', background: 'rgba(255,214,10,0.15)', color: 'var(--mario-yellow)', fontFamily: 'var(--font-arcade)', fontSize: '7px', cursor: 'pointer' }}>Next →</button>
+          </div>
+        )}
+
+        {/* Auto-play toggle for TV */}
+        {type === 'tv' && !showAutoPlay && (
+          <button onClick={() => {
+            // Simulate episode end to trigger auto-play
+            setShowAutoPlay(true);
+            setAutoPlayCountdown(10);
+          }} style={{
+            padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(255,214,10,0.2)',
+            background: 'rgba(255,214,10,0.1)', color: 'var(--mario-yellow)',
+            fontFamily: 'var(--font-arcade)', fontSize: '6px', cursor: 'pointer',
+          }}>⚡ Auto-Play</button>
+        )}
+      </div>
     </div>
   );
 }

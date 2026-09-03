@@ -18,6 +18,16 @@ type MediaItem = {
   name?: string;
 };
 
+type ContinueWatchingItem = {
+  id: number;
+  mediaType: string;
+  title: string;
+  posterPath: string | null;
+  season?: number;
+  episode?: number;
+  progress?: number;
+};
+
 const GENRE_MAP: Record<number, string> = {
   28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy', 80: 'Crime',
   99: 'Documentary', 18: 'Drama', 10751: 'Family', 14: 'Fantasy', 36: 'History',
@@ -81,33 +91,74 @@ function MediaCard({ item, size = 'normal' }: { item: MediaItem; size?: 'large' 
         {item.voteAverage > 0 && (
           <div style={{
             position: 'absolute', top: '8px', right: '8px',
-            background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)',
-            padding: '2px 6px', borderRadius: '6px',
-            fontFamily: 'var(--font-arcade)', fontSize: '8px', color: '#ffd60a',
-            display: 'flex', alignItems: 'center', gap: '3px',
+            background: 'rgba(0,0,0,0.7)', borderRadius: '6px',
+            padding: '2px 6px', display: 'flex', alignItems: 'center', gap: '3px',
           }}>
-            ★ {item.voteAverage.toFixed(1)}
+            <span style={{ color: '#ffd60a', fontSize: '9px' }}>★</span>
+            <span style={{ color: '#fff', fontFamily: 'var(--font-arcade)', fontSize: '7px' }}>
+              {item.voteAverage.toFixed(1)}
+            </span>
           </div>
         )}
-        {/* Title bar */}
-        <div style={{
-          padding: '8px 10px',
-          background: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.8) 100%)',
-          position: 'absolute', bottom: 0, left: 0, right: 0,
-        }}>
+        {/* Info */}
+        <div style={{ padding: '8px' }}>
           <p style={{
-            fontFamily: 'var(--font-arcade)', fontSize: '7px',
-            color: '#fff', margin: 0, lineHeight: 1.3,
+            fontFamily: 'var(--font-arcade)', fontSize: '7px', color: '#fff', margin: 0,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
-            {item.title}
-          </p>
+          }}>{item.title}</p>
           {item.year && (
             <p style={{
-              fontFamily: 'var(--font-body)', fontSize: '10px',
-              color: '#999', margin: 0, marginTop: '2px',
-            }}>
-              {item.year}
+              fontFamily: 'var(--font-arcade)', fontSize: '6px', color: '#888', margin: '2px 0 0',
+            }}>{item.year}</p>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function ContinueWatchingCard({ item }: { item: ContinueWatchingItem }) {
+  const href = item.mediaType === 'tv'
+    ? `/murastream/watch?type=tv&id=${item.id}&season=${item.season || 1}&episode=${item.episode || 1}`
+    : `/murastream/movie/${item.id}`;
+
+  return (
+    <Link href={href} style={{ textDecoration: 'none', color: 'inherit' }}>
+      <div style={{
+        position: 'relative', borderRadius: '12px', overflow: 'hidden',
+        background: '#1a1a2e', cursor: 'pointer', width: '160px', minWidth: '160px', flexShrink: 0,
+        transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(255,214,10,0.15)'; }}
+      onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+      >
+        {item.posterPath ? (
+          <img src={item.posterPath} alt={item.title} loading="lazy"
+            style={{ width: '100%', height: '180px', objectFit: 'cover' }} />
+        ) : (
+          <div style={{ width: '100%', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a1a2e', fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#666' }}>No Image</div>
+        )}
+        {/* Play overlay */}
+        <div style={{
+          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.3)', opacity: 0,
+          transition: 'opacity 0.2s',
+        }}
+          className="cw-play-overlay"
+        >
+          <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(255,214,10,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="16" height="16" fill="#000" viewBox="0 0 16 16"><path d="M6.271 4.138a.5.5 0 0 1 .78-.172l4 2.8a.5.5 0 0 1 0 .824l-4 2.8A.5.5 0 0 1 6 10.2V5.8a.5.5 0 0 1 .271-.414z"/></svg>
+          </div>
+        </div>
+        {/* Progress bar */}
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '3px', background: 'rgba(0,0,0,0.5)' }}>
+          <div style={{ height: '100%', width: `${item.progress || 0}%`, background: 'var(--mario-yellow)', borderRadius: '0 2px 0 0' }} />
+        </div>
+        <div style={{ padding: '8px' }}>
+          <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '7px', color: '#fff', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</p>
+          {item.mediaType === 'tv' && item.season != null && (
+            <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '6px', color: '#ffd60a', margin: '2px 0 0' }}>
+              ▶ Continue S{item.season}E{item.episode}
             </p>
           )}
         </div>
@@ -116,24 +167,25 @@ function MediaCard({ item, size = 'normal' }: { item: MediaItem; size?: 'large' 
   );
 }
 
-function SkeletonCard() {
+function MediaRow({ title, items, loading }: { title: string; items: MediaItem[]; loading: boolean }) {
+  if (loading) {
+    return (
+      <div style={{ marginBottom: '24px' }}>
+        <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#888', margin: '0 0 12px' }}>{title}</p>
+        <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '8px' }} className="murastream-scroll">
+          {[1, 2, 3, 4, 5].map(i => (
+            <div key={i} style={{ width: '150px', height: '280px', borderRadius: '12px', background: 'linear-gradient(90deg, #1a1a2e 0%, #252540 50%, #1a1a2e 100%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite', flexShrink: 0 }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (items.length === 0) return null;
   return (
-    <div style={{
-      width: '150px', minWidth: '150px', borderRadius: '12px', overflow: 'hidden',
-      background: '#1a1a2e', flexShrink: 0,
-    }}>
-      <div style={{
-        width: '100%', height: '225px',
-        background: 'linear-gradient(90deg, #1a1a2e 25%, #252540 50%, #1a1a2e 75%)',
-        backgroundSize: '200% 100%',
-        animation: 'shimmer 1.5s infinite',
-      }} />
-      <div style={{ padding: '8px 10px' }}>
-        <div style={{
-          height: '8px', borderRadius: '4px', width: '80%',
-          background: 'linear-gradient(90deg, #252540 25%, #333 50%, #252540 75%)',
-          backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite',
-        }} />
+    <div style={{ marginBottom: '24px' }}>
+      <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#888', margin: '0 0 12px' }}>{title}</p>
+      <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '8px' }} className="murastream-scroll">
+        {items.map(item => <MediaCard key={item.id} item={item} />)}
       </div>
     </div>
   );
@@ -141,61 +193,39 @@ function SkeletonCard() {
 
 function HeroCarousel({ items }: { items: MediaItem[] }) {
   const [current, setCurrent] = useState(0);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    timerRef.current = setInterval(() => {
-      setCurrent(c => (c + 1) % Math.min(items.length, 5));
-    }, 6000);
+    timerRef.current = setInterval(() => setCurrent(c => c + 1), 6000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [items.length]);
+  }, []);
 
   if (items.length === 0) return null;
   const item = items[current % items.length];
   const href = item.mediaType === 'tv' ? `/murastream/tv/${item.id}` : `/murastream/movie/${item.id}`;
 
   return (
-    <Link href={href} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+    <Link href={href} style={{ textDecoration: 'none', color: 'inherit' }}>
       <div style={{
-        position: 'relative', width: '100%', height: '400px',
-        borderRadius: '16px', overflow: 'hidden', marginBottom: '32px',
-        cursor: 'pointer',
+        position: 'relative', borderRadius: '16px', overflow: 'hidden',
+        height: '300px', marginBottom: '24px', cursor: 'pointer',
       }}>
         {item.backdropPath ? (
-          <img
-            src={item.backdropPath}
-            alt={item.title}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
+          <img src={item.backdropPath} alt={item.title}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ) : item.posterPath ? (
+          <img src={item.posterPath} alt={item.title}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
-          <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #1a1a2e, #16213e)' }} />
+          <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #0a0a18, #1a1a2e)' }} />
         )}
-        {/* Gradient overlay */}
         <div style={{
           position: 'absolute', inset: 0,
-          background: 'linear-gradient(0deg, rgba(15,15,26,0.95) 0%, rgba(15,15,26,0.5) 40%, transparent 70%)',
+          background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.3) 50%, transparent 100%)',
         }} />
-        {/* Content */}
         <div style={{
-          position: 'absolute', bottom: '24px', left: '24px', right: '24px',
+          position: 'absolute', bottom: '40px', left: '24px',
         }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px',
-          }}>
-            <span style={{
-              background: 'var(--mario-red)', padding: '2px 8px', borderRadius: '4px',
-              fontFamily: 'var(--font-arcade)', fontSize: '7px', color: '#fff',
-            }}>
-              {item.mediaType === 'tv' ? 'TV SERIES' : 'MOVIE'}
-            </span>
-            {item.voteAverage > 0 && (
-              <span style={{
-                fontFamily: 'var(--font-arcade)', fontSize: '8px', color: '#ffd60a',
-              }}>
-                ★ {item.voteAverage.toFixed(1)}
-              </span>
-            )}
-          </div>
           <h2 style={{
             fontFamily: 'var(--font-arcade)', fontSize: '18px',
             color: '#fff', margin: 0, marginBottom: '8px',
@@ -229,7 +259,7 @@ function HeroCarousel({ items }: { items: MediaItem[] }) {
           {items.slice(0, 5).map((_, i) => (
             <div
               key={i}
-              onClick={(e) => {                    e.preventDefault(); setCurrent(i); if (timerRef.current) clearInterval(timerRef.current); }}
+              onClick={(e) => { e.preventDefault(); setCurrent(i); if (timerRef.current) clearInterval(timerRef.current); }}
               style={{
                 width: i === (current % 5) ? '20px' : '8px',
                 height: '8px', borderRadius: '4px',
@@ -256,6 +286,7 @@ export default function MuraStreamHome() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<MediaItem[]>([]);
   const [searching, setSearching] = useState(false);
+  const [continueWatching, setContinueWatching] = useState<ContinueWatchingItem[]>([]);
 
   const fetchTMDB = useCallback(async (action: string, params: Record<string, string> = {}) => {
     const sp = new URLSearchParams({ action, ...params });
@@ -279,11 +310,9 @@ export default function MuraStreamHome() {
         setPopularMovies(pM.results || []);
         setPopularTV(pTV.results || []);
 
-        // Try fetching anime via AniList or filter TMDB
         try {
           const animeRes = await fetch('/api/murastream/tmdb?action=trending&type=movie&window=week');
           const animeData = await animeRes.json();
-          // Filter animation genre (16) with Japanese origin
           const anime = (animeData.results || []).filter((item: MediaItem & { genreIds?: number[]; originalLanguage?: string }) =>
             (item.genreIds || []).includes(16) && item.originalLanguage === 'ja'
           );
@@ -291,6 +320,15 @@ export default function MuraStreamHome() {
         } catch {
           setAnimeList([]);
         }
+
+        // Fetch continue watching from library
+        try {
+          const libRes = await fetch('/api/murastream/library');
+          if (libRes.ok) {
+            const libData = await libRes.json();
+            setContinueWatching(libData.continueWatching || []);
+          }
+        } catch { /* empty */ }
       } catch (err) {
         console.error('Failed to load MuraStream data:', err);
       } finally {
@@ -302,50 +340,17 @@ export default function MuraStreamHome() {
 
   // Search
   useEffect(() => {
-    if (!searchQuery.trim()) { setSearchResults([]); setSearching(false); return; }
+    if (!searchQuery.trim()) { setSearchResults([]); return; }
     const timer = setTimeout(async () => {
+      setSearching(true);
       try {
-        setSearching(true);
-        const data = await fetchTMDB('search', { q: searchQuery });
-        setSearchResults((data.results || []).filter((item: MediaItem) => item.mediaType !== 'person'));
-      } catch {
-        setSearchResults([]);
-      } finally {
-        setSearching(false);
-      }
-    }, 400);
+        const data = await fetchTMDB('search', { query: searchQuery });
+        setSearchResults(data.results || []);
+      } catch { setSearchResults([]); }
+      setSearching(false);
+    }, 500);
     return () => clearTimeout(timer);
   }, [searchQuery, fetchTMDB]);
-
-  const renderSection = (title: string, items: MediaItem[], loading?: boolean) => (
-    <div style={{ marginBottom: '32px' }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        marginBottom: '16px',
-      }}>
-        <h3 style={{
-          fontFamily: 'var(--font-arcade)', fontSize: '12px',
-          color: 'var(--mario-yellow)', margin: 0,
-        }}>
-          {title}
-        </h3>
-      </div>
-      <div style={{
-        display: 'flex', gap: '12px', overflowX: 'auto',
-        paddingBottom: '8px', scrollbarWidth: 'thin',
-      }}>
-        {loading ? (
-          Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)
-        ) : items.length === 0 ? (
-          <p style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: '#666' }}>
-            No titles available yet.
-          </p>
-        ) : (
-          items.map(item => <MediaCard key={item.id} item={item} />)
-        )}
-      </div>
-    </div>
-  );
 
   return (
     <>
@@ -357,6 +362,8 @@ export default function MuraStreamHome() {
         .murastream-scroll::-webkit-scrollbar { height: 6px; }
         .murastream-scroll::-webkit-scrollbar-track { background: transparent; }
         .murastream-scroll::-webkit-scrollbar-thumb { background: rgba(255,214,10,0.3); border-radius: 3px; }
+        .cw-play-overlay { opacity: 0 !important; }
+        div:hover > .cw-play-overlay { opacity: 1 !important; }
       `}</style>
 
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -449,6 +456,25 @@ export default function MuraStreamHome() {
         {/* Category Tabs */}
         {!searchQuery.trim() && (
           <>
+            {/* Continue Watching */}
+            {continueWatching.length > 0 && (
+              <div style={{ marginBottom: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'var(--mario-yellow)', margin: 0 }}>
+                    ▶ Continue Watching
+                  </p>
+                  <Link href="/murastream/library" style={{ fontFamily: 'var(--font-arcade)', fontSize: '7px', color: '#666', textDecoration: 'none' }}>
+                    View All →
+                  </Link>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '8px' }} className="murastream-scroll">
+                  {continueWatching.map((item) => (
+                    <ContinueWatchingCard key={`${item.id}-${item.season}-${item.episode}`} item={item} />
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div style={{
               display: 'flex', gap: '8px', marginBottom: '24px',
               overflowX: 'auto', paddingBottom: '4px',
@@ -485,26 +511,26 @@ export default function MuraStreamHome() {
             {/* Content Sections */}
             {activeTab === 'trending' && (
               <>
-                {renderSection('🔥 Trending Movies', trendingMovies, loading)}
-                {renderSection('📺 Trending TV Shows', trendingTV, loading)}
-                {renderSection('🎬 Popular Movies', popularMovies, loading)}
+                {MediaRow({ title: '🔥 Trending Movies', items: trendingMovies, loading })}
+                {MediaRow({ title: '📺 Trending TV Shows', items: trendingTV, loading })}
+                {MediaRow({ title: '🎬 Popular Movies', items: popularMovies, loading })}
               </>
             )}
             {activeTab === 'movies' && (
               <>
-                {renderSection('🎬 Popular Movies', popularMovies, loading)}
-                {renderSection('🔥 Trending Movies', trendingMovies, loading)}
+                {MediaRow({ title: '🎬 Popular Movies', items: popularMovies, loading })}
+                {MediaRow({ title: '🔥 Trending Movies', items: trendingMovies, loading })}
               </>
             )}
             {activeTab === 'tv' && (
               <>
-                {renderSection('📺 Popular TV Shows', popularTV, loading)}
-                {renderSection('🔥 Trending TV', trendingTV, loading)}
+                {MediaRow({ title: '📺 Popular TV Shows', items: popularTV, loading })}
+                {MediaRow({ title: '🔥 Trending TV', items: trendingTV, loading })}
               </>
             )}
             {activeTab === 'anime' && (
               <>
-                {renderSection('🍥 Anime', animeList, loading)}
+                {MediaRow({ title: '🍥 Anime', items: animeList, loading })}
                 {animeList.length === 0 && !loading && (
                   <div style={{
                     textAlign: 'center', padding: '48px 16px',
