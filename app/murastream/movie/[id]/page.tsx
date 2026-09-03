@@ -61,14 +61,14 @@ export default function MovieDetailPage() {
 
   useEffect(() => { fetchMovie(); }, [fetchMovie]);
 
-  // Source URLs (from Streambert)
+  // Source URLs — direct embed (no proxy needed)
   const getSourceUrl = (sourceId: string) => {
     const sources: Record<string, string> = {
-      videasy: `https://player.videasy.to/movie/${movieId}?overlay=true`,
-      vidsrc: `https://vsembed.su/embed/movie/${movieId}`,
-      vidking: `https://www.vidking.net/embed/movie/${movieId}?autoPlay=true`,
+      vidsrc: `https://vidsrc.to/embed/movie/${movieId}`,
+      vidking: `https://www.vidking.net/embed/movie/${movieId}?color=ffa600`,
+      videasy: `https://player.videasy.to/movie/${movieId}`,
     };
-    return sources[sourceId] || sources.videasy;
+    return sources[sourceId] || sources.vidsrc;
   };
 
   if (loading) {

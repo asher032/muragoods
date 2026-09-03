@@ -13,37 +13,50 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing id parameter' }, { status: 400 });
   }
 
-  // All sources go through our ad-stripping proxy
-  const proxyBase = '/api/murastream/proxy';
+  const nexstreamKey = process.env.NEXTSTREAM_API_KEY || '';
 
+  // Sources that validate their page URL must use direct embed URLs.
+  // NexStream checks the URL pattern inside JS — routing through proxy breaks it.
   const sources: Record<string, { id: string; label: string; url: string }> = {
-    nexstream: {
-      id: 'nexstream',
-      label: 'NexStream',
-      url: `${proxyBase}?type=${type}&id=${id}&season=${season}&episode=${episode}&source=nexstream`,
+    vidsrc: {
+      id: 'vidsrc',
+      label: 'VidSrc',
+      url: type === 'movie'
+        ? `https://vidsrc.to/embed/movie/${id}`
+        : `https://vidsrc.to/embed/tv/${id}/${season}/${episode}`,
+    },
+    vidking: {
+      id: 'vidking',
+      label: 'VidKing',
+      url: type === 'movie'
+        ? `https://www.vidking.net/embed/movie/${id}?color=ffa600`
+        : `https://www.vidking.net/embed/tv/${id}/${season}/${episode}?color=ffa600`,
     },
     videasy: {
       id: 'videasy',
       label: 'Videasy',
-      url: `${proxyBase}?type=${type}&id=${id}&season=${season}&episode=${episode}&source=videasy`,
+      url: type === 'movie'
+        ? `https://player.videasy.to/movie/${id}`
+        : `https://player.videasy.to/tv/${id}/${season}/${episode}`,
     },
-    vidsrc: {
-      id: 'vidsrc',
-      label: 'VidSrc',
-      url: `${proxyBase}?type=${type}&id=${id}&season=${season}&episode=${episode}&source=vidsrc`,
-    },
-    vidking: {
-      id: 'vidking',
-      label: 'Vidking',
-      url: `${proxyBase}?type=${type}&id=${id}&season=${season}&episode=${episode}&source=vidking`,
-    },
+    ...(nexstreamKey ? {
+      nexstream: {
+        id: 'nexstream',
+        label: 'NexStream',
+        url: type === 'movie'
+          ? `https://api.codespecters.com/embed/movie/${id}?apikey=${nexstreamKey}`
+          : `https://api.codespecters.com/embed/tv/${id}/${season}/${episode}?apikey=${nexstreamKey}`,
+      },
+    } : {}),
   };
 
-  const activeSource = sources.nexstream;
+  // Default to first available source
+  const defaultKey = sources.nexstream ? 'nexstream' : 'vidsrc';
+  const activeSource = sources[defaultKey] || Object.values(sources)[0];
 
   return NextResponse.json({
     sources,
     active: activeSource,
-    defaultSource: 'nexstream',
+    defaultSource: defaultKey,
   });
 }

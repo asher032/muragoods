@@ -32,8 +32,8 @@ export async function GET(request: NextRequest) {
       break;
     case 'vidsrc':
       embedUrl = type === 'movie'
-        ? `https://vsembed.su/embed/movie/${id}`
-        : `https://vsembed.su/embed/tv/${id}/${season}/${episode}`;
+        ? `https://vidsrc.to/embed/movie/${id}`
+        : `https://vidsrc.to/embed/tv/${id}/${season}/${episode}`;
       break;
     case 'vidking':
       embedUrl = type === 'movie'

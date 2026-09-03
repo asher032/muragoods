@@ -34,8 +34,8 @@ export const STREAMING_SOURCES: StreamingSource[] = [
     id: 'vidsrc',
     label: 'VidSrc',
     langParam: 'ds_lang',
-    movieUrl: (id) => `https://vsembed.su/embed/movie/${id}`,
-    tvUrl: (id, season, ep) => `https://vsembed.su/embed/tv/${id}/${season}/${ep}`,
+    movieUrl: (id) => `https://vidsrc.to/embed/movie/${id}`,
+    tvUrl: (id, season, ep) => `https://vidsrc.to/embed/tv/${id}/${season}/${ep}`,
   },
   {
     id: 'vidking',
