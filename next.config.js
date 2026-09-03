@@ -4,7 +4,7 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: '/(.*)',
+        source: '/((?!api/murastream/proxy).*)',
         headers: [
           {
             key: 'X-Frame-Options',

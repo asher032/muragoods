@@ -93,6 +93,8 @@ export async function GET(request: NextRequest) {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
         'Access-Control-Allow-Origin': '*',
+        'X-Frame-Options': 'ALLOWALL',
+        'Content-Security-Policy': 'frame-ancestors *;',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
       },
     });
