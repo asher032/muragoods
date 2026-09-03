@@ -65,7 +65,7 @@ export default function TvDetailPage() {
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [seasonData, setSeasonData] = useState<EpisodeData[]>([]);
   const [seasonLoading, setSeasonLoading] = useState(false);
-  const [activeSource, setActiveSource] = useState('vidking');
+
   const [showTrailer, setShowTrailer] = useState(false);
 
   const fetchShow = useCallback(async () => {
@@ -201,7 +201,7 @@ export default function TvDetailPage() {
             </div>
 
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
-              <Link href={`/murastream/watch?type=tv&id=${tvId}&source=${activeSource}&season=1&episode=1`} style={{
+              <Link href={`/murastream/watch?type=tv&id=${tvId}&season=1&episode=1`} style={{
                 background: 'var(--mario-yellow)', color: 'var(--mario-bg)', padding: '10px 20px',
                 borderRadius: '10px', fontFamily: 'var(--font-arcade)', fontSize: '9px', textDecoration: 'none',
               }}>▶ WATCH S1 E1</Link>
@@ -220,20 +220,11 @@ export default function TvDetailPage() {
           </div>
         </div>
 
-        {/* Source Selector */}
+        {/* Source Info */}
         <div style={{ marginTop: '24px' }}>
-          <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '7px', color: '#666', margin: '0 0 6px' }}>SOURCE:</p>
-          <div style={{ display: 'flex', gap: '6px' }}>
-            {['vidking', 'videasy'].map(src => (
-              <button key={src} onClick={() => setActiveSource(src)} style={{
-                padding: '4px 10px', borderRadius: '6px',
-                border: activeSource === src ? '1px solid var(--mario-yellow)' : '1px solid rgba(255,255,255,0.1)',
-                background: activeSource === src ? 'rgba(255,214,10,0.15)' : 'transparent',
-                color: activeSource === src ? 'var(--mario-yellow)' : '#888',
-                fontFamily: 'var(--font-arcade)', fontSize: '7px', cursor: 'pointer', textTransform: 'capitalize',
-              }}>{src}</button>
-            ))}
-          </div>
+          <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '7px', color: '#666', margin: '0 0 6px' }}>
+            STREAMING SOURCES: VidRock • Videasy • Vidzee (auto-resolved)
+          </p>
         </div>
 
         {/* Seasons & Episodes */}
@@ -266,8 +257,7 @@ export default function TvDetailPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {seasonData.map((ep: EpisodeData) => (
                 <Link
-                  key={ep.id}
-                  href={`/murastream/watch?type=tv&id=${tvId}&source=${activeSource}&season=${selectedSeason}&episode=${ep.episodeNumber}`}
+                  key={ep.id}                   href={`/murastream/watch?type=tv&id=${tvId}&season=${selectedSeason}&episode=${ep.episodeNumber}`}
                   style={{
                     display: 'flex', gap: '12px', padding: '8px',
                     borderRadius: '10px', textDecoration: 'none', color: 'inherit',

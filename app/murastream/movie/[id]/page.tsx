@@ -41,7 +41,7 @@ export default function MovieDetailPage() {
   const [movie, setMovie] = useState<DetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeSource, setActiveSource] = useState('vidking');
+
   const [showTrailer, setShowTrailer] = useState(false);
   const [inWatchlist, setInWatchlist] = useState(false);
   const [inFavorites, setInFavorites] = useState(false);
@@ -61,14 +61,7 @@ export default function MovieDetailPage() {
 
   useEffect(() => { fetchMovie(); }, [fetchMovie]);
 
-  // Source URLs — direct embed (proxy broke player routing)
-  const getSourceUrl = (sourceId: string) => {
-    const sources: Record<string, string> = {
-      vidking: `https://www.vidking.net/embed/movie/${movieId}?color=ffa600`,
-      videasy: `https://player.videasy.to/movie/${movieId}`,
-    };
-    return sources[sourceId] || sources.vidking;
-  };
+
 
   if (loading) {
     return (
@@ -222,7 +215,7 @@ export default function MovieDetailPage() {
             {/* Action buttons */}
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
               <Link
-                href={`/murastream/watch?type=movie&id=${movieId}&source=${activeSource}`}
+                href={`/murastream/watch?type=movie&id=${movieId}`}
                 style={{
                   background: 'var(--mario-yellow)', color: 'var(--mario-bg)',
                   padding: '10px 20px', borderRadius: '10px',
@@ -247,29 +240,11 @@ export default function MovieDetailPage() {
               )}
             </div>
 
-            {/* Source selector */}
+            {/* Source info */}
             <div style={{ marginBottom: '16px' }}>
               <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '7px', color: '#666', margin: '0 0 6px' }}>
-                SELECT SOURCE:
+                STREAMING SOURCES: VidRock • Videasy • Vidzee
               </p>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                {['vidking', 'videasy'].map(src => (
-                  <button
-                    key={src}
-                    onClick={() => setActiveSource(src)}
-                    style={{
-                      padding: '4px 10px', borderRadius: '6px',
-                      border: activeSource === src ? '1px solid var(--mario-yellow)' : '1px solid rgba(255,255,255,0.1)',
-                      background: activeSource === src ? 'rgba(255,214,10,0.15)' : 'transparent',
-                      color: activeSource === src ? 'var(--mario-yellow)' : '#888',
-                      fontFamily: 'var(--font-arcade)', fontSize: '7px', cursor: 'pointer',
-                      textTransform: 'capitalize',
-                    }}
-                  >
-                    {src}
-                  </button>
-                ))}
-              </div>
             </div>
 
             {/* Overview */}
