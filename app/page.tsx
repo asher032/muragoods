@@ -288,7 +288,7 @@ export default function Home() {
             </Reveal>
             <Reveal delay={0.4}>
               <p className="text-mario-text-muted text-base mb-8 max-w-lg mx-auto">
-                Fuel your adventure with iconic campus treats and power-ups delivered straight to your door!
+                Fuel your adventure with iconic campus treats and power-ups delivered straight to your door! Stroll down for more features-
               </p>
             </Reveal>
 
@@ -303,25 +303,22 @@ export default function Home() {
                     🍕 ORDER NOW
                   </AnimatedButton>
                 </Link>
-                {isLoggedIn ? (
-                  <Link href="/orders">
-                    <AnimatedButton
-                      className="px-8 py-3 font-arcade text-sm"
-                      style={{ background: 'rgba(255,214,10,0.15)', borderColor: 'rgba(255,214,10,0.3)', color: '#ffd60a' }}
-                    >
-                      📦 VIEW ORDERS
-                    </AnimatedButton>
-                  </Link>
-                ) : (
-                  <Link href="/login">
-                    <AnimatedButton
-                      className="px-8 py-3 font-arcade text-sm"
-                      style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: '#e8e8f0' }}
-                    >
-                      🎮 PLAY NOW
-                    </AnimatedButton>
-                  </Link>
-                )}
+                <Link href="/orders">
+                  <AnimatedButton
+                    className="px-8 py-3 font-arcade text-sm"
+                    style={{ background: 'rgba(255,214,10,0.15)', borderColor: 'rgba(255,214,10,0.3)', color: '#ffd60a' }}
+                  >
+                    📦 VIEW ORDERS
+                  </AnimatedButton>
+                </Link>
+                <Link href="/murastream">
+                  <AnimatedButton
+                    className="px-8 py-3 font-arcade text-sm"
+                    style={{ background: 'rgba(230,57,70,0.15)', borderColor: 'rgba(230,57,70,0.3)', color: '#e63946' }}
+                  >
+                    🎬 MOVIES
+                  </AnimatedButton>
+                </Link>
               </div>
             </Reveal>
 
@@ -556,6 +553,54 @@ export default function Home() {
           </div>
         </section>
       </ParallaxSection>
+
+      {/* ═══════════════════════════════════════════════════════
+          MURASTREAM FEATURE SECTION
+          ═══════════════════════════════════════════════════════ */}
+      <section className="relative px-4 py-20 sm:px-8 overflow-hidden">
+        <div className="absolute inset-0 z-0">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] rounded-full"
+            style={{ background: 'radial-gradient(ellipse, rgba(230,57,70,0.08) 0%, transparent 70%)' }} />
+        </div>
+        <div className="mario-container relative z-10 text-center">
+          <Reveal direction="scale">
+            <div className="text-6xl sm:text-8xl mb-6">🎬</div>
+          </Reveal>
+          <Reveal delay={0.1}>
+            <h2 className="mario-title text-xl sm:text-3xl mb-4" style={{ color: '#e63946' }}>
+              MuraStream
+            </h2>
+          </Reveal>
+          <Reveal delay={0.2}>
+            <p className="text-mario-text-muted text-sm sm:text-base max-w-xl mx-auto mb-2">
+              Your next adventure starts here.
+            </p>
+            <p className="text-mario-text-muted/60 text-xs mb-8">
+              Movies • TV Series • Anime
+            </p>
+          </Reveal>
+          <Reveal delay={0.3}>
+            <div className="flex flex-wrap justify-center gap-4">
+              <Link href="/murastream">
+                <AnimatedButton
+                  className="px-10 py-4 font-arcade text-sm"
+                  style={{ background: 'rgba(230,57,70,0.2)', borderColor: 'rgba(230,57,70,0.4)', color: '#e63946' }}
+                >
+                  🎬 EXPLORE MOVIES →
+                </AnimatedButton>
+              </Link>
+              <Link href="/murastream/library">
+                <AnimatedButton
+                  className="px-10 py-4 font-arcade text-sm"
+                  style={{ background: 'rgba(255,214,10,0.15)', borderColor: 'rgba(255,214,10,0.3)', color: '#ffd60a' }}
+                >
+                  📚 MY LIBRARY
+                </AnimatedButton>
+              </Link>
+            </div>
+          </Reveal>
+        </div>
+      </section>
 
       {/* ═══════════════════════════════════════════════════════
           FOOTER

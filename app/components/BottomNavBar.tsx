@@ -24,6 +24,12 @@ const tabs = [
       <path d="M8 13.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11m0 .5A6 6 0 1 0 8 2a6 6 0 0 0 0 12"/>
     </svg>
   )},
+  { href: '/murastream', label: 'Movies', icon: (active: boolean) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill={active ? '#ffd60a' : '#888'} viewBox="0 0 16 16">
+      <path d="M0 11a1 1 0 0 1 1 1H4a1 1 0 0 1-1-1zm-2.05-.5a.5.5 0 0 1 .42-.49c.31-.05.65-.07 1.03-.07.38 0 .72.02 1.03.07a.5.5 0 0 1-.41.99 5.2 5.2 0 0 0-1.04 0 .5.5 0 0 1-.49-.42zM12 9a1 1 0 0 1 1 1 3 3 0 0 1-6 0 1 1 0 0 1 1-1z"/>
+      <path d="M4 6.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5M4 11.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5"/>
+    </svg>
+  )},
   { href: '/account/profile', label: 'Profile', icon: (active: boolean) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill={active ? '#ffd60a' : '#888'} viewBox="0 0 16 16">
       <path d="M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6"/>
