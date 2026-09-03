@@ -22,9 +22,8 @@ const DEFAULT_SETTINGS: Settings = {
 };
 
 const SOURCES = [
+  { id: 'vidking', label: 'VidKing' },
   { id: 'videasy', label: 'Videasy' },
-  { id: 'vidsrc', label: 'VidSrc' },
-  { id: 'vidking', label: 'Vidking' },
 ];
 
 const LANGUAGES = [

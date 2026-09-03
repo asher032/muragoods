@@ -66,7 +66,6 @@ export default function MovieDetailPage() {
     const sources: Record<string, string> = {
       vidking: `/api/murastream/proxy?type=movie&id=${movieId}&source=vidking`,
       videasy: `/api/murastream/proxy?type=movie&id=${movieId}&source=videasy`,
-      vidsrc: `/api/murastream/proxy?type=movie&id=${movieId}&source=vidsrc`,
     };
     return sources[sourceId] || sources.vidking;
   };
@@ -254,7 +253,7 @@ export default function MovieDetailPage() {
                 SELECT SOURCE:
               </p>
               <div style={{ display: 'flex', gap: '6px' }}>
-                {['vidking', 'videasy', 'vidsrc'].map(src => (
+                {['vidking', 'videasy'].map(src => (
                   <button
                     key={src}
                     onClick={() => setActiveSource(src)}

@@ -13,9 +13,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing id parameter' }, { status: 400 });
   }
 
-  // All sources route through ad-stripping proxy
+  // All sources route through ad-stripping proxy (URLs rewritten to absolute)
   const proxyBase = '/api/murastream/proxy';
-
+  // VidSrc removed — blocks server-side requests (403)
   const sources: Record<string, { id: string; label: string; url: string }> = {
     vidking: {
       id: 'vidking',
@@ -26,11 +26,6 @@ export async function GET(request: NextRequest) {
       id: 'videasy',
       label: 'Videasy',
       url: `${proxyBase}?type=${type}&id=${id}&season=${season}&episode=${episode}&source=videasy`,
-    },
-    vidsrc: {
-      id: 'vidsrc',
-      label: 'VidSrc',
-      url: `${proxyBase}?type=${type}&id=${id}&season=${season}&episode=${episode}&source=vidsrc`,
     },
   };
 
