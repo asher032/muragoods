@@ -13,33 +13,27 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing id parameter' }, { status: 400 });
   }
 
-  // Ad-free sources only — NexStream removed (has Adsterra popunders)
-  // VidKing & Videasy are verified clean. VidSrc has minor popups.
+  // All sources route through ad-stripping proxy
+  const proxyBase = '/api/murastream/proxy';
+
   const sources: Record<string, { id: string; label: string; url: string }> = {
     vidking: {
       id: 'vidking',
       label: 'VidKing',
-      url: type === 'movie'
-        ? `https://www.vidking.net/embed/movie/${id}?color=ffa600`
-        : `https://www.vidking.net/embed/tv/${id}/${season}/${episode}?color=ffa600`,
+      url: `${proxyBase}?type=${type}&id=${id}&season=${season}&episode=${episode}&source=vidking`,
     },
     videasy: {
       id: 'videasy',
       label: 'Videasy',
-      url: type === 'movie'
-        ? `https://player.videasy.to/movie/${id}`
-        : `https://player.videasy.to/tv/${id}/${season}/${episode}`,
+      url: `${proxyBase}?type=${type}&id=${id}&season=${season}&episode=${episode}&source=videasy`,
     },
     vidsrc: {
       id: 'vidsrc',
       label: 'VidSrc',
-      url: type === 'movie'
-        ? `https://vidsrc.to/embed/movie/${id}`
-        : `https://vidsrc.to/embed/tv/${id}/${season}/${episode}`,
+      url: `${proxyBase}?type=${type}&id=${id}&season=${season}&episode=${episode}&source=vidsrc`,
     },
   };
 
-  // Default to VidKing (verified zero ads)
   const defaultKey = 'vidking';
   const activeSource = sources[defaultKey];
 
