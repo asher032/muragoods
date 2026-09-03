@@ -3,7 +3,55 @@
 import { useState, useEffect, useCallback, Suspense, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import type { StreamSource } from '@/app/lib/murastream/stream-sources';
+
+// AES-GCM key from Flickv4's StreamflixService (must match server)
+const STREAM_KEY_HEX = '7f3e9c2a8b5d1f4e6a9c3b7d2e5f8a1c4b6d9e2f5a8c1b4d7e9f2a5c8b1d4e7f';
+
+interface ResolvedSource {
+  id: string;
+  name: string;
+  language?: string;
+  kind: 'hls' | 'file';
+  uri: string;
+  subtitles: { label: string; file: string }[];
+}
+
+// ─── Client-side AES-GCM decryption ───────────────────────
+
+function base64ToBytes(payload: string, urlSafe = false): Uint8Array {
+  const normalized = urlSafe ? payload.replace(/-/g, '+').replace(/_/g, '/') : payload;
+  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+  return bytes;
+}
+
+async function decryptAesGcm(payload: string): Promise<string | null> {
+  try {
+    const packed = base64ToBytes(payload, true);
+    if (packed.length < 28) return null;
+    const nonce = packed.slice(0, 12);
+    const ciphertextAndTag = packed.slice(12);
+    const keyBytes = hexToBytes(STREAM_KEY_HEX);
+    const cryptoKey = await crypto.subtle.importKey('raw', keyBytes.buffer as ArrayBuffer, { name: 'AES-GCM' }, false, ['decrypt']);
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonce }, cryptoKey, ciphertextAndTag.buffer as ArrayBuffer);
+    const url = new TextDecoder().decode(plain).trim();
+    return /^https?:\/\//i.test(url) ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+function slugId(name: string): string {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
 
 function WatchContent() {
   const searchParams = useSearchParams();
@@ -16,14 +64,15 @@ function WatchContent() {
   const season = Number(searchParams.get('season')) || 1;
   const episode = Number(searchParams.get('episode')) || 1;
 
-  const [sources, setSources] = useState<StreamSource[]>([]);
-  const [activeSource, setActiveSource] = useState<StreamSource | null>(null);
+  const [sources, setSources] = useState<ResolvedSource[]>([]);
+  const [activeSource, setActiveSource] = useState<ResolvedSource | null>(null);
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(true);
+  const [decrypting, setDecrypting] = useState(false);
   const [error, setError] = useState('');
   const [showSources, setShowSources] = useState(false);
 
-  // Fetch title
+  // Fetch title from TMDB
   useEffect(() => {
     if (!id) return;
     const action = type === 'tv' ? 'tv_details' : 'movie_details';
@@ -33,26 +82,62 @@ function WatchContent() {
       .catch(() => setTitle(type === 'tv' ? 'TV Show' : 'Movie'));
   }, [id, type]);
 
-  // Resolve streams from server-side API
+  // Resolve and decrypt streams
   const fetchSources = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     setError('');
+    setDecrypting(true);
     try {
       const params = new URLSearchParams({ tmdbId: String(id), type });
       if (type === 'tv') { params.set('season', String(season)); params.set('episode', String(episode)); }
       const res = await fetch(`/api/murastream/stream?${params}`);
       const data = await res.json();
-      if (data.sources?.length > 0) {
-        setSources(data.sources);
-        setActiveSource(data.first || data.sources[0]);
+
+      if (!data.encrypted || typeof data.encrypted !== 'object' || Object.keys(data.encrypted).length === 0) {
+        setError(data.error || 'No streams found for this title.');
+        setDecrypting(false);
+        setLoading(false);
+        return;
+      }
+
+      // Decrypt all sources in parallel
+      const entries = Object.entries(data.encrypted) as [string, { url?: string | null; language?: string | null; flag?: string | null }][];
+      const decrypted: ResolvedSource[] = [];
+
+      await Promise.all(entries.map(async ([name, info]) => {
+        const packed = (info?.url || '').trim();
+        if (!packed) return;
+        const url = await decryptAesGcm(packed);
+        if (!url) return;
+        const kind = url.includes('.m3u8') ? 'hls' : 'file';
+        decrypted.push({
+          id: `vidrock-${slugId(name)}`,
+          name: `${name} (VidRock)`,
+          language: info.language || undefined,
+          kind,
+          uri: url,
+          subtitles: [],
+        });
+      }));
+
+      if (decrypted.length === 0) {
+        setError('Could not decrypt any streams. Try another title.');
       } else {
-        setError('No streams found. Try another title.');
+        // Sort English first
+        decrypted.sort((a, b) => {
+          const aEn = a.language?.toLowerCase() === 'english' ? 1 : 0;
+          const bEn = b.language?.toLowerCase() === 'english' ? 1 : 0;
+          return bEn - aEn;
+        });
+        setSources(decrypted);
+        setActiveSource(decrypted[0]);
       }
     } catch {
       setError('Failed to load streams.');
     } finally {
       setLoading(false);
+      setDecrypting(false);
     }
   }, [id, type, season, episode]);
 
@@ -80,21 +165,25 @@ function WatchContent() {
             if (d?.fatal) setError('Playback error. Try another source.');
           });
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-          video.src = uri; video.play().catch(() => {});
+          video.src = uri;
+          video.play().catch(() => {});
         }
       });
     } else {
-      video.src = uri; video.play().catch(() => {});
+      video.src = uri;
+      video.play().catch(() => {});
     }
 
     return () => { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } };
   }, [activeSource]);
 
   if (!id) {
-    return (<div style={{ padding: '48px 16px', textAlign: 'center' }}>
-      <p style={{ fontFamily: 'var(--font-body)', color: '#666' }}>No content selected.</p>
-      <Link href="/murastream" style={{ color: 'var(--mario-yellow)' }}>← Browse</Link>
-    </div>);
+    return (
+      <div style={{ padding: '48px 16px', textAlign: 'center' }}>
+        <p style={{ fontFamily: 'var(--font-body)', color: '#666' }}>No content selected.</p>
+        <Link href="/murastream" style={{ color: 'var(--mario-yellow)' }}>← Browse</Link>
+      </div>
+    );
   }
 
   return (
@@ -118,7 +207,9 @@ function WatchContent() {
         {loading ? (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px' }}>
             <div className="custom-loader" />
-            <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px', color: '#666' }}>Finding streams...</p>
+            <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px', color: '#666' }}>
+              {decrypting ? 'Decrypting streams...' : 'Finding streams...'}
+            </p>
           </div>
         ) : error ? (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px' }}>
@@ -141,7 +232,9 @@ function WatchContent() {
               border: activeSource?.id === s.id ? '1px solid var(--mario-yellow)' : '1px solid rgba(255,255,255,0.1)',
               borderRadius: '6px', cursor: 'pointer', fontFamily: 'var(--font-arcade)', fontSize: '7px',
               color: activeSource?.id === s.id ? 'var(--mario-yellow)' : '#ccc',
-            }}>{s.name} — {s.kind.toUpperCase()}</button>
+            }}>
+              {s.name} — {s.kind.toUpperCase()}{s.language ? ` (${s.language})` : ''}
+            </button>
           ))}
         </div>
       )}
@@ -155,9 +248,15 @@ function WatchContent() {
             background: activeSource?.id === s.id ? 'rgba(255,214,10,0.15)' : 'transparent',
             color: activeSource?.id === s.id ? 'var(--mario-yellow)' : '#888',
             fontFamily: 'var(--font-arcade)', fontSize: '7px', cursor: 'pointer',
-          }}>{s.name.split(' (')[0]}</button>
+          }}>
+            {s.name.split(' (')[0]}
+          </button>
         ))}
-        {sources.length > 4 && <button onClick={() => setShowSources(true)} style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: '#888', fontFamily: 'var(--font-arcade)', fontSize: '7px', cursor: 'pointer' }}>+{sources.length - 4}</button>}
+        {sources.length > 4 && (
+          <button onClick={() => setShowSources(true)} style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: '#888', fontFamily: 'var(--font-arcade)', fontSize: '7px', cursor: 'pointer' }}>
+            +{sources.length - 4} more
+          </button>
+        )}
         {type === 'tv' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
             <button onClick={() => { if (episode > 1) router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode - 1}`); }} disabled={episode <= 1} style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)', background: episode <= 1 ? 'rgba(255,255,255,0.05)' : 'rgba(255,214,10,0.15)', color: episode <= 1 ? '#444' : 'var(--mario-yellow)', fontFamily: 'var(--font-arcade)', fontSize: '7px', cursor: episode <= 1 ? 'default' : 'pointer' }}>← Prev</button>
