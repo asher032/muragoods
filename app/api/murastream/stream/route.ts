@@ -1,5 +1,7 @@
 // MuraStream — Stream Resolution API
 // Resolves TMDB IDs to actual m3u8/mp4 stream URLs via VidRock
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveVidRock } from '@/app/lib/murastream/stream-sources';
 
