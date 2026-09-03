@@ -1,20 +1,27 @@
-// MuraStream — Surgical Ad-Stripping Proxy
-// Fetches streaming embed pages and removes ONLY ad code while keeping all player logic intact
+// MuraStream — Ad-Stripping Proxy with URL Rewriting
+// Fetches streaming embed pages, rewrites relative URLs to absolute,
+// removes ad code, and serves clean HTML with proper iframe headers
 
 import { NextRequest, NextResponse } from 'next/server';
 
-// Domains and patterns that serve ads
-const AD_DOMAINS = [
-  'llvpn.com',
-  'adsterra.com',
-  'zvigratbmq.com',
-  'zvaufrpq.com',
-  'superextraextra.info',
-  'nviqolho.com',
-  't7cpbtd6.com',
-  'cdilw9894mlkx.cloudfront.net',
-  'histats.com',
+// Ad domain patterns to strip
+const AD_SCRIPT_PATTERNS = [
+  /llvpn\.com/gi,
+  /adsterra/gi,
+  /zvigrat/gi,
+  /zvaufrpq/gi,
+  /superextraextra/gi,
+  /nviqolho/gi,
+  /t7cpbtd6/gi,
+  /histats\.com/gi,
 ];
+
+// Source base URLs for rewriting relative URLs
+const SOURCE_ORIGINS: Record<string, string> = {
+  vidsrc: 'https://vsembed.ru',
+  vidking: 'https://www.vidking.net',
+  videasy: 'https://player.videasy.to',
+};
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -28,7 +35,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing id' }, { status: 400 });
   }
 
-  // Build the direct embed URL for each source
+  // Build the direct embed URL
   let embedUrl = '';
   switch (source) {
     case 'vidsrc':
@@ -50,6 +57,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unknown source' }, { status: 400 });
   }
 
+  const origin = SOURCE_ORIGINS[source] || '';
+
   try {
     const res = await fetch(embedUrl, {
       headers: {
@@ -65,85 +74,117 @@ export async function GET(request: NextRequest) {
     let html = await res.text();
 
     // ═══════════════════════════════════════════════════════════════
-    // SURGICAL AD REMOVAL — Only remove ad code, keep ALL player logic
+    // 1. REWRITE RELATIVE URLs → ABSOLUTE URLs
+    //    This is critical — without it, the browser tries to load
+    //    /assets/player.js from muragoods.vercel.app instead of vidking.net
     // ═══════════════════════════════════════════════════════════════
 
-    // 1. Remove llvpn.com ad scripts (VidSrc main ad vector)
-    html = html.replace(
-      /<script[^>]*src=["'][^"']*llvpn\.com[^"']*["'][^>]*><\/script>/gi,
-      '<!-- llvpn ad removed -->'
-    );
-    html = html.replace(
-      /<script[^>]*>[^<]*llvpn[^<]*<\/script>/gi,
-      '<!-- llvpn ad removed -->'
-    );
-
-    // 2. Remove any script that sets dataset.zone and src to ad domains
-    html = html.replace(
-      /<script>\s*\(function\(s\)\{[^}]*src=['"][^'"]*(?:llvpn|adsterra|zvigrat)[^'"]*['"]/gi,
-      '<!-- ad script removed -->'
-    );
-
-    // 3. For VidSrc: Remove the histats tracking pixel
-    html = html.replace(
-      /<img[^>]*src=["'][^"']*histats\.com[^"']*["'][^>]*>/gi,
-      '<!-- histats removed -->'
-    );
-
-    // 4. For VidKing: Force-disable ads by injecting sessionStorage before any script
-    if (source === 'vidking') {
+    if (origin) {
+      // Rewrite src="..." for scripts, iframes, images, links
       html = html.replace(
-        '<head>',
-        `<head><script>window.sessionStorage.setItem("adsEnabled","false");</script>`
+        /src="\/(?!\/)/g,
+        `src="${origin}/`
+      );
+      // Rewrite href="..." for stylesheets, manifests, etc.
+      html = html.replace(
+        /href="\/(?!\/)/g,
+        `href="${origin}/`
+      );
+      // Rewrite url('...') in inline styles
+      html = html.replace(
+        /url\(['"]\/(?!\/)/g,
+        `url('${origin}/`
+      );
+      // Rewrite // protocol-relative URLs (they need https:)
+      html = html.replace(
+        /src="\/\//g,
+        `src="https://`
+      );
+      html = html.replace(
+        /href="\/\//g,
+        `href="https://`
       );
     }
 
-    // 5. For VidSrc inner player (vsembed.ru): Remove ad-related scripts
-    // vsembed.ru loads sbx.js (sandbox-blocker) and disable-devtool.js — keep those
-    // But remove any dynamically-injected ad domains
+    // ═══════════════════════════════════════════════════════════════
+    // 2. SURGICAL AD REMOVAL
+    // ═══════════════════════════════════════════════════════════════
 
-    // 6. Remove any script tags that reference ad domains
-    for (const domain of AD_DOMAINS) {
-      const escaped = domain.replace(/\./g, '\\.');
-      const regex = new RegExp(`<script[^>]*src=["'][^"']*${escaped}[^"']*["'][^>]*>[\\s\\S]*?<\\/script>`, 'gi');
-      html = html.replace(regex, `<!-- ${domain} ad removed -->`);
+    // Remove ad script tags (llvpn, adsterra, etc.)
+    for (const pattern of AD_SCRIPT_PATTERNS) {
+      // Remove <script> tags that contain ad domain references
+      const scriptRegex = new RegExp(
+        `<script[^>]*>[\\s\\S]*?${pattern.source}[\\s\\S]*?<\\/script>`,
+        'gi'
+      );
+      html = html.replace(scriptRegex, '<!-- ad script removed -->');
+
+      // Remove <script src="...adomain..."> tags
+      const srcRegex = new RegExp(
+        `<script[^>]*src=["'][^"']*${pattern.source}[^"']*["'][^>]*>[\\s\\S]*?<\\/script>`,
+        'gi'
+      );
+      html = html.replace(srcRegex, '<!-- ad script removed -->');
+
+      // Also handle self-closing: <script src="..." />
+      const selfCloseRegex = new RegExp(
+        `<script[^>]*src=["'][^"']*${pattern.source}[^"']*["'][^>]*/>`,
+        'gi'
+      );
+      html = html.replace(selfCloseRegex, '<!-- ad script removed -->');
     }
 
-    // 7. Override window.open to prevent popup ads (only for ad-related calls)
-    // This is injected as a safety net — it blocks popups from ad domains
+    // Remove the specific inline llvpn ad pattern from VidSrc
+    html = html.replace(
+      /<script>\s*\(function\(s\)\{s\.dataset\.zone=['"]\d+['"],s\.src=['"][^'"]*(?:llvpn|adsterra|zvigrat)[^'"]*['"]/gi,
+      '<!-- ad script removed -->'
+    );
+
+    // Remove histats tracking pixel
+    html = html.replace(
+      /<img[^>]*src=["'][^"']*histats\.com[^"']*["'][^>]*\/?>/gi,
+      '<!-- tracking removed -->'
+    );
+
+    // ═══════════════════════════════════════════════════════════════
+    // 3. INJECT AD-BLOCKING SAFETY NET
+    // ═══════════════════════════════════════════════════════════════
+
+    // For VidKing: disable ads via sessionStorage
+    if (source === 'vidking') {
+      html = html.replace(
+        '<head>',
+        `<head><script>try{window.sessionStorage.setItem("adsEnabled","false")}catch(e){}</script>`
+      );
+    }
+
+    // Inject popup blocker and ad overlay hider BEFORE </head>
     html = html.replace(
       '</head>',
       `<script>
-        // Ad popup blocker — blocks window.open from ad domains only
-        (function() {
-          const origOpen = window.open;
-          window.open = function(url, target, features) {
-            if (typeof url === 'string' && (
-              url.includes('llvpn') || url.includes('adsterra') || 
-              url.includes('zvigrat') || url.includes('superextra') ||
-              url.includes('clickunder') || url.includes('popunder')
-            )) {
-              return null; // Block ad popups
+        (function(){
+          // Block popup ads from known ad domains
+          var _open=window.open;
+          window.open=function(u,t,f){
+            if(typeof u==='string'&&(u.indexOf('llvpn')>-1||u.indexOf('adsterra')>-1||u.indexOf('zvigrat')>-1||u.indexOf('superextra')>-1||u.indexOf('clickunder')>-1||u.indexOf('popunder')>-1||u.indexOf('nviqolho')>-1||u.indexOf('t7cpbtd')>-1)){
+              return null;
             }
-            return origOpen.call(this, url, target, features);
+            return _open?_open.call(window,u,t,f):null;
           };
+          // Block mousedown popups
+          document.addEventListener('mousedown',function(e){
+            if(e.target&&e.target.closest&&e.target.closest('[data-cfasync]')){
+              e.stopPropagation();e.preventDefault();
+            }
+          },true);
         })();
       </script>
       <style>
-        /* Hide any ad overlays that might still appear */
-        .ad-shield-play, #adblock-screen, [class*="ad-shield"],
-        [id*="adblock"], .adblock-card, [class*="popunder"],
-        [class*="ad-overlay"], [class*="ad-container"] {
-          display: none !important; pointer-events: none !important;
-        }
+        [class*="ad-shield"],[id*="adblock"],.adblock-card,
+        [class*="popunder"],[class*="ad-overlay"],[class*="ad-container"],
+        [data-cfasync]{display:none!important;pointer-events:none!important;}
       </style>
       </head>`
-    );
-
-    // 8. For VidSrc: remove the second <script> tag with Adsterra (if any remains)
-    html = html.replace(
-      /<script\s+type="text\/javascript">\s*\/\/\s*Adsterra[\s\S]*?<\/script>/gi,
-      '<!-- adsterra ad removed -->'
     );
 
     return new NextResponse(html, {
