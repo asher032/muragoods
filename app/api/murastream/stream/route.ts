@@ -1,60 +1,54 @@
-// MuraStream — Stream Proxy API
-// Proxies VidRock responses to avoid CORS issues
-// Decryption happens client-side for reliability
-export const runtime = 'nodejs';
+// MuraStream — Stream config API (kept for backwards compatibility)
+// Returns available sources and embed URLs for a given TMDB ID
 
 import { NextRequest, NextResponse } from 'next/server';
 
-const VIDROCK_MAIN = 'https://vidrock.net';
-const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
+export const runtime = 'nodejs';
+
+interface SourceConfig {
+  id: string;
+  name: string;
+  getEmbedUrl: (type: string, id: number, season?: number, episode?: number) => string;
+}
+
+const SOURCES: SourceConfig[] = [
+  {
+    id: 'vidking',
+    name: 'VidKing',
+    getEmbedUrl: (type, id, season, episode) => {
+      if (type === 'tv' && season && episode) return `https://www.vidking.net/embed/tv/${id}/${season}/${episode}`;
+      return `https://www.vidking.net/embed/movie/${id}`;
+    },
+  },
+  {
+    id: 'videasy',
+    name: 'Videasy',
+    getEmbedUrl: (type, id, season, episode) => {
+      if (type === 'tv' && season && episode) return `https://player.videasy.to/tv/${id}/${season}/${episode}`;
+      return `https://player.videasy.to/movie/${id}`;
+    },
+  },
+];
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
+  const type = searchParams.get('type') || 'movie';
   const tmdbId = Number(searchParams.get('tmdbId'));
-  const mediaType = (searchParams.get('type') || 'movie') as 'movie' | 'tv';
   const season = searchParams.get('season') ? Number(searchParams.get('season')) : undefined;
   const episode = searchParams.get('episode') ? Number(searchParams.get('episode')) : undefined;
-
-  console.log(`[Stream Proxy] tmdbId=${tmdbId} type=${mediaType}`);
 
   if (!tmdbId || !Number.isFinite(tmdbId)) {
     return NextResponse.json({ error: 'Invalid tmdbId' }, { status: 400 });
   }
 
-  const isTv = mediaType === 'tv' && season != null && episode != null;
-  const apiUrl = isTv
-    ? `${VIDROCK_MAIN}/api/tv/${tmdbId}/${season}/${episode}`
-    : `${VIDROCK_MAIN}/api/movie/${tmdbId}`;
+  const sources = SOURCES.map(s => ({
+    id: s.id,
+    name: s.name,
+    url: s.getEmbedUrl(type, tmdbId, season, episode),
+  }));
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
-
-    const res = await fetch(apiUrl, {
-      headers: {
-        'User-Agent': USER_AGENT,
-        'Referer': `${VIDROCK_MAIN}/`,
-        'Origin': VIDROCK_MAIN,
-        'Accept': 'application/json',
-      },
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeout);
-
-    if (!res.ok) {
-      return NextResponse.json({ error: `VidRock HTTP ${res.status}`, encrypted: {} });
-    }
-
-    const body = await res.json();
-    return NextResponse.json({
-      encrypted: body,
-      source: 'vidrock',
-    });
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error('[Stream Proxy] Error:', msg);
-    return NextResponse.json({ error: msg, encrypted: {} }, { status: 500 });
-  }
+  return NextResponse.json({
+    sources,
+    first: sources[0] || null,
+  });
 }
-// v1788451773
