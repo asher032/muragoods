@@ -13,19 +13,21 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing id parameter' }, { status: 400 });
   }
 
-  // All sources route through ad-stripping proxy (URLs rewritten to absolute)
-  const proxyBase = '/api/murastream/proxy';
-  // VidSrc removed — blocks server-side requests (403)
+  // Direct embed URLs — no proxy (proxy broke player routing)
   const sources: Record<string, { id: string; label: string; url: string }> = {
     vidking: {
       id: 'vidking',
       label: 'VidKing',
-      url: `${proxyBase}?type=${type}&id=${id}&season=${season}&episode=${episode}&source=vidking`,
+      url: type === 'movie'
+        ? `https://www.vidking.net/embed/movie/${id}?color=ffa600`
+        : `https://www.vidking.net/embed/tv/${id}/${season}/${episode}?color=ffa600`,
     },
     videasy: {
       id: 'videasy',
       label: 'Videasy',
-      url: `${proxyBase}?type=${type}&id=${id}&season=${season}&episode=${episode}&source=videasy`,
+      url: type === 'movie'
+        ? `https://player.videasy.to/movie/${id}`
+        : `https://player.videasy.to/tv/${id}/${season}/${episode}`,
     },
   };
 

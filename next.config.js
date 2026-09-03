@@ -4,7 +4,7 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: '/((?!api/murastream/proxy).*)',
+        source: '/(.*)',
         headers: [
           {
             key: 'X-Frame-Options',
@@ -21,10 +21,6 @@ const nextConfig = {
           {
             key: 'Referrer-Policy',
             value: 'strict-origin-when-cross-origin',
-          },
-          {
-            key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()',
           },
           {
             key: 'Strict-Transport-Security',

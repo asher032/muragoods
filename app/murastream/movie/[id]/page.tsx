@@ -61,11 +61,11 @@ export default function MovieDetailPage() {
 
   useEffect(() => { fetchMovie(); }, [fetchMovie]);
 
-  // Source URLs — routed through ad-stripping proxy
+  // Source URLs — direct embed (proxy broke player routing)
   const getSourceUrl = (sourceId: string) => {
     const sources: Record<string, string> = {
-      vidking: `/api/murastream/proxy?type=movie&id=${movieId}&source=vidking`,
-      videasy: `/api/murastream/proxy?type=movie&id=${movieId}&source=videasy`,
+      vidking: `https://www.vidking.net/embed/movie/${movieId}?color=ffa600`,
+      videasy: `https://player.videasy.to/movie/${movieId}`,
     };
     return sources[sourceId] || sources.vidking;
   };
