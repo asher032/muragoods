@@ -1,6 +1,5 @@
-// MuraStream — Ad-Free Proxy
-// Fetches streaming embed HTML and strips ALL ad scripts (Adsterra, popunders, click shields)
-// before serving to the user. This ensures zero ads in the player.
+// MuraStream — Ad-Free Proxy (Fixed)
+// Surgically removes ONLY ad code while keeping player logic intact
 
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -16,7 +15,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing id' }, { status: 400 });
   }
 
-  // Build the original embed URL
   const nexstreamKey = process.env.NEXTSTREAM_API_KEY || '';
   let embedUrl = '';
 
@@ -47,7 +45,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Fetch the original embed HTML
     const res = await fetch(embedUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -61,77 +58,70 @@ export async function GET(request: NextRequest) {
 
     let html = await res.text();
 
-    // ── AD STRIPPING ──────────────────────────────────────────────────────
-    // Remove Adsterra scripts and popunders
-    html = html.replace(/<script[^>]*>[\s\S]*?adsterra[\s\S]*?<\/script>/gi, '<!-- ad removed -->');
-    html = html.replace(/<script[^>]*>[\s\S]*?popunder[\s\S]*?<\/script>/gi, '<!-- ad removed -->');
-    html = html.replace(/<script[^>]*>[\s\S]*?clickunder[\s\S]*?<\/script>/gi, '<!-- ad removed -->');
-    html = html.replace(/<script[^>]*>[\s\S]*?exoclick[\s\S]*?<\/script>/gi, '<!-- ad removed -->');
-    html = html.replace(/<script[^>]*>[\s\S]*?propeller[\s\S]*?<\/script>/gi, '<!-- ad removed -->');
-    html = html.replace(/<script[^>]*>[\s\S]*?hilltop[\s\S]*?<\/script>/gi, '<!-- ad removed -->');
-    html = html.replace(/<script[^>]*>[\s\S]*?monetag[\s\S]*?<\/script>/gi, '<!-- ad removed -->');
-    html = html.replace(/<script[^>]*>[\s\S]*?adsterra[\s\S]*?<\/script>/gi, '<!-- ad removed -->');
+    // ── SURGICAL AD REMOVAL ─────────────────────────────────────────────
+    // Instead of removing entire script blocks, remove ONLY the ad code within them
 
-    // Remove ad-related script blocks by content patterns
-    html = html.replace(/<script[^>]*>[\s\S]*?(window\.open\(ad|adUrl|adShield|adshield|ad-shield|ADSTERRA|CLICK-SHIELD)[\s\S]*?<\/script>/gi, '<!-- ad shield removed -->');
+    // 1. Remove the Adsterra click-shield div creation and dismiss logic
+    //    This is the block that creates the overlay and opens popup on click
+    html = html.replace(
+      /\/\/ =+[\s\S]*?ADSTERRA CLICK-SHIELD LOGIC[\s\S]*?=+\s*if\s*\(!isDemo\)\s*\{[\s\S]*?adShield\.addEventListener\('touchend'[\s\S]*?\}\s*\}/,
+      '// ADS REMOVED BY PROXY'
+    );
 
-    // Remove ad containers/divs
-    html = html.replace(/<div[^>]*class="[^"]*(?:ad|banner|sponsor|popup)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '<!-- ad div removed -->');
-    html = html.replace(/<div[^>]*id="[^"]*(?:ad|banner|sponsor|popup)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '<!-- ad div removed -->');
+    // 2. Remove the Adsterra popunder script block (second <script> tag)
+    html = html.replace(
+      /<script\s+type="text\/javascript">\s*\/\/\s*Adsterra[\s\S]*?<\/script>/,
+      '<!-- adsterra popunder removed -->'
+    );
 
-    // Remove ad-related CSS (adblock screens, ad shields)
-    html = html.replace(/#adblock-screen[\s\S]*?\}/g, '#adblock-screen { display: none !important; }');
-    html = html.replace(/\.ad-shield[\s\S]*?\}/g, '.ad-shield { display: none !important; }');
-    html = html.replace(/#ad-shield[\s\S]*?\}/g, '#ad-shield { display: none !important; }');
+    // 3. Remove any remaining ad-related inline scripts
+    html = html.replace(
+      /<script[^>]*>[\s\S]*?adsterra[\s\S]*?<\/script>/gi,
+      '<!-- ad script removed -->'
+    );
 
-    // Remove bait/anti-adblock elements
+    // 4. Remove the ad-shield-play CSS and adblock-screen CSS
+    html = html.replace(/\/\* ── Ad Shield Play Button ── \*\/[\s\S]*?\.ad-shield-play::after\s*\{[^}]*\}/, '/* ad shield css removed */');
+    html = html.replace(/\/\* ── Adblock Screen ── \*\/[\s\S]*?\.adblock-card\s*\{[^}]*\}/, '/* adblock css removed */');
+
+    // 5. Remove ad bait elements (hidden divs that detect adblockers)
+    html = html.replace(/bait\.className\s*=\s*'[^']*(?:adsbox|ad-placement|doubleclick)[^']*'/g, "bait.className = 'clean'");
     html = html.replace(/<div[^>]*class="[^"]*(?:adsbox|ad-placement|doubleclick|ad-banner)[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
 
-    // Inject our own clean CSS to hide any remaining ad elements
+    // 6. Remove ad-block detection screen
+    html = html.replace(/<div[^>]*id="adblock-screen"[^>]*>[\s\S]*?<\/div>/gi, '<!-- adblock screen removed -->');
+
+    // 7. Inject CSS to hide any remaining ad elements
     const cleanCSS = `
       <style>
-        /* Hide all ad-related elements */
-        [class*="ad-"], [class*="ad_"], [id*="ad-"], [id*="ad_"],
-        [class*="banner"], [class*="sponsor"], [class*="popup"],
-        [class*="overlay-ad"], [class*="click-shield"],
-        .ad-shield-play, #adblock-screen, .adblock-card,
+        [class*="ad-shield"], [id*="ad-shield"], [id*="adblock-screen"],
+        [class*="adblock"], .ad-shield-play, #adblock-screen,
         [class*="adsbox"], [class*="ad-placement"] {
           display: none !important;
           visibility: hidden !important;
           opacity: 0 !important;
           pointer-events: none !important;
-          position: absolute !important;
-          left: -9999px !important;
-          width: 0 !important;
-          height: 0 !important;
-          overflow: hidden !important;
         }
-        /* Ensure the actual video player is visible and full-size */
-        iframe, video, .player, #player, #stream-frame {
+        /* Ensure video player fills the container */
+        #stream-frame, iframe, video {
           width: 100% !important;
           height: 100% !important;
-          position: relative !important;
-          z-index: 9999 !important;
+          border: none !important;
         }
-        /* Override any ad-block detection */
-        body::after { display: none !important; }
       </style>
     `;
     html = html.replace('</head>', cleanCSS + '</head>');
 
-    // Remove any script that tries to detect ad blockers
-    html = html.replace(/<script[^>]*>[\s\S]*?(adblock|ad-blocker|adBlockDetect|blocker-detected)[\s\S]*?<\/script>/gi, '<!-- adblock detection removed -->');
+    // 8. Override isDemo to always skip ad logic (belt and suspenders)
+    html = html.replace(
+      'const isDemo = _apiKey.startsWith(\'DEMO_\');',
+      'const isDemo = true; // Force ad-free via proxy'
+    );
 
-    // Remove onclick handlers that open new windows (popups)
-    html = html.replace(/onclick="[^"]*window\.open[^"]*"/gi, 'onclick="event.preventDefault()"');
-    html = html.replace(/onclick="[^"]*open\([^"]*'_blank'[^"]*\)"/gi, 'onclick="event.preventDefault()"');
-
-    // Serve the cleaned HTML
     return new NextResponse(html, {
       status: 200,
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        'X-Frame-Options': 'ALLOWALL',
         'Access-Control-Allow-Origin': '*',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
       },
