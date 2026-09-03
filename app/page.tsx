@@ -208,6 +208,7 @@ export default function Home() {
     { icon: <Icon name="coin" size={28} />, title: 'Earn Coins', desc: '0.5 coins per peso spent', color: '#ffd60a', link: '/points' },
     { icon: <Icon name="game" size={28} />, title: 'Play Games', desc: 'Win rewards & prizes', color: '#4895ef', link: '/entertainment' },
     { icon: <Icon name="envelope" size={28} />, title: 'Untold Words', desc: 'Send anonymous confessions', color: '#c896ff', link: '/untold-words' },
+    { icon: <Icon name="stream" size={28} />, title: 'MuraStream', desc: 'Movies • TV • Anime', color: '#e63946', link: '/murastream' },
   ];
 
   return (
@@ -398,6 +399,16 @@ export default function Home() {
                   <h3 className="font-arcade text-sm text-mario-yellow mb-2">UNTOLD WORDS</h3>
                   <p className="text-xs text-mario-text-muted mb-3">Some things are easier to say through a letter, a confession, or a song.</p>
                   <span className="font-arcade text-[9px]" style={{ color: '#c896ff', letterSpacing: '0.1em' }}>EXPLORE NOW →</span>
+                </div>
+              </SpotlightCard>
+            </Reveal>
+            <Reveal delay={0.3}>
+              <SpotlightCard href="/murastream" className="highlight-card block" bgStyle={{ background: 'linear-gradient(135deg, rgba(230,57,70,0.12), rgba(255,100,150,0.08))' }}>
+                <div className="highlight-content">
+                  <span className="text-5xl mb-4 float-anim block">🎬</span>
+                  <h3 className="font-arcade text-sm text-mario-yellow mb-2">MURASTREAM</h3>
+                  <p className="text-xs text-mario-text-muted mb-3">Movies • TV • Anime — Stream, browse, and build your watchlist.</p>
+                  <span className="font-arcade text-[9px]" style={{ color: '#e63946', letterSpacing: '0.1em' }}>WATCH NOW →</span>
                 </div>
               </SpotlightCard>
             </Reveal>
