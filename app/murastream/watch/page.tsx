@@ -27,18 +27,18 @@ const SOURCES: Source[] = [
         : `https://www.2embed.cc/embed/movie/${id}`,
   },
   {
+    id: 'vidsrc', name: 'VidSrc',
+    getUrl: (type, id, season, episode) =>
+      type === 'tv' && season && episode
+        ? `https://vidsrcme.ru/embed/tv?tmdb=${id}&season=${season}&episode=${episode}`
+        : `https://vidsrcme.ru/embed/movie?tmdb=${id}`,
+  },
+  {
     id: 'multiembed', name: 'Multi',
     getUrl: (type, id, season, episode) =>
       type === 'tv' && season && episode
         ? `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${season}&e=${episode}`
         : `https://multiembed.mov/?video_id=${id}&tmdb=1`,
-  },
-  {
-    id: 'vidsrc', name: 'VidSrc',
-    getUrl: (type, id, season, episode) =>
-      type === 'tv' && season && episode
-        ? `https://vidsrc.me/embed/tv?tmdb=${id}&season=${season}&episode=${episode}`
-        : `https://vidsrc.me/embed/movie?tmdb=${id}`,
   },
 ];
 
@@ -57,6 +57,7 @@ function WatchContent() {
   const [activeSource, setActiveSource] = useState<Source>(SOURCES[0]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [failedSources, setFailedSources] = useState<Set<string>>(new Set());
   const [showAutoPlay, setShowAutoPlay] = useState(false);
   const [autoPlayCountdown, setAutoPlayCountdown] = useState(10);
   const [posterPath, setPosterPath] = useState('');
@@ -164,10 +165,26 @@ function WatchContent() {
 
   const embedUrl = activeSource.getUrl(type, id, season, episode);
 
+  // Debug logging
+  console.group('[MuraStream] Watch Page');
+  console.log('Type:', type, '| ID:', id, '| Season:', season, '| Episode:', episode);
+  console.log('AniList ID:', anilistIdParam || 'none');
+  console.log('Source:', activeSource.name, '| URL:', embedUrl);
+  console.log('Failed sources:', Array.from(failedSources));
+  console.groupEnd();
+
   const handleIframeError = () => {
-    const currentIdx = SOURCES.findIndex(s => s.id === activeSource.id);
-    if (currentIdx < SOURCES.length - 1) {
-      setActiveSource(SOURCES[currentIdx + 1]);
+    const newFailed = new Set(failedSources);
+    newFailed.add(activeSource.id);
+    setFailedSources(newFailed);
+
+    // Find next non-failed source
+    const nextSource = SOURCES.find(s => !newFailed.has(s.id));
+    if (nextSource) {
+      setActiveSource(nextSource);
+    } else {
+      // All sources failed
+      setError('All streaming sources are currently unavailable for this content. Please try again later or try a different source.');
     }
   };
 
@@ -223,9 +240,22 @@ function WatchContent() {
             <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px', color: '#666' }}>Loading player...</p>
           </div>
         ) : error ? (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px' }}>
-            <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', color: '#ef4444' }}>{error}</p>
-            <Link href="/murastream" style={{ color: '#B85CFF', fontFamily: '-apple-system, sans-serif', fontSize: '13px' }}>← Back to MuraStream</Link>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px', padding: '24px' }}>
+            <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', color: '#ef4444', textAlign: 'center', maxWidth: '400px' }}>{error}</p>
+            {failedSources.size > 0 && (
+              <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px', color: '#666', textAlign: 'center' }}>
+                Tried: {Array.from(failedSources).join(', ')}
+              </p>
+            )}
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={() => { setError(''); setFailedSources(new Set()); setActiveSource(SOURCES[0]); }}
+                style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid #B85CFF', background: 'rgba(184,92,255,0.15)', color: '#B85CFF', fontFamily: '-apple-system, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                ↻ Retry
+              </button>
+              <Link href={type === 'tv' ? `/murastream/tv/${id}${isAnime ? `?anilist=${anilistIdParam}` : ''}` : `/murastream/movie/${id}`} style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: '#888', fontFamily: '-apple-system, sans-serif', fontSize: '13px', textDecoration: 'none' }}>
+                ← Details
+              </Link>
+            </div>
           </div>
         ) : (
           <iframe
@@ -279,11 +309,21 @@ function WatchContent() {
             background: 'transparent', color: '#888',
             fontFamily: 'var(--font-arcade)', fontSize: '7px', textDecoration: 'none',
           }}>Details</Link>
-          <Link href="/murastream/library" style={{
-            padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)',
-            background: 'transparent', color: '#888',
-            fontFamily: 'var(--font-arcade)', fontSize: '7px', textDecoration: 'none',
-          }}>Library</Link>
+          {/* Source selector */}
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {SOURCES.map(s => (
+              <button key={s.id} onClick={() => { setActiveSource(s); setFailedSources(prev => { const next = new Set(prev); next.delete(s.id); return next; }); setError(''); }}
+                style={{
+                  padding: '3px 8px', borderRadius: '4px',
+                  border: activeSource.id === s.id ? '1px solid #B85CFF' : '1px solid rgba(255,255,255,0.06)',
+                  background: activeSource.id === s.id ? 'rgba(184,92,255,0.15)' : 'transparent',
+                  color: failedSources.has(s.id) ? '#ef4444' : activeSource.id === s.id ? '#B85CFF' : '#666',
+                  fontFamily: 'var(--font-arcade)', fontSize: '6px', cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  textDecoration: failedSources.has(s.id) ? 'line-through' : 'none',
+                }}>{s.name}</button>
+            ))}
+          </div>
         </div>
 
         {type === 'tv' && (
