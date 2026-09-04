@@ -263,7 +263,7 @@ export default function MuraStreamHome() {
         const controller = new AbortController();
         searchAbortRef.current = controller;
         const timeoutId = setTimeout(() => controller.abort(), 8000);
-        const sp = new URLSearchParams({ action: 'search', query: searchQuery });
+        const sp = new URLSearchParams({ action: 'search', q: searchQuery });
         const res = await fetch(`/api/murastream/tmdb?${sp}`, { signal: controller.signal });
         clearTimeout(timeoutId);
         if (!res.ok) throw new Error('Search failed');

@@ -52,7 +52,7 @@ export default function MuraStreamSearchPage() {
       } else {
         // Multi-search: try both TMDB and anime
         const [tmdbRes, animeRes] = await Promise.allSettled([
-          fetch(`/api/murastream/tmdb?action=search&query=${encodeURIComponent(q.trim())}`, { signal: controller.signal }),
+          fetch(`/api/murastream/tmdb?action=search&q=${encodeURIComponent(q.trim())}`, { signal: controller.signal }),
           fetch(`/api/murastream/anilist?action=search&q=${encodeURIComponent(q.trim())}`, { signal: controller.signal }),
         ]);
 
