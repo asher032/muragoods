@@ -152,6 +152,7 @@ export async function GET(request: NextRequest) {
       data.title = data.title || data.name;
       data.mediaType = data.first_air_date ? 'tv' : 'movie';
       data.year = (data.release_date || data.first_air_date || '').substring(0, 4);
+      data.voteAverage = data.vote_average ?? 0;
       data.posterPath = getImgUrl(data.poster_path);
       data.backdropPath = getImgUrl(data.backdrop_path, 'w1280');
 

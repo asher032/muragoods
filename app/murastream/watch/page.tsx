@@ -40,6 +40,20 @@ const SOURCES: Source[] = [
         ? `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${season}&e=${episode}`
         : `https://multiembed.mov/?video_id=${id}&tmdb=1`,
   },
+  {
+    id: 'vidsrc2', name: 'VidSrc2',
+    getUrl: (type, id, season, episode) =>
+      type === 'tv' && season && episode
+        ? `https://vidsrcme.ru/embed/tv?tmdb=${id}&season=${season}&episode=${episode}&ds=1`
+        : `https://vidsrcme.ru/embed/movie?tmdb=${id}&ds=1`,
+  },
+  {
+    id: '2embed-alt', name: '2Emb2',
+    getUrl: (type, id, season, episode) =>
+      type === 'tv' && season && episode
+        ? `https://www.2embed.cc/embed/tv/${id}/${season}/${episode}`
+        : `https://www.2embed.cc/embed/movie?tmdb=${id}`,
+  },
 ];
 
 function WatchContent() {
@@ -142,16 +156,26 @@ function WatchContent() {
     }
   }, [id, type, season, episode, title, posterPath, loading, error, markEpisodeWatched]);
 
+  // Auto-play next episode — trigger automatically after watching for 30+ seconds
+  useEffect(() => {
+    if (type !== 'tv') return;
+    const timer = setTimeout(() => {
+      setShowAutoPlay(true);
+      setAutoPlayCountdown(10);
+    }, 30000); // Show auto-play after 30 seconds
+    return () => clearTimeout(timer);
+  }, [type, season, episode]);
+
   // Auto-play countdown
   useEffect(() => {
     if (!showAutoPlay || type !== 'tv') return;
     if (autoPlayCountdown <= 0) {
-      router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode + 1}`);
+      router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode + 1}${isAnime ? `&anilist=${anilistIdParam}` : ''}`);
       return;
     }
     const timer = setTimeout(() => setAutoPlayCountdown(prev => prev - 1), 1000);
     return () => clearTimeout(timer);
-  }, [showAutoPlay, autoPlayCountdown, type, id, season, episode, router]);
+  }, [showAutoPlay, autoPlayCountdown, type, id, season, episode, router, isAnime, anilistIdParam]);
 
   // Error states
   if (!id) {

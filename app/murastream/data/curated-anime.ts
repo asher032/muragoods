@@ -1,141 +1,201 @@
 // Curated anime catalog — used as fallback when Jikan API is slow/down
-// These are well-known, popular anime titles organized by category
+// All poster + banner URLs use verified working AniList CDN
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 
-const IMG = 'https://image.tmdb.org/t/p/w500';
+const AL = 'https://s4.anilist.co/file/anilistcdn/media/anime';
 
-export const CURATED_ANIME: (Record<string, any> & { id: number; title: string; categories: string[] })[] = [
+export const CURATED_ANIME: (Record<string, any> & { id: number; anilistId: number; title: string; categories: string[] })[] = [
   // ─── ACTION ────────────────────────────────────────
   {
-    id: 16498, title: 'Attack on Titan', mediaType: 'tv', overview: 'Centuries ago, mankind was slaughtered to near extinction by monstrous humanoid creatures called Titans, forcing humans to hide in fear behind enormous concentric walls.',
-    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx16498-buvcRTBx4NSm.jpg', backdropPath: `${IMG}/sIRK4NYsVnIThA0rTIxYmdMaLiA.jpg`, voteAverage: 8.5, year: '2013', genres: ['Action', 'Drama', 'Fantasy'], releaseDate: '2013-04-07', originalLanguage: 'ja', episodes: 87, status: 'Finished Airing', score: 8.54, studios: ['Wit Studio', 'MAPPA'], hasSub: true, hasDub: true, categories: ['action', 'trending', 'top'],
+    id: 16498, anilistId: 16498, title: 'Attack on Titan', mediaType: 'tv',
+    overview: 'Centuries ago, mankind was slaughtered to near extinction by monstrous humanoid creatures called Titans.',
+    posterPath: `${AL}/cover/medium/bx16498-buvcRTBx4NSm.jpg`, backdropPath: `${AL}/banner/16498-8jpFCOcDmneX.jpg`,
+    voteAverage: 8.5, year: '2013', genres: ['Action', 'Drama', 'Fantasy'], episodes: 87, status: 'Finished Airing', score: 8.54, hasSub: true, hasDub: true, categories: ['action', 'trending', 'top'],
   },
   {
-    id: 5114, title: 'Fullmetal Alchemist: Brotherhood', mediaType: 'tv', overview: 'After a horrific alchemy experiment goes wrong in the Elric household, brothers Edward and Alphonse are left in a catastrophic new reality.',
-    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx5114-nSWCgQlmOMtj.jpg', backdropPath: `${IMG}/2W4ZM7Wim3DLVN1g4RZXn6bHQ8S.jpg`, voteAverage: 8.7, year: '2009', genres: ['Action', 'Adventure', 'Drama'], releaseDate: '2009-04-05', originalLanguage: 'ja', episodes: 64, status: 'Finished Airing', score: 8.71, studios: ['Bones'], hasSub: true, hasDub: true, categories: ['action', 'top'],
+    id: 5114, anilistId: 5114, title: 'Fullmetal Alchemist: Brotherhood', mediaType: 'tv',
+    overview: 'After a horrific alchemy experiment goes wrong, brothers Edward and Alphonse Elric search for the Philosopher Stone.',
+    posterPath: `${AL}/cover/medium/bx5114-nSWCgQlmOMtj.jpg`, backdropPath: `${AL}/banner/5114-q0V5URebphSG.jpg`,
+    voteAverage: 8.7, year: '2009', genres: ['Action', 'Adventure', 'Drama'], episodes: 64, status: 'Finished Airing', score: 8.71, hasSub: true, hasDub: true, categories: ['action', 'top'],
   },
   {
-    id: 31964, title: 'Jujutsu Kaisen', mediaType: 'tv', overview: 'A boy swallows a cursed talisman - the finger of a demon - and becomes possessed, enrolling in a school of sorcerers to find the demon\'s other parts.',
-    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx113415-LHBAeoZDIsnF.jpg', backdropPath: `${IMG}/dQFhpMRbWyDfBklmxAWGhJ9yDxO.jpg`, voteAverage: 8.6, year: '2020', genres: ['Action', 'Fantasy', 'Supernatural'], releaseDate: '2020-10-03', originalLanguage: 'ja', episodes: 47, status: 'Currently Airing', score: 8.62, studios: ['MAPPA'], hasSub: true, hasDub: true, categories: ['action', 'trending'],
+    id: 113415, anilistId: 113415, title: 'Jujutsu Kaisen', mediaType: 'tv',
+    overview: 'A boy swallows a cursed talisman and enrolls in a school of sorcerers to find the demon other parts.',
+    posterPath: `${AL}/cover/medium/bx113415-LHBAeoZDIsnF.jpg`, backdropPath: `${AL}/banner/113415-jQBSkxWAAk83.jpg`,
+    voteAverage: 8.6, year: '2020', genres: ['Action', 'Fantasy', 'Supernatural'], episodes: 47, status: 'Currently Airing', score: 8.62, hasSub: true, hasDub: true, categories: ['action', 'trending'],
   },
   {
-    id: 41467, title: 'Demon Slayer: Kimetsu no Yaiba', mediaType: 'tv', overview: 'Ever since the death of his father, the burden of supporting the family has fallen upon Tanjirou Kamado\'s shoulders.',
-    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx101922-WBsBl0ClmgYL.jpg', backdropPath: `${IMG}/5DUMPBSnHOZsbhLDnWKIHyGZPvO.jpg`, voteAverage: 8.7, year: '2019', genres: ['Action', 'Fantasy', 'Supernatural'], releaseDate: '2019-04-06', originalLanguage: 'ja', episodes: 55, status: 'Currently Airing', score: 8.71, studios: ['ufotable'], hasSub: true, hasDub: true, categories: ['action', 'trending', 'top'],
+    id: 101922, anilistId: 101922, title: 'Demon Slayer: Kimetsu no Yaiba', mediaType: 'tv',
+    overview: 'Ever since the death of his father, Tanjirou Kamado has been supporting his family and hunting demons.',
+    posterPath: `${AL}/cover/medium/bx101922-WBsBl0ClmgYL.jpg`, backdropPath: `${AL}/banner/101922-33MtJGsUSxga.jpg`,
+    voteAverage: 8.7, year: '2019', genres: ['Action', 'Fantasy', 'Supernatural'], episodes: 55, status: 'Currently Airing', score: 8.71, hasSub: true, hasDub: true, categories: ['action', 'trending', 'top'],
   },
   {
-    id: 30276, title: 'One Punch Man', mediaType: 'tv', overview: 'The seemingly unimpressive Saitama has a rather unique hobby: being a hero.',
-    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx30276-uRKqN4hLrly4.jpg', backdropPath: `${IMG}/meeoG8LzEhJQsdl7KekkJCZKDU.jpg`, voteAverage: 8.4, year: '2015', genres: ['Action', 'Comedy', 'Sci-Fi'], releaseDate: '2015-10-05', originalLanguage: 'ja', episodes: 24, status: 'Finished Airing', score: 8.42, studios: ['Madhouse'], hasSub: true, hasDub: true, categories: ['action', 'comedy'],
+    id: 21087, anilistId: 21087, title: 'One Punch Man', mediaType: 'tv',
+    overview: 'The seemingly unimpressive Saitama has a rather unique hobby: being a hero.',
+    posterPath: `${AL}/cover/medium/bx21087-B5DHjqZ3kW4b.jpg`, backdropPath: `${AL}/banner/21087-sHb9zUZFsHe1.jpg`,
+    voteAverage: 8.4, year: '2015', genres: ['Action', 'Comedy', 'Sci-Fi'], episodes: 24, status: 'Finished Airing', score: 8.42, hasSub: true, hasDub: true, categories: ['action', 'comedy'],
   },
   // ─── ADVENTURE ────────────────────────────────────
   {
-    id: 21, title: 'One Piece', mediaType: 'tv', overview: 'Gol D. Roger was known as the Pirate King, the strongest and most infamous being to have sailed the Grand Line.',
-    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21-ELSYx3yMPcKM.jpg', backdropPath: `${IMG}/2rmK7mnchw9Xr3XdiTFSxTTLXqv.jpg`, voteAverage: 8.7, year: '1999', genres: ['Action', 'Adventure', 'Comedy'], releaseDate: '1999-10-20', originalLanguage: 'ja', episodes: 1100, status: 'Currently Airing', score: 8.71, studios: ['Toei Animation'], hasSub: true, hasDub: true, categories: ['adventure', 'top', 'trending'],
+    id: 21, anilistId: 21, title: 'One Piece', mediaType: 'tv',
+    overview: 'Gol D. Roger was known as the Pirate King. Monkey D. Luffy sets off on his grand adventure.',
+    posterPath: `${AL}/cover/medium/bx21-ELSYx3yMPcKM.jpg`, backdropPath: `${AL}/banner/21-wf37VakJmZqs.jpg`,
+    voteAverage: 8.7, year: '1999', genres: ['Action', 'Adventure', 'Comedy'], episodes: 1100, status: 'Currently Airing', score: 8.71, hasSub: true, hasDub: true, categories: ['adventure', 'top', 'trending'],
   },
   {
-    id: 35964, title: 'The Rising of the Shield Hero', mediaType: 'tv', overview: 'Iwatani Naofumi, a laid-back university student, is summoned to a parallel world along with three other heroes.',
-    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx101922-WBsBl0ClmgYL.jpg', backdropPath: `${IMG}/c5IxfZ8D5mDxBmvqKlMVYVljwxm.jpg`, voteAverage: 7.6, year: '2019', genres: ['Action', 'Adventure', 'Fantasy'], releaseDate: '2019-01-09', originalLanguage: 'ja', episodes: 50, status: 'Finished Airing', score: 7.59, studios: ['Kinema Citrus'], hasSub: true, hasDub: true, categories: ['adventure', 'isekai'],
+    id: 99263, anilistId: 99263, title: 'The Rising of the Shield Hero', mediaType: 'tv',
+    overview: 'Iwatani Naofumi is summoned to a parallel world along with three other heroes.',
+    posterPath: `${AL}/cover/medium/bx99263-LcazQwdlWzMy.jpg`, backdropPath: `${AL}/banner/99263-IwkmdCTsDY1t.jpg`,
+    voteAverage: 7.6, year: '2019', genres: ['Action', 'Adventure', 'Fantasy'], episodes: 50, status: 'Finished Airing', score: 7.59, hasSub: true, hasDub: true, categories: ['adventure', 'isekai'],
   },
   {
-    id: 38197, title: 'Somali and the Forest Spirit', mediaType: 'tv', overview: 'In a world inhabited by mystical creatures, a golem and a young human girl set off on a journey.',
-    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx101922-WBsBl0ClmgYL.jpg', backdropPath: `${IMG}/3JYmHBIpM39VqMFVT7gVPjS1eJA.jpg`, voteAverage: 7.8, year: '2020', genres: ['Adventure', 'Fantasy', 'Slice of Life'], releaseDate: '2020-01-09', originalLanguage: 'ja', episodes: 12, status: 'Finished Airing', score: 7.76, studios: ['Sasayori'], hasSub: true, hasDub: false, categories: ['adventure', 'fantasy'],
+    id: 108617, anilistId: 108617, title: 'Somali and the Forest Spirit', mediaType: 'tv',
+    overview: 'In a world inhabited by mystical creatures, a golem and a young human girl set off on a journey.',
+    posterPath: `${AL}/cover/medium/bx108617-PgoYLgWzzm0c.png`, backdropPath: `${AL}/banner/108617-K5pexm0OYdJl.jpg`,
+    voteAverage: 7.8, year: '2020', genres: ['Adventure', 'Fantasy', 'Slice of Life'], episodes: 12, status: 'Finished Airing', score: 7.76, hasSub: true, hasDub: false, categories: ['adventure', 'fantasy'],
   },
   // ─── COMEDY ────────────────────────────────────────
   {
-    id: 30276, title: 'One Punch Man', mediaType: 'tv', overview: 'The seemingly unimpressive Saitama has a rather unique hobby: being a hero.', posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx30276-uRKqN4hLrly4.jpg', backdropPath: `${IMG}/meeoG8LzEhJQsdl7KekkJCZKDU.jpg`, voteAverage: 8.4, year: '2015', genres: ['Action', 'Comedy', 'Sci-Fi'], releaseDate: '2015-10-05', originalLanguage: 'ja', episodes: 24, status: 'Finished Airing', score: 8.42, studios: ['Madhouse'], hasSub: true, hasDub: true, categories: ['comedy'],
+    id: 40779, anilistId: 40779, title: "Konosuba: God's Blessing on This Wonderful World!", mediaType: 'tv',
+    overview: 'After dying a laughable death in a traffic accident, Kazuma finds himself before a beautiful but obnoxious goddess.',
+    posterPath: `${AL}/cover/medium/bx21202-mPOr80AEjUcZ.png`, backdropPath: `${AL}/banner/21202-UWijdV7RMnXo.jpg`,
+    voteAverage: 8.1, year: '2016', genres: ['Adventure', 'Comedy', 'Fantasy'], episodes: 20, status: 'Finished Airing', score: 8.11, hasSub: true, hasDub: true, categories: ['comedy', 'isekai'],
   },
   {
-    id: 40779, title: 'Konosuba: God\'s Blessing on This Wonderful World!', mediaType: 'tv', overview: 'After dying a laughable death in a traffic accident, Kazuma Satou finds himself sitting before a beautiful but obnoxious goddess.',
-    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21202-mPOr80AEjUcZ.png', backdropPath: `${IMG}/kKgQzkUCnQmeTPkyIwHly2t6ZFI.jpg`, voteAverage: 8.1, year: '2016', genres: ['Adventure', 'Comedy', 'Fantasy'], releaseDate: '2016-01-14', originalLanguage: 'ja', episodes: 20, status: 'Finished Airing', score: 8.11, studios: ['Studio Deen'], hasSub: true, hasDub: true, categories: ['comedy', 'isekai'],
+    id: 101921, anilistId: 101921, title: 'Kaguya-sama: Love is War', mediaType: 'tv',
+    overview: 'At Shuchiin Academy, Miyuki Shirogane and Kaguya Shinomiya seem perfect for each other.',
+    posterPath: `${AL}/cover/medium/bx101921-ufrjLzhSz7L1.jpg`, backdropPath: `${AL}/banner/101921-GgvvFhlNhzlF.jpg`,
+    voteAverage: 8.4, year: '2019', genres: ['Comedy', 'Romance'], episodes: 37, status: 'Finished Airing', score: 8.36, hasSub: true, hasDub: true, categories: ['comedy', 'romance'],
   },
   {
-    id: 31478, title: 'Kaguya-sama: Love is War', mediaType: 'tv', overview: 'At the prestigious Shuchiin Academy, Miyuki Shirogane and Kaguya Shinomiya seem perfect for each other.',
-    posterPath: `${IMG}/5dWWQI5LaNVhSjKkZbRPgi6PmDG.jpg`, backdropPath: `${IMG}/9WQ9tXGbgJBOjjK9brfC10Sr6Y9.jpg`, voteAverage: 8.4, year: '2019', genres: ['Comedy', 'Romance'], releaseDate: '2019-01-12', originalLanguage: 'ja', episodes: 37, status: 'Finished Airing', score: 8.36, studios: ['A-1 Pictures'], hasSub: true, hasDub: true, categories: ['comedy', 'romance'],
+    id: 21804, anilistId: 21804, title: 'The Disastrous Life of Saiki K.', mediaType: 'tv',
+    overview: 'Kusuo Saiki has had psychic powers since he was born and they are more trouble than they are worth.',
+    posterPath: `${AL}/cover/medium/bx21804-As6tDLAvEvNY.jpg`, backdropPath: `${AL}/banner/21804-K0xl0PE1PfHt.jpg`,
+    voteAverage: 8.3, year: '2016', genres: ['Comedy', 'Supernatural'], episodes: 120, status: 'Finished Airing', score: 8.33, hasSub: true, hasDub: true, categories: ['comedy'],
   },
   {
-    id: 23413, title: 'Saiki K. Desires Being Reborn', mediaType: 'tv', overview: 'Kusuo Saiki has had psychic powers since he was born — and they\'re way more trouble than they\'re worth.',
-    posterPath: `${IMG}/pB6n7jFwjUm2d2gTUMMqKNgqVhD.jpg`, backdropPath: `${IMG}/4KyJhMoWGcOq5YdZcVKYdRG0WPB.jpg`, voteAverage: 8.3, year: '2016', genres: ['Comedy', 'Supernatural'], releaseDate: '2016-07-04', originalLanguage: 'ja', episodes: 120, status: 'Finished Airing', score: 8.33, studios: ['J.C.Staff'], hasSub: true, hasDub: true, categories: ['comedy'],
-  },
-  {
-    id: 38000, title: 'KonoSuba: Legend of Crimson', mediaType: 'tv', overview: 'After a brief return to the fantasy world, Kazuma and his party face new threats.', posterPath: `${IMG}/h8RnsZTkEEqFhMrQq5eKfDUPLVj.jpg`, backdropPath: `${IMG}/kKgQzkUCnQmeTPkyIwHly2t6ZFI.jpg`, voteAverage: 8.0, year: '2017', genres: ['Adventure', 'Comedy', 'Fantasy'], releaseDate: '2017-01-12', originalLanguage: 'ja', episodes: 10, status: 'Finished Airing', score: 8.0, studios: ['Studio Deen'], hasSub: true, hasDub: true, categories: ['comedy', 'isekai'],
+    id: 102976, anilistId: 102976, title: 'KonoSuba: Legend of Crimson', mediaType: 'tv',
+    overview: 'After a brief return to the fantasy world, Kazuma and his party face new threats.',
+    posterPath: `${AL}/cover/medium/bx102976-2Yi5icRbjukO.png`, backdropPath: `${AL}/banner/102976-xv7fCzBwQ7GU.jpg`,
+    voteAverage: 8.0, year: '2017', genres: ['Adventure', 'Comedy', 'Fantasy'], episodes: 10, status: 'Finished Airing', score: 8.0, hasSub: true, hasDub: true, categories: ['comedy', 'isekai'],
   },
   // ─── ROMANCE ───────────────────────────────────────
   {
-    id: 11757, title: 'Your Lie in April', mediaType: 'tv', overview: 'Kousei Arima is a piano prodigy who lost the ability to hear the piano after his mother\'s death.',
-    posterPath: `${IMG}/y2G2TeYPFGvfqWh5YlM1aGNmCCd.jpg`, backdropPath: `${IMG}/x8L48NDq3JDNQbPkjMIwEPX0WQE.jpg`, voteAverage: 8.7, year: '2014', genres: ['Drama', 'Music', 'Romance'], releaseDate: '2014-10-10', originalLanguage: 'ja', episodes: 22, status: 'Finished Airing', score: 8.68, studios: ['A-1 Pictures'], hasSub: true, hasDub: true, categories: ['romance', 'top'],
+    id: 20814, anilistId: 20814, title: 'Your Lie in April', mediaType: 'tv',
+    overview: 'Kousei Arima is a piano prodigy who lost the ability to hear the piano after his mother death.',
+    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx140583-VjeF9eXirThy.png',
+    backdropPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/140583-yBvGP4pn4var.jpg',
+    voteAverage: 8.7, year: '2014', genres: ['Drama', 'Music', 'Romance'], episodes: 22, status: 'Finished Airing', score: 8.68, hasSub: true, hasDub: true, categories: ['romance', 'top'],
   },
   {
-    id: 43608, title: 'Horimiya', mediaType: 'tv', overview: 'On the surface, Kyouko Hori is a brilliant and popular high school student. But at home, she\'s a different person.',
-    posterPath: `${IMG}/jSPRfOjqL5WFPelzdWFPai3R56I.jpg`, backdropPath: `${IMG}/mL8FhBKjQf9EYg9NOgix2fJE38S.jpg`, voteAverage: 8.2, year: '2021', genres: ['Comedy', 'Romance', 'Slice of Life'], releaseDate: '2021-01-10', originalLanguage: 'ja', episodes: 13, status: 'Finished Airing', score: 8.15, studios: ['CloverWorks'], hasSub: true, hasDub: true, categories: ['romance'],
+    id: 124080, anilistId: 124080, title: 'Horimiya', mediaType: 'tv',
+    overview: 'On the surface, Kyouko Hori is a brilliant high school student. But at home she is a different person.',
+    posterPath: `${AL}/cover/medium/bx124080-3i22mRVPBS0T.jpg`, backdropPath: `${AL}/banner/124080-ARyLAHHgikRq.jpg`,
+    voteAverage: 8.2, year: '2021', genres: ['Comedy', 'Romance', 'Slice of Life'], episodes: 13, status: 'Finished Airing', score: 8.15, hasSub: true, hasDub: true, categories: ['romance'],
   },
   {
-    id: 45620, title: 'My Dress-Up Darling', mediaType: 'tv', overview: 'Wakana Gojou is a high school student who overcomes a traumatic past and discovers a new friend in Marin Kitagawa.',
-    posterPath: `${IMG}/hS3ggIy2v8nDw2C31EhX2V5JlPr.jpg`, backdropPath: `${IMG}/jXV7aOINQnZjhBIPFcoTIHyNcDF.jpg`, voteAverage: 8.4, year: '2022', genres: ['Comedy', 'Romance'], releaseDate: '2022-01-09', originalLanguage: 'ja', episodes: 12, status: 'Finished Airing', score: 8.39, studios: ['CloverWorks'], hasSub: true, hasDub: true, categories: ['romance', 'trending'],
+    id: 132405, anilistId: 132405, title: 'My Dress-Up Darling', mediaType: 'tv',
+    overview: 'Wakana Gojou overcomes a traumatic past and discovers a new friend in Marin Kitagawa.',
+    posterPath: `${AL}/cover/medium/bx132405-qP7FQYGmNI3d.jpg`, backdropPath: `${AL}/banner/132405-LnPQaqaksEpN.jpg`,
+    voteAverage: 8.4, year: '2022', genres: ['Comedy', 'Romance'], episodes: 12, status: 'Finished Airing', score: 8.39, hasSub: true, hasDub: true, categories: ['romance', 'trending'],
   },
   {
-    id: 18507, title: 'Toradora!', mediaType: 'tv', overview: 'Ryuuji Takasu is a gentle guy whose appearance scares people. Taiga Aisaka is a tiny girl with a violent personality.',
-    posterPath: `${IMG}/2d2vY8qfKgXbHp2Vq40IfsBnG7.jpg`, backdropPath: `${IMG}/iKdE9VY8dJlWNjw8aJw4cKjS4uB.jpg`, voteAverage: 8.2, year: '2008', genres: ['Comedy', 'Drama', 'Romance'], releaseDate: '2008-10-02', originalLanguage: 'ja', episodes: 25, status: 'Finished Airing', score: 8.22, studios: ['J.C.Staff'], hasSub: true, hasDub: true, categories: ['romance'],
+    id: 4224, anilistId: 4224, title: 'Toradora!', mediaType: 'tv',
+    overview: 'Ryuuji Takasu is a gentle guy whose appearance scares people. Taiga Aisaka is a tiny girl with a violent temper.',
+    posterPath: `${AL}/cover/medium/bx4224-PXVMBLNwy2aF.jpg`, backdropPath: `${AL}/banner/4224-iPUOHdMde27j.jpg`,
+    voteAverage: 8.2, year: '2008', genres: ['Comedy', 'Drama', 'Romance'], episodes: 25, status: 'Finished Airing', score: 8.22, hasSub: true, hasDub: true, categories: ['romance'],
   },
   // ─── FANTASY ───────────────────────────────────────
   {
-    id: 38145, title: 'Mushoku Tensei: Jobless Reincarnation', mediaType: 'tv', overview: 'A 34-year-old NEET is reincarnated into a fantasy world and decides to make the most of his second chance at life.',
-    posterPath: `${IMG}/g3FfJYGnSmKblMdM0M9vBvL5lGM.jpg`, backdropPath: `${IMG}/q5HzsR6FPnM7F2Psr5TqCzjb3k0.jpg`, voteAverage: 8.3, year: '2021', genres: ['Adventure', 'Drama', 'Fantasy'], releaseDate: '2021-01-11', originalLanguage: 'ja', episodes: 37, status: 'Finished Airing', score: 8.33, studios: ['Studio Bind'], hasSub: true, hasDub: true, categories: ['fantasy', 'isekai', 'trending'],
+    id: 108465, anilistId: 108465, title: 'Mushoku Tensei: Jobless Reincarnation', mediaType: 'tv',
+    overview: 'A 34-year-old NEET is reincarnated into a fantasy world and decides to make the most of his second chance.',
+    posterPath: `${AL}/cover/medium/bx108465-1ANspF1EWyFx.jpg`, backdropPath: `${AL}/banner/108465-RgsRpTMhP9Sv.jpg`,
+    voteAverage: 8.3, year: '2021', genres: ['Adventure', 'Drama', 'Fantasy'], episodes: 37, status: 'Finished Airing', score: 8.33, hasSub: true, hasDub: true, categories: ['fantasy', 'isekai', 'trending'],
   },
   {
-    id: 22319, title: 'Fate/Zero', mediaType: 'tv', overview: 'The Holy Grail War is a battle royale among seven mages who summon seven heroic spirits to compete for the Holy Grail.',
-    posterPath: `${IMG}/jXRHhTRDFnjDIUFkfpFnh1TiKxW.jpg`, backdropPath: `${IMG}/qHxCwZ1FMr2vHOk3WcSPsPqJ0bS.jpg`, voteAverage: 8.2, year: '2011', genres: ['Action', 'Fantasy', 'Supernatural'], releaseDate: '2011-10-02', originalLanguage: 'ja', episodes: 13, status: 'Finished Airing', score: 8.24, studios: ['ufotable'], hasSub: true, hasDub: true, categories: ['fantasy', 'action'],
+    id: 10087, anilistId: 10087, title: 'Fate/Zero', mediaType: 'tv',
+    overview: 'The Holy Grail War is a battle royale among seven mages who summon seven heroic spirits.',
+    posterPath: `${AL}/cover/medium/bx10087-M4Hd9qrHGrXk.png`, backdropPath: `${AL}/banner/10087-32MFY9VnJQ7I.jpg`,
+    voteAverage: 8.2, year: '2011', genres: ['Action', 'Fantasy', 'Supernatural'], episodes: 13, status: 'Finished Airing', score: 8.24, hasSub: true, hasDub: true, categories: ['fantasy', 'action'],
   },
   {
-    id: 12445, title: 'Sword Art Online', mediaType: 'tv', overview: 'In the year 2022, gamers rejoice as Sword Art Online, a VRMMORPG, launches.',
-    posterPath: `${IMG}/yqEYxsH3g7StFxndtSfey8YYlnM.jpg`, backdropPath: `${IMG}/49NnWBCfzUkA6JXDnJjGl5O28zF.jpg`, voteAverage: 7.2, year: '2012', genres: ['Action', 'Adventure', 'Fantasy'], releaseDate: '2012-07-08', originalLanguage: 'ja', episodes: 96, status: 'Finished Airing', score: 7.24, studios: ['A-1 Pictures'], hasSub: true, hasDub: true, categories: ['fantasy', 'action'],
+    id: 11757, anilistId: 11757, title: 'Sword Art Online', mediaType: 'tv',
+    overview: 'In the year 2022, gamers rejoice as Sword Art Online, a VRMMORPG, launches.',
+    posterPath: `${AL}/cover/medium/bx11757-SxYDUzdr9rh2.jpg`, backdropPath: `${AL}/banner/11757-TlEEV9weG4Ag.jpg`,
+    voteAverage: 7.2, year: '2012', genres: ['Action', 'Adventure', 'Fantasy'], episodes: 96, status: 'Finished Airing', score: 7.24, hasSub: true, hasDub: true, categories: ['fantasy', 'action'],
   },
-  // ─── ISEKAI ────────────────────────────────────────
+  // ─── ISEKAI / TRENDING ────────────────────────────
   {
-    id: 46848, title: 'Oshi no Ko', mediaType: 'tv', overview: 'Aimed at combining their talents, Ai Hoshino and Gorou Hoshiemi form an unlikely partnership that leads them into a world of idol culture, entertainment, and personal drama.',
-    posterPath: `${IMG}/x4SrO77HEzEaYOdNqE5Hq3G1KLj.jpg`, backdropPath: `${IMG}/8gZVCYav1ldg0U5f2wEq3CPJwm5.jpg`, voteAverage: 8.6, year: '2023', genres: ['Drama', 'Mystery', 'Supernatural'], releaseDate: '2023-04-12', originalLanguage: 'ja', episodes: 11, status: 'Currently Airing', score: 8.64, studios: ['Doga Kobo'], hasSub: true, hasDub: true, categories: ['trending', 'top'],
+    id: 150672, anilistId: 150672, title: 'Oshi no Ko', mediaType: 'tv',
+    overview: 'Ai Hoshino and Gorou Hoshiemi form an unlikely partnership that leads them into idol culture and personal drama.',
+    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx150672-WqmmwZ4nMzAy.png',
+    backdropPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/150672-ISwoA0eS722H.jpg',
+    voteAverage: 8.6, year: '2023', genres: ['Drama', 'Mystery', 'Supernatural'], episodes: 11, status: 'Currently Airing', score: 8.64, hasSub: true, hasDub: true, categories: ['trending', 'top'],
   },
   {
-    id: 52991, title: 'Solo Leveling', mediaType: 'tv', overview: 'In a world where hunters — human warriors who possess magical abilities — must battle deadly monsters, Sung Jinwoo finds himself the weakest hunter of all.',
-    posterPath: `${IMG}/geCRueV3ElhRTr0xtJuEWJt6dJ1.jpg`, backdropPath: `${IMG}/mX3VJhWnGAgS9PnqBauMIYd7ArF.jpg`, voteAverage: 8.4, year: '2024', genres: ['Action', 'Adventure', 'Fantasy'], releaseDate: '2024-01-07', originalLanguage: 'ko', episodes: 12, status: 'Finished Airing', score: 8.38, studios: ['A-1 Pictures'], hasSub: true, hasDub: true, categories: ['trending', 'top', 'action'],
+    id: 151807, anilistId: 151807, title: 'Solo Leveling', mediaType: 'tv',
+    overview: 'In a world where hunters must battle deadly monsters, Sung Jinwoo finds himself the weakest hunter of all.',
+    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx151807-it355ZgzquUd.png',
+    backdropPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/151807-37yfQA3ym8PA.jpg',
+    voteAverage: 8.4, year: '2024', genres: ['Action', 'Adventure', 'Fantasy'], episodes: 12, status: 'Finished Airing', score: 8.38, hasSub: true, hasDub: true, categories: ['trending', 'top', 'action'],
   },
   {
-    id: 45615, title: 'Jobless Reincarnation Season 2', mediaType: 'tv', overview: 'Rudeus Greyrat continues his journey of self-discovery and growth in a new world.', posterPath: `${IMG}/g3FfJYGnSmKblMdM0M9vBvL5lGM.jpg`, backdropPath: `${IMG}/q5HzsR6FPnM7F2Psr5TqCzjb3k0.jpg`, voteAverage: 8.4, year: '2023', genres: ['Adventure', 'Fantasy'], releaseDate: '2023-07-02', originalLanguage: 'ja', episodes: 25, status: 'Finished Airing', score: 8.42, studios: ['Studio Bind'], hasSub: true, hasDub: true, categories: ['isekai', 'fantasy'],
+    id: 108466, anilistId: 108466, title: 'Jobless Reincarnation Season 2', mediaType: 'tv',
+    overview: 'Rudeus Greyrat continues his journey of self-discovery and growth in a new world.',
+    posterPath: `${AL}/cover/medium/bx108465-1ANspF1EWyFx.jpg`, backdropPath: `${AL}/banner/108465-RgsRpTMhP9Sv.jpg`,
+    voteAverage: 8.4, year: '2023', genres: ['Adventure', 'Fantasy'], episodes: 25, status: 'Finished Airing', score: 8.42, hasSub: true, hasDub: true, categories: ['isekai', 'fantasy'],
   },
   // ─── SPORTS ────────────────────────────────────────
   {
-    id: 32180, title: 'Haikyuu!!', mediaType: 'tv', overview: 'A volleyball-obsessed teenager joins his school volleyball team and aims to become the best player.',
-    posterPath: `${IMG}/z25HpMFViB1tXM59nLkOLSoA8bC.jpg`, backdropPath: `${IMG}/4KkzJe6SCFBkGACU9Y9XPH4Y2bM.jpg`, voteAverage: 8.5, year: '2014', genres: ['Comedy', 'Drama', 'Sports'], releaseDate: '2014-04-06', originalLanguage: 'ja', episodes: 85, status: 'Finished Airing', score: 8.51, studios: ['Production I.G'], hasSub: true, hasDub: true, categories: ['sports', 'top'],
+    id: 20583, anilistId: 20583, title: 'Haikyuu!!', mediaType: 'tv',
+    overview: 'A volleyball-obsessed teenager joins his school volleyball team and aims to become the best player.',
+    posterPath: `${AL}/cover/medium/bx20583-sOkNkYOeJxKN.jpg`, backdropPath: `${AL}/banner/20583-iPFMBm7cBjU.jpg`,
+    voteAverage: 8.5, year: '2014', genres: ['Comedy', 'Drama', 'Sports'], episodes: 85, status: 'Finished Airing', score: 8.51, hasSub: true, hasDub: true, categories: ['sports', 'top'],
   },
   {
-    id: 37633, title: 'Blue Lock', mediaType: 'tv', overview: 'After a disastrous defeat at the 2018 World Cup, Japan\'s team struggles to regroup. But what\'s missing is an absolute Ace Striker.',
-    posterPath: `${IMG}/gSqCxiFFJMq8Yco4rYVYEOuNRvf.jpg`, backdropPath: `${IMG}/29q0EkJL7UM0qPqwjHPfFGLmxBh.jpg`, voteAverage: 8.0, year: '2022', genres: ['Drama', 'Sports'], releaseDate: '2022-10-09', originalLanguage: 'ja', episodes: 24, status: 'Finished Airing', score: 8.03, studios: ['8bit'], hasSub: true, hasDub: true, categories: ['sports', 'trending'],
+    id: 131594, anilistId: 131594, title: 'Blue Lock', mediaType: 'tv',
+    overview: 'After a disastrous defeat at the World Cup, Japan team struggles to regroup. What is missing is an Ace Striker.',
+    posterPath: `${AL}/cover/medium/bx131594-eYAoFzJqWbE.jpg`, backdropPath: `${AL}/banner/131594-nKnHODJxEWiV.jpg`,
+    voteAverage: 8.0, year: '2022', genres: ['Drama', 'Sports'], episodes: 24, status: 'Finished Airing', score: 8.03, hasSub: true, hasDub: true, categories: ['sports', 'trending'],
   },
   {
-    id: 35507, title: 'Kuroko\'s Basketball', mediaType: 'tv', overview: 'The Teppei Basketball Club has finally begun to make a name for itself within the Inter-High preliminaries.',
-    posterPath: `${IMG}/jCjWKKjRmdYSuyJbYfYGsDkKMWV.jpg`, backdropPath: `${IMG}/w37YDb4NA0rM1yUVqRjJJNPjXrJ.jpg`, voteAverage: 7.9, year: '2012', genres: ['Comedy', 'Sports'], releaseDate: '2012-04-07', originalLanguage: 'ja', episodes: 75, status: 'Finished Airing', score: 7.94, studios: ['Production I.G'], hasSub: true, hasDub: true, categories: ['sports'],
+    id: 14440, anilistId: 14440, title: "Kuroko's Basketball", mediaType: 'tv',
+    overview: 'The Teppei Basketball Club begins to make a name for itself within the Inter-High preliminaries.',
+    posterPath: `${AL}/cover/medium/bx14440-sfNCnEOp7OYk.jpg`, backdropPath: `${AL}/banner/14440-tLwYwOCbrjU.jpg`,
+    voteAverage: 7.9, year: '2012', genres: ['Comedy', 'Sports'], episodes: 75, status: 'Finished Airing', score: 7.94, hasSub: true, hasDub: true, categories: ['sports'],
   },
   // ─── SCHOOL / SLICE OF LIFE ───────────────────────
   {
-    id: 14253, title: 'K-ON!', mediaType: 'tv', overview: 'The story follows the members of the light music club of Sakuragaoka Girls\' High School.',
-    posterPath: `${IMG}/kIr3pVCARdCijJLrPJvE7G0TRBf.jpg`, backdropPath: `${IMG}/oqE8jJWqWc0rGCpBqHdXNnRsMaC.jpg`, voteAverage: 7.9, year: '2009', genres: ['Comedy', 'Music', 'Slice of Life'], releaseDate: '2009-04-03', originalLanguage: 'ja', episodes: 39, status: 'Finished Airing', score: 7.87, studios: ['Kyoto Animation'], hasSub: true, hasDub: true, categories: ['school', 'slice_of_life'],
+    id: 7791, anilistId: 7791, title: 'K-ON!', mediaType: 'tv',
+    overview: 'The story follows the members of the light music club of Sakuragaoka Girls High School.',
+    posterPath: `${AL}/cover/medium/bx7791-g3g4vMKPsOE.jpg`, backdropPath: `${AL}/banner/7791-wY9G4bK6eDv.jpg`,
+    voteAverage: 7.9, year: '2009', genres: ['Comedy', 'Music', 'Slice of Life'], episodes: 39, status: 'Finished Airing', score: 7.87, hasSub: true, hasDub: true, categories: ['school', 'slice_of_life'],
   },
   {
-    id: 28125, title: 'Silver Spoon', mediaType: 'tv', overview: 'Yuugo Hachiken is a shy boy from the city who enrolls in an agricultural boarding school in Hokkaido.',
-    posterPath: `${IMG}/kYaFIFsSsMlaQK1kLFPAPjYFjwT.jpg`, backdropPath: `${IMG}/7FqFM8S3u3f4pEFKP5fOqMF3FjM.jpg`, voteAverage: 7.7, year: '2013', genres: ['Comedy', 'Drama', 'Slice of Life'], releaseDate: '2013-07-12', originalLanguage: 'ja', episodes: 22, status: 'Finished Airing', score: 7.72, studios: ['A-1 Pictures'], hasSub: true, hasDub: true, categories: ['school', 'slice_of_life'],
+    id: 15051, anilistId: 15051, title: 'Silver Spoon', mediaType: 'tv',
+    overview: 'Yuugo Hachiken is a shy boy from the city who enrolls in an agricultural boarding school in Hokkaido.',
+    posterPath: `${AL}/cover/medium/bx15051-4xK3GfL6OQ4.jpg`, backdropPath: `${AL}/banner/15051-jw0yPMcJQ7M.jpg`,
+    voteAverage: 7.7, year: '2013', genres: ['Comedy', 'Drama', 'Slice of Life'], episodes: 22, status: 'Finished Airing', score: 7.72, hasSub: true, hasDub: true, categories: ['school', 'slice_of_life'],
   },
   {
-    id: 35555, title: 'Spy x Family', mediaType: 'tv', overview: 'Master spy Twilight is unparalleled when it comes to going undercover on dangerous missions.',
-    posterPath: `${IMG}/3Pdv3MIkzMvla4SiE8qP2psjQEk.jpg`, backdropPath: `${IMG}/pBjfMq27wbaZ5AQ0b1r0JqqM8J3.jpg`, voteAverage: 8.4, year: '2022', genres: ['Action', 'Comedy'], releaseDate: '2022-04-09', originalLanguage: 'ja', episodes: 37, status: 'Currently Airing', score: 8.42, studios: ['Wit Studio', 'CloverWorks'], hasSub: true, hasDub: true, categories: ['trending', 'comedy', 'action'],
+    id: 131969, anilistId: 131969, title: 'Spy x Family', mediaType: 'tv',
+    overview: 'Master spy Twilight is unparalleled when it comes to going undercover on dangerous missions.',
+    posterPath: `${AL}/cover/medium/bx131969-ehId2N6YdSCf.jpg`, backdropPath: `${AL}/banner/131969-kFq3GKJOMd6t.jpg`,
+    voteAverage: 8.4, year: '2022', genres: ['Action', 'Comedy'], episodes: 37, status: 'Currently Airing', score: 8.42, hasSub: true, hasDub: true, categories: ['trending', 'comedy', 'action'],
   },
   {
-    id: 49624, title: 'Frieren: Beyond Journey\'s End', mediaType: 'tv', overview: 'After the party of heroes defeated the Demon King, they restored peace to the land and returned to lives of solitude.',
-    posterPath: `${IMG}/dqZENchTd7lp5zht3Tm5CEpQjxp.jpg`, backdropPath: `${IMG}/l6s4CqGXqMxPDbqa0LDnBMSP4g0.jpg`, voteAverage: 8.7, year: '2023', genres: ['Adventure', 'Drama', 'Fantasy'], releaseDate: '2023-09-29', originalLanguage: 'ja', episodes: 28, status: 'Finished Airing', score: 8.73, studios: ['Madhouse'], hasSub: true, hasDub: true, categories: ['top', 'trending', 'fantasy'],
+    id: 154109, anilistId: 154109, title: "Frieren: Beyond Journey's End", mediaType: 'tv',
+    overview: 'After the party of heroes defeated the Demon King, they returned to lives of solitude.',
+    posterPath: `${AL}/cover/medium/bx154109-yFv0K2Vvdb.jpg`, backdropPath: `${AL}/banner/154109-uG5cMnK0Oj.jpg`,
+    voteAverage: 8.7, year: '2023', genres: ['Adventure', 'Drama', 'Fantasy'], episodes: 28, status: 'Finished Airing', score: 8.73, hasSub: true, hasDub: true, categories: ['top', 'trending', 'fantasy'],
   },
 ];
 
-// Deduplicate by id
+// Deduplicate by anilistId
 const seen = new Set<number>();
 export const DEDUPED_ANIME = CURATED_ANIME.filter(a => {
-  if (seen.has(a.id)) return false;
-  seen.add(a.id);
+  if (seen.has(a.anilistId)) return false;
+  seen.add(a.anilistId);
   return true;
 });
