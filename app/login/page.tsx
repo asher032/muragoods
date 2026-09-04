@@ -4,55 +4,57 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { adminCredentials } from '@/app/lib/muragoods-data';
+import { useAuth } from '@/app/contexts/AuthContext';
 
 export default function LoginPage() {
+  const { user, state, login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  // If already authenticated, redirect away from login
   useEffect(() => {
-    const user = localStorage.getItem('user');
-    if (user) router.push('/');
-  }, [router]);
+    if (state === 'authenticated' && user) {
+      if (user.role === 'admin') {
+        router.push('/admin');
+      } else {
+        router.push('/');
+      }
+    }
+  }, [state, user, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
 
     if (!email || !password) {
       setError('Please fill in all fields');
+      setLoading(false);
       return;
     }
 
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      const result = await res.json();
-
-      if (result.success) {
-        localStorage.setItem('user', JSON.stringify(result.data));
-        if (email === adminCredentials.email) {
-          router.push('/admin');
-        } else {
-          router.push('/');
-        }
+    const result = await login(email, password);
+    if (result.success) {
+      // Redirect based on role — check localStorage for the role
+      const stored = localStorage.getItem('user');
+      const userData = stored ? JSON.parse(stored) : null;
+      if (userData?.role === 'admin') {
+        router.push('/admin');
       } else {
-        setError(result.error || 'Login failed');
+        router.push('/');
       }
-    } catch {
-      setError('An error occurred. Please try again.');
+    } else {
+      setError(result.error || 'Login failed');
     }
+    setLoading(false);
   };
 
   return (
     <main className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
-        {/* Card */}
         <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-8">
           {/* Logo + Brand */}
           <div className="flex flex-col items-center gap-4 mb-8">
@@ -72,7 +74,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Title */}
           <h1
             className="text-xl mb-2 text-center text-[var(--cream)]"
             style={{ fontFamily: 'var(--font-arcade)' }}
@@ -83,7 +84,6 @@ export default function LoginPage() {
             Access your orders and favorites
           </p>
 
-          {/* Form */}
           <form onSubmit={handleLogin} className="space-y-5">
             <label className="block">
               <span
@@ -123,8 +123,8 @@ export default function LoginPage() {
               </div>
             )}
 
-            <button type="submit" className="deco-btn deco-btn-crimson w-full deco-btn-lg mt-6">
-              SIGN IN
+            <button type="submit" disabled={loading} className="deco-btn deco-btn-crimson w-full deco-btn-lg mt-6" style={{ opacity: loading ? 0.7 : 1 }}>
+              {loading ? 'SIGNING IN...' : 'SIGN IN'}
             </button>
 
             <div className="text-center mt-4">
@@ -134,12 +134,10 @@ export default function LoginPage() {
             </div>
           </form>
 
-          {/* Divider */}
           <div className="my-8">
             <hr className="deco-divider" />
           </div>
 
-          {/* Sign Up Link */}
           <p className="text-center text-sm text-[var(--cream-muted)]">
             No account yet?{' '}
             <Link href="/signup" className="text-[var(--gold)] hover:text-[var(--gold-bright)] underline transition-colors">
@@ -147,7 +145,6 @@ export default function LoginPage() {
             </Link>
           </p>
 
-          {/* Back Button */}
           <Link href="/" className="deco-btn w-full mt-6 text-center">
             ← Back to Shop
           </Link>

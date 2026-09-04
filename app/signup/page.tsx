@@ -2,10 +2,12 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/app/contexts/AuthContext';
 
 export default function SignupPage() {
+  const { user, state, signup } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,6 +19,17 @@ export default function SignupPage() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const router = useRouter();
+
+  // If already authenticated, redirect away
+  useEffect(() => {
+    if (state === 'authenticated' && user) {
+      if (user.email === 'admin@muragoods.com') {
+        router.push('/admin');
+      } else {
+        router.push('/');
+      }
+    }
+  }, [state, user, router]);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,16 +54,9 @@ export default function SignupPage() {
 
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password, referredBy: referralCode || undefined }),
-      });
-      const result = await res.json();
-
+      const result = await signup(name, email, password);
       if (result.success) {
-        localStorage.setItem('user', JSON.stringify(result.data));
-        setEmailSent(result.data.emailSent);
+        setEmailSent(true);
         setShowSuccess(true);
       } else {
         setError(result.error || 'Signup failed');
@@ -65,7 +71,6 @@ export default function SignupPage() {
   return (
     <main className="min-h-screen flex items-center justify-center px-4 py-8 page-enter">
       <div className="w-full max-w-md">
-        {/* Card */}
         <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-8">
           {/* Logo + Brand */}
           <div className="flex flex-col items-center gap-4 mb-8">
@@ -85,7 +90,6 @@ export default function SignupPage() {
             </div>
           </div>
 
-          {/* Title */}
           <h1
             className="text-xl mb-2 text-center text-[var(--cream)]"
             style={{ fontFamily: 'var(--font-arcade)' }}
@@ -96,7 +100,6 @@ export default function SignupPage() {
             Create your account to start ordering
           </p>
 
-          {/* Form */}
           <form onSubmit={handleSignup} className="space-y-5">
             <label className="block">
               <span
@@ -214,12 +217,10 @@ export default function SignupPage() {
             </button>
           </form>
 
-          {/* Divider */}
           <div className="my-8">
             <hr className="deco-divider" />
           </div>
 
-          {/* Sign In Link */}
           <p className="text-center text-sm text-[var(--cream-muted)]">
             Have an account?{' '}
             <Link href="/login" className="text-[var(--gold)] hover:text-[var(--gold-bright)] underline transition-colors">
@@ -227,7 +228,6 @@ export default function SignupPage() {
             </Link>
           </p>
 
-          {/* Back Button */}
           <Link href="/" className="deco-btn w-full mt-6 text-center">
             ← Back to Shop
           </Link>

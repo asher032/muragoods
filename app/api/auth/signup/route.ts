@@ -65,6 +65,7 @@ export async function POST(req: Request) {
         name: user.name,
         email: user.email,
         userId: user.userId,
+        role: user.role || 'user',
         createdAt: user.createdAt,
         emailVerified: false,
         referralCode: user.referralCode,

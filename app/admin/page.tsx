@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { adminCredentials, adminEmails, products, type InventoryStatus, type Order, type OrderStatus, type Product } from '@/app/lib/muragoods-data';
 import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@/app/contexts/AuthContext';
 import { UsersCoinsPanel } from '@/app/components/UsersCoinsPanel';
 
 const statusOptions = [
@@ -17,6 +18,7 @@ const statusOptions = [
 const inventoryCycle: InventoryStatus[] = ['In Stock', 'Out of Stock', 'Pre-Order Only'];
 
 export default function AdminPage() {
+  const { user, isAdmin } = useAuth();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,6 +28,14 @@ export default function AdminPage() {
   const [alert, setAlert] = useState<{ show: boolean; message: string; orderId?: string }>({ show: false, message: '' });
   const [previewReceipt, setPreviewReceipt] = useState('');
   const [loadingCatalog, setLoadingCatalog] = useState(false);
+
+  // Auto-authenticate if user is already logged in as admin via AuthContext
+  useEffect(() => {
+    if (isAdmin && user) {
+      setIsAuthenticated(true);
+      setEmail(user.email);
+    }
+  }, [isAdmin, user]);
 
   const syncCatalog = useCallback(async () => {
     setLoadingCatalog(true);
@@ -92,7 +102,9 @@ export default function AdminPage() {
     e.preventDefault();
     if (!adminEmails.includes(email)) { setError('UNAUTHORIZED! Only authorized admin accounts have access.'); return; }
     if ((email === adminCredentials.email && password === adminCredentials.password) || (email === 'mhaxthedog@gmail.com' && password === 'Jesusmaryosepcasiram')) {
-      localStorage.setItem('user', JSON.stringify({ email, name: email.split('@')[0] }));
+      // Store admin session consistently with AuthContext
+      const adminUser = { email, name: email.split('@')[0], userId: 'MG-ADMIN', role: 'admin' };
+      localStorage.setItem('user', JSON.stringify(adminUser));
       setIsAuthenticated(true);
       setError('');
       fetchOrders();

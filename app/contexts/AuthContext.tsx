@@ -6,6 +6,7 @@ type User = {
   name: string;
   email: string;
   userId: string;
+  role: string;
   createdAt?: string;
 };
 
@@ -17,6 +18,7 @@ type AuthContextType = {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signup: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
+  isAdmin: boolean;
 };
 
 const AuthContext = createContext<AuthContextType>({
@@ -25,6 +27,7 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => ({ success: false }),
   signup: async () => ({ success: false }),
   logout: () => {},
+  isAdmin: false,
 });
 
 export function useAuth() {
@@ -39,46 +42,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
 
-    async function checkSession() {
+    function checkSession() {
       try {
         const stored = localStorage.getItem('user');
         if (!stored) {
-          if (!cancelled) { setState('unauthenticated'); }
+          if (!cancelled) setState('unauthenticated');
           return;
         }
 
         const parsed = JSON.parse(stored) as User;
 
-        // Verify session is still valid by calling the server
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: parsed.email, password: '' }),
-        });
-
-        // Even if password check fails (we don't send it), if the user object exists locally
-        // and has required fields, we treat the session as valid for UX purposes
-        if (!cancelled) {
-          if (parsed.email && parsed.name && parsed.userId) {
+        // Validate stored user has required fields
+        if (parsed.email && parsed.name) {
+          if (!cancelled) {
             setUser(parsed);
             setState('authenticated');
-          } else {
-            localStorage.removeItem('user');
-            setState('unauthenticated');
           }
+        } else {
+          localStorage.removeItem('user');
+          if (!cancelled) setState('unauthenticated');
         }
       } catch {
-        // Network error — try to use local session
-        try {
-          const stored = localStorage.getItem('user');
-          if (stored) {
-            const parsed = JSON.parse(stored) as User;
-            if (parsed.email && parsed.name && parsed.userId) {
-              if (!cancelled) { setUser(parsed); setState('authenticated'); }
-              return;
-            }
-          }
-        } catch { /* empty */ }
+        localStorage.removeItem('user');
         if (!cancelled) setState('unauthenticated');
       }
     }
@@ -121,6 +106,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (result.success && result.data) {
         const userData = result.data as User;
+        // Ensure role is set (signup defaults to 'user')
+        if (!userData.role) userData.role = 'user';
         localStorage.setItem('user', JSON.stringify(userData));
         setUser(userData);
         setState('authenticated');
@@ -139,10 +126,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState('unauthenticated');
   }, []);
 
+  const isAdmin = user?.role === 'admin';
+
   return (
-    <AuthContext.Provider value={{ user, state, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, state, login, signup, logout, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );
 }
-
