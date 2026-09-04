@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import MuraStreamLoader from '../../components/MuraStreamLoader';
 import MuraStreamCard from '../../components/MuraStreamCard';
@@ -31,7 +31,64 @@ export default function TvDetailPage() {
   const [showTrailer, setShowTrailer] = useState(false);
   const { isLiked, toggleLike, isInMyList, toggleMyList } = useMuraStreamStore();
 
+  const searchParams = useSearchParams();
+  const anilistId = searchParams.get('anilist') ? Number(searchParams.get('anilist')) : null;
+
   const fetchShow = useCallback(async () => {
+    // If we have an anilist query param, try AniList first for anime
+    if (anilistId) {
+      try {
+        const res = await fetch(`/api/murastream/anilist?action=details&id=${anilistId}`);
+        if (res.ok) {
+          const data = await res.json();
+          // Convert AniList data to the DetailData shape the page expects
+          const seasons = [];
+          const epCount = data.episodes || 0;
+          if (epCount > 0) {
+            seasons.push({
+              id: anilistId,
+              seasonNumber: 1,
+              name: 'Season 1',
+              overview: data.overview || '',
+              posterPath: data.posterPath || null,
+              episodeCount: epCount,
+              airDate: data.releaseDate || '',
+            });
+          }
+          setShow({
+            id: anilistId,
+            name: data.title,
+            title: data.title,
+            overview: data.overview || '',
+            posterPath: data.posterPath || null,
+            backdropPath: data.backdropPath || null,
+            voteAverage: data.voteAverage || 0,
+            voteCount: 0,
+            firstAirDate: data.releaseDate || '',
+            lastAirDate: '',
+            status: data.status || 'Ended',
+            genres: (data.genres || []).map((g: string, i: number) => ({ id: i, name: g })),
+            seasons,
+            credits: { cast: [], crew: [] },
+            videos: [],
+            similar: { results: [] },
+            number_of_seasons: 1,
+            number_of_episodes: epCount,
+            mediaType: 'tv',
+            year: data.year || '',
+            // Anime-specific fields
+            _isAnime: true,
+            _anilistId: anilistId,
+            _malId: data.malId || null,
+            _episodes: epCount,
+          } as DetailData & { _isAnime: boolean; _anilistId: number; _malId: number | null; _episodes: number });
+          setLoading(false);
+          return;
+        }
+      } catch (err) { console.error('AniList details failed, falling back to TMDB:', err); }
+    }
+
+    // Fallback to TMDB
     try {
       const res = await fetch(`/api/murastream/tmdb?action=tv_details&id=${tvId}`);
       if (!res.ok) throw new Error('Failed to fetch show');
@@ -39,7 +96,7 @@ export default function TvDetailPage() {
       setShow(data);
     } catch (err) { console.error('TV fetch error:', err); }
     finally { setLoading(false); }
-  }, [tvId]);
+  }, [tvId, anilistId]);
 
   useEffect(() => { fetchShow(); }, [fetchShow]);
 
@@ -131,7 +188,7 @@ export default function TvDetailPage() {
             </div>
 
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '24px' }}>
-              <Link href={`/murastream/watch?type=tv&id=${tvId}&season=1&episode=1`} style={{
+              <Link href={`/murastream/watch?type=tv&id=${tvId}&season=1&episode=1${anilistId ? `&anilist=${anilistId}` : ''}`} style={{
                 background: '#B85CFF', color: '#FFF', padding: '14px 28px', borderRadius: '12px',
                 fontFamily: '-apple-system, sans-serif', fontSize: '14px', fontWeight: 700,
                 textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px',
@@ -200,7 +257,7 @@ export default function TvDetailPage() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {seasonData.map((ep: EpisodeData) => (
-                <Link key={ep.id} href={`/murastream/watch?type=tv&id=${tvId}&season=${selectedSeason}&episode=${ep.episodeNumber}`} style={{
+                <Link key={ep.id} href={`/murastream/watch?type=tv&id=${tvId}&season=${selectedSeason}&episode=${ep.episodeNumber}${anilistId ? `&anilist=${anilistId}` : ''}`} style={{
                   display: 'flex', gap: '16px', padding: '12px', borderRadius: '12px',
                   textDecoration: 'none', color: 'inherit',
                   background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.04)',

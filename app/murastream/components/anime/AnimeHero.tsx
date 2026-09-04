@@ -66,7 +66,7 @@ export default function AnimeHero({ item }: { item: MediaItem | null }) {
           margin: '0 0 20px', maxWidth: '500px', lineHeight: '1.6', maxHeight: '56px', overflow: 'hidden',
         }}>{item.overview}</p>
 
-        <a href={`/murastream/tv/${item.id}`} style={{
+        <a href={`/murastream/tv/${item.id}${item.anilistId ? `?anilist=${item.anilistId}` : ''}`} style={{
           background: '#B85CFF', color: '#FFF', padding: '10px 24px', borderRadius: '8px',
           fontFamily: 'var(--font-arcade)', fontSize: '11px', display: 'inline-flex',
           alignItems: 'center', gap: '6px', textDecoration: 'none',

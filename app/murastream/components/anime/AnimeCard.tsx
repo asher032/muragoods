@@ -8,7 +8,7 @@ export default function AnimeCard({ item }: { item: MediaItem }) {
   const genres = item.genres?.slice(0, 2);
 
   return (
-    <Link href={`/murastream/tv/${item.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+    <Link href={`/murastream/tv/${item.id}${item.anilistId ? `?anilist=${item.anilistId}` : ''}`} style={{ textDecoration: 'none', color: 'inherit' }}>
       <div className="anime-card">
         <div className="anime-card-poster">
           {item.posterPath ? (

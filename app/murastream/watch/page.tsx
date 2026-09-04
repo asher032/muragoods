@@ -50,6 +50,8 @@ function WatchContent() {
   const id = Number(searchParams.get('id'));
   const season = Number(searchParams.get('season')) || 1;
   const episode = Number(searchParams.get('episode')) || 1;
+  const anilistIdParam = searchParams.get('anilist');
+  const isAnime = !!anilistIdParam;
 
   const [title, setTitle] = useState('');
   const [activeSource, setActiveSource] = useState<Source>(SOURCES[0]);
@@ -59,7 +61,7 @@ function WatchContent() {
   const [autoPlayCountdown, setAutoPlayCountdown] = useState(10);
   const [posterPath, setPosterPath] = useState('');
 
-  // Fetch title from TMDB
+  // Fetch title — TMDB for regular content, AniList for anime
   useEffect(() => {
     if (!id) {
       setError('No content selected.');
@@ -67,25 +69,47 @@ function WatchContent() {
       return;
     }
     const controller = new AbortController();
-    const action = type === 'tv' ? 'tv_details' : 'movie_details';
-    fetch(`/api/murastream/tmdb?action=${action}&id=${id}`, { signal: controller.signal })
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then(data => {
-        setTitle(type === 'tv' ? data.name : data.title);
-        setPosterPath(data.posterPath || '');
-        setLoading(false);
-      })
-      .catch(err => {
-        if (err.name === 'AbortError') return;
-        console.error('[Watch] Failed to load details:', err);
-        setTitle(type === 'tv' ? 'TV Show' : 'Movie');
-        setLoading(false);
-      });
+
+    if (isAnime && anilistIdParam) {
+      // Fetch anime details from AniList
+      fetch(`/api/murastream/anilist?action=details&id=${anilistIdParam}`, { signal: controller.signal })
+        .then(r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        })
+        .then(data => {
+          setTitle(data.title || 'Anime');
+          setPosterPath(data.posterPath || '');
+          setLoading(false);
+        })
+        .catch(err => {
+          if (err.name === 'AbortError') return;
+          console.error('[Watch] AniList fetch failed:', err);
+          setTitle('Anime');
+          setLoading(false);
+        });
+    } else {
+      // Fetch from TMDB
+      const action = type === 'tv' ? 'tv_details' : 'movie_details';
+      fetch(`/api/murastream/tmdb?action=${action}&id=${id}`, { signal: controller.signal })
+        .then(r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        })
+        .then(data => {
+          setTitle(type === 'tv' ? data.name : data.title);
+          setPosterPath(data.posterPath || '');
+          setLoading(false);
+        })
+        .catch(err => {
+          if (err.name === 'AbortError') return;
+          console.error('[Watch] TMDB fetch failed:', err);
+          setTitle(type === 'tv' ? 'TV Show' : 'Movie');
+          setLoading(false);
+        });
+    }
     return () => controller.abort();
-  }, [id, type]);
+  }, [id, type, isAnime, anilistIdParam]);
 
   const { markEpisodeWatched } = useMuraStreamStore();
 
@@ -232,7 +256,7 @@ function WatchContent() {
               Starting in {autoPlayCountdown}s...
             </p>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode + 1}`)} style={{
+              <button onClick={() => router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode + 1}${isAnime ? `&anilist=${anilistIdParam}` : ''}`)} style={{
                 flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #B85CFF',
                 background: 'rgba(184,92,255,0.15)', color: '#B85CFF',
                 fontFamily: 'var(--font-arcade)', fontSize: '7px', cursor: 'pointer',
@@ -250,7 +274,7 @@ function WatchContent() {
       {/* Bottom bar */}
       <div style={{ background: 'rgba(15,15,26,0.95)', borderTop: '1px solid rgba(255,255,255,0.05)', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Link href={type === 'tv' ? `/murastream/tv/${id}` : `/murastream/movie/${id}`} style={{
+          <Link href={type === 'tv' ? `/murastream/tv/${id}${isAnime ? `?anilist=${anilistIdParam}` : ''}` : `/murastream/movie/${id}`} style={{
             padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)',
             background: 'transparent', color: '#888',
             fontFamily: 'var(--font-arcade)', fontSize: '7px', textDecoration: 'none',
@@ -264,7 +288,7 @@ function WatchContent() {
 
         {type === 'tv' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button onClick={() => { if (episode > 1) router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode - 1}`); }}
+            <button onClick={() => { if (episode > 1) router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode - 1}${isAnime ? `&anilist=${anilistIdParam}` : ''}`); }}
               disabled={episode <= 1} style={{
                 padding: '4px 12px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)',
                 background: episode <= 1 ? 'rgba(255,255,255,0.05)' : 'rgba(184,92,255,0.15)',
