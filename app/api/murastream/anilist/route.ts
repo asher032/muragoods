@@ -40,14 +40,24 @@ async function searchTmdbForAnime(query: string): Promise<Map<string, number>> {
 }
 
 // Find best TMDB match for an anime title
+function normalizeTitle(t: string): string {
+  return t.toLowerCase().trim().replace(/[:\-\u2010-\u2015()\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 function findTmdbId(title: string, romaji: string, english: string | null, tmdbMap: Map<string, number>): number | null {
   // Try English title first, then romaji
-  const candidates = [english, title, romaji].filter((t): t is string => !!t).map(t => t.toLowerCase().trim());
+  const candidates = [english, title, romaji].filter((t): t is string => !!t).map(normalizeTitle);
+  const tmdbEntries = Array.from(tmdbMap.entries()).map(([key, id]) => [normalizeTitle(key), id] as const);
+
   for (const candidate of candidates) {
-    if (tmdbMap.has(candidate)) return tmdbMap.get(candidate)!;
-    // Fuzzy: check if any TMDB key starts with or contains the candidate
-    for (const [key, id] of tmdbMap) {
-      if (key.includes(candidate) || candidate.includes(key)) return id;
+    // Exact match
+    for (const [normKey, id] of tmdbEntries) {
+      if (normKey === candidate) return id;
+    }
+    // Partial match: candidate is prefix of TMDB title or vice versa
+    for (const [normKey, id] of tmdbEntries) {
+      if (normKey.startsWith(candidate) || candidate.startsWith(normKey)) return id;
+      if (normKey.includes(candidate) || candidate.includes(normKey)) return id;
     }
   }
   return null;
