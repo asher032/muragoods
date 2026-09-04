@@ -8,44 +8,44 @@ export const CURATED_ANIME: (Record<string, any> & { id: number; title: string; 
   // ─── ACTION ────────────────────────────────────────
   {
     id: 16498, title: 'Attack on Titan', mediaType: 'tv', overview: 'Centuries ago, mankind was slaughtered to near extinction by monstrous humanoid creatures called Titans, forcing humans to hide in fear behind enormous concentric walls.',
-    posterPath: `${IMG}/hTP1DtLGFamjfu8WqjnuQdP1n4i.jpg`, backdropPath: `${IMG}/sIRK4NYsVnIThA0rTIxYmdMaLiA.jpg`, voteAverage: 8.5, year: '2013', genres: ['Action', 'Drama', 'Fantasy'], releaseDate: '2013-04-07', originalLanguage: 'ja', episodes: 87, status: 'Finished Airing', score: 8.54, studios: ['Wit Studio', 'MAPPA'], hasSub: true, hasDub: true, categories: ['action', 'trending', 'top'],
+    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx16498-buvcRTBx4NSm.jpg', backdropPath: `${IMG}/sIRK4NYsVnIThA0rTIxYmdMaLiA.jpg`, voteAverage: 8.5, year: '2013', genres: ['Action', 'Drama', 'Fantasy'], releaseDate: '2013-04-07', originalLanguage: 'ja', episodes: 87, status: 'Finished Airing', score: 8.54, studios: ['Wit Studio', 'MAPPA'], hasSub: true, hasDub: true, categories: ['action', 'trending', 'top'],
   },
   {
     id: 5114, title: 'Fullmetal Alchemist: Brotherhood', mediaType: 'tv', overview: 'After a horrific alchemy experiment goes wrong in the Elric household, brothers Edward and Alphonse are left in a catastrophic new reality.',
-    posterPath: `${IMG}/mFdFnkzGNQVBUDjKrN1XvqQQtjB.jpg`, backdropPath: `${IMG}/2W4ZM7Wim3DLVN1g4RZXn6bHQ8S.jpg`, voteAverage: 8.7, year: '2009', genres: ['Action', 'Adventure', 'Drama'], releaseDate: '2009-04-05', originalLanguage: 'ja', episodes: 64, status: 'Finished Airing', score: 8.71, studios: ['Bones'], hasSub: true, hasDub: true, categories: ['action', 'top'],
+    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx5114-nSWCgQlmOMtj.jpg', backdropPath: `${IMG}/2W4ZM7Wim3DLVN1g4RZXn6bHQ8S.jpg`, voteAverage: 8.7, year: '2009', genres: ['Action', 'Adventure', 'Drama'], releaseDate: '2009-04-05', originalLanguage: 'ja', episodes: 64, status: 'Finished Airing', score: 8.71, studios: ['Bones'], hasSub: true, hasDub: true, categories: ['action', 'top'],
   },
   {
     id: 31964, title: 'Jujutsu Kaisen', mediaType: 'tv', overview: 'A boy swallows a cursed talisman - the finger of a demon - and becomes possessed, enrolling in a school of sorcerers to find the demon\'s other parts.',
-    posterPath: `${IMG}/fHnXbutterrCd5no3EYKfvpjZYU.jpg`, backdropPath: `${IMG}/dQFhpMRbWyDfBklmxAWGhJ9yDxO.jpg`, voteAverage: 8.6, year: '2020', genres: ['Action', 'Fantasy', 'Supernatural'], releaseDate: '2020-10-03', originalLanguage: 'ja', episodes: 47, status: 'Currently Airing', score: 8.62, studios: ['MAPPA'], hasSub: true, hasDub: true, categories: ['action', 'trending'],
+    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx113415-LHBAeoZDIsnF.jpg', backdropPath: `${IMG}/dQFhpMRbWyDfBklmxAWGhJ9yDxO.jpg`, voteAverage: 8.6, year: '2020', genres: ['Action', 'Fantasy', 'Supernatural'], releaseDate: '2020-10-03', originalLanguage: 'ja', episodes: 47, status: 'Currently Airing', score: 8.62, studios: ['MAPPA'], hasSub: true, hasDub: true, categories: ['action', 'trending'],
   },
   {
     id: 41467, title: 'Demon Slayer: Kimetsu no Yaiba', mediaType: 'tv', overview: 'Ever since the death of his father, the burden of supporting the family has fallen upon Tanjirou Kamado\'s shoulders.',
-    posterPath: `${IMG}/wrCVHdkBlBWdJUZPvnxe0XhmnhZ.jpg`, backdropPath: `${IMG}/5DUMPBSnHOZsbhLDnWKIHyGZPvO.jpg`, voteAverage: 8.7, year: '2019', genres: ['Action', 'Fantasy', 'Supernatural'], releaseDate: '2019-04-06', originalLanguage: 'ja', episodes: 55, status: 'Currently Airing', score: 8.71, studios: ['ufotable'], hasSub: true, hasDub: true, categories: ['action', 'trending', 'top'],
+    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx101922-WBsBl0ClmgYL.jpg', backdropPath: `${IMG}/5DUMPBSnHOZsbhLDnWKIHyGZPvO.jpg`, voteAverage: 8.7, year: '2019', genres: ['Action', 'Fantasy', 'Supernatural'], releaseDate: '2019-04-06', originalLanguage: 'ja', episodes: 55, status: 'Currently Airing', score: 8.71, studios: ['ufotable'], hasSub: true, hasDub: true, categories: ['action', 'trending', 'top'],
   },
   {
     id: 30276, title: 'One Punch Man', mediaType: 'tv', overview: 'The seemingly unimpressive Saitama has a rather unique hobby: being a hero.',
-    posterPath: `${IMG}/iZ5bVnaKUhMPMfCkNTMi4dwxjMd.jpg`, backdropPath: `${IMG}/meeoG8LzEhJQsdl7KekkJCZKDU.jpg`, voteAverage: 8.4, year: '2015', genres: ['Action', 'Comedy', 'Sci-Fi'], releaseDate: '2015-10-05', originalLanguage: 'ja', episodes: 24, status: 'Finished Airing', score: 8.42, studios: ['Madhouse'], hasSub: true, hasDub: true, categories: ['action', 'comedy'],
+    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx30276-uRKqN4hLrly4.jpg', backdropPath: `${IMG}/meeoG8LzEhJQsdl7KekkJCZKDU.jpg`, voteAverage: 8.4, year: '2015', genres: ['Action', 'Comedy', 'Sci-Fi'], releaseDate: '2015-10-05', originalLanguage: 'ja', episodes: 24, status: 'Finished Airing', score: 8.42, studios: ['Madhouse'], hasSub: true, hasDub: true, categories: ['action', 'comedy'],
   },
   // ─── ADVENTURE ────────────────────────────────────
   {
     id: 21, title: 'One Piece', mediaType: 'tv', overview: 'Gol D. Roger was known as the Pirate King, the strongest and most infamous being to have sailed the Grand Line.',
-    posterPath: `${IMG}/cMD9Ygz11zjJzAovURpO75Qg7rT.jpg`, backdropPath: `${IMG}/2rmK7mnchw9Xr3XdiTFSxTTLXqv.jpg`, voteAverage: 8.7, year: '1999', genres: ['Action', 'Adventure', 'Comedy'], releaseDate: '1999-10-20', originalLanguage: 'ja', episodes: 1100, status: 'Currently Airing', score: 8.71, studios: ['Toei Animation'], hasSub: true, hasDub: true, categories: ['adventure', 'top', 'trending'],
+    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21-ELSYx3yMPcKM.jpg', backdropPath: `${IMG}/2rmK7mnchw9Xr3XdiTFSxTTLXqv.jpg`, voteAverage: 8.7, year: '1999', genres: ['Action', 'Adventure', 'Comedy'], releaseDate: '1999-10-20', originalLanguage: 'ja', episodes: 1100, status: 'Currently Airing', score: 8.71, studios: ['Toei Animation'], hasSub: true, hasDub: true, categories: ['adventure', 'top', 'trending'],
   },
   {
     id: 35964, title: 'The Rising of the Shield Hero', mediaType: 'tv', overview: 'Iwatani Naofumi, a laid-back university student, is summoned to a parallel world along with three other heroes.',
-    posterPath: `${IMG}/mFb0t1fcaXV0RJRqE3SLnS3EMDt.jpg`, backdropPath: `${IMG}/c5IxfZ8D5mDxBmvqKlMVYVljwxm.jpg`, voteAverage: 7.6, year: '2019', genres: ['Action', 'Adventure', 'Fantasy'], releaseDate: '2019-01-09', originalLanguage: 'ja', episodes: 50, status: 'Finished Airing', score: 7.59, studios: ['Kinema Citrus'], hasSub: true, hasDub: true, categories: ['adventure', 'isekai'],
+    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx101922-WBsBl0ClmgYL.jpg', backdropPath: `${IMG}/c5IxfZ8D5mDxBmvqKlMVYVljwxm.jpg`, voteAverage: 7.6, year: '2019', genres: ['Action', 'Adventure', 'Fantasy'], releaseDate: '2019-01-09', originalLanguage: 'ja', episodes: 50, status: 'Finished Airing', score: 7.59, studios: ['Kinema Citrus'], hasSub: true, hasDub: true, categories: ['adventure', 'isekai'],
   },
   {
     id: 38197, title: 'Somali and the Forest Spirit', mediaType: 'tv', overview: 'In a world inhabited by mystical creatures, a golem and a young human girl set off on a journey.',
-    posterPath: `${IMG}/kE0sDwaw3K8kYgLYsLkYGtOOjUh.jpg`, backdropPath: `${IMG}/3JYmHBIpM39VqMFVT7gVPjS1eJA.jpg`, voteAverage: 7.8, year: '2020', genres: ['Adventure', 'Fantasy', 'Slice of Life'], releaseDate: '2020-01-09', originalLanguage: 'ja', episodes: 12, status: 'Finished Airing', score: 7.76, studios: ['Sasayori'], hasSub: true, hasDub: false, categories: ['adventure', 'fantasy'],
+    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx101922-WBsBl0ClmgYL.jpg', backdropPath: `${IMG}/3JYmHBIpM39VqMFVT7gVPjS1eJA.jpg`, voteAverage: 7.8, year: '2020', genres: ['Adventure', 'Fantasy', 'Slice of Life'], releaseDate: '2020-01-09', originalLanguage: 'ja', episodes: 12, status: 'Finished Airing', score: 7.76, studios: ['Sasayori'], hasSub: true, hasDub: false, categories: ['adventure', 'fantasy'],
   },
   // ─── COMEDY ────────────────────────────────────────
   {
-    id: 30276, title: 'One Punch Man', mediaType: 'tv', overview: 'The seemingly unimpressive Saitama has a rather unique hobby: being a hero.', posterPath: `${IMG}/iZ5bVnaKUhMPMfCkNTMi4dwxjMd.jpg`, backdropPath: `${IMG}/meeoG8LzEhJQsdl7KekkJCZKDU.jpg`, voteAverage: 8.4, year: '2015', genres: ['Action', 'Comedy', 'Sci-Fi'], releaseDate: '2015-10-05', originalLanguage: 'ja', episodes: 24, status: 'Finished Airing', score: 8.42, studios: ['Madhouse'], hasSub: true, hasDub: true, categories: ['comedy'],
+    id: 30276, title: 'One Punch Man', mediaType: 'tv', overview: 'The seemingly unimpressive Saitama has a rather unique hobby: being a hero.', posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx30276-uRKqN4hLrly4.jpg', backdropPath: `${IMG}/meeoG8LzEhJQsdl7KekkJCZKDU.jpg`, voteAverage: 8.4, year: '2015', genres: ['Action', 'Comedy', 'Sci-Fi'], releaseDate: '2015-10-05', originalLanguage: 'ja', episodes: 24, status: 'Finished Airing', score: 8.42, studios: ['Madhouse'], hasSub: true, hasDub: true, categories: ['comedy'],
   },
   {
     id: 40779, title: 'Konosuba: God\'s Blessing on This Wonderful World!', mediaType: 'tv', overview: 'After dying a laughable death in a traffic accident, Kazuma Satou finds himself sitting before a beautiful but obnoxious goddess.',
-    posterPath: `${IMG}/eBdUdYKI0Ut3hPbdhoPYIin5IhS.jpg`, backdropPath: `${IMG}/kKgQzkUCnQmeTPkyIwHly2t6ZFI.jpg`, voteAverage: 8.1, year: '2016', genres: ['Adventure', 'Comedy', 'Fantasy'], releaseDate: '2016-01-14', originalLanguage: 'ja', episodes: 20, status: 'Finished Airing', score: 8.11, studios: ['Studio Deen'], hasSub: true, hasDub: true, categories: ['comedy', 'isekai'],
+    posterPath: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21202-mPOr80AEjUcZ.png', backdropPath: `${IMG}/kKgQzkUCnQmeTPkyIwHly2t6ZFI.jpg`, voteAverage: 8.1, year: '2016', genres: ['Adventure', 'Comedy', 'Fantasy'], releaseDate: '2016-01-14', originalLanguage: 'ja', episodes: 20, status: 'Finished Airing', score: 8.11, studios: ['Studio Deen'], hasSub: true, hasDub: true, categories: ['comedy', 'isekai'],
   },
   {
     id: 31478, title: 'Kaguya-sama: Love is War', mediaType: 'tv', overview: 'At the prestigious Shuchiin Academy, Miyuki Shirogane and Kaguya Shinomiya seem perfect for each other.',
