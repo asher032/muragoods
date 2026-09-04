@@ -1,18 +1,15 @@
 'use client';
 
 export default function MuraStreamLoader({ fullScreen = true, text }: { fullScreen?: boolean; text?: string }) {
-  const svg = (
-    <svg className="pl" viewBox="0 0 128 128" width="6em" height="6em">
-      <circle className="pl__ring pl__ring--a" cx="64" cy="64" r="56" fill="none" />
-      <circle className="pl__ring pl__ring--b" cx="64" cy="64" r="40" fill="none" />
-      <circle className="pl__ring pl__ring--c" cx="64" cy="64" r="24" fill="none" />
-      <circle className="pl__ring pl__ring--d" cx="64" cy="64" r="8" fill="none" />
-    </svg>
+  const loader = (
+    <div className="ms-loader-wrap">
+      <div className="ms-loader" />
+    </div>
   );
 
   if (!fullScreen) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '24px' }}>
-      {svg}
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', padding: '24px' }}>
+      {loader}
       {text && <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: '#A0A0A0', letterSpacing: '0.1em' }}>{text}</p>}
     </div>
   );
@@ -20,63 +17,46 @@ export default function MuraStreamLoader({ fullScreen = true, text }: { fullScre
   return (
     <>
       <style jsx global>{`
-        .pl {
-          width: 6em;
-          height: 6em;
+        .ms-loader-wrap {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 8px;
         }
-        .pl__ring {
-          animation: ringA 2s linear infinite;
+        .ms-loader {
+          width: 44.8px;
+          height: 44.8px;
+          color: #B85CFF;
+          position: relative;
+          background: radial-gradient(11.2px, currentColor 94%, #0000);
         }
-        .pl__ring--a {
-          stroke: #f42f25;
+        .ms-loader:before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: 50%;
+          background:
+            radial-gradient(10.08px at bottom right, #0000 94%, currentColor) top left,
+            radial-gradient(10.08px at bottom left, #0000 94%, currentColor) top right,
+            radial-gradient(10.08px at top right, #0000 94%, currentColor) bottom left,
+            radial-gradient(10.08px at top left, #0000 94%, currentColor) bottom right;
+          background-size: 22.4px 22.4px;
+          background-repeat: no-repeat;
+          animation: msLoaderSpin 1.5s infinite cubic-bezier(0.3, 1, 0, 1);
         }
-        .pl__ring--b {
-          animation-name: ringB;
-          stroke: #f49725;
-        }
-        .pl__ring--c {
-          animation-name: ringC;
-          stroke: #255ff4;
-        }
-        .pl__ring--d {
-          animation-name: ringD;
-          stroke: #f42582;
-        }
-        @keyframes ringA {
-          from, 4% { stroke-dasharray: 0 660; stroke-width: 20; stroke-dashoffset: -330; }
-          12% { stroke-dasharray: 60 600; stroke-width: 30; stroke-dashoffset: -335; }
-          32% { stroke-dasharray: 60 600; stroke-width: 30; stroke-dashoffset: -595; }
-          40%, 54% { stroke-dasharray: 0 660; stroke-width: 20; stroke-dashoffset: -660; }
-          62% { stroke-dasharray: 60 600; stroke-width: 30; stroke-dashoffset: -665; }
-          82% { stroke-dasharray: 60 600; stroke-width: 30; stroke-dashoffset: -925; }
-          90%, to { stroke-dasharray: 0 660; stroke-width: 20; stroke-dashoffset: -990; }
-        }
-        @keyframes ringB {
-          from, 12% { stroke-dasharray: 0 220; stroke-width: 20; stroke-dashoffset: -110; }
-          20% { stroke-dasharray: 20 200; stroke-width: 30; stroke-dashoffset: -115; }
-          40% { stroke-dasharray: 20 200; stroke-width: 30; stroke-dashoffset: -195; }
-          48%, 62% { stroke-dasharray: 0 220; stroke-width: 20; stroke-dashoffset: -220; }
-          70% { stroke-dasharray: 20 200; stroke-width: 30; stroke-dashoffset: -225; }
-          90% { stroke-dasharray: 20 200; stroke-width: 30; stroke-dashoffset: -305; }
-          98%, to { stroke-dasharray: 0 220; stroke-width: 20; stroke-dashoffset: -330; }
-        }
-        @keyframes ringC {
-          from { stroke-dasharray: 0 440; stroke-width: 20; stroke-dashoffset: 0; }
-          8% { stroke-dasharray: 40 400; stroke-width: 30; stroke-dashoffset: -5; }
-          28% { stroke-dasharray: 40 400; stroke-width: 30; stroke-dashoffset: -175; }
-          36%, 58% { stroke-dasharray: 0 440; stroke-width: 20; stroke-dashoffset: -220; }
-          66% { stroke-dasharray: 40 400; stroke-width: 30; stroke-dashoffset: -225; }
-          86% { stroke-dasharray: 40 400; stroke-width: 30; stroke-dashoffset: -395; }
-          94%, to { stroke-dasharray: 0 440; stroke-width: 20; stroke-dashoffset: -440; }
-        }
-        @keyframes ringD {
-          from, 8% { stroke-dasharray: 0 440; stroke-width: 20; stroke-dashoffset: 0; }
-          16% { stroke-dasharray: 40 400; stroke-width: 30; stroke-dashoffset: -5; }
-          36% { stroke-dasharray: 40 400; stroke-width: 30; stroke-dashoffset: -175; }
-          44%, 50% { stroke-dasharray: 0 440; stroke-width: 20; stroke-dashoffset: -220; }
-          58% { stroke-dasharray: 40 400; stroke-width: 30; stroke-dashoffset: -225; }
-          78% { stroke-dasharray: 40 400; stroke-width: 30; stroke-dashoffset: -395; }
-          86%, to { stroke-dasharray: 0 440; stroke-width: 20; stroke-dashoffset: -440; }
+        @keyframes msLoaderSpin {
+          33% {
+            inset: -11.2px;
+            transform: rotate(0deg);
+          }
+          66% {
+            inset: -11.2px;
+            transform: rotate(90deg);
+          }
+          100% {
+            inset: 0;
+            transform: rotate(90deg);
+          }
         }
       `}</style>
       <div style={{
@@ -85,7 +65,7 @@ export default function MuraStreamLoader({ fullScreen = true, text }: { fullScre
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         gap: '16px',
       }}>
-        {svg}
+        {loader}
         {text && <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: '#A0A0A0', letterSpacing: '0.1em' }}>{text}</p>}
       </div>
     </>

@@ -163,12 +163,9 @@ export default function MuraStreamHome() {
         setPopularTV(pTV.results || []);
 
         try {
-          const animeRes = await fetch('/api/murastream/tmdb?action=trending&type=movie&window=week');
+          const animeRes = await fetch('/api/murastream/anime?action=trending&limit=15');
           const animeData = await animeRes.json();
-          const anime = (animeData.results || []).filter((item: MediaItem & { genreIds?: number[]; originalLanguage?: string }) =>
-            (item.genreIds || []).includes(16) && item.originalLanguage === 'ja'
-          );
-          setAnimeList(anime);
+          setAnimeList(animeData.data || []);
         } catch { setAnimeList([]); }
 
       } catch (err) {
@@ -314,12 +311,28 @@ export default function MuraStreamHome() {
             )}
             {activeTab === 'anime' && (
               <>
-                <MediaRow title="🍥 ANIME" items={animeList} loading={loading} />
+                <MediaRow title="🍥 TRENDING ANIME" items={animeList} loading={loading} />
                 {animeList.length === 0 && !loading && (
                   <div style={{ textAlign: 'center', padding: '48px 16px', color: '#555' }}>
                     <MuraStreamLoader fullScreen={false} text="No anime titles found yet" />
                   </div>
                 )}
+                {/* Link to full anime page */}
+                <div style={{ textAlign: 'center', marginTop: '24px', padding: '20px', background: 'rgba(184,92,255,0.06)', borderRadius: '12px', border: '1px solid rgba(184,92,255,0.15)' }}>
+                  <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: '#B85CFF', margin: '0 0 8px' }}>
+                    🍥 FULL ANIME EXPERIENCE
+                  </p>
+                  <p style={{ fontFamily: '"Lucida Sans", sans-serif', fontSize: '12px', color: '#888', margin: '0 0 14px' }}>
+                    Top anime, seasonal releases, genre filters, and more
+                  </p>
+                  <Link href="/murastream/anime" style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '6px',
+                    background: '#B85CFF', color: '#FFF', padding: '10px 24px', borderRadius: '8px',
+                    fontFamily: 'var(--font-arcade)', fontSize: '10px', textDecoration: 'none',
+                  }}>
+                    🍥 EXPLORE ANIME →
+                  </Link>
+                </div>
               </>
             )}
           </>

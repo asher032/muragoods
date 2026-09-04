@@ -7,20 +7,44 @@ import Link from 'next/link';
 interface Source {
   id: string;
   name: string;
-  baseUrl: string;
+  getUrl: (type: string, id: number, season?: number, episode?: number) => string;
 }
 
 const SOURCES: Source[] = [
-  { id: 'vidlink', name: 'VidLink', baseUrl: 'https://vidlink.pro' },
-  { id: '2embed', name: '2Embed', baseUrl: 'https://www.2embed.cc/embed/tmdb' },
+  {
+    id: 'vidlink', name: 'VidLink',
+    getUrl: (type, id, season, episode) =>
+      type === 'tv' && season && episode
+        ? `https://vidlink.pro/tv/${id}/${season}/${episode}`
+        : `https://vidlink.pro/movie/${id}`,
+  },
+  {
+    id: '2embed', name: '2Embed',
+    getUrl: (type, id, season, episode) =>
+      type === 'tv' && season && episode
+        ? `https://www.2embed.cc/embed/tmdb/tv/${id}/${season}/${episode}`
+        : `https://www.2embed.cc/embed/tmdb/movie/${id}`,
+  },
+  {
+    id: 'multiembed', name: 'Multi',
+    getUrl: (type, id, season, episode) =>
+      type === 'tv' && season && episode
+        ? `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${season}&e=${episode}`
+        : `https://multiembed.mov/?video_id=${id}&tmdb=1`,
+  },
+  {
+    id: 'vidsrc', name: 'VidSrc',
+    getUrl: (type, id, season, episode) =>
+      type === 'tv' && season && episode
+        ? `https://vidsrc.me/embed/tv?tmdb=${id}&season=${season}&episode=${episode}`
+        : `https://vidsrc.me/embed/movie?tmdb=${id}`,
+  },
+  {
+    id: 'cinesrc', name: 'CineSrc',
+    getUrl: (type, id) =>
+      `https://cinesrc.st/embed/movie/${id}`,
+  },
 ];
-
-function getSourceUrl(source: Source, type: string, id: number, season?: number, episode?: number): string {
-  if (type === 'tv' && season && episode) {
-    return `${source.baseUrl}/tv/${id}/${season}/${episode}`;
-  }
-  return `${source.baseUrl}/movie/${id}`;
-}
 
 function WatchContent() {
   const searchParams = useSearchParams();
@@ -111,7 +135,15 @@ function WatchContent() {
     );
   }
 
-  const embedUrl = getSourceUrl(activeSource, type, id, season, episode);
+  const embedUrl = activeSource.getUrl(type, id, season, episode);
+
+  // Auto-fallback: if iframe fails to load, try next source
+  const handleIframeError = () => {
+    const currentIdx = SOURCES.findIndex(s => s.id === activeSource.id);
+    if (currentIdx < SOURCES.length - 1) {
+      setActiveSource(SOURCES[currentIdx + 1]);
+    }
+  };
 
   return (
     <div style={{ minHeight: '100vh', background: '#000', display: 'flex', flexDirection: 'column' }}>
@@ -150,6 +182,7 @@ function WatchContent() {
             style={{ width: '100%', height: '100%', border: 'none', position: 'absolute', inset: 0 }}
             allow="autoplay; fullscreen; picture-in-picture"
             allowFullScreen
+            onError={handleIframeError}
           />
         )}
 

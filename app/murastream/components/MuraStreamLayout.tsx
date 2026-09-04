@@ -10,7 +10,7 @@ const NAV_ITEMS = [
     { href: '/murastream?tab=trending', label: 'Trending', icon: 'M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m.25-11.75v3.5h2.5a.25.25 0 0 1 0 .5h-3a.25.25 0 0 1-.25-.25v-4a.25.25 0 0 1 .25-.25h3a.25.25 0 0 1 0 .5H8.5v2.75a.25.25 0 0 1-.5 0v-3.5a.25.25 0 0 1 .25-.25h3a.25.25 0 0 1 0 .5H8.5v2.25' },
     { href: '/murastream?tab=movies', label: 'Movies', icon: 'M0 11a1 1 0 0 1 1 1h4a1 1 0 0 1-1-1zm-2.05-.5a.5.5 0 0 1 .42-.49c.31-.05.65-.07 1.03-.07.38 0 .72.02 1.03.07a.5.5 0 0 1-.41.99 5.2 5.2 0 0 0-1.04 0 .5.5 0 0 1-.49-.42zM12 9a1 1 0 0 1 1 1 3 3 0 0 1-6 0 1 1 0 0 1 1-1zM4 6.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5zM4 11.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5' },
     { href: '/murastream?tab=tv', label: 'TV Series', icon: 'M2.5 4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5zm0-2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z' },
-    { href: '/murastream?tab=anime', label: 'Anime', icon: 'M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16' },
+    { href: '/murastream/anime', label: 'Anime', icon: 'M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16' },
     { href: '/murastream/search', label: 'Search', icon: 'M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.442.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10' },
   ]},
   { section: 'MY STUFF', items: [
