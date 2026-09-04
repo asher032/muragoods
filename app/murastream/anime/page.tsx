@@ -6,6 +6,7 @@ import MuraStreamCard from '../components/MuraStreamCard';
 import MuraStreamLoader from '../components/MuraStreamLoader';
 import { useMuraStreamStore } from '../hooks/useMuraStreamStore';
 import type { MediaItem } from '../types';
+import { DEDUPED_ANIME } from '../data/curated-anime';
 
 // Anime genre IDs (MAL genre IDs)
 const ANIME_GENRES = [
@@ -17,10 +18,12 @@ const ANIME_GENRES = [
   { id: 14, name: 'Horror' },
   { id: 22, name: 'Romance' },
   { id: 24, name: 'Sci-Fi' },
+  { id: 30, name: 'Sports' },
   { id: 36, name: 'Slice of Life' },
   { id: 37, name: 'Supernatural' },
   { id: 40, name: 'Psychological' },
   { id: 62, name: 'Isekai' },
+  { id: 73, name: 'School' },
 ];
 
 function AnimeHero({ item }: { item: MediaItem | null }) {
@@ -191,6 +194,8 @@ export default function AnimePage() {
   const [genreResults, setGenreResults] = useState<MediaItem[]>([]);
   const [genreLoading, setGenreLoading] = useState(false);
   const [audioFilter, setAudioFilter] = useState<'all' | 'sub' | 'dub'>('all');
+  const [showCurated, setShowCurated] = useState(true);
+  const [curatedFilter, setCuratedFilter] = useState<string | null>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { animeContinueWatching, markEpisodeWatched, isEpisodeWatched, getAnimeProgress } = useMuraStreamStore();
 
@@ -681,6 +686,88 @@ export default function AnimePage() {
               </>
             )}
           </>
+        )}
+
+        {/* ─── Curated Anime Library ──────────────────── */}
+        {!searchQuery.trim() && !activeGenre && (
+          <div style={{ marginTop: '16px' }}>
+            {/* Curated filter pills */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => { setCuratedFilter(null); setShowCurated(true); }}
+                style={{
+                  padding: '7px 16px', borderRadius: '20px',
+                  border: curatedFilter === null ? '1px solid #B85CFF' : '1px solid #2A2A2A',
+                  background: curatedFilter === null ? 'rgba(184,92,255,0.15)' : '#111',
+                  color: curatedFilter === null ? '#B85CFF' : '#888',
+                  fontFamily: 'var(--font-arcade)', fontSize: '9px', cursor: 'pointer',
+                  transition: 'all 0.2s', whiteSpace: 'nowrap',
+                }}
+              >⭐ All Popular</button>
+              {[
+                { id: 'action', label: '⚔️ Action' },
+                { id: 'comedy', label: '😂 Comedy' },
+                { id: 'romance', label: '💕 Romance' },
+                { id: 'fantasy', label: '🔮 Fantasy' },
+                { id: 'isekai', label: '🌀 Isekai' },
+                { id: 'sports', label: '⚽ Sports' },
+                { id: 'school', label: '🏫 School' },
+                { id: 'slice_of_life', label: '🍃 Slice of Life' },
+              ].map(opt => (
+                <button
+                  key={opt.id}
+                  onClick={() => setCuratedFilter(curatedFilter === opt.id ? null : opt.id)}
+                  style={{
+                    padding: '7px 16px', borderRadius: '20px',
+                    border: curatedFilter === opt.id ? '1px solid #B85CFF' : '1px solid #2A2A2A',
+                    background: curatedFilter === opt.id ? 'rgba(184,92,255,0.15)' : '#111',
+                    color: curatedFilter === opt.id ? '#B85CFF' : '#888',
+                    fontFamily: 'var(--font-arcade)', fontSize: '9px', cursor: 'pointer',
+                    transition: 'all 0.2s', whiteSpace: 'nowrap',
+                  }}
+                >{opt.label}</button>
+              ))}
+            </div>
+
+            {/* Curated: Trending */}
+            {DEDUPED_ANIME.filter(a => a.categories.includes('trending')).length > 0 && (
+              <div className="anime-row">
+                <div className="anime-row-header">
+                  <p className="anime-row-title">🔥 POPULAR NOW</p>
+                </div>
+                <div className="anime-scroll">
+                  {(curatedFilter ? DEDUPED_ANIME.filter(a => a.categories.includes(curatedFilter)) : DEDUPED_ANIME.filter(a => a.categories.includes('trending')))
+                    .map(item => <AnimeCard key={`curated-${item.id}`} item={item as unknown as MediaItem} />)}
+                </div>
+              </div>
+            )}
+
+            {/* Curated: Top Rated */}
+            {curatedFilter === null && (
+              <div className="anime-row">
+                <div className="anime-row-header">
+                  <p className="anime-row-title">⭐ ALL-TIME CLASSICS</p>
+                </div>
+                <div className="anime-scroll">
+                  {DEDUPED_ANIME.filter(a => a.categories.includes('top') && !a.categories.includes('trending'))
+                    .map(item => <AnimeCard key={`curated-${item.id}`} item={item as unknown as MediaItem} />)}
+                </div>
+              </div>
+            )}
+
+            {/* Curated: Filtered category */}
+            {curatedFilter && curatedFilter !== 'trending' && (
+              <div className="anime-row">
+                <div className="anime-row-header">
+                  <p className="anime-row-title">{curatedFilter.replace('_', ' ').toUpperCase()}</p>
+                </div>
+                <div className="anime-scroll">
+                  {DEDUPED_ANIME.filter(a => a.categories.includes(curatedFilter))
+                    .map(item => <AnimeCard key={`curated-${item.id}`} item={item as unknown as MediaItem} />)}
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Footer */}
