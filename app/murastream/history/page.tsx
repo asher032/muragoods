@@ -1,40 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-
-type HistoryItem = {
-  id: number;
-  mediaType: string;
-  title: string;
-  posterPath: string | null;
-  date: string;
-  season?: number;
-  episode?: number;
-  progress?: number;
-};
+import { useMuraStreamStore } from '../hooks/useMuraStreamStore';
 
 export default function MuraStreamHistoryPage() {
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { history, clearHistory } = useMuraStreamStore();
   const [confirmClear, setConfirmClear] = useState(false);
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('ms-history');
-      if (stored) setHistory(JSON.parse(stored));
-    } catch { /* empty */ }
-    setLoading(false);
-  }, []);
-
-  const clearHistory = () => {
-    setHistory([]);
-    localStorage.removeItem('ms-history');
-    setConfirmClear(false);
-  };
-
   // Group by date
-  const grouped = history.reduce<Record<string, HistoryItem[]>>((acc, item) => {
+  const grouped = history.reduce<Record<string, typeof history>>((acc, item) => {
     const d = new Date(item.date);
     const today = new Date();
     const yesterday = new Date(today);
@@ -50,11 +25,10 @@ export default function MuraStreamHistoryPage() {
     return acc;
   }, {});
 
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '50vh' }}>
-      <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#666' }}>Loading history...</p>
-    </div>
-  );
+  const handleClear = () => {
+    clearHistory();
+    setConfirmClear(false);
+  };
 
   return (
     <div style={{ padding: '24px 28px' }}>
@@ -66,7 +40,7 @@ export default function MuraStreamHistoryPage() {
           <>
             {confirmClear ? (
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={clearHistory} style={{
+                <button onClick={handleClear} style={{
                   padding: '6px 12px', borderRadius: '6px', border: '1px solid #e63946',
                   background: 'rgba(230,57,70,0.12)', color: '#e63946',
                   fontFamily: 'var(--font-arcade)', fontSize: '8px', cursor: 'pointer',

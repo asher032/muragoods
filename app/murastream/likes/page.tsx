@@ -1,41 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMuraStreamStore } from '../hooks/useMuraStreamStore';
 import MuraStreamCard from '../components/MuraStreamCard';
-import MuraStreamLoader from '../components/MuraStreamLoader';
-
-type MediaItem = {
-  id: number;
-  mediaType: string;
-  title: string;
-  posterPath: string | null;
-  backdropPath: string | null;
-  voteAverage: number;
-  year: string;
-  overview: string;
-  genreIds: number[];
-  releaseDate: string;
-};
 
 export default function MuraStreamLikesPage() {
-  const [likes, setLikes] = useState<MediaItem[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('ms-likes');
-      if (stored) setLikes(JSON.parse(stored));
-    } catch { /* empty */ }
-    setLoading(false);
-  }, []);
-
-  const removeLike = (id: number) => {
-    const updated = likes.filter(l => l.id !== id);
-    setLikes(updated);
-    localStorage.setItem('ms-likes', JSON.stringify(updated));
-  };
-
-  if (loading) return <MuraStreamLoader text="Loading likes..." />;
+  const { likes, removeFromLikes } = useMuraStreamStore();
 
   return (
     <div style={{ padding: '24px 28px' }}>
@@ -52,7 +21,7 @@ export default function MuraStreamLikesPage() {
             <div key={item.id} style={{ position: 'relative' }}>
               <MuraStreamCard item={item} />
               <button
-                onClick={() => removeLike(item.id)}
+                onClick={() => removeFromLikes(item.id)}
                 style={{
                   position: 'absolute', top: '6px', right: '6px', zIndex: 2,
                   background: 'rgba(0,0,0,0.7)', border: 'none', borderRadius: '50%',

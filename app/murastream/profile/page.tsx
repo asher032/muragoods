@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useMuraStreamStore } from '../hooks/useMuraStreamStore';
 
 export default function MuraStreamProfilePage() {
-  const [stats, setStats] = useState({ movies: 0, episodes: 0, likes: 0, myList: 0, history: 0 });
+  const { likes, myList, history } = useMuraStreamStore();
   const [username, setUsername] = useState('User');
 
   useEffect(() => {
@@ -14,18 +15,10 @@ export default function MuraStreamProfilePage() {
         setUsername(parsed.name || parsed.username || parsed.email?.split('@')[0] || 'User');
       }
     } catch { /* empty */ }
-
-    const likes = JSON.parse(localStorage.getItem('ms-likes') || '[]');
-    const myList = JSON.parse(localStorage.getItem('ms-mylist') || '[]');
-    const history = JSON.parse(localStorage.getItem('ms-history') || '[]');
-    setStats({
-      movies: history.filter((h: { mediaType: string }) => h.mediaType === 'movie').length,
-      episodes: history.filter((h: { mediaType: string }) => h.mediaType === 'tv').length,
-      likes: likes.length,
-      myList: myList.length,
-      history: history.length,
-    });
   }, []);
+
+  const moviesWatched = history.filter(h => h.mediaType === 'movie').length;
+  const episodesWatched = history.filter(h => h.mediaType === 'tv').length;
 
   return (
     <div style={{ padding: '24px 28px', maxWidth: '600px' }}>
@@ -58,10 +51,10 @@ export default function MuraStreamProfilePage() {
         display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '24px',
       }}>
         {[
-          { label: 'Movies Watched', value: stats.movies, color: '#B85CFF' },
-          { label: 'Episodes Watched', value: stats.episodes, color: '#f42f25' },
-          { label: 'Likes', value: stats.likes, color: '#e63946' },
-          { label: 'On My List', value: stats.myList, color: '#06d6a0' },
+          { label: 'Movies Watched', value: moviesWatched, color: '#B85CFF' },
+          { label: 'Episodes Watched', value: episodesWatched, color: '#f42f25' },
+          { label: 'Likes', value: likes.length, color: '#e63946' },
+          { label: 'On My List', value: myList.length, color: '#06d6a0' },
         ].map(stat => (
           <div key={stat.label} style={{
             padding: '16px', background: '#111', borderRadius: '10px',
@@ -86,7 +79,7 @@ export default function MuraStreamProfilePage() {
         <div>
           <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: '#E5E5E5', margin: 0 }}>Total Titles Watched</p>
           <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '12px', color: '#666', margin: '2px 0 0' }}>
-            {stats.history} title{stats.history !== 1 ? 's' : ''}
+            {history.length} title{history.length !== 1 ? 's' : ''}
           </p>
         </div>
       </div>

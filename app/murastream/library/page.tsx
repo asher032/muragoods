@@ -1,20 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import MuraStreamCard from '../components/MuraStreamCard';
-
-type MediaItem = {
-  id: number;
-  mediaType: string;
-  title: string;
-  posterPath: string | null;
-  backdropPath: string | null;
-  voteAverage: number;
-  year: string;
-  overview: string;
-  genreIds: number[];
-  releaseDate: string;
-};
+import { useMuraStreamStore } from '../hooks/useMuraStreamStore';
+import type { MediaItem } from '../types';
 
 const TABS = [
   { id: 'all', label: 'ALL' },
@@ -24,38 +13,37 @@ const TABS = [
   { id: 'watchlist', label: 'WATCHLIST' },
 ];
 
-const SORTS = ['Recently Added', 'Recently Watched', 'Alphabetical', 'Rating'];
+const SORTS = ['Recently Added', 'Recently Watched', 'Alphabetical', 'Rating'] as const;
 
 export default function MuraStreamLibraryPage() {
   const [activeTab, setActiveTab] = useState('all');
-  const [sortBy, setSortBy] = useState('Recently Added');
-  const [items, setItems] = useState<MediaItem[]>([]);
+  const [sortBy, setSortBy] = useState<string>('Recently Added');
+  const { history, likes, myList } = useMuraStreamStore();
 
-  useEffect(() => {
-    const history = JSON.parse(localStorage.getItem('ms-history') || '[]');
-    const likes = JSON.parse(localStorage.getItem('ms-likes') || '[]');
-    const myList = JSON.parse(localStorage.getItem('ms-mylist') || '[]');
-
-    // Deduplicate
+  const items = useMemo(() => {
     const allItems = new Map<number, MediaItem>();
-    [...history, ...likes, ...myList].forEach((item: MediaItem) => {
+    [...history, ...likes, ...myList].forEach(item => {
       if (!allItems.has(item.id)) allItems.set(item.id, item);
     });
+    return Array.from(allItems.values());
+  }, [history, likes, myList]);
 
-    setItems(Array.from(allItems.values()));
-  }, []);
+  const filtered = useMemo(() => {
+    const likedIds = new Set(likes.map(l => l.id));
+    const myListIds = new Set(myList.map(w => w.id));
 
-  const filtered = items.filter(item => {
-    if (activeTab === 'movies') return item.mediaType === 'movie';
-    if (activeTab === 'tv') return item.mediaType === 'tv';
-    if (activeTab === 'liked') return JSON.parse(localStorage.getItem('ms-likes') || '[]').some((l: MediaItem) => l.id === item.id);
-    if (activeTab === 'watchlist') return JSON.parse(localStorage.getItem('ms-mylist') || '[]').some((w: MediaItem) => w.id === item.id);
-    return true;
-  }).sort((a, b) => {
-    if (sortBy === 'Alphabetical') return a.title.localeCompare(b.title);
-    if (sortBy === 'Rating') return b.voteAverage - a.voteAverage;
-    return 0;
-  });
+    return items.filter(item => {
+      if (activeTab === 'movies') return item.mediaType === 'movie';
+      if (activeTab === 'tv') return item.mediaType === 'tv';
+      if (activeTab === 'liked') return likedIds.has(item.id);
+      if (activeTab === 'watchlist') return myListIds.has(item.id);
+      return true;
+    }).sort((a, b) => {
+      if (sortBy === 'Alphabetical') return a.title.localeCompare(b.title);
+      if (sortBy === 'Rating') return (b.voteAverage ?? 0) - (a.voteAverage ?? 0);
+      return 0;
+    });
+  }, [items, activeTab, sortBy, likes, myList]);
 
   return (
     <div style={{ padding: '24px 28px' }}>

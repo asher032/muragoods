@@ -1,41 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMuraStreamStore } from '../hooks/useMuraStreamStore';
 import MuraStreamCard from '../components/MuraStreamCard';
-import MuraStreamLoader from '../components/MuraStreamLoader';
-
-type MediaItem = {
-  id: number;
-  mediaType: string;
-  title: string;
-  posterPath: string | null;
-  backdropPath: string | null;
-  voteAverage: number;
-  year: string;
-  overview: string;
-  genreIds: number[];
-  releaseDate: string;
-};
 
 export default function MuraStreamMyListPage() {
-  const [items, setItems] = useState<MediaItem[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('ms-mylist');
-      if (stored) setItems(JSON.parse(stored));
-    } catch { /* empty */ }
-    setLoading(false);
-  }, []);
-
-  const removeItem = (id: number) => {
-    const updated = items.filter(i => i.id !== id);
-    setItems(updated);
-    localStorage.setItem('ms-mylist', JSON.stringify(updated));
-  };
-
-  if (loading) return <MuraStreamLoader text="Loading list..." />;
+  const { myList, removeFromMyList } = useMuraStreamStore();
 
   return (
     <div style={{ padding: '24px 28px' }}>
@@ -43,16 +12,16 @@ export default function MuraStreamMyListPage() {
         <span style={{ color: '#B85CFF' }}>★</span> MY LIST
       </h1>
       <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '12px', color: '#666', margin: '0 0 24px' }}>
-        {items.length} title{items.length !== 1 ? 's' : ''} saved
+        {myList.length} title{myList.length !== 1 ? 's' : ''} saved
       </p>
 
-      {items.length > 0 ? (
+      {myList.length > 0 ? (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
-          {items.map(item => (
+          {myList.map(item => (
             <div key={item.id} style={{ position: 'relative' }}>
               <MuraStreamCard item={item} />
               <button
-                onClick={() => removeItem(item.id)}
+                onClick={() => removeFromMyList(item.id)}
                 style={{
                   position: 'absolute', top: '6px', right: '6px', zIndex: 2,
                   background: 'rgba(0,0,0,0.7)', border: 'none', borderRadius: '50%',

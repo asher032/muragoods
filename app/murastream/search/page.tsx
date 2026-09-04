@@ -3,19 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import MuraStreamCard from '../components/MuraStreamCard';
 import MuraStreamLoader from '../components/MuraStreamLoader';
-
-type MediaItem = {
-  id: number;
-  mediaType: string;
-  title: string;
-  posterPath: string | null;
-  backdropPath: string | null;
-  voteAverage: number;
-  year: string;
-  overview: string;
-  genreIds: number[];
-  releaseDate: string;
-};
+import type { MediaItem } from '../types';
 
 const GENRES = [
   { id: 'all', label: 'All' },

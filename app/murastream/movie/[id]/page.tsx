@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import MuraStreamCard from '../../components/MuraStreamCard';
 import MuraStreamLoader from '../../components/MuraStreamLoader';
+import { useMuraStreamStore } from '../../hooks/useMuraStreamStore';
 
 type DetailData = {
   id: number;
@@ -38,9 +39,8 @@ export default function MovieDetailPage() {
 
   const [movie, setMovie] = useState<DetailData | null>(null);
   const [loading, setLoading] = useState(true);
+  const { isLiked, toggleLike, isInMyList, toggleMyList } = useMuraStreamStore();
   const [showTrailer, setShowTrailer] = useState(false);
-  const [liked, setLiked] = useState(false);
-  const [inList, setInList] = useState(false);
 
   const fetchMovie = useCallback(async () => {
     try {
@@ -57,39 +57,7 @@ export default function MovieDetailPage() {
 
   useEffect(() => { fetchMovie(); }, [fetchMovie]);
 
-  // Check if liked/inList
-  useEffect(() => {
-    try {
-      const likes = JSON.parse(localStorage.getItem('ms-likes') || '[]');
-      setLiked(likes.some((l: { id: number }) => l.id === Number(movieId)));
-      const list = JSON.parse(localStorage.getItem('ms-mylist') || '[]');
-      setInList(list.some((w: { id: number }) => w.id === Number(movieId)));
-    } catch { /* empty */ }
-  }, [movieId]);
 
-  const toggleLike = () => {
-    if (!movie) return;
-    const likes = JSON.parse(localStorage.getItem('ms-likes') || '[]');
-    if (liked) {
-      localStorage.setItem('ms-likes', JSON.stringify(likes.filter((l: { id: number }) => l.id !== movie.id)));
-    } else {
-      likes.push({ id: movie.id, mediaType: 'movie', title: movie.title, posterPath: movie.posterPath, backdropPath: movie.backdropPath, voteAverage: movie.voteAverage, year: movie.year, overview: movie.overview, genreIds: movie.genres?.map(g => g.id) || [], releaseDate: movie.releaseDate });
-      localStorage.setItem('ms-likes', JSON.stringify(likes));
-    }
-    setLiked(!liked);
-  };
-
-  const toggleList = () => {
-    if (!movie) return;
-    const list = JSON.parse(localStorage.getItem('ms-mylist') || '[]');
-    if (inList) {
-      localStorage.setItem('ms-mylist', JSON.stringify(list.filter((w: { id: number }) => w.id !== movie.id)));
-    } else {
-      list.push({ id: movie.id, mediaType: 'movie', title: movie.title, posterPath: movie.posterPath, backdropPath: movie.backdropPath, voteAverage: movie.voteAverage, year: movie.year, overview: movie.overview, genreIds: movie.genres?.map(g => g.id) || [], releaseDate: movie.releaseDate });
-      localStorage.setItem('ms-mylist', JSON.stringify(list));
-    }
-    setInList(!inList);
-  };
 
   if (loading) return <MuraStreamLoader text="Loading movie..." />;
 
@@ -183,19 +151,19 @@ export default function MovieDetailPage() {
                 <svg width="14" height="14" fill="#fff" viewBox="0 0 16 16"><path d="M6.271 4.138a.5.5 0 0 1 .78-.172l4 2.8a.5.5 0 0 1 0 .824l-4 2.8A.5.5 0 0 1 6 10.2V5.8a.5.5 0 0 1 .271-.414z"/></svg>
                 WATCH NOW
               </Link>
-              <button onClick={toggleList} style={{
-                background: inList ? 'rgba(184,92,255,0.12)' : 'rgba(184,92,255,0.06)',
-                border: `1px solid ${inList ? '#B85CFF' : '#2A2A2A'}`, color: inList ? '#B85CFF' : '#A0A0A0',
+              <button onClick={() => { if (movie) toggleMyList({ id: movie.id, mediaType: 'movie', title: movie.title, posterPath: movie.posterPath, backdropPath: movie.backdropPath, voteAverage: movie.voteAverage, year: movie.year, overview: movie.overview, genreIds: movie.genres?.map(g => g.id) || [], releaseDate: movie.releaseDate }); }} style={{
+                background: isInMyList(Number(movieId)) ? 'rgba(184,92,255,0.12)' : 'rgba(184,92,255,0.06)',
+                border: `1px solid ${isInMyList(Number(movieId)) ? '#B85CFF' : '#2A2A2A'}`, color: isInMyList(Number(movieId)) ? '#B85CFF' : '#A0A0A0',
                 padding: '12px 18px', borderRadius: '8px', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer',
               }}>
-                {inList ? '✓ IN MY LIST' : '+ MY LIST'}
+                {isInMyList(Number(movieId)) ? '✓ IN MY LIST' : '+ MY LIST'}
               </button>
-              <button onClick={toggleLike} style={{
-                background: liked ? 'rgba(230,57,70,0.12)' : 'rgba(230,57,70,0.06)',
-                border: `1px solid ${liked ? '#e63946' : '#2A2A2A'}`, color: liked ? '#e63946' : '#A0A0A0',
+              <button onClick={() => { if (movie) toggleLike({ id: movie.id, mediaType: 'movie', title: movie.title, posterPath: movie.posterPath, backdropPath: movie.backdropPath, voteAverage: movie.voteAverage, year: movie.year, overview: movie.overview, genreIds: movie.genres?.map(g => g.id) || [], releaseDate: movie.releaseDate }); }} style={{
+                background: isLiked(Number(movieId)) ? 'rgba(230,57,70,0.12)' : 'rgba(230,57,70,0.06)',
+                border: `1px solid ${isLiked(Number(movieId)) ? '#e63946' : '#2A2A2A'}`, color: isLiked(Number(movieId)) ? '#e63946' : '#A0A0A0',
                 padding: '12px 18px', borderRadius: '8px', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer',
               }}>
-                {liked ? '❤ LIKED' : '♡ LIKE'}
+                {isLiked(Number(movieId)) ? '❤ LIKED' : '♡ LIKE'}
               </button>
               {trailer && (
                 <button onClick={() => setShowTrailer(true)} style={{

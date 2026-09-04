@@ -4,40 +4,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import MuraStreamCard from './components/MuraStreamCard';
 import MuraStreamLoader from './components/MuraStreamLoader';
-
-type MediaItem = {
-  id: number;
-  mediaType: string;
-  title: string;
-  posterPath: string | null;
-  backdropPath: string | null;
-  voteAverage: number;
-  year: string;
-  overview: string;
-  genreIds: number[];
-  releaseDate: string;
-  name?: string;
-  originalLanguage?: string;
-};
-
-type ContinueWatchingItem = {
-  id: number;
-  mediaType: string;
-  title: string;
-  posterPath: string | null;
-  season?: number;
-  episode?: number;
-  progress?: number;
-};
-
-const GENRE_MAP: Record<number, string> = {
-  28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy', 80: 'Crime',
-  99: 'Documentary', 18: 'Drama', 10751: 'Family', 14: 'Fantasy', 36: 'History',
-  27: 'Horror', 10402: 'Music', 9648: 'Mystery', 10749: 'Romance', 878: 'Sci-Fi',
-  53: 'Thriller', 10752: 'War', 37: 'Western',
-  10759: 'Action & Adventure', 10762: 'Kids', 10763: 'News', 10764: 'Reality',
-  10765: 'Sci-Fi & Fantasy', 10766: 'Soap', 10767: 'Talk', 10768: 'War & Politics',
-};
+import { useMuraStreamStore } from './hooks/useMuraStreamStore';
+import type { MediaItem, ContinueWatchingItem } from './types';
+import { GENRE_MAP } from './types';
 
 function FeaturedHero({ item }: { item: MediaItem | null }) {
   if (!item) return null;
@@ -67,10 +36,10 @@ function FeaturedHero({ item }: { item: MediaItem | null }) {
           <h2 style={{ fontFamily: 'var(--font-arcade)', fontSize: '28px', color: '#FFF', margin: '0 0 8px', textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}>
             {item.title}
           </h2>
-          {item.voteAverage > 0 && (
+          {(item.voteAverage ?? 0) > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '12px' }}>
               <span style={{ color: '#B85CFF', fontSize: '13px' }}>★</span>
-              <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: '#E5E5E5' }}>{item.voteAverage.toFixed(1)}</span>
+              <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: '#E5E5E5' }}>{(item.voteAverage ?? 0).toFixed(1)}</span>
             </div>
           )}
           <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '13px', color: '#A0A0A0', margin: '0 0 20px', maxWidth: '500px', lineHeight: '1.6', maxHeight: '52px', overflow: 'hidden' }}>
@@ -160,7 +129,7 @@ export default function MuraStreamHome() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<MediaItem[]>([]);
   const [searching, setSearching] = useState(false);
-  const [continueWatching, setContinueWatching] = useState<ContinueWatchingItem[]>([]);
+  const { continueWatching } = useMuraStreamStore();
   const [activeTab, setActiveTab] = useState('trending');
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -202,13 +171,6 @@ export default function MuraStreamHome() {
           setAnimeList(anime);
         } catch { setAnimeList([]); }
 
-        try {
-          const libRes = await fetch('/api/murastream/library');
-          if (libRes.ok) {
-            const libData = await libRes.json();
-            setContinueWatching(libData.continueWatching || []);
-          }
-        } catch { /* empty */ }
       } catch (err) {
         console.error('Failed to load MuraStream data:', err);
       } finally {
