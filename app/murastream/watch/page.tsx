@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useMuraStreamStore } from '../hooks/useMuraStreamStore';
 
 interface Source {
   id: string;
@@ -76,6 +77,8 @@ function WatchContent() {
       .catch(() => { setTitle(type === 'tv' ? 'TV Show' : 'Movie'); setLoading(false); });
   }, [id, type]);
 
+  const { markEpisodeWatched } = useMuraStreamStore();
+
   // Record to watch history when page loads
   useEffect(() => {
     if (!id || loading) return;
@@ -113,7 +116,12 @@ function WatchContent() {
         }),
       }).catch(() => {});
     }
-  }, [id, type, season, episode, title, posterPath, loading]);
+
+    // Mark episode as watched in anime progress tracker
+    if (type === 'tv' && title) {
+      markEpisodeWatched(id, title, posterPath, episode, undefined);
+    }
+  }, [id, type, season, episode, title, posterPath, loading, markEpisodeWatched]);
 
   // Auto-play countdown for TV shows
   useEffect(() => {

@@ -22,11 +22,22 @@ function removeKey(key: string) {
   localStorage.removeItem(key);
 }
 
+export type AnimeProgress = {
+  id: number; // MAL or TMDB id
+  title: string;
+  posterPath?: string | null;
+  totalEpisodes?: number | null;
+  watchedEpisodes: number[]; // e.g. [1,2,3,5] means ep 4 skipped
+  lastWatched: string; // ISO date
+  genres?: string[];
+};
+
 const KEYS = {
   likes: 'ms-likes',
   myList: 'ms-mylist',
   history: 'ms-history',
   settings: 'ms-settings',
+  animeProgress: 'ms-anime-progress',
 } as const;
 
 // ─── Hook ────────────────────────────────────────────────────────
@@ -83,6 +94,67 @@ export function useMuraStreamStore() {
     removeKey(KEYS.history);
   }, []);
 
+  // ─── Anime Episode Progress ──────────────────────────────
+  const [animeProgress, setAnimeProgressState] = useState<AnimeProgress[]>(() =>
+    readJSON<AnimeProgress[]>(KEYS.animeProgress, [])
+  );
+
+  const markEpisodeWatched = useCallback((
+    animeId: number,
+    title: string,
+    posterPath: string | null | undefined,
+    episode: number,
+    totalEpisodes?: number | null,
+    genres?: string[]
+  ) => {
+    setAnimeProgressState(prev => {
+      const existing = prev.find(a => a.id === animeId);
+      const watched = existing ? [...new Set([...existing.watchedEpisodes, episode])].sort((a, b) => a - b) : [episode];
+      const entry: AnimeProgress = {
+        id: animeId,
+        title,
+        posterPath,
+        totalEpisodes: totalEpisodes ?? existing?.totalEpisodes ?? null,
+        watchedEpisodes: watched,
+        lastWatched: new Date().toISOString(),
+        genres: genres ?? existing?.genres,
+      };
+      const next = [entry, ...prev.filter(a => a.id !== animeId)].slice(0, 50);
+      writeJSON(KEYS.animeProgress, next);
+      return next;
+    });
+  }, []);
+
+  const isEpisodeWatched = useCallback((
+    animeId: number,
+    episode: number
+  ): boolean => {
+    const prog = animeProgress.find(a => a.id === animeId);
+    return prog ? prog.watchedEpisodes.includes(episode) : false;
+  }, [animeProgress]);
+
+  const getAnimeProgress = useCallback((animeId: number): AnimeProgress | undefined => {
+    return animeProgress.find(a => a.id === animeId);
+  }, [animeProgress]);
+
+  const removeAnimeProgress = useCallback((animeId: number) => {
+    setAnimeProgressState(prev => {
+      const next = prev.filter(a => a.id !== animeId);
+      writeJSON(KEYS.animeProgress, next);
+      return next;
+    });
+  }, []);
+
+  const animeContinueWatching = useMemo(() => {
+    return animeProgress
+      .filter(a => {
+        const total = a.totalEpisodes || 0;
+        return a.watchedEpisodes.length > 0 && (total === 0 || a.watchedEpisodes.length < total);
+      })
+      .sort((a, b) => new Date(b.lastWatched).getTime() - new Date(a.lastWatched).getTime())
+      .slice(0, 10);
+  }, [animeProgress]);
+
   // Derived
   const continueWatching = useMemo(() => {
     return history
@@ -125,6 +197,13 @@ export function useMuraStreamStore() {
     history,
     addToHistory,
     clearHistory,
+    // Anime Episode Progress
+    animeProgress,
+    markEpisodeWatched,
+    isEpisodeWatched,
+    getAnimeProgress,
+    removeAnimeProgress,
+    animeContinueWatching,
     // Derived
     continueWatching,
   } as const;

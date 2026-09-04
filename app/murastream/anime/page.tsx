@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import MuraStreamCard from '../components/MuraStreamCard';
 import MuraStreamLoader from '../components/MuraStreamLoader';
+import { useMuraStreamStore } from '../hooks/useMuraStreamStore';
 import type { MediaItem } from '../types';
 
 // Anime genre IDs (MAL genre IDs)
@@ -142,6 +143,16 @@ function AnimeCard({ item }: { item: MediaItem }) {
             </div>
           )}
 
+          {/* Sub/Dub badge */}
+          {(item as MediaItem & { hasDub?: boolean }).hasDub && (
+            <div style={{
+              position: 'absolute', bottom: '8px', left: '8px',
+              background: 'rgba(74,222,128,0.85)', color: '#000',
+              padding: '2px 6px', borderRadius: '4px',
+              fontFamily: 'var(--font-arcade)', fontSize: '7px', fontWeight: 700,
+            }}>DUB</div>
+          )}
+
           {/* Hover play overlay */}
           <div className="anime-card-play">
             <svg width="20" height="20" fill="#fff" viewBox="0 0 16 16">
@@ -179,7 +190,9 @@ export default function AnimePage() {
   const [activeGenre, setActiveGenre] = useState<number | null>(null);
   const [genreResults, setGenreResults] = useState<MediaItem[]>([]);
   const [genreLoading, setGenreLoading] = useState(false);
+  const [audioFilter, setAudioFilter] = useState<'all' | 'sub' | 'dub'>('all');
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { animeContinueWatching, markEpisodeWatched, isEpisodeWatched, getAnimeProgress } = useMuraStreamStore();
 
   const fetchAnime = useCallback(async (action: string, params: Record<string, string> = {}) => {
     const sp = new URLSearchParams({ action, ...params });
@@ -470,6 +483,27 @@ export default function AnimePage() {
           </div>
         </div>
 
+        {/* Audio + Genre Filter Row */}
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Sub/Dub Filter */}
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {[{ id: 'all' as const, label: 'ALL' }, { id: 'sub' as const, label: '🇯🇵 SUB' }, { id: 'dub' as const, label: '🇺🇸 DUB' }].map(opt => (
+              <button
+                key={opt.id}
+                onClick={() => setAudioFilter(opt.id)}
+                style={{
+                  padding: '6px 14px', borderRadius: '8px',
+                  border: audioFilter === opt.id ? '1px solid #B85CFF' : '1px solid #2A2A2A',
+                  background: audioFilter === opt.id ? 'rgba(184,92,255,0.15)' : '#171717',
+                  color: audioFilter === opt.id ? '#B85CFF' : '#888',
+                  fontFamily: 'var(--font-arcade)', fontSize: '8px', cursor: 'pointer',
+                  transition: 'all 0.2s', letterSpacing: '0.05em',
+                }}
+              >{opt.label}</button>
+            ))}
+          </div>
+        </div>
+
         {/* Genre Filter Pills */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '28px', overflowX: 'auto', paddingBottom: '4px' }}>
           {ANIME_GENRES.map(g => (
@@ -534,54 +568,116 @@ export default function AnimePage() {
                 {/* Featured Hero */}
                 {featured && <AnimeHero item={featured} />}
 
-                {/* Airing Now */}
-                {seasonal.length > 0 && (
+                {/* Continue Watching Anime */}
+                {animeContinueWatching.length > 0 && (
                   <div className="anime-row">
                     <div className="anime-row-header">
-                      <p className="anime-row-title">📺 AIRING NOW</p>
+                      <p className="anime-row-title">▶ CONTINUE WATCHING</p>
                     </div>
                     <div className="anime-scroll">
-                      {seasonal.map(item => <AnimeCard key={item.id} item={item} />)}
+                      {animeContinueWatching.map(prog => {
+                        const total = prog.totalEpisodes || 0;
+                        const watched = prog.watchedEpisodes.length;
+                        const pct = total > 0 ? Math.round((watched / total) * 100) : 0;
+                        return (
+                          <Link key={prog.id} href={`/murastream/tv/${prog.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                            <div className="anime-card" style={{ width: '200px' }}>
+                              <div className="anime-card-poster" style={{ position: 'relative' }}>
+                                {prog.posterPath ? (
+                                  <img src={prog.posterPath} alt={prog.title} loading="lazy" />
+                                ) : (
+                                  <div style={{ width: '100%', height: '100%', background: '#111' }} />
+                                )}
+                                {/* Progress bar */}
+                                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '3px', background: 'rgba(0,0,0,0.5)' }}>
+                                  <div style={{ height: '100%', background: '#B85CFF', width: `${pct}%`, transition: 'width 0.3s' }} />
+                                </div>
+                                <div style={{ position: 'absolute', bottom: '8px', left: '8px', right: '8px' }}>
+                                  <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px', color: '#fff', background: 'rgba(0,0,0,0.7)', padding: '2px 6px', borderRadius: '4px' }}>
+                                    {watched}/{total || '?'} EP
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="anime-card-info">
+                                <p className="anime-card-title">{prog.title}</p>
+                                <p className="anime-card-episodes">{pct}% watched</p>
+                              </div>
+                            </div>
+                          </Link>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
 
-                {/* Trending */}
-                {trending.length > 0 && (
-                  <div className="anime-row">
-                    <div className="anime-row-header">
-                      <p className="anime-row-title">🔥 TRENDING</p>
-                    </div>
-                    <div className="anime-scroll">
-                      {trending.map(item => <AnimeCard key={item.id} item={item} />)}
-                    </div>
-                  </div>
-                )}
+                {/* Helper: filter by sub/dub */}
+                {(() => {
+                  const filterAudio = (items: MediaItem[]) => {
+                    if (audioFilter === 'all') return items;
+                    return items.filter(item => {
+                      const hasDub = (item as MediaItem & { hasDub?: boolean }).hasDub;
+                      const hasSub = (item as MediaItem & { hasSub?: boolean }).hasSub;
+                      return audioFilter === 'dub' ? hasDub : hasSub;
+                    });
+                  };
+                  const fSeasonal = filterAudio(seasonal);
+                  const fTrending = filterAudio(trending);
+                  const fTop = filterAudio(topAllTime);
+                  const fUpcoming = filterAudio(upcoming);
 
-                {/* Top All Time */}
-                {topAllTime.length > 0 && (
-                  <div className="anime-row">
-                    <div className="anime-row-header">
-                      <p className="anime-row-title">⭐ TOP ALL TIME</p>
-                      <Link href="/murastream/search" className="anime-row-more">View All →</Link>
-                    </div>
-                    <div className="anime-scroll">
-                      {topAllTime.map(item => <AnimeCard key={item.id} item={item} />)}
-                    </div>
-                  </div>
-                )}
+                  return (
+                    <>
+                      {/* Airing Now */}
+                      {fSeasonal.length > 0 && (
+                        <div className="anime-row">
+                          <div className="anime-row-header">
+                            <p className="anime-row-title">📺 AIRING NOW</p>
+                          </div>
+                          <div className="anime-scroll">
+                            {fSeasonal.map(item => <AnimeCard key={item.id} item={item} />)}
+                          </div>
+                        </div>
+                      )}
 
-                {/* Upcoming */}
-                {upcoming.length > 0 && (
-                  <div className="anime-row">
-                    <div className="anime-row-header">
-                      <p className="anime-row-title">📅 UPCOMING</p>
-                    </div>
-                    <div className="anime-scroll">
-                      {upcoming.map(item => <AnimeCard key={item.id} item={item} />)}
-                    </div>
-                  </div>
-                )}
+                      {/* Trending */}
+                      {fTrending.length > 0 && (
+                        <div className="anime-row">
+                          <div className="anime-row-header">
+                            <p className="anime-row-title">🔥 TRENDING</p>
+                          </div>
+                          <div className="anime-scroll">
+                            {fTrending.map(item => <AnimeCard key={item.id} item={item} />)}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Top All Time */}
+                      {fTop.length > 0 && (
+                        <div className="anime-row">
+                          <div className="anime-row-header">
+                            <p className="anime-row-title">⭐ TOP ALL TIME</p>
+                            <Link href="/murastream/search" className="anime-row-more">View All →</Link>
+                          </div>
+                          <div className="anime-scroll">
+                            {fTop.map(item => <AnimeCard key={item.id} item={item} />)}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Upcoming */}
+                      {fUpcoming.length > 0 && (
+                        <div className="anime-row">
+                          <div className="anime-row-header">
+                            <p className="anime-row-title">📅 UPCOMING</p>
+                          </div>
+                          <div className="anime-scroll">
+                            {fUpcoming.map(item => <AnimeCard key={item.id} item={item} />)}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </>
             )}
           </>
