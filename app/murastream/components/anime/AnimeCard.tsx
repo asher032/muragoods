@@ -1,18 +1,29 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
 import type { MediaItem } from '../../types';
 
 export default function AnimeCard({ item }: { item: MediaItem }) {
+  const [imgError, setImgError] = useState(false);
   const score = item.score || item.voteAverage || 0;
   const episodes = item.episodes;
   const status = item.status;
   const genres = item.genres?.slice(0, 2);
 
+  const showPoster = item.posterPath && !imgError;
+
   return (
     <Link href={`/murastream/tv/${item.id}${item.anilistId ? `?anilist=${item.anilistId}` : ''}`} style={{ textDecoration: 'none', color: 'inherit' }}>
       <div className="anime-card">
         <div className="anime-card-poster">
-          {item.posterPath ? (
-            <img src={item.posterPath} alt={item.title} loading="lazy" />
+          {showPoster ? (
+            <img
+              src={item.posterPath!}
+              alt={item.title}
+              loading="lazy"
+              onError={() => setImgError(true)}
+            />
           ) : (
             <div style={{
               width: '100%', height: '100%', background: 'linear-gradient(135deg, #111, #1A1A2E)',
