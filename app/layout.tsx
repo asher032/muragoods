@@ -11,6 +11,8 @@ import { OrderNotificationPoller } from "@/app/components/OrderNotifications";
 import { BottomNavBar } from "@/app/components/BottomNavBar";
 import { CookieNotice } from "@/app/components/CookieNotice";
 import { PageTransition } from "@/app/components/PageTransition";
+import { AuthProvider } from "@/app/contexts/AuthContext";
+import ProtectedRoutes from "@/app/components/ProtectedRoutes";
 
 
 const pressStart = Press_Start_2P({
@@ -83,13 +85,17 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en">
       <body className={`${pressStart.variable} ${josefin.variable}`} style={{ fontFamily: "var(--font-body)" }}>
         <NotificationProvider>
+          <AuthProvider>
           <AppLoader>
+            <ProtectedRoutes>
             <PageTransition>
               {children}
             </PageTransition>
+            </ProtectedRoutes>
             <BottomNavBar />
             <CookieNotice />
           </AppLoader>
+          </AuthProvider>
           <OrderNotificationPoller />
           <PWAInstallBanner />
           <NotificationSetup />

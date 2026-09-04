@@ -10,7 +10,7 @@ export default function MuraStreamLoader({ fullScreen = true, text }: { fullScre
   if (!fullScreen) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', padding: '24px' }}>
       {loader}
-      {text && <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: '#A0A0A0', letterSpacing: '0.1em' }}>{text}</p>}
+      {text && <p style={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: '13px', color: '#A0A0A0' }}>{text}</p>}
     </div>
   );
 
@@ -26,7 +26,7 @@ export default function MuraStreamLoader({ fullScreen = true, text }: { fullScre
         .ms-loader {
           width: 44.8px;
           height: 44.8px;
-          color: #B85CFF;
+          color: #554cb5;
           position: relative;
           background: radial-gradient(11.2px, currentColor 94%, #0000);
         }
@@ -66,7 +66,7 @@ export default function MuraStreamLoader({ fullScreen = true, text }: { fullScre
         gap: '16px',
       }}>
         {loader}
-        {text && <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: '#A0A0A0', letterSpacing: '0.1em' }}>{text}</p>}
+        {text && <p style={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: '13px', color: '#A0A0A0' }}>{text}</p>}
       </div>
     </>
   );

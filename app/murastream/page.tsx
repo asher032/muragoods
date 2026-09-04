@@ -202,9 +202,11 @@ export default function MuraStreamHome() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<MediaItem[]>([]);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState(false);
   const { continueWatching } = useMuraStreamStore();
   const [activeTab, setActiveTab] = useState('trending');
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
 
   const fetchTMDB = useCallback(async (action: string, params: Record<string, string> = {}) => {
     const sp = new URLSearchParams({ action, ...params });
@@ -249,20 +251,37 @@ export default function MuraStreamHome() {
     load();
   }, [fetchTMDB]);
 
-  // Search with debounce
+  // Search with debounce + AbortController
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    if (!searchQuery.trim()) { setSearchResults([]); return; }
+    if (searchAbortRef.current) searchAbortRef.current.abort();
+    if (!searchQuery.trim()) { setSearchResults([]); setSearching(false); setSearchError(false); return; }
     setSearching(true);
+    setSearchError(false);
     searchTimerRef.current = setTimeout(async () => {
       try {
-        const data = await fetchTMDB('search', { query: searchQuery });
+        const controller = new AbortController();
+        searchAbortRef.current = controller;
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const sp = new URLSearchParams({ action: 'search', query: searchQuery });
+        const res = await fetch(`/api/murastream/tmdb?${sp}`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (!res.ok) throw new Error('Search failed');
+        const data = await res.json();
         setSearchResults(data.results || []);
-      } catch { setSearchResults([]); }
-      setSearching(false);
-    }, 400);
-    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
-  }, [searchQuery, fetchTMDB]);
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        setSearchResults([]);
+        setSearchError(true);
+      } finally {
+        setSearching(false);
+      }
+    }, 350);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+      if (searchAbortRef.current) searchAbortRef.current.abort();
+    };
+  }, [searchQuery]);
 
   const heroItem = activeTab === 'trending' && trendingMovies.length > 0
     ? trendingMovies[0]
@@ -318,6 +337,14 @@ export default function MuraStreamHome() {
             </p>
             {searching ? (
               <MuraStreamLoader fullScreen={false} text="Searching..." />
+            ) : searchError ? (
+              <div style={{ textAlign: 'center', padding: '24px', color: '#ef4444' }}>
+                <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '13px' }}>Search failed. Please try again.</p>
+              </div>
+            ) : searchResults.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '24px', color: '#666' }}>
+                <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '13px' }}>No results found</p>
+              </div>
             ) : (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '18px' }}>
                 {searchResults.map(item => <MuraStreamCard key={item.id} item={item} />)}
