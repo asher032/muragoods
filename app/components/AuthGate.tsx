@@ -1,18 +1,21 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { useAuth } from '@/app/contexts/AuthContext';
 import MuraStreamLoader from '@/app/murastream/components/MuraStreamLoader';
 
 export default function AuthGate({ children }: { children: React.ReactNode }) {
-  const { user, state, login, signup, logout } = useAuth();
+  const { user, state, login, signup } = useAuth();
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
 
   // Loading state — show loader while checking session
   if (state === 'checking') {
@@ -51,6 +54,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
     setLoading(true);
 
     if (mode === 'signup') {
@@ -70,7 +74,9 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
         return;
       }
       const result = await signup(name, email, password);
-      if (!result.success) {
+      if (result.success) {
+        setSuccess('Account created! Check your email for a verification code.');
+      } else {
         setError(result.error || 'Signup failed');
       }
     } else {
@@ -86,6 +92,30 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     }
 
     setLoading(false);
+  };
+
+  const handleResendVerification = async () => {
+    if (!email) { setError('Enter your email first'); return; }
+    setResending(true);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await fetch('/api/auth/verify-email/resend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        setSuccess(result.message || 'Verification code sent! Check your inbox.');
+      } else {
+        setError(result.error || 'Failed to resend code');
+      }
+    } catch {
+      setError('Failed to resend code');
+    } finally {
+      setResending(false);
+    }
   };
 
   return (
@@ -125,7 +155,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
 
           {/* Tabs */}
           <div style={{ display: 'flex', gap: '4px', marginBottom: '28px', background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '4px' }}>
-            <button onClick={() => { setMode('login'); setError(''); }} style={{
+            <button onClick={() => { setMode('login'); setError(''); setSuccess(''); }} style={{
               flex: 1, padding: '10px', borderRadius: '8px', border: 'none', cursor: 'pointer',
               background: mode === 'login' ? 'rgba(184,92,255,0.15)' : 'transparent',
               color: mode === 'login' ? '#B85CFF' : '#888',
@@ -134,7 +164,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
             }}>
               Sign In
             </button>
-            <button onClick={() => { setMode('signup'); setError(''); }} style={{
+            <button onClick={() => { setMode('signup'); setError(''); setSuccess(''); }} style={{
               flex: 1, padding: '10px', borderRadius: '8px', border: 'none', cursor: 'pointer',
               background: mode === 'signup' ? 'rgba(184,92,255,0.15)' : 'transparent',
               color: mode === 'signup' ? '#B85CFF' : '#888',
@@ -207,6 +237,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
               </div>
             )}
 
+            {/* Error message */}
             {error && (
               <div style={{
                 padding: '10px 14px', borderRadius: '8px', marginBottom: '16px',
@@ -214,6 +245,17 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
                 fontFamily: '-apple-system, sans-serif', fontSize: '13px', color: '#ef4444',
               }}>
                 {error}
+              </div>
+            )}
+
+            {/* Success message */}
+            {success && (
+              <div style={{
+                padding: '10px 14px', borderRadius: '8px', marginBottom: '16px',
+                background: 'rgba(6,214,160,0.1)', border: '1px solid rgba(6,214,160,0.2)',
+                fontFamily: '-apple-system, sans-serif', fontSize: '13px', color: '#06d6a0',
+              }}>
+                ✓ {success}
               </div>
             )}
 
@@ -227,7 +269,40 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
               {loading ? 'Loading...' : mode === 'login' ? 'Sign In' : 'Create Account'}
             </button>
           </form>
+
+          {/* Forgot Password + Resend Verification — login mode only */}
+          {mode === 'login' && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px' }}>
+              <Link href="/forgot-password" style={{
+                fontFamily: '-apple-system, sans-serif', fontSize: '13px',
+                color: '#B85CFF', textDecoration: 'none', fontWeight: 500,
+              }}>
+                Forgot Password?
+              </Link>
+              <button
+                onClick={handleResendVerification}
+                disabled={resending || !email}
+                style={{
+                  background: 'none', border: 'none', cursor: resending ? 'not-allowed' : 'pointer',
+                  fontFamily: '-apple-system, sans-serif', fontSize: '13px',
+                  color: resending ? '#555' : '#888', fontWeight: 500,
+                  padding: 0,
+                }}
+              >
+                {resending ? 'Sending...' : 'Resend Code'}
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Back to MuraGoods */}
+        <Link href="/" style={{
+          display: 'block', textAlign: 'center', marginTop: '16px',
+          fontFamily: '-apple-system, sans-serif', fontSize: '13px',
+          color: '#666', textDecoration: 'none',
+        }}>
+          ← Back to MuraGoods
+        </Link>
       </div>
     </div>
   );

@@ -47,6 +47,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Invalid email or password' }, { status: 401 });
     }
 
+    // Auto-verify legacy accounts that have no verificationCode (created before verification system)
+    if (user && !user.emailVerified && !user.verificationCode) {
+      user.emailVerified = true;
+      await user.save();
+    }
+
     // Generate userId for users who signed up before the field existed
     let userId = user.userId;
     if (!userId) {
