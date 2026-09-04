@@ -11,8 +11,8 @@ interface Source {
 }
 
 const SOURCES: Source[] = [
-  { id: 'vidking', name: 'VidKing', baseUrl: 'https://www.vidking.net/embed' },
-  { id: 'videasy', name: 'Videasy', baseUrl: 'https://player.videasy.to' },
+  { id: 'vidlink', name: 'VidLink', baseUrl: 'https://vidlink.pro' },
+  { id: '2embed', name: '2Embed', baseUrl: 'https://www.2embed.cc/embed/tmdb' },
 ];
 
 function getSourceUrl(source: Source, type: string, id: number, season?: number, episode?: number): string {
