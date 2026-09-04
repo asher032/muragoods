@@ -434,7 +434,7 @@ export default function MuraStreamHome() {
             fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
             fontSize: '12px', color: '#444', letterSpacing: '0.05em',
           }}>
-            MURASTREAM — Powered by TMDB & MyAnimeList
+            MURASTREAM — Powered by TMDB and & MyAnimeList
           </p>
         </div>
       </div>
