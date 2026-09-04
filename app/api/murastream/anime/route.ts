@@ -310,9 +310,16 @@ export async function GET(request: NextRequest) {
     const response = data as Record<string, unknown>;
     if (response.data && Array.isArray(response.data)) {
       response.data = response.data.map((item: Record<string, unknown>) => {
-        // If already in our format (from TMDB fallback), return as-is
-        if (item.mediaType && item.posterPath !== undefined) return item;
-        return toMediaItem(item);
+        let transformed: Record<string, unknown>;
+        if (item.mediaType && item.posterPath !== undefined) {
+          transformed = { ...item };
+        } else {
+          transformed = toMediaItem(item);
+        }
+        // Always ensure sub/dub flags exist
+        if (transformed.hasSub === undefined) transformed.hasSub = true;
+        if (transformed.hasDub === undefined) transformed.hasDub = false;
+        return transformed;
       });
     }
 
