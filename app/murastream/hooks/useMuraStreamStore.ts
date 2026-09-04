@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import type { MediaItem, HistoryItem } from '../types';
 
 // ─── localStorage helpers ────────────────────────────────────────
@@ -21,6 +21,30 @@ function removeKey(key: string) {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(key);
 }
+
+export type MuraStreamSettings = {
+  autoplay: boolean;
+  autoplayNext: boolean;
+  continueWatching: boolean;
+  subtitleSize: number;
+  subtitleLang: string;
+  appearance: 'dark' | 'light' | 'system';
+  compactCards: boolean;
+  watchHistory: boolean;
+  recommendations: boolean;
+};
+
+export const DEFAULT_SETTINGS: MuraStreamSettings = {
+  autoplay: true,
+  autoplayNext: true,
+  continueWatching: true,
+  subtitleSize: 100,
+  subtitleLang: 'en',
+  appearance: 'dark',
+  compactCards: false,
+  watchHistory: true,
+  recommendations: true,
+};
 
 export type AnimeProgress = {
   id: number; // MAL or TMDB id
@@ -166,6 +190,30 @@ export function useMuraStreamStore() {
       .slice(0, 10);
   }, [history]);
 
+  // ─── Settings ────────────────────────────────────────
+  const [settings, setSettingsState] = useState<MuraStreamSettings>(() =>
+    readJSON<MuraStreamSettings>(KEYS.settings, DEFAULT_SETTINGS)
+  );
+  const updateSettings = useCallback((partial: Partial<MuraStreamSettings>) => {
+    setSettingsState(prev => {
+      const next = { ...prev, ...partial };
+      writeJSON(KEYS.settings, next);
+      return next;
+    });
+  }, []);
+
+  // ─── Clear all library data ────────────────────────
+  const clearAllLibrary = useCallback(() => {
+    setLikesState([]);
+    setMyListState([]);
+    setHistoryState([]);
+    setAnimeProgressState([]);
+    removeKey(KEYS.likes);
+    removeKey(KEYS.myList);
+    removeKey(KEYS.history);
+    removeKey(KEYS.animeProgress);
+  }, []);
+
   // Remove individual item from any list
   const removeFromLikes = useCallback((id: number) => {
     setLikesState(prev => {
@@ -181,6 +229,60 @@ export function useMuraStreamStore() {
       return next;
     });
   }, []);
+
+  // ─── MongoDB Sync ────────────────────────────────────
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const emailRef = useRef<string | null>(null);
+
+  // Read user email from localStorage (set by AuthContext)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('user');
+      if (raw) { const u = JSON.parse(raw); emailRef.current = u?.email || null; }
+    } catch { /* empty */ }
+  }, []);
+
+  // Load from MongoDB on mount (if authenticated)
+  useEffect(() => {
+    const email = emailRef.current;
+    if (!email) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/murastream/library?email=${encodeURIComponent(email)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.likes?.length) { setLikesState(data.likes); writeJSON(KEYS.likes, data.likes); }
+        if (data.myList?.length) { setMyListState(data.myList); writeJSON(KEYS.myList, data.myList); }
+        if (data.history?.length) { setHistoryState(data.history); writeJSON(KEYS.history, data.history); }
+        if (data.animeProgress?.length) { setAnimeProgressState(data.animeProgress); writeJSON(KEYS.animeProgress, data.animeProgress); }
+        if (data.settings && Object.keys(data.settings).length > 0) {
+          setSettingsState(prev => { const merged = { ...prev, ...data.settings }; writeJSON(KEYS.settings, merged); return merged; });
+        }
+      } catch (err) { console.error('[Library sync load]', err); }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Debounced save to MongoDB
+  const saveToMongo = useCallback(() => {
+    const email = emailRef.current;
+    if (!email) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        await fetch('/api/murastream/library', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, likes, myList, history, animeProgress, settings }),
+        });
+      } catch (err) { console.error('[Library sync save]', err); }
+    }, 2000);
+  }, [likes, myList, history, animeProgress, settings]);
+
+  useEffect(() => { saveToMongo(); }, [saveToMongo]);
+
+  // Cleanup timer
+  useEffect(() => { return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); }; }, []);
 
   return {
     // Likes
@@ -204,6 +306,11 @@ export function useMuraStreamStore() {
     getAnimeProgress,
     removeAnimeProgress,
     animeContinueWatching,
+    // Settings
+    settings,
+    updateSettings,
+    // Clear
+    clearAllLibrary,
     // Derived
     continueWatching,
   } as const;

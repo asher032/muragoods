@@ -1,30 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-
-type Settings = {
-  autoplay: boolean;
-  autoplayNext: boolean;
-  continueWatching: boolean;
-  subtitleSize: number;
-  subtitleLang: string;
-  appearance: 'dark' | 'light' | 'system';
-  compactCards: boolean;
-  watchHistory: boolean;
-  recommendations: boolean;
-};
-
-const defaultSettings: Settings = {
-  autoplay: true,
-  autoplayNext: true,
-  continueWatching: true,
-  subtitleSize: 100,
-  subtitleLang: 'en',
-  appearance: 'dark',
-  compactCards: false,
-  watchHistory: true,
-  recommendations: true,
-};
+import { useState } from 'react';
+import { useMuraStreamStore, type MuraStreamSettings } from '../hooks/useMuraStreamStore';
 
 function Toggle({ enabled, onChange }: { enabled: boolean; onChange: () => void }) {
   return (
@@ -47,25 +24,22 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: () => void 
 }
 
 export default function MuraStreamSettingsPage() {
-  const [settings, setSettings] = useState<Settings>(defaultSettings);
+  const { settings, updateSettings, clearHistory, clearAllLibrary } = useMuraStreamStore();
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('ms-settings');
-      if (stored) setSettings({ ...defaultSettings, ...JSON.parse(stored) });
-    } catch { /* empty */ }
-  }, []);
-
-  const update = (key: keyof Settings, value: boolean | number | string) => {
-    const next = { ...settings, [key]: value };
-    setSettings(next);
-    localStorage.setItem('ms-settings', JSON.stringify(next));
+  const update = (key: keyof MuraStreamSettings, value: boolean | number | string) => {
+    updateSettings({ [key]: value } as Partial<MuraStreamSettings>);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const toggle = (key: keyof Settings) => update(key, !settings[key as keyof Settings]);
+  const toggle = (key: keyof MuraStreamSettings) => update(key, !settings[key]);
+
+  const handleClear = (action: () => void) => {
+    action();
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
 
   return (
     <div style={{ padding: '24px 28px', maxWidth: '500px' }}>
@@ -153,21 +127,14 @@ export default function MuraStreamSettingsPage() {
           <Toggle enabled={settings.recommendations} onChange={() => toggle('recommendations')} />
         </SettingRow>
         <SettingRow label="Clear Watch History" desc="Remove all watch history">
-          <button onClick={() => { localStorage.removeItem('ms-history'); setSaved(true); setTimeout(() => setSaved(false), 2000); }} style={{
+          <button onClick={() => handleClear(clearHistory)} style={{
             padding: '5px 12px', borderRadius: '6px', border: '1px solid rgba(230,57,70,0.3)',
             background: 'rgba(230,57,70,0.1)', color: '#e63946',
             fontFamily: 'var(--font-arcade)', fontSize: '8px', cursor: 'pointer',
           }}>Clear</button>
         </SettingRow>
-        <SettingRow label="Clear Likes" desc="Remove all liked titles">
-          <button onClick={() => { localStorage.removeItem('ms-likes'); setSaved(true); setTimeout(() => setSaved(false), 2000); }} style={{
-            padding: '5px 12px', borderRadius: '6px', border: '1px solid rgba(230,57,70,0.3)',
-            background: 'rgba(230,57,70,0.1)', color: '#e63946',
-            fontFamily: 'var(--font-arcade)', fontSize: '8px', cursor: 'pointer',
-          }}>Clear</button>
-        </SettingRow>
-        <SettingRow label="Clear Library Data" desc="Remove all library and list data">
-          <button onClick={() => { localStorage.removeItem('ms-mylist'); localStorage.removeItem('ms-likes'); localStorage.removeItem('ms-history'); setSaved(true); setTimeout(() => setSaved(false), 2000); }} style={{
+        <SettingRow label="Clear Library Data" desc="Remove all library, list, and likes data">
+          <button onClick={() => handleClear(clearAllLibrary)} style={{
             padding: '5px 12px', borderRadius: '6px', border: '1px solid rgba(230,57,70,0.3)',
             background: 'rgba(230,57,70,0.1)', color: '#e63946',
             fontFamily: 'var(--font-arcade)', fontSize: '8px', cursor: 'pointer',
