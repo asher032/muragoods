@@ -1,8 +1,28 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import MuraStreamLayout from './components/MuraStreamLayout';
 
 export default function MuraStreamLayoutWrapper({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const [displayChildren, setDisplayChildren] = useState(children);
+  const [transitionStage, setTransitionStage] = useState('enter');
+
+  useEffect(() => {
+    setTransitionStage('exit');
+    const timer = setTimeout(() => {
+      setDisplayChildren(children);
+      setTransitionStage('enter');
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [pathname]);
+
+  // Also update children when they change (same page, different data)
+  useEffect(() => {
+    setDisplayChildren(children);
+  }, [children]);
+
   return (
     <div style={{ background: '#0A0A0A', minHeight: '100vh' }}>
       <style jsx global>{`
@@ -228,14 +248,25 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           margin-bottom: 16px;
         }
         /* ─── Smooth page transitions ──────────────────── */
-        @keyframes msFadeIn {
-          from { opacity: 0; transform: translateY(12px); }
+        @keyframes msPageEnter {
+          from { opacity: 0; transform: translateY(16px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        .ms-page-enter { animation: msFadeIn 0.4s ease-out; }
+        @keyframes msPageExit {
+          from { opacity: 1; transform: translateY(0); }
+          to { opacity: 0; transform: translateY(-8px); }
+        }
+        .ms-page-transition-enter {
+          animation: msPageEnter 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+        .ms-page-transition-exit {
+          animation: msPageExit 0.15s ease-in forwards;
+        }
       `}</style>
       <MuraStreamLayout>
-        {children}
+        <div className={`ms-page-transition-${transitionStage}`}>
+          {displayChildren}
+        </div>
       </MuraStreamLayout>
     </div>
   );
