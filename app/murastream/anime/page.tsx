@@ -204,14 +204,34 @@ export default function AnimePage() {
         const seasonalData = seasonalRes.status === 'fulfilled' ? seasonalRes.value : { data: [] };
         const upcomingData = upcomingRes.status === 'fulfilled' ? upcomingRes.value : { data: [] };
 
-        setTopAllTime(topData.data || []);
-        setTrending(trendData.data || []);
-        setSeasonal(seasonalData.data || []);
-        setUpcoming(upcomingData.data || []);
+        let topAnime = topData.data || [];
+        let trendAnime = trendData.data || [];
+        let seasonalAnime = seasonalData.data || [];
+        let upcomingAnime = upcomingData.data || [];
+
+        // Fallback: if Jikan returns nothing, use TMDB anime (genre 16, Japanese)
+        if (topAnime.length === 0 && trendAnime.length === 0) {
+          try {
+            const tmdbRes = await fetch('/api/murastream/tmdb?action=trending&type=tv&window=week');
+            const tmdbData = await tmdbRes.json();
+            const anime = (tmdbData.results || []).filter((item: MediaItem & { genreIds?: number[]; originalLanguage?: string }) =>
+              (item.genreIds || []).includes(16) && item.originalLanguage === 'ja'
+            );
+            if (anime.length > 0) {
+              topAnime = anime;
+              trendAnime = anime.slice(0, 10);
+            }
+          } catch { /* empty */ }
+        }
+
+        setTopAllTime(topAnime);
+        setTrending(trendAnime);
+        setSeasonal(seasonalAnime);
+        setUpcoming(upcomingAnime);
 
         // Use top anime as featured
-        if (topData.data?.length > 0) {
-          setFeatured(topData.data[0]);
+        if (topAnime.length > 0) {
+          setFeatured(topAnime[0]);
         }
       } catch (err) {
         console.error('Failed to load anime:', err);

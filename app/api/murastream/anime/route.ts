@@ -5,13 +5,26 @@ import { NextRequest, NextResponse } from 'next/server';
 const JIKAN_BASE = 'https://api.jikan.moe/v4';
 
 // Rate-limit: Jikan allows 3 req/sec. We add a small delay between calls.
-async function jikanFetch(path: string): Promise<unknown> {
-  const res = await fetch(`${JIKAN_BASE}${path}`, {
-    headers: { 'Accept': 'application/json' },
-    next: { revalidate: 300 }, // Cache for 5 minutes
-  });
-  if (!res.ok) throw new Error(`Jikan ${res.status}: ${path}`);
-  return res.json();
+async function jikanFetch(path: string, retries = 3): Promise<unknown> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const res = await fetch(`${JIKAN_BASE}${path}`, {
+        headers: { 'Accept': 'application/json' },
+        next: { revalidate: 300 }, // Cache for 5 minutes
+      });
+      if (res.status === 429 || res.status === 504) {
+        // Rate limited or gateway timeout — wait and retry
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
+      }
+      if (!res.ok) throw new Error(`Jikan ${res.status}: ${path}`);
+      return res.json();
+    } catch (err) {
+      if (attempt === retries - 1) throw err;
+      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
+  throw new Error(`Jikan failed after ${retries} retries: ${path}`);
 }
 
 // Convert Jikan anime to our MediaItem shape
