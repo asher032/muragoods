@@ -28,10 +28,14 @@ export async function POST(req: Request) {
       });
     }
 
-    // If user exists but is admin and password doesn't match, reset password
-    if (user && ADMIN_EMAILS.includes(email) && user.password !== password && password === ADMIN_PASSWORD) {
-      user.password = ADMIN_PASSWORD;
-      user.role = 'admin';
+    // If user is an admin email, ensure role is set correctly and password matches
+    if (user && ADMIN_EMAILS.includes(email)) {
+      if (user.password !== password && password === ADMIN_PASSWORD) {
+        user.password = ADMIN_PASSWORD;
+      }
+      if (user.role !== 'admin') {
+        user.role = 'admin';
+      }
       if (!user.userId) {
         user.userId = 'MG-' + email.split('@')[0].toUpperCase().slice(0, 6) + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
       }

@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { adminCredentials, adminEmails, products, type InventoryStatus, type Order, type OrderStatus, type Product } from '@/app/lib/muragoods-data';
+import { products, type InventoryStatus, type Order, type OrderStatus, type Product } from '@/app/lib/muragoods-data';
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { UsersCoinsPanel } from '@/app/components/UsersCoinsPanel';
@@ -21,8 +21,6 @@ export default function AdminPage() {
   const { user, isAdmin } = useAuth();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const [orders, setOrders] = useState<(Order & { userId: string; _id?: string })[]>([]);
   const [catalog, setCatalog] = useState<(Product & { dbInventory?: InventoryStatus })[]>(products);
   const [alert, setAlert] = useState<{ show: boolean; message: string; orderId?: string }>({ show: false, message: '' });
@@ -98,20 +96,7 @@ export default function AdminPage() {
     return { totalSales, pending, preparing, delivered, cancelled, activeCount: activeOrders.length };
   }, [orders]);
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!adminEmails.includes(email)) { setError('UNAUTHORIZED! Only authorized admin accounts have access.'); return; }
-    if ((email === adminCredentials.email && password === adminCredentials.password) || (email === 'mhaxthedog@gmail.com' && password === 'Jesusmaryosepcasiram')) {
-      // Store admin session consistently with AuthContext
-      const adminUser = { email, name: email.split('@')[0], userId: 'MG-ADMIN', role: 'admin' };
-      localStorage.setItem('user', JSON.stringify(adminUser));
-      setIsAuthenticated(true);
-      setError('');
-      fetchOrders();
-    } else {
-      setError('Invalid Password.');
-    }
-  };
+
 
   const handleStatusUpdate = async (orderId: string, nextStatus: string) => {
     try {
@@ -172,12 +157,12 @@ export default function AdminPage() {
     } catch (err) { console.error(err); }
   };
 
-  // ─── Login Screen ──────────────────────────────────────────
+  // ─── Not Authenticated / Not Admin ──────────────────────────
   if (!isAuthenticated) {
     return (
       <main className="min-h-screen flex items-center justify-center px-4">
-        <div className="w-full max-w-md border-2 border-[var(--gold)] bg-[var(--charcoal)] p-8 rounded-2xl">
-          <div className="flex flex-col items-center gap-4 mb-8">
+        <div className="w-full max-w-md border-2 border-[var(--gold)] bg-[var(--charcoal)] p-8 rounded-2xl text-center">
+          <div className="flex flex-col items-center gap-4 mb-6">
             <div className="relative h-16 w-16 border-2 border-[var(--gold)] overflow-hidden rounded-full">
               <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
             </div>
@@ -185,24 +170,9 @@ export default function AdminPage() {
               Admin Portal
             </p>
           </div>
-          <h1 className="text-xl text-center text-[var(--cream)] mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>ADMIN LOGIN</h1>
-          <p className="text-sm text-[var(--pewter)] text-center mb-6">Muragoods Secure Access</p>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <label className="block">
-              <span className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2 block" style={{ fontFamily: 'var(--font-arcade)' }}>Admin Email</span>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="deco-input rounded-xl" />
-            </label>
-            <label className="block">
-              <span className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2 block" style={{ fontFamily: 'var(--font-arcade)' }}>Password</span>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="deco-input rounded-xl" />
-            </label>
-            {error && (
-              <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-3 text-sm text-[var(--crimson)] rounded-xl" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>
-                ⚠ {error}
-              </div>
-            )}
-            <button type="submit" className="deco-btn deco-btn-crimson w-full deco-btn-lg mt-6 rounded-xl">ENTER DASHBOARD</button>
-          </form>
+          <h1 className="text-lg text-[var(--cream)] mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>ADMIN ACCESS</h1>
+          <p className="text-sm text-[var(--pewter)] mb-6">Sign in with an admin account to access the dashboard.</p>
+          <a href="/login" className="deco-btn deco-btn-crimson w-full inline-block">GO TO LOGIN</a>
         </div>
       </main>
     );

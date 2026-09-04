@@ -7,6 +7,7 @@ import { NavBar } from '@/app/components/NavBar';
 import { PixelDivider } from '@/app/components/PixelDivider';
 import { useCoins } from '@/app/hooks/useCoins';
 import { Icon } from '@/app/components/Icon';
+import FlappyBirdIcon from '@/app/components/icons/FlappyBirdIcon';
 
 const features = [
   {
@@ -26,7 +27,7 @@ const features = [
     tagColor: 'var(--emerald-bright)',
   },
   {
-    icon: '🐦',
+    icon: <FlappyBirdIcon size={28} color="var(--gold)" />,
     title: 'Flappy Bird',
     desc: 'Tap to fly through pipes! Earn coins for every pipe you pass. How far can you go?',
     link: '/play/flappy',
