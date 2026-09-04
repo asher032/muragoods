@@ -18,9 +18,16 @@ export default function MuraStreamCard({
   episode?: number;
 }) {
   const { toggleMyList, isInMyList } = useMuraStreamStore();
-  const href = item.mediaType === 'tv'
+
+  // Build href with anilistId and malId as query params when available
+  const baseHref = item.mediaType === 'tv'
     ? `/murastream/tv/${item.id}`
     : `/murastream/movie/${item.id}`;
+  const params = new URLSearchParams();
+  if (item.anilistId) params.set('anilist', String(item.anilistId));
+  if (item.malId) params.set('mal', String(item.malId));
+  const qs = params.toString();
+  const href = qs ? `${baseHref}?${qs}` : baseHref;
 
   const inList = isInMyList(item.id);
 
@@ -45,7 +52,7 @@ export default function MuraStreamCard({
           </div>
         )}
 
-        {/* Hover overlay with play + actions */}
+        {/* Hover overlay */}
         <div className="ms-card-overlay">
           <div className="ms-card-play">
             <svg width="18" height="18" fill="#fff" viewBox="0 0 16 16">

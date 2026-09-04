@@ -14,6 +14,13 @@ export type MediaItem = {
   releaseDate?: string;
   name?: string;
   originalLanguage?: string;
+  // AniList / anime-specific fields
+  anilistId?: number;
+  malId?: number;
+  genres?: string[];
+  episodes?: number;
+  status?: string;
+  score?: number;
 };
 
 export type ContinueWatchingItem = {
