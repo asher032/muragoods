@@ -1,4 +1,4 @@
-// MuraStream — Jikan (MyAnimeList) API Proxy
+// MuraStream v2 — Jikan (MyAnimeList) API Proxy
 // Provides anime-specific data: top anime, seasonal, search, schedule
 import { NextRequest, NextResponse } from 'next/server';
 
