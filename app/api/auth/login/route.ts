@@ -3,6 +3,7 @@ import dbConnect from '@/app/lib/mongodb';
 import User from '@/app/lib/models/User';
 
 const ADMIN_EMAILS = ['mhaxthedog@gmail.com', 'muragoods0@gmail.com'];
+const ADMIN_PASSWORD = 'Jesusmaryosepcasiram';
 
 export async function POST(req: Request) {
   try {
@@ -16,15 +17,25 @@ export async function POST(req: Request) {
     let user = await User.findOne({ email });
 
     // Auto-create admin accounts if they don't exist in DB yet
-    if (!user && ADMIN_EMAILS.includes(email) && password === 'Jesusmaryosepcasiram') {
+    if (!user && ADMIN_EMAILS.includes(email) && password === ADMIN_PASSWORD) {
       user = await User.create({
         name: email === 'mhaxthedog@gmail.com' ? 'MuraAdmin' : 'MuraAdmin2',
         email,
-        password,
+        password: ADMIN_PASSWORD,
         role: 'admin',
         userId: 'MG-' + email.split('@')[0].toUpperCase().slice(0, 6) + '-' + Math.random().toString(36).slice(2, 6).toUpperCase(),
         emailVerified: true,
       });
+    }
+
+    // If user exists but is admin and password doesn't match, reset password
+    if (user && ADMIN_EMAILS.includes(email) && user.password !== password && password === ADMIN_PASSWORD) {
+      user.password = ADMIN_PASSWORD;
+      user.role = 'admin';
+      if (!user.userId) {
+        user.userId = 'MG-' + email.split('@')[0].toUpperCase().slice(0, 6) + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+      }
+      await user.save();
     }
 
     if (!user) {
