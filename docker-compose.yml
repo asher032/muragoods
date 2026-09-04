@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  shoko:
+    image: shokoanime/server:latest
+    container_name: shokoserver
+    ports:
+      - "8111:8111"
+    volumes:
+      - shoko-data:/home/shoko/.shoko
+    environment:
+      - SHOKO_HOME=/home/shoko/.shoko
+      - ENABLE_RESTART=true
+    restart: unless-stopped
+
+volumes:
+  shoko-data:
