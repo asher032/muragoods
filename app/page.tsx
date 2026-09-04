@@ -151,6 +151,7 @@ function MarqueeBanner() {
     { text: 'EARN COINS', icon: <Icon name="coin" size={12} /> },
     { text: 'PLAY GAMES', icon: <Icon name="game" size={12} /> },
     { text: 'SEND LETTERS', icon: <Icon name="envelope" size={12} /> },
+    { text: 'WATCH MOVIES', icon: <Icon name="stream" size={12} /> },
     { text: 'COFFEE JELLY', icon: <Icon name="food" size={12} /> },
     { text: 'COOKIES', icon: <Icon name="food" size={12} /> },
     { text: 'RATED 4.9', icon: <Icon name="star" size={12} /> },
@@ -283,7 +284,7 @@ export default function Home() {
             {/* Subtitle */}
             <Reveal delay={0.35}>
               <p className="text-mario-yellow font-arcade text-sm sm:text-base mb-3">
-                MUSUBI · CHURROS · COFFEE JELLY · COOKIES
+                FOOD · LETTERS · GAMES · MOVIES
               </p>
             </Reveal>
             <Reveal delay={0.4}>
@@ -297,23 +298,15 @@ export default function Home() {
               <div className="flex flex-wrap justify-center gap-4 mb-12">
                 <Link href="/menu">
                   <AnimatedButton
-                    className="px-8 py-3 font-arcade text-sm"
+                    className="px-10 py-3 font-arcade text-sm"
                     style={{ background: 'rgba(6,214,160,0.15)', borderColor: 'rgba(6,214,160,0.3)', color: '#06d6a0' }}
                   >
                     🍕 ORDER NOW
                   </AnimatedButton>
                 </Link>
-                <Link href="/orders">
-                  <AnimatedButton
-                    className="px-8 py-3 font-arcade text-sm"
-                    style={{ background: 'rgba(255,214,10,0.15)', borderColor: 'rgba(255,214,10,0.3)', color: '#ffd60a' }}
-                  >
-                    📦 VIEW ORDERS
-                  </AnimatedButton>
-                </Link>
                 <Link href="/murastream">
                   <AnimatedButton
-                    className="px-8 py-3 font-arcade text-sm"
+                    className="px-10 py-3 font-arcade text-sm"
                     style={{ background: 'rgba(230,57,70,0.15)', borderColor: 'rgba(230,57,70,0.3)', color: '#e63946' }}
                   >
                     🎬 MOVIES
@@ -565,12 +558,11 @@ export default function Home() {
         <div className="mario-container relative z-10 text-center">
           <Reveal direction="scale">
             <div className="text-6xl sm:text-8xl mb-6">🎬</div>
-          </Reveal>
-          <Reveal delay={0.1}>
-            <h2 className="mario-title text-xl sm:text-3xl mb-4" style={{ color: '#e63946' }}>
-              MuraStream
-            </h2>
-          </Reveal>
+          </Reveal>            <Reveal delay={0.1}>
+              <h2 className="mario-title text-xl sm:text-3xl mb-4" style={{ color: '#B85CFF' }}>
+                MuraStream
+              </h2>
+            </Reveal>
           <Reveal delay={0.2}>
             <p className="text-mario-text-muted text-sm sm:text-base max-w-xl mx-auto mb-2">
               Your next adventure starts here.
@@ -584,7 +576,7 @@ export default function Home() {
               <Link href="/murastream">
                 <AnimatedButton
                   className="px-10 py-4 font-arcade text-sm"
-                  style={{ background: 'rgba(230,57,70,0.2)', borderColor: 'rgba(230,57,70,0.4)', color: '#e63946' }}
+                  style={{ background: 'rgba(184,92,255,0.2)', borderColor: 'rgba(184,92,255,0.4)', color: '#B85CFF' }}
                 >
                   🎬 EXPLORE MOVIES →
                 </AnimatedButton>

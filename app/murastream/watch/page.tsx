@@ -119,7 +119,7 @@ function WatchContent() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(15,15,26,0.95)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button onClick={() => router.back()} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', fontFamily: 'var(--font-arcade)', fontSize: '8px', color: '#ccc' }}>← Back</button>
-          <Link href="/murastream" style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px', color: 'var(--mario-yellow)', textDecoration: 'none' }}>🎬 MuraStream</Link>
+          <Link href="/murastream" style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px', color: '#B85CFF', textDecoration: 'none' }}>🎬 MuraStream</Link>
         </div>
         <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px', color: '#fff', margin: 0, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {title}{type === 'tv' && ` — S${season}E${episode}`}
@@ -128,9 +128,9 @@ function WatchContent() {
           {SOURCES.map(s => (
             <button key={s.id} onClick={() => setActiveSource(s)} style={{
               padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontFamily: 'var(--font-arcade)', fontSize: '7px',
-              border: activeSource.id === s.id ? '1px solid var(--mario-yellow)' : '1px solid rgba(255,255,255,0.1)',
-              background: activeSource.id === s.id ? 'rgba(255,214,10,0.15)' : 'transparent',
-              color: activeSource.id === s.id ? 'var(--mario-yellow)' : '#888',
+              border: activeSource.id === s.id ? '1px solid #B85CFF' : '1px solid rgba(255,255,255,0.1)',
+              background: activeSource.id === s.id ? 'rgba(184,92,255,0.15)' : 'transparent',
+              color: activeSource.id === s.id ? '#B85CFF' : '#888',
             }}>{s.name}</button>
           ))}
         </div>
@@ -157,11 +157,10 @@ function WatchContent() {
         {showAutoPlay && type === 'tv' && (
           <div style={{
             position: 'absolute', bottom: '80px', right: '16px', zIndex: 20,
-            background: 'rgba(10,10,24,0.95)', border: '1px solid rgba(255,214,10,0.3)',
+            background: 'rgba(10,10,24,0.95)', border: '1px solid rgba(184,92,255,0.3)',
             borderRadius: '12px', padding: '16px', width: '300px',
             backdropFilter: 'blur(10px)',
-          }}>
-            <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px', color: 'var(--mario-yellow)', margin: '0 0 8px' }}>
+          }}>              <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px', color: '#B85CFF', margin: '0 0 8px' }}>
               ▶ NEXT EPISODE
             </p>
             <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '7px', color: '#fff', margin: '0 0 4px' }}>
@@ -172,8 +171,8 @@ function WatchContent() {
             </p>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={() => router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode + 1}`)} style={{
-                flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid var(--mario-yellow)',
-                background: 'rgba(255,214,10,0.15)', color: 'var(--mario-yellow)',
+                flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #B85CFF',
+                background: 'rgba(184,92,255,0.15)', color: '#B85CFF',
                 fontFamily: 'var(--font-arcade)', fontSize: '7px', cursor: 'pointer',
               }}>▶ Play Now</button>
               <button onClick={() => setShowAutoPlay(false)} style={{
@@ -204,13 +203,13 @@ function WatchContent() {
         {/* TV Episode Navigation */}
         {type === 'tv' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button onClick={() => { if (episode > 1) router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode - 1}`); }} disabled={episode <= 1} style={{ padding: '4px 12px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)', background: episode <= 1 ? 'rgba(255,255,255,0.05)' : 'rgba(255,214,10,0.15)', color: episode <= 1 ? '#444' : 'var(--mario-yellow)', fontFamily: 'var(--font-arcade)', fontSize: '7px', cursor: episode <= 1 ? 'default' : 'pointer' }}>← Prev</button>
+            <button onClick={() => { if (episode > 1) router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode - 1}`); }} disabled={episode <= 1} style={{ padding: '4px 12px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)',              background: episode <= 1 ? 'rgba(255,255,255,0.05)' : 'rgba(184,92,255,0.15)', color: episode <= 1 ? '#444' : '#B85CFF', fontFamily: 'var(--font-arcade)', fontSize: '7px', cursor: episode <= 1 ? 'default' : 'pointer' }}>← Prev</button>
             <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '7px', color: '#888' }}>S{season}E{episode}</span>
             <button onClick={() => {
               // Show auto-play overlay instead of navigating immediately
               setShowAutoPlay(true);
               setAutoPlayCountdown(10);
-            }} style={{ padding: '4px 12px', borderRadius: '6px', border: '1px solid var(--mario-yellow)', background: 'rgba(255,214,10,0.15)', color: 'var(--mario-yellow)', fontFamily: 'var(--font-arcade)', fontSize: '7px', cursor: 'pointer' }}>Next →</button>
+            }} style={{ padding: '4px 12px', borderRadius: '6px', border: '1px solid #B85CFF', background: 'rgba(184,92,255,0.15)', color: '#B85CFF', fontFamily: 'var(--font-arcade)', fontSize: '7px', cursor: 'pointer' }}>Next →</button>
           </div>
         )}
 
@@ -221,8 +220,8 @@ function WatchContent() {
             setShowAutoPlay(true);
             setAutoPlayCountdown(10);
           }} style={{
-            padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(255,214,10,0.2)',
-            background: 'rgba(255,214,10,0.1)', color: 'var(--mario-yellow)',
+            padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(184,92,255,0.2)',
+            background: 'rgba(184,92,255,0.1)', color: '#B85CFF',
             fontFamily: 'var(--font-arcade)', fontSize: '6px', cursor: 'pointer',
           }}>⚡ Auto-Play</button>
         )}
