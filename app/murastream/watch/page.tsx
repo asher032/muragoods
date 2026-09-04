@@ -156,21 +156,44 @@ function WatchContent() {
   return (
     <div style={{ minHeight: '100vh', background: '#000', display: 'flex', flexDirection: 'column' }}>
       {/* Top bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(15,15,26,0.95)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button onClick={() => router.back()} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', fontFamily: 'var(--font-arcade)', fontSize: '8px', color: '#ccc' }}>← Back</button>
-          <Link href="/murastream" style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px', color: '#B85CFF', textDecoration: 'none' }}>🎬 MuraStream</Link>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '10px 20px',
+        background: 'rgba(10,10,10,0.9)',
+        backdropFilter: 'blur(20px)',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button onClick={() => router.back()} style={{
+            background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '8px', padding: '8px 14px', cursor: 'pointer',
+            fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: '13px', color: '#ccc',
+            display: 'flex', alignItems: 'center', gap: '6px',
+          }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path fillRule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8"/></svg>
+            Back
+          </button>
+          <Link href="/murastream" style={{
+            fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: '13px',
+            color: '#B85CFF', textDecoration: 'none', fontWeight: 600,
+          }}>MuraStream</Link>
         </div>
-        <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px', color: '#fff', margin: 0, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {title}{type === 'tv' && ` — S${season}E${episode}`}
+        <p style={{
+          fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: '14px',
+          fontWeight: 600, color: '#fff', margin: 0, maxWidth: '300px',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {title}{type === 'tv' && <span style={{ color: '#B85CFF', fontWeight: 400 }}> — S{season}E{episode}</span>}
         </p>
-        <div style={{ display: 'flex', gap: '4px' }}>
+        <div style={{ display: 'flex', gap: '6px' }}>
           {SOURCES.map(s => (
             <button key={s.id} onClick={() => setActiveSource(s)} style={{
-              padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontFamily: 'var(--font-arcade)', fontSize: '7px',
-              border: activeSource.id === s.id ? '1px solid #B85CFF' : '1px solid rgba(255,255,255,0.1)',
-              background: activeSource.id === s.id ? 'rgba(184,92,255,0.15)' : 'transparent',
+              padding: '6px 12px', borderRadius: '8px', cursor: 'pointer',
+              fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: '12px', fontWeight: 500,
+              border: activeSource.id === s.id ? '1px solid rgba(184,92,255,0.4)' : '1px solid rgba(255,255,255,0.08)',
+              background: activeSource.id === s.id ? 'rgba(184,92,255,0.15)' : 'rgba(255,255,255,0.04)',
               color: activeSource.id === s.id ? '#B85CFF' : '#888',
+              transition: 'all 0.2s',
             }}>{s.name}</button>
           ))}
         </div>
