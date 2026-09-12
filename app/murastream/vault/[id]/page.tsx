@@ -94,9 +94,10 @@ export default function VaultDetailPage() {
               FREE VAULT · {item.license} LICENSE
             </span>
             <h1 style={{
-              fontFamily: -apple-system, fontSize: 34, fontWeight: 800,
+              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+              fontSize: 34, fontWeight: 800,
               color: '#fff', margin: '0 0 10px', lineHeight: 1.1,
-            } as React.CSSProperties}>
+            }}>
               {item.title}
             </h1>
             <div style={{ fontSize: 14, color: '#A0A0A0', marginBottom: 16 }}>

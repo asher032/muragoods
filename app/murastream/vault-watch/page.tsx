@@ -14,7 +14,7 @@ export default function VaultWatchPage() {
   const item = VAULT_ITEMS.find(v => v.id === new URLSearchParams(window.location.search).get('id'));
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const hlsRef = useRef<{ destroy: () => void; levels?: unknown[]; currentLevel: number } | null>(null);
+  const hlsRef = useRef<import('hls.js').default | null>(null);
   const savedRef = useRef(false);
 
   const [playing, setPlaying] = useState(false);
@@ -51,7 +51,7 @@ export default function VaultWatchPage() {
               .sort((a: Level, b: Level) => b.height - a.height)
           );
         });
-        hls.on('ERROR', (_evt, data) => {
+        hls.on(Hls.Events.ERROR, (_evt, data) => {
           if (data.fatal) {
             setError('Stream failed to load. Try the download instead — it always works.');
             setLoading(false);
@@ -134,8 +134,7 @@ export default function VaultWatchPage() {
 
   const pickLevel = (idx: number) => {
     setCurrentLevel(idx);
-    const hls = hlsRef.current as unknown as { currentLevel: number } | null;
-    if (hls) hls.currentLevel = idx;
+    if (hlsRef.current) hlsRef.current.currentLevel = idx;
   };
 
   return (
