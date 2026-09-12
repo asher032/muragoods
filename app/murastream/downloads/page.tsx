@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { VAULT_ITEMS, type VaultItem } from '../data/vault';
+import { PopcornIcon } from '../components/MuraStreamIcons';
 
 function VaultCard({ item, posterPath }: { item: VaultItem; posterPath?: string | null }) {
   const [broken, setBroken] = useState(false);

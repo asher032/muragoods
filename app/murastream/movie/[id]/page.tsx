@@ -197,7 +197,7 @@ export default function MovieDetailPage() {
                   fontFamily: '-apple-system, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
                 }}>Trailer</button>
               )}
-              <button onClick={() => copyShareLink({ id: movieId, mediaType: 'movie', title: movie.title || movie.name })} style={{
+              <button onClick={() => copyShareLink({ id: String(movieId), mediaType: 'movie', title: movie.title || movie.name })} style={{
                 background: shared ? 'rgba(6,214,160,0.12)' : 'rgba(255,255,255,0.06)',
                 border: `1px solid ${shared ? 'rgba(6,214,160,0.4)' : 'rgba(255,255,255,0.1)'}`,
                 color: shared ? '#06d6a0' : 'var(--ms-text-muted)',
