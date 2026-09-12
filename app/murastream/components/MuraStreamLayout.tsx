@@ -9,7 +9,7 @@ const NAV_LINKS = [
   { href: '/murastream', label: 'Home' },
   { href: '/murastream?tab=movies', label: 'Movies' },
   { href: '/murastream?tab=tv', label: 'TV Shows' },
-  { href: '/murastream?tab=kdrama', label: 'K-Drama' },
+  { href: '/murastream/kdrama', label: 'K-Drama' },
 ];
 
 const BOTTOM_NAV = [

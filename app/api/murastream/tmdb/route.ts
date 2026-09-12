@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
 
   try {
     let url = '';
-    let format: 'list' | 'detail' = 'list';
+    let format: 'list' | 'detail' | 'season' = 'list';
 
     switch (action) {
       case 'trending':
@@ -123,6 +123,7 @@ export async function GET(request: NextRequest) {
         break;
       case 'tv_season':
         url = `/tv/${searchParams.get('id')}/season/${searchParams.get('season')}?language=${language}`;
+        format = 'season';
         break;
       case 'discover': {
         // Generic TMDB discover — used for K-Dramas (with_genres=18 & with_origin_country=KR
@@ -137,6 +138,7 @@ export async function GET(request: NextRequest) {
           ...(searchParams.get('with_keywords') ? { with_keywords: searchParams.get('with_keywords')! } : {}),
           ...(searchParams.get('with_networks') ? { with_networks: searchParams.get('with_networks')! } : {}),
           ...(searchParams.get('primary_release_year') ? { primary_release_year: searchParams.get('primary_release_year')! } : {}),
+          ...(searchParams.get('first_air_date_year') ? { first_air_date_year: searchParams.get('first_air_date_year')! } : {}),
           'vote_count.gte': searchParams.get('vote_count_gte') || '0',
         });
         url = `/discover/${searchParams.get('type') || 'tv'}?${dsp}`;
@@ -196,6 +198,20 @@ export async function GET(request: NextRequest) {
             airDate: s.air_date,
           }));
       }
+    }
+
+    if (format === 'season' && data.episodes) {
+      // Normalize snake_case TMDB season payloads for the client
+      data.episodes = (data.episodes as Array<Record<string, unknown>>).map((ep: Record<string, unknown>) => ({
+        id: ep.id,
+        episodeNumber: ep.episode_number,
+        name: ep.name,
+        overview: ep.overview,
+        stillPath: getImgUrl(ep.still_path as string | null, 'w300'),
+        airDate: ep.air_date,
+        runtime: ep.runtime,
+        voteAverage: ep.vote_average,
+      }));
     }
 
     return NextResponse.json(data);

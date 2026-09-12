@@ -193,11 +193,18 @@ export default function TvDetailPage() {
                     onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(184,92,255,0.1)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
                   >
-                    <div style={{
-                      width: '36px', height: '36px', borderRadius: '8px',
-                      background: 'rgba(184,92,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '13px', fontWeight: 700, color: '#B85CFF', flexShrink: 0,
-                    }}>{ep.episodeNumber}</div>
+                    {ep.stillPath ? (
+                      <img src={ep.stillPath} alt="" loading="lazy" style={{
+                        width: 96, height: 54, borderRadius: 8, objectFit: 'cover', flexShrink: 0,
+                        background: '#171717',
+                      }} />
+                    ) : (
+                      <div style={{
+                        width: '36px', height: '36px', borderRadius: '8px',
+                        background: 'rgba(184,92,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '13px', fontWeight: 700, color: '#B85CFF', flexShrink: 0,
+                      }}>{ep.episodeNumber}</div>
+                    )}
                     <div style={{ flex: 1 }}>
                       <p style={{ fontSize: '13px', fontWeight: 600, color: '#E5E5E5', margin: 0 }}>{ep.name || `Episode ${ep.episodeNumber}`}</p>
                       {ep.overview && <p style={{ fontSize: '12px', color: '#666', margin: '4px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ep.overview}</p>}
