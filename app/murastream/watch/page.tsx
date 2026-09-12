@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useMuraStreamStore } from '../hooks/useMuraStreamStore';
@@ -8,6 +8,7 @@ import { useMuraStreamStore } from '../hooks/useMuraStreamStore';
 interface Source {
   id: string;
   name: string;
+  quality?: 'HD' | '4K';
   getUrl: (type: string, id: number, season?: number, episode?: number) => string;
 }
 
@@ -15,35 +16,35 @@ interface Source {
 // ad-supported providers last as fallbacks.
 const SOURCES: Source[] = [
   {
-    id: 'vidlink', name: 'VidLink',
+    id: 'vidlink', name: 'VidLink', quality: '4K',
     getUrl: (type, id, season, episode) =>
       type === 'tv' && season && episode
         ? `https://vidlink.pro/tv/${id}/${season}/${episode}`
         : `https://vidlink.pro/movie/${id}`,
   },
   {
-    id: 'videasy', name: 'Videasy',
+    id: 'videasy', name: 'Videasy', quality: '4K',
     getUrl: (type, id, season, episode) =>
       type === 'tv' && season && episode
         ? `https://player.videasy.to/tv/${id}/${season}/${episode}`
         : `https://player.videasy.to/movie/${id}`,
   },
   {
-    id: 'vidking', name: 'Vidking',
+    id: 'vidking', name: 'Vidking', quality: '4K',
     getUrl: (type, id, season, episode) =>
       type === 'tv' && season && episode
         ? `https://www.vidking.net/embed/tv/${id}/${season}/${episode}`
         : `https://www.vidking.net/embed/movie/${id}`,
   },
   {
-    id: 'vidfast', name: 'Vidfast',
+    id: 'vidfast', name: 'Vidfast', quality: '4K',
     getUrl: (type, id, season, episode) =>
       type === 'tv' && season && episode
         ? `https://vidfast.pro/tv/${id}/${season}/${episode}`
         : `https://vidfast.pro/movie/${id}`,
   },
   {
-    id: '111movies', name: '111Movies',
+    id: '111movies', name: '111Movies', quality: 'HD',
     getUrl: (type, id, season, episode) =>
       type === 'tv' && season && episode
         ? `https://111movies.com/tv/${id}/${season}/${episode}`
@@ -64,6 +65,11 @@ const SOURCES: Source[] = [
         : `https://multiembed.mov/?video_id=${id}&tmdb=1`,
   },
 ];
+
+// Providers users can report; quality shown on their button
+const QUALITY: Record<string, 'HD' | '4K'> = Object.fromEntries(
+  SOURCES.filter(s => s.quality).map(s => [s.id, s.quality!])
+);
 
 function WatchContent() {
   const searchParams = useSearchParams();
@@ -86,6 +92,13 @@ function WatchContent() {
   // null = probe still running (player area shows a loader).
   const [sourceHealth, setSourceHealth] = useState<Record<string, boolean> | null>(null);
   const manualPickRef = useRef(false);
+  // Community reports: provider → trust info for this title (last 14 days)
+  const [reports, setReports] = useState<Record<string, { broken: number; ads: number; score: number }>>({});
+  const [reportDone, setReportDone] = useState<Set<string>>(new Set());
+  const [showReport, setShowReport] = useState(false);
+  // Last-known-good provider for this exact title (per-title cache) — lets
+  // repeat plays skip the probe delay entirely.
+  const [cachedSource, setCachedSource] = useState<Source | null>(null);
 
   // Fetch title
   useEffect(() => {
@@ -127,10 +140,23 @@ function WatchContent() {
     }
   }, [id, type, episode, title, posterPath, loading, error, markEpisodeWatched]);
 
-  // Reset failed sources when content or episode changes
+  // Reset failed sources when content or episode changes; restore the
+  // last-known-good provider for this exact title if we have one.
   useEffect(() => {
     setFailedSources(new Set());
     manualPickRef.current = false;
+    setCachedSource(null);
+    try {
+      const key = `ms-best-source:${type}:${id}${type === 'tv' ? `:S${season}E${episode}` : ''}`;
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const src = SOURCES.find(s => s.id === saved);
+        if (src) {
+          setCachedSource(src);
+          setActiveSource(src);
+        }
+      }
+    } catch { /* empty */ }
   }, [id, type, season, episode]);
 
   // Probe which sources actually serve this title before opening the iframe.
@@ -160,13 +186,44 @@ function WatchContent() {
     return () => { cancelled = true; controller.abort(); clearTimeout(timeout); };
   }, [id, type, season, episode]);
 
-  // Auto-select the first source the probe confirms healthy (unless the user
-  // already picked one manually for this content).
+  // Load community trust reports for this title (best-effort)
   useEffect(() => {
-    if (!sourceHealth || manualPickRef.current) return;
-    const firstHealthy = SOURCES.find(s => sourceHealth[s.id]);
-    if (firstHealthy) setActiveSource(firstHealthy);
-  }, [sourceHealth]);
+    if (!id) return;
+    let cancelled = false;
+    fetch(`/api/murastream/source-report?type=${type}&id=${id}`)
+      .then(r => (r.ok ? r.json() : { trust: {} }))
+      .then(data => { if (!cancelled) setReports(data.trust || {}); })
+      .catch(() => { /* empty */ });
+    return () => { cancelled = true; };
+  }, [id, type]);
+
+  // Probe results merged with community reports: sources downvoted to trust 0
+  // are treated as dead for this title.
+  const effectiveHealth = useMemo(() => {
+    if (!sourceHealth) return null;
+    const merged = { ...sourceHealth };
+    for (const [pid, t] of Object.entries(reports)) {
+      if (t.score <= 0) merged[pid] = false;
+    }
+    return merged;
+  }, [sourceHealth, reports]);
+
+  // Auto-select the first source confirmed healthy (unless the user already
+  // picked one manually). A cached source is kept if the probe still vouches
+  // for it; otherwise the cache is corrected and the winner remembered.
+  useEffect(() => {
+    if (!effectiveHealth || manualPickRef.current) return;
+    if (cachedSource && effectiveHealth[cachedSource.id]) return; // cache still good
+    const firstHealthy = SOURCES.find(s => effectiveHealth[s.id]);
+    if (firstHealthy && firstHealthy.id !== activeSource.id) {
+      setActiveSource(firstHealthy);
+      try {
+        const key = `ms-best-source:${type}:${id}${type === 'tv' ? `:S${season}E${episode}` : ''}`;
+        localStorage.setItem(key, firstHealthy.id);
+      } catch { /* empty */ }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveHealth, cachedSource]);
 
   // Auto-play next episode
   useEffect(() => {
@@ -190,10 +247,34 @@ function WatchContent() {
 
   const embedUrl = activeSource.getUrl(type, id, season, episode);
 
-  // Fallback order = sources the probe marked healthy (or all, if no probe data)
-  const orderedSources = sourceHealth
-    ? SOURCES.filter(s => sourceHealth[s.id] !== false)
+  // Fallback order = verified-healthy sources (or all, if no data)
+  const orderedSources = effectiveHealth
+    ? SOURCES.filter(s => effectiveHealth[s.id] !== false)
     : SOURCES;
+
+  const reportSource = async (provider: string, issue: 'broken' | 'ads') => {
+    const key = `${provider}:${issue}`;
+    if (reportDone.has(key)) return;
+    setReportDone(prev => new Set(prev).add(key));
+    if (issue === 'broken') handleIframeError(); // instant fallback, no waiting
+    try {
+      let email: string | undefined;
+      try {
+        const raw = localStorage.getItem('user');
+        if (raw) email = JSON.parse(raw)?.email;
+      } catch { /* anonymous */ }
+      await fetch('/api/murastream/source-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mediaType: type, tmdbId: id, provider, issue,
+          season: type === 'tv' ? season : undefined,
+          episode: type === 'tv' ? episode : undefined,
+          email,
+        }),
+      });
+    } catch { /* best effort */ }
+  };
 
   const handleIframeError = () => {
     // Record this source as failed, then move to the next healthy one
@@ -236,7 +317,7 @@ function WatchContent() {
         </p>
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {SOURCES.map(s => {
-            const healthy = sourceHealth ? sourceHealth[s.id] !== false : true;
+            const healthy = effectiveHealth ? effectiveHealth[s.id] !== false : true;
             const active = activeSource.id === s.id;
             return (
               <button key={s.id} onClick={() => { manualPickRef.current = true; setActiveSource(s); }} style={{
@@ -250,13 +331,57 @@ function WatchContent() {
               }}>
                 <span style={{
                   width: 6, height: 6, borderRadius: '50%',
-                  background: sourceHealth ? (healthy ? '#22c55e' : '#ef4444') : '#666',
+                  background: effectiveHealth ? (healthy ? '#22c55e' : '#ef4444') : '#666',
                   flexShrink: 0,
                 }} />
                 {s.name}
+                {QUALITY[s.id] && healthy && (
+                  <span style={{
+                    fontSize: 8, fontWeight: 700, letterSpacing: '0.04em',
+                    color: '#B85CFF', border: '1px solid rgba(184,92,255,0.45)',
+                    borderRadius: 4, padding: '0 4px', lineHeight: '13px',
+                  }}>{QUALITY[s.id]}</span>
+                )}
               </button>
             );
           })}
+
+          {/* Report active source */}
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setShowReport(v => !v)} title="Report this source" style={{
+              padding: '6px 10px', borderRadius: '8px', cursor: 'pointer',
+              fontSize: '13px', color: '#888', border: '1px solid rgba(255,255,255,0.08)',
+              background: 'rgba(255,255,255,0.04)', transition: 'all 0.2s',
+            }}>⚑</button>
+            {showReport && (
+              <div style={{
+                position: 'absolute', top: '36px', right: 0, zIndex: 60,
+                background: 'rgba(20,20,20,0.97)', border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 10, padding: 6, minWidth: 200, boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+              }}>
+                <p style={{ fontSize: 10, color: '#666', margin: '4px 8px 6px', letterSpacing: '0.06em' }}>
+                  FLAG {activeSource.name.toUpperCase()}
+                </p>
+                {(['broken', 'ads'] as const).map(issue => {
+                  const done = reportDone.has(`${activeSource.id}:${issue}`);
+                  return (
+                    <button key={issue} disabled={done}
+                      onClick={() => { reportSource(activeSource.id, issue); setShowReport(false); }}
+                      style={{
+                        display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px',
+                        borderRadius: 6, cursor: done ? 'default' : 'pointer', fontSize: 12,
+                        color: done ? '#555' : '#E5E5E5', border: 'none', background: 'transparent',
+                      }}
+                      onMouseEnter={e => { if (!done) e.currentTarget.style.background = 'rgba(184,92,255,0.1)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      {issue === 'broken' ? '⚠ Broken / won\u2019t play' : '◆ Too many ads'} {done && '✓ reported'}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -280,7 +405,7 @@ function WatchContent() {
               </Link>
             </div>
           </div>
-        ) : sourceHealth === null ? (
+        ) : sourceHealth === null && !cachedSource ? (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px' }}>
             <div className="custom-loader" />
             <p style={{ fontSize: '14px', color: '#666' }}>Finding the best source…</p>
