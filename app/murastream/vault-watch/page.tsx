@@ -14,7 +14,23 @@ export default function VaultWatchPage() {
   const item = VAULT_ITEMS.find(v => v.id === new URLSearchParams(window.location.search).get('id'));
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const hlsRef = useRef<import('hls.js').default | null>(null);
+  // Minimal structural type for the hls.js surface we use. Decouples us from
+  // whatever hls.js typings the build environment resolves.
+  type HlsLevel = { height?: number; bitrate: number };
+  type HlsEventData = { fatal?: boolean };
+  type HlsInstance = {
+    destroy(): void;
+    loadSource(url: string): void;
+    attachMedia(media: HTMLMediaElement): void;
+    on(event: string, cb: (evt: string, data: HlsEventData) => void): void;
+    levels: HlsLevel[];
+    currentLevel: number;
+  };
+  type HlsCtor = {
+    new (config?: Record<string, unknown>): HlsInstance;
+    isSupported(): boolean;
+  };
+  const hlsRef = useRef<HlsInstance | null>(null);
   const savedRef = useRef(false);
 
   const [playing, setPlaying] = useState(false);
@@ -31,7 +47,8 @@ export default function VaultWatchPage() {
     let cancelled = false;
 
     (async () => {
-      const { default: Hls } = await import('hls.js');
+      const mod = await import('hls.js');
+      const Hls = mod.default as unknown as HlsCtor;
       if (cancelled || !videoRef.current) return;
 
       const video = videoRef.current;
@@ -44,14 +61,11 @@ export default function VaultWatchPage() {
           setLoading(false);
           setLevels(
             (hls.levels || [])
-              .map((l: { height?: number; bitrate: number }) => ({
-                height: l.height || 0,
-                bitrate: l.bitrate,
-              }))
+              .map(l => ({ height: l.height || 0, bitrate: l.bitrate }))
               .sort((a: Level, b: Level) => b.height - a.height)
           );
         });
-        hls.on(Hls.Events.ERROR, (_evt, data) => {
+        hls.on('ERROR', (_evt, data) => {
           if (data.fatal) {
             setError('Stream failed to load. Try the download instead — it always works.');
             setLoading(false);
