@@ -198,6 +198,7 @@ export default function AdminPage() {
           <div className="flex gap-3">
             <a href="/" className="deco-btn deco-btn-sm">Back to Shop</a>
             <a href="/admin/analytics" className="deco-btn deco-btn-sm deco-btn-gold">📊 Analytics</a>
+            <a href="/admin/source-reports" className="deco-btn deco-btn-sm deco-btn-gold">⚑ Source Reports</a>
             <a href="/admin/promo-codes" className="deco-btn deco-btn-sm deco-btn-gold">🎁 Promos</a>
             <a href="/admin/support" className="deco-btn deco-btn-sm deco-btn-gold">💬 Support</a>
             <button type="button" onClick={() => setIsAuthenticated(false)} className="deco-btn deco-btn-crimson">LOG OUT</button>

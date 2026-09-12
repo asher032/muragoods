@@ -94,6 +94,9 @@ function WatchContent() {
   const manualPickRef = useRef(false);
   // Community reports: provider → trust info for this title (last 14 days)
   const [reports, setReports] = useState<Record<string, { broken: number; ads: number; score: number }>>({});
+  // Globally-disabled providers (admin dashboard)
+  const [disabledProviders, setDisabledProviders] = useState<Set<string>>(new Set());
+  const playerRef = useRef<HTMLDivElement>(null);
   const [reportDone, setReportDone] = useState<Set<string>>(new Set());
   const [showReport, setShowReport] = useState(false);
   // Last-known-good provider for this exact title (per-title cache) — lets
@@ -197,6 +200,14 @@ function WatchContent() {
     return () => { cancelled = true; };
   }, [id, type]);
 
+  // Global admin disables (2-min CDN cache, cheap)
+  useEffect(() => {
+    fetch('/api/murastream/provider-config')
+      .then(r => (r.ok ? r.json() : { disabled: [] }))
+      .then(d => setDisabledProviders(new Set(d.disabled || [])))
+      .catch(() => { /* empty */ });
+  }, []);
+
   // Probe results merged with community reports: sources downvoted to trust 0
   // are treated as dead for this title.
   const effectiveHealth = useMemo(() => {
@@ -205,8 +216,14 @@ function WatchContent() {
     for (const [pid, t] of Object.entries(reports)) {
       if (t.score <= 0) merged[pid] = false;
     }
+    for (const pid of disabledProviders) merged[pid] = false;
     return merged;
-  }, [sourceHealth, reports]);
+  }, [sourceHealth, reports, disabledProviders]);
+
+  // Fallback order = verified-healthy sources (or all, if no data)
+  const orderedSources = useMemo(() => (
+    effectiveHealth ? SOURCES.filter(s => effectiveHealth[s.id] !== false) : SOURCES
+  ), [effectiveHealth]);
 
   // Auto-select the first source confirmed healthy (unless the user already
   // picked one manually). A cached source is kept if the probe still vouches
@@ -225,6 +242,10 @@ function WatchContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveHealth, cachedSource]);
 
+  const advanceEpisode = useCallback(() => {
+    router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode + 1}`);
+  }, [router, id, season, episode]);
+
   // Auto-play next episode
   useEffect(() => {
     if (!showAutoPlay || type !== 'tv') return;
@@ -235,6 +256,53 @@ function WatchContent() {
     const timer = setTimeout(() => setAutoPlayCountdown(prev => prev - 1), 1000);
     return () => clearTimeout(timer);
   }, [showAutoPlay, autoPlayCountdown, type, id, season, episode, router]);
+
+  // Provider completion signal → advance instantly. Cross-origin iframes can't
+  // be read directly, but some providers (VidLink, Videasy) postMessage player
+  // events; listen for every completion shape they've used.
+  useEffect(() => {
+    if (type !== 'tv') return;
+    const onMessage = (e: MessageEvent) => {
+      const d = e.data;
+      const ended =
+        d === 'ended' ||
+        d?.event === 'ended' ||
+        d?.type === 'ended' ||
+        d?.type === 'media/ended' ||
+        d?.type === 'player:ended' ||
+        d?.name === 'ended' ||
+        (typeof d?.type === 'string' && d.type.endsWith(':ended'));
+      if (ended) advanceEpisode();
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [type, advanceEpisode]);
+
+  // Keyboard shortcuts: S = cycle source, N = next episode, F = fullscreen.
+  // Must live above the `if (!id)` early return (Rules of Hooks).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      const key = e.key.toLowerCase();
+      if (key === 's') {
+        const order = orderedSources.length > 0 ? orderedSources : SOURCES;
+        if (order.length < 2) return;
+        const idx = order.findIndex(s => s.id === activeSource.id);
+        manualPickRef.current = true;
+        setActiveSource(order[(idx + 1) % order.length]);
+      } else if (key === 'n' && type === 'tv') {
+        advanceEpisode();
+      } else if (key === 'f') {
+        if (document.fullscreenElement) void document.exitFullscreen();
+        else void playerRef.current?.requestFullscreen();
+      } else if (key === 'escape') {
+        setShowReport(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [orderedSources, activeSource, type, advanceEpisode]);
 
   if (!id) {
     return (
@@ -247,10 +315,7 @@ function WatchContent() {
 
   const embedUrl = activeSource.getUrl(type, id, season, episode);
 
-  // Fallback order = verified-healthy sources (or all, if no data)
-  const orderedSources = effectiveHealth
-    ? SOURCES.filter(s => effectiveHealth[s.id] !== false)
-    : SOURCES;
+  // Fallback order comes from the orderedSources memo above.
 
   const reportSource = async (provider: string, issue: 'broken' | 'ads') => {
     const key = `${provider}:${issue}`;
@@ -386,7 +451,7 @@ function WatchContent() {
       </div>
 
       {/* Player */}
-      <div style={{ flex: 1, position: 'relative', minHeight: '60vh' }}>
+      <div ref={playerRef} style={{ flex: 1, position: 'relative', minHeight: '60vh' }}>
         {loading ? (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px' }}>
             <div className="custom-loader" />
@@ -449,12 +514,30 @@ function WatchContent() {
 
       {/* Bottom bar */}
       <div style={{ background: 'rgba(15,15,26,0.95)', borderTop: '1px solid rgba(255,255,255,0.05)', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Link href={type === 'tv' ? `/murastream/tv/${id}` : `/murastream/movie/${id}`} style={{
-            padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)',
-            background: 'transparent', color: '#888', fontSize: '12px', textDecoration: 'none',
-          }}>Details</Link>
-        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>            <Link href={type === 'tv' ? `/murastream/tv/${id}` : `/murastream/movie/${id}`} style={{
+              padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)',
+              background: 'transparent', color: '#888', fontSize: '12px', textDecoration: 'none',
+            }}>Details</Link>
+            {/* Trust badge: community confidence in the active source */}
+            {(() => {
+              const t = reports[activeSource.id];
+              const score = t ? t.score : 1; // no reports = neutral-good
+              const [label, color] = score >= 0.8 ? ['Trusted', '#22c55e'] : score >= 0.5 ? ['Mixed reports', '#eab308'] : score > 0 ? ['Low confidence', '#f97316'] : ['Reported broken', '#ef4444'];
+              return (
+                <span title={t ? `${t.broken} broken · ${t.ads} ads reports (14d)` : 'No reports for this title'} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  fontSize: 10, fontWeight: 700, color, padding: '3px 8px', borderRadius: 6,
+                  border: `1px solid ${color}55`, letterSpacing: '0.04em',
+                }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, display: 'inline-block' }} />
+                  {label}{t ? ` · ${Math.round(score * 100)}%` : ''}
+                </span>
+              );
+            })()}
+            <span style={{ color: '#555', fontSize: 10, fontFamily: 'var(--font-arcade)', letterSpacing: '0.05em' }} title="S: source · N: next · F: fullscreen">
+              S·N·F
+            </span>
+          </div>
 
         {type === 'tv' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
