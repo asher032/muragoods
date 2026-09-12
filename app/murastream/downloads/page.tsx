@@ -67,7 +67,7 @@ export default function MuraStreamVaultPage() {
       const entries = await Promise.all(
         VAULT_ITEMS.map(async it => {
           try {
-            const res = await fetch(`/api/murastream/tmdb?type=movie_details&id=${it.tmdbId}`);
+            const res = await fetch(`/api/murastream/tmdb?action=movie_details&id=${it.tmdbId}`);
             if (!res.ok) return null;
             const data = await res.json();
             return data?.posterPath ? [it.tmdbId, data.posterPath as string] : null;

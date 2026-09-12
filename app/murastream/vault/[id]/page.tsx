@@ -18,7 +18,7 @@ export default function VaultDetailPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/murastream/tmdb?type=movie_details&id=${item.tmdbId}`);
+        const res = await fetch(`/api/murastream/tmdb?action=movie_details&id=${item.tmdbId}`);
         if (!res.ok) return;
         const d = await res.json();
         if (!cancelled) setArt({ poster: d.posterPath, backdrop: d.backdropPath });
