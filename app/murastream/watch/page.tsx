@@ -11,14 +11,9 @@ interface Source {
   getUrl: (type: string, id: number, season?: number, episode?: number) => string;
 }
 
+// Sources ordered by cleanliness: ad-free 4K-capable providers first,
+// ad-supported providers last as fallbacks.
 const SOURCES: Source[] = [
-  {
-    id: '2embed', name: '2Embed',
-    getUrl: (type, id, season, episode) =>
-      type === 'tv' && season && episode
-        ? `https://www.2embed.cc/embed/tv/${id}/${season}/${episode}`
-        : `https://www.2embed.cc/embed/movie/${id}`,
-  },
   {
     id: 'vidlink', name: 'VidLink',
     getUrl: (type, id, season, episode) =>
@@ -27,11 +22,32 @@ const SOURCES: Source[] = [
         : `https://vidlink.pro/movie/${id}`,
   },
   {
-    id: 'vidsrc', name: 'VidSrc',
+    id: 'videasy', name: 'Videasy',
     getUrl: (type, id, season, episode) =>
       type === 'tv' && season && episode
-        ? `https://vidsrcme.ru/embed/tv?tmdb=${id}&season=${season}&episode=${episode}`
-        : `https://vidsrcme.ru/embed/movie?tmdb=${id}`,
+        ? `https://player.videasy.to/tv/${id}/${season}/${episode}`
+        : `https://player.videasy.to/movie/${id}`,
+  },
+  {
+    id: 'vidking', name: 'Vidking',
+    getUrl: (type, id, season, episode) =>
+      type === 'tv' && season && episode
+        ? `https://www.vidking.net/embed/tv/${id}/${season}/${episode}`
+        : `https://www.vidking.net/embed/movie/${id}`,
+  },
+  {
+    id: '111movies', name: '111Movies',
+    getUrl: (type, id, season, episode) =>
+      type === 'tv' && season && episode
+        ? `https://111movies.com/tv/${id}/${season}/${episode}`
+        : `https://111movies.com/movie/${id}`,
+  },
+  {
+    id: '2embed', name: '2Embed',
+    getUrl: (type, id, season, episode) =>
+      type === 'tv' && season && episode
+        ? `https://www.2embed.cc/embed/tv/${id}/${season}/${episode}`
+        : `https://www.2embed.cc/embed/movie/${id}`,
   },
   {
     id: 'multiembed', name: 'Multi',
@@ -39,14 +55,6 @@ const SOURCES: Source[] = [
       type === 'tv' && season && episode
         ? `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${season}&e=${episode}`
         : `https://multiembed.mov/?video_id=${id}&tmdb=1`,
-  },
-  {
-    id: 'dailymotion', name: 'Dailymotion',
-    getUrl: (_type, id) => `https://geo.dailymotion.com/player.html?video=${id}`,
-  },
-  {
-    id: 'cinecom', name: 'CineCom',
-    getUrl: (_type, id) => `https://cinecom.net/embed/${id}`,
   },
 ];
 
