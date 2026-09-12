@@ -8,7 +8,7 @@ import {
   UserIcon, FilmIcon, TvIcon, PlayIcon, HeartIcon, StarIcon,
   ClockIcon, BookIcon, ChevronRightIcon, TrashIcon, SignOutIcon,
   AlertIcon, GearIcon, PackageIcon, ScrollIcon,
-} from '../../components/MuraStreamIcons';
+} from '../components/MuraStreamIcons';
 
 type UserProfile = { name: string; email: string; role: string } | null;
 
