@@ -347,7 +347,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
       {toast && (
         <div style={{
           position: 'fixed', bottom: 84, right: 20, zIndex: 500,
-          background: 'rgba(20,20,20,0.97)', border: '1px solid rgba(229,9,20,0.4)',
+          background: 'var(--ms-overlay)', border: '1px solid rgba(229,9,20,0.4)',
           borderRadius: 12, padding: '14px 16px', width: 300, maxWidth: 'calc(100vw - 32px)',
           boxShadow: '0 8px 32px rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)',
         }}>
@@ -364,8 +364,8 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
               background: 'rgba(229,9,20,0.15)', color: '#E50914', fontSize: 12, fontWeight: 600, cursor: 'pointer',
             }}>See what's new</button>
             <button onClick={() => dismissToast(false)} style={{
-              padding: '8px 12px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)',
-              background: 'transparent', color: '#888', fontSize: 12, cursor: 'pointer',
+              padding: '8px 12px', borderRadius: 6, border: '1px solid var(--ms-border-2)',
+              background: 'transparent', color: 'var(--ms-text-dim)', fontSize: 12, cursor: 'pointer',
             }}>Dismiss</button>
           </div>
         </div>

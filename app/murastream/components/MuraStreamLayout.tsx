@@ -148,20 +148,23 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
         /* Dropdown menu */
         .ms-dropdown {
           position: absolute; top: 56px; right: 32px; z-index: 300;
-          background: rgba(20,20,20,0.97); backdrop-filter: blur(20px);
-          border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;
+          background: var(--ms-overlay); backdrop-filter: blur(20px);
+          border: 1px solid var(--ms-line); border-radius: 12px;
           padding: 8px; min-width: 180px;
           box-shadow: 0 8px 32px rgba(0,0,0,0.5);
           opacity: 0; transform: translateY(-8px); pointer-events: none;
           transition: all 0.2s ease;
         }
+        html.ms-light .ms-dropdown { box-shadow: 0 8px 32px rgba(0,0,0,0.18); }
         .ms-dropdown.open { opacity: 1; transform: translateY(0); pointer-events: all; }
         .ms-dropdown-link {
           display: block; padding: 10px 14px; border-radius: 8px; text-decoration: none;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
           font-size: 13px; color: var(--ms-text-muted); transition: all 0.15s;
         }
-        .ms-dropdown-link:hover { background: rgba(229,9,20,0.1); color: #fff; }
+        .ms-dropdown-link { color: var(--ms-text-muted); }
+        .ms-dropdown-link:hover { background: rgba(229,9,20,0.1); color: var(--ms-text-strong); }
+        html.ms-light .ms-topnav-more:hover { background: rgba(0,0,0,0.06); }
         .ms-dropdown-divider { height: 1px; background: rgba(255,255,255,0.06); margin: 4px 8px; }
         /* What's New badge */
         .ms-whatsnew-row { position: relative; }
