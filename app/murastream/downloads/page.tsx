@@ -11,15 +11,15 @@ function VaultCard({ item, posterPath }: { item: VaultItem; posterPath?: string 
       href={`/murastream/vault/${item.id}`}
       style={{
         flexShrink: 0, width: 230, display: 'flex', flexDirection: 'column',
-        background: '#111', border: '1px solid #2A2A2A', borderRadius: 10,
+        background: 'var(--ms-surface)', border: '1px solid var(--ms-border-2)', borderRadius: 10,
         padding: 10, textDecoration: 'none', transition: 'all 0.3s', cursor: 'pointer',
       }}
       onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-10px)'; e.currentTarget.style.borderColor = '#E50914'; }}
-      onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = '#2A2A2A'; }}
+      onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'var(--ms-border-2)'; }}
     >
       <div style={{
         width: '100%', minHeight: 240, borderRadius: 10, marginBottom: 12,
-        overflow: 'hidden', background: '#171717', position: 'relative',
+        overflow: 'hidden', background: 'var(--ms-surface-2)', position: 'relative',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         {posterPath && !broken ? (
@@ -44,11 +44,11 @@ function VaultCard({ item, posterPath }: { item: VaultItem; posterPath?: string 
       <div style={{ fontSize: 15, fontWeight: 600, color: '#fff', marginBottom: 4 }}>
         {item.title}
       </div>
-      <div style={{ fontSize: 12, color: '#A0A0A0', marginBottom: 6 }}>
+      <div style={{ fontSize: 12, color: 'var(--ms-text-muted)', marginBottom: 6 }}>
         {item.year} · {item.runtime} · ★ {item.rating.toFixed(1)}
       </div>
       <div style={{
-        fontSize: 12, color: '#A0A0A0', display: '-webkit-box', WebkitLineClamp: 2,
+        fontSize: 12, color: 'var(--ms-text-muted)', display: '-webkit-box', WebkitLineClamp: 2,
         WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.5,
       }}>
         {item.overview}
@@ -86,8 +86,8 @@ export default function MuraStreamVaultPage() {
       <style jsx global>{`
         .vault-hero {
           position: relative; border-radius: 16px; overflow: hidden;
-          background: linear-gradient(135deg, #171717 0%, #0A0A0A 60%);
-          border: 1px solid #2A2A2A; padding: 40px 36px; margin-bottom: 36px;
+          background: linear-gradient(135deg, var(--ms-surface-2) 0%, var(--ms-bg) 60%);
+          border: 1px solid var(--ms-border-2); padding: 40px 36px; margin-bottom: 36px;
         }
         .vault-hero h1 {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -95,7 +95,7 @@ export default function MuraStreamVaultPage() {
         }
         .vault-hero p {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          font-size: 14px; color: #A0A0A0; max-width: 560px; margin: 0; line-height: 1.6;
+          font-size: 14px; color: var(--ms-text-muted); max-width: 560px; margin: 0; line-height: 1.6;
         }
         .vault-badge {
           display: inline-block; background: rgba(229,9,20,0.15); color: #E50914;

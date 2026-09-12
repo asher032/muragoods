@@ -32,7 +32,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     items: [
       { label: 'K·C·J', text: 'Dedicated drama browse page with K-Dramas, C-Dramas, and J-Dramas — genre, year, and sort filters plus infinite scroll.' },
       { label: 'HERO', text: 'Featured hero banner spotlighting the #1 trending drama of your current filter.' },
-      { label: '🌏', text: 'Country badges (K-DRAMA / C-DRAMA / J-DRAMA) on cards across the whole app so origins are recognizable everywhere.' },
+      { label: 'ORIGIN', text: 'Country badges (K-DRAMA / C-DRAMA / J-DRAMA) on cards across the whole app so origins are recognizable everywhere.' },
       { label: '2', text: 'Fixed episode numbering bug that made every TV episode play as Episode 1.' },
     ],
   },

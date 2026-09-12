@@ -62,7 +62,7 @@ export default function MovieDetailPage() {
   if (!movie) {
     return (
       <div style={{ padding: '80px 24px', textAlign: 'center' }}>
-        <p style={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: '16px', color: '#666' }}>Movie not found</p>
+        <p style={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: '16px', color: 'var(--ms-text-faint)' }}>Movie not found</p>
         <Link href="/murastream" style={{ color: '#E50914', fontSize: '14px', textDecoration: 'none' }}>← Back to MuraStream</Link>
       </div>
     );
@@ -83,10 +83,10 @@ export default function MovieDetailPage() {
         {movie.backdropPath ? (
           <img src={movie.backdropPath} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
-          <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #0A0A0A 0%, #1A0A2E 50%, #0A0A0A 100%)' }} />
+          <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, var(--ms-bg) 0%, #1A0A2E 50%, var(--ms-bg) 100%)' }} />
         )}
         {/* Cinematic gradients */}
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, #0A0A0A 0%, rgba(10,10,10,0.4) 40%, transparent 70%)' }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, var(--ms-bg) 0%, rgba(10,10,10,0.4) 40%, transparent 70%)' }} />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(10,10,10,0.9) 0%, transparent 50%)' }} />
 
         {/* Back button */}
@@ -95,7 +95,7 @@ export default function MovieDetailPage() {
           background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(12px)',
           border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px',
           padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
-          fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: '13px', color: '#E5E5E5',
+          fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: '13px', color: 'var(--ms-text)',
           transition: 'all 0.2s',
         }}>
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
@@ -120,7 +120,7 @@ export default function MovieDetailPage() {
           <div style={{ flex: 1, minWidth: '300px', paddingTop: '8px' }}>
             <h1 style={{
               fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
-              fontSize: '32px', fontWeight: 800, color: '#F5F5F5', margin: '0 0 10px',
+              fontSize: '32px', fontWeight: 800, color: 'var(--ms-text-strong)', margin: '0 0 10px',
               lineHeight: '1.1', letterSpacing: '-0.02em',
             }}>
               {movie.title}
@@ -136,8 +136,8 @@ export default function MovieDetailPage() {
 
             {/* Meta row */}
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px', alignItems: 'center' }}>
-              {movie.year && <span style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', color: '#A0A0A0' }}>{movie.year}</span>}
-              {movie.runtime > 0 && <span style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', color: '#666' }}>· {runtimeH}h {runtimeM}m</span>}
+              {movie.year && <span style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', color: 'var(--ms-text-muted)' }}>{movie.year}</span>}
+              {movie.runtime > 0 && <span style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', color: 'var(--ms-text-faint)' }}>· {runtimeH}h {runtimeM}m</span>}
               {movie.voteAverage > 0 && (
                 <span style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', color: '#E50914', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
                   ★ {movie.voteAverage.toFixed(1)}
@@ -171,7 +171,7 @@ export default function MovieDetailPage() {
               <button onClick={() => toggleMyList(mediaItem)} style={{
                 background: inList ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.06)',
                 border: `1px solid ${inList ? 'rgba(229,9,20,0.4)' : 'rgba(255,255,255,0.1)'}`,
-                color: inList ? '#E50914' : '#A0A0A0',
+                color: inList ? '#E50914' : 'var(--ms-text-muted)',
                 padding: '14px 22px', borderRadius: '12px',
                 fontFamily: '-apple-system, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
                 backdropFilter: 'blur(8px)',
@@ -181,7 +181,7 @@ export default function MovieDetailPage() {
               <button onClick={() => toggleLike(mediaItem)} style={{
                 background: liked ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.06)',
                 border: `1px solid ${liked ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.1)'}`,
-                color: liked ? '#ef4444' : '#A0A0A0',
+                color: liked ? '#ef4444' : 'var(--ms-text-muted)',
                 padding: '14px 22px', borderRadius: '12px',
                 fontFamily: '-apple-system, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
               }}>
@@ -190,7 +190,7 @@ export default function MovieDetailPage() {
               {trailer && (
                 <button onClick={() => setShowTrailer(true)} style={{
                   background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-                  color: '#A0A0A0', padding: '14px 22px', borderRadius: '12px',
+                  color: 'var(--ms-text-muted)', padding: '14px 22px', borderRadius: '12px',
                   fontFamily: '-apple-system, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
                 }}>▶ Trailer</button>
               )}
@@ -199,17 +199,17 @@ export default function MovieDetailPage() {
             {/* Overview */}
             <p style={{
               fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-              fontSize: '15px', color: '#A0A0A0', lineHeight: '1.7', margin: 0,
+              fontSize: '15px', color: 'var(--ms-text-muted)', lineHeight: '1.7', margin: 0,
             }}>
               {movie.overview}
             </p>
 
             {director && (
               <p style={{
-                fontFamily: '-apple-system, sans-serif', fontSize: '13px', color: '#666',
+                fontFamily: '-apple-system, sans-serif', fontSize: '13px', color: 'var(--ms-text-faint)',
                 marginTop: '18px',
               }}>
-                Director: <span style={{ color: '#E5E5E5', fontWeight: 600 }}>{director.name}</span>
+                Director: <span style={{ color: 'var(--ms-text)', fontWeight: 600 }}>{director.name}</span>
               </p>
             )}
           </div>
@@ -220,7 +220,7 @@ export default function MovieDetailPage() {
           <div style={{ marginTop: '48px' }}>
             <h3 style={{
               fontFamily: '-apple-system, sans-serif', fontSize: '18px', fontWeight: 700,
-              color: '#F5F5F5', margin: '0 0 18px',
+              color: 'var(--ms-text-strong)', margin: '0 0 18px',
             }}>Cast</h3>
             <div style={{ display: 'flex', gap: '16px', overflowX: 'auto', paddingBottom: '8px' }} className="ms-scroll">
               {movie.credits.cast.slice(0, 12).map((person: { id: number; name: string; character: string; profilePath: string | null }) => (
@@ -240,8 +240,8 @@ export default function MovieDetailPage() {
                       {person.name.charAt(0)}
                     </div>
                   )}
-                  <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '12px', fontWeight: 600, color: '#E5E5E5', margin: 0 }}>{person.name}</p>
-                  <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '11px', color: '#666', margin: '2px 0 0' }}>{person.character}</p>
+                  <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '12px', fontWeight: 600, color: 'var(--ms-text)', margin: 0 }}>{person.name}</p>
+                  <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '11px', color: 'var(--ms-text-faint)', margin: '2px 0 0' }}>{person.character}</p>
                 </div>
               ))}
             </div>
@@ -253,7 +253,7 @@ export default function MovieDetailPage() {
           <div style={{ marginTop: '48px', marginBottom: '60px' }}>
             <h3 style={{
               fontFamily: '-apple-system, sans-serif', fontSize: '18px', fontWeight: 700,
-              color: '#F5F5F5', margin: '0 0 18px',
+              color: 'var(--ms-text-strong)', margin: '0 0 18px',
             }}>Recommended</h3>
             <div style={{ display: 'flex', gap: '18px', overflowX: 'auto', paddingBottom: '8px' }} className="ms-scroll">
               {(movie.recommendations?.results || movie.similar?.results || []).slice(0, 10).map(

@@ -58,6 +58,37 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
   return (
     <div className="ms-root">
       <style jsx global>{`
+        /* ─── Theme variables (light mode via html.ms-light) ── */
+        .ms-root {
+          --ms-bg: #0A0A0A;
+          --ms-surface: #111;
+          --ms-surface-2: #171717;
+          --ms-border: #1A1A1A;
+          --ms-border-2: #2A2A2A;
+          --ms-text: #E5E5E5;
+          --ms-text-strong: #F5F5F5;
+          --ms-text-muted: #A0A0A0;
+          --ms-text-dim: #888;
+          --ms-text-faint: #666;
+          --ms-text-ghost: #555;
+          --ms-overlay: rgba(20,20,20,0.97);
+          --ms-line: rgba(255,255,255,0.06);
+        }
+        html.ms-light .ms-root {
+          --ms-bg: #F4F4F6;
+          --ms-surface: #FFFFFF;
+          --ms-surface-2: #FAFAFC;
+          --ms-border: #E2E2E8;
+          --ms-border-2: #D0D0D8;
+          --ms-text: #1A1A22;
+          --ms-text-strong: #0A0A0F;
+          --ms-text-muted: #55555F;
+          --ms-text-dim: #6E6E78;
+          --ms-text-faint: #8A8A94;
+          --ms-text-ghost: #A0A0AA;
+          --ms-overlay: rgba(255,255,255,0.98);
+          --ms-line: rgba(0,0,0,0.08);
+        }
         /* ─── Card System ────────────────────────────────── */
         .ms-card {
           display: flex;
@@ -228,7 +259,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           font-size: 13px;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
           font-weight: 600;
-          color: #E5E5E5;
+          color: var(--ms-text);
           cursor: default;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -241,7 +272,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           margin-top: 3px;
           font-size: 12px;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          color: #777;
+          color: var(--ms-text-faint);
         }
         .ms-card-episode { color: #E50914; font-weight: 600; }
         /* ─── Scroll Row ──────────────────────────────── */
@@ -261,7 +292,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
           font-size: 18px;
           font-weight: 700;
-          color: #F5F5F5;
+          color: var(--ms-text-strong);
           margin: 0;
           letter-spacing: -0.01em;
         }
@@ -308,15 +339,9 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
         }
         .ms-page-transition-exit {
           animation: msPageExit 0.15s ease-in forwards;
-        }
-        /* ─── Root / settings-driven appearance ─────────── */
-        .ms-root { background: #0A0A0A; min-height: 100vh; }
+        }        /* ─── Root / settings-driven appearance ─────────── */
+        .ms-root { background: var(--ms-bg); min-height: 100vh; }
         html.ms-compact .ms-card { width: 150px; }
-        html.ms-light .ms-root { background: #F5F5F5; }
-        html.ms-light .ms-card-title { color: #111; }
-        html.ms-light .ms-card-meta { color: #666; }
-        html.ms-light .ms-row-title { color: #111; }
-        html.ms-light .ms-section-label { color: #B20710; }
       `}</style>
       {/* What's New toast (one-time per changelog entry) */}
       {toast && (

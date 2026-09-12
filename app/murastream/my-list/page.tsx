@@ -8,10 +8,10 @@ export default function MuraStreamMyListPage() {
 
   return (
     <div style={{ padding: '24px 28px' }}>
-      <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: '#E5E5E5', margin: '0 0 4px' }}>
+      <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: 'var(--ms-text)', margin: '0 0 4px' }}>
         <span style={{ color: '#E50914' }}>★</span> MY LIST
       </h1>
-      <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '12px', color: '#666', margin: '0 0 24px' }}>
+      <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '12px', color: 'var(--ms-text-faint)', margin: '0 0 24px' }}>
         {myList.length} title{myList.length !== 1 ? 's' : ''} saved
       </p>
 
@@ -37,7 +37,7 @@ export default function MuraStreamMyListPage() {
           ))}
         </div>
       ) : (
-        <div style={{ textAlign: 'center', padding: '64px 16px', color: '#555' }}>
+        <div style={{ textAlign: 'center', padding: '64px 16px', color: 'var(--ms-text-ghost)' }}>
           <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="#333" viewBox="0 0 16 16" style={{ marginBottom: '12px' }}>
             <path d="M2 2v2h2V2zm4 0v2h8V2zm-4 4v2h12V6zm-4 4v2h16v-2zm-4 4v2h20v-2z"/>
           </svg>

@@ -29,13 +29,13 @@ function FeaturedHero({ item }: { item: MediaItem | null }) {
           <img src={item.posterPath} alt={item.title}
             style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
-          <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #0A0A0A 0%, #1A0A2E 50%, #0A0A0A 100%)' }} />
+          <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, var(--ms-bg) 0%, #1A0A2E 50%, var(--ms-bg) 100%)' }} />
         )}
 
         {/* Cinematic gradients */}
         <div style={{
           position: 'absolute', inset: 0,
-          background: 'linear-gradient(to top, #0A0A0A 0%, rgba(10,10,10,0.5) 30%, rgba(10,10,10,0.1) 50%, transparent 100%)',
+          background: 'linear-gradient(to top, var(--ms-bg) 0%, rgba(10,10,10,0.5) 30%, rgba(10,10,10,0.1) 50%, transparent 100%)',
         }} />
         <div style={{
           position: 'absolute', inset: 0,
@@ -58,13 +58,13 @@ function FeaturedHero({ item }: { item: MediaItem | null }) {
             {year && (
               <span style={{
                 fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-                fontSize: '12px', color: '#888',
+                fontSize: '12px', color: 'var(--ms-text-dim)',
               }}>{year}</span>
             )}
             {genres && (
               <span style={{
                 fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-                fontSize: '12px', color: '#666',
+                fontSize: '12px', color: 'var(--ms-text-faint)',
               }}>· {genres}</span>
             )}
           </div>
@@ -86,7 +86,7 @@ function FeaturedHero({ item }: { item: MediaItem | null }) {
               <span style={{ color: '#E50914', fontSize: '16px' }}>★</span>
               <span style={{
                 fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-                fontSize: '14px', fontWeight: 600, color: '#E5E5E5'
+                fontSize: '14px', fontWeight: 600, color: 'var(--ms-text)'
               }}>{(item.voteAverage ?? 0).toFixed(1)}</span>
             </div>
           )}
@@ -94,7 +94,7 @@ function FeaturedHero({ item }: { item: MediaItem | null }) {
           {/* Description */}
           <p style={{
             fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-            fontSize: '14px', color: '#A0A0A0', margin: '0 0 24px',
+            fontSize: '14px', color: 'var(--ms-text-muted)', margin: '0 0 24px',
             lineHeight: '1.6', maxHeight: '60px', overflow: 'hidden',
           }}>
             {item.overview}
@@ -117,7 +117,7 @@ function FeaturedHero({ item }: { item: MediaItem | null }) {
             </span>
             <span style={{
               background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
-              color: '#E5E5E5', padding: '12px 28px', borderRadius: '10px',
+              color: 'var(--ms-text)', padding: '12px 28px', borderRadius: '10px',
               display: 'inline-flex', alignItems: 'center', gap: '8px',
               fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
               fontSize: '14px', fontWeight: 600,
@@ -145,7 +145,7 @@ function MediaRow({ title, items, loading, viewAllHref }: {
           {[1, 2, 3, 4, 5, 6].map(i => (
             <div key={i} style={{
               width: '200px', height: '300px', borderRadius: '12px',
-              background: 'linear-gradient(90deg, #141414 0%, #1A1A1A 50%, #141414 100%)',
+              background: 'linear-gradient(90deg, #141414 0%, var(--ms-border) 50%, #141414 100%)',
               backgroundSize: '200% 100%', animation: 'msShimmer 1.5s infinite',
               flexShrink: 0,
             }} />
@@ -323,14 +323,14 @@ export default function MuraStreamHome() {
                 width: '100%', padding: '14px 18px 14px 44px',
                 background: 'rgba(255,255,255,0.05)',
                 border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '12px', color: '#E5E5E5', fontSize: '14px',
+                borderRadius: '12px', color: 'var(--ms-text)', fontSize: '14px',
                 fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
                 outline: 'none', transition: 'all 0.2s',
               }}
               onFocus={e => { e.currentTarget.style.borderColor = 'rgba(229,9,20,0.4)'; e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; }}
               onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
             />
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#555"
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="var(--ms-text-ghost)"
               style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }}
               viewBox="0 0 16 16">
               <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.442.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10"/>
@@ -351,7 +351,7 @@ export default function MuraStreamHome() {
                 <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '13px' }}>Search failed. Please try again.</p>
               </div>
             ) : searchResults.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '24px', color: '#666' }}>
+              <div style={{ textAlign: 'center', padding: '24px', color: 'var(--ms-text-faint)' }}>
                 <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '13px' }}>No results found</p>
               </div>
             ) : (
@@ -383,7 +383,7 @@ export default function MuraStreamHome() {
                     padding: '10px 20px', borderRadius: '10px',
                     border: activeTab === tab.id ? '1px solid rgba(229,9,20,0.4)' : '1px solid rgba(255,255,255,0.06)',
                     background: activeTab === tab.id ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.03)',
-                    color: activeTab === tab.id ? '#E50914' : '#888',
+                    color: activeTab === tab.id ? '#E50914' : 'var(--ms-text-dim)',
                     fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
                     fontSize: '13px', fontWeight: 600, cursor: 'pointer',
                     transition: 'all 0.2s', whiteSpace: 'nowrap',
@@ -440,11 +440,11 @@ export default function MuraStreamHome() {
                     fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
                     fontSize: '16px', fontWeight: 700, color: '#E50914', margin: '0 0 6px',
                   }}>
-                    🌏 Full Drama Experience
+                    Full Drama Experience
                   </p>
                   <p style={{
                     fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-                    fontSize: '13px', color: '#888', margin: '0 0 16px',
+                    fontSize: '13px', color: 'var(--ms-text-dim)', margin: '0 0 16px',
                   }}>
                     K-Dramas, C-Dramas & J-Dramas — genres, years, top-rated
                   </p>
@@ -455,7 +455,7 @@ export default function MuraStreamHome() {
                     fontSize: '13px', fontWeight: 700, textDecoration: 'none',
                     boxShadow: '0 4px 20px rgba(229,9,20,0.3)',
                   }}>
-                    🌏 Browse Dramas →
+                    Browse Dramas →
                   </Link>
                 </div>
               </>

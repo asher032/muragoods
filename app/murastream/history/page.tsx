@@ -34,7 +34,7 @@ export default function MuraStreamHistoryPage() {
   return (
     <div style={{ padding: '24px 28px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: '#E5E5E5', margin: 0 }}>
+        <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: 'var(--ms-text)', margin: 0 }}>
           <span style={{ color: '#E50914', display: 'inline-flex', verticalAlign: 'middle', marginRight: 6 }}><ClockIcon size={15} /></span> WATCH HISTORY
         </h1>
         {history.length > 0 && (
@@ -47,15 +47,15 @@ export default function MuraStreamHistoryPage() {
                   fontFamily: 'var(--font-arcade)', fontSize: '8px', cursor: 'pointer',
                 }}>Confirm Clear</button>
                 <button onClick={() => setConfirmClear(false)} style={{
-                  padding: '6px 12px', borderRadius: '6px', border: '1px solid #2A2A2A',
-                  background: '#171717', color: '#888',
+                  padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--ms-border-2)',
+                  background: 'var(--ms-surface-2)', color: 'var(--ms-text-dim)',
                   fontFamily: 'var(--font-arcade)', fontSize: '8px', cursor: 'pointer',
                 }}>Cancel</button>
               </div>
             ) : (
               <button onClick={() => setConfirmClear(true)} style={{
-                padding: '6px 12px', borderRadius: '6px', border: '1px solid #2A2A2A',
-                background: '#171717', color: '#888',
+                padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--ms-border-2)',
+                background: 'var(--ms-surface-2)', color: 'var(--ms-text-dim)',
                 fontFamily: 'var(--font-arcade)', fontSize: '8px', cursor: 'pointer',
               }}>CLEAR HISTORY</button>
             )}
@@ -66,7 +66,7 @@ export default function MuraStreamHistoryPage() {
       {Object.keys(grouped).length > 0 ? (
         Object.entries(grouped).map(([label, items]) => (
           <div key={label} style={{ marginBottom: '24px' }}>
-            <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#555', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'var(--ms-text-ghost)', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
               {label}
             </p>
             {items.map(item => (
@@ -79,31 +79,31 @@ export default function MuraStreamHistoryPage() {
               >
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: '14px',
-                  padding: '12px', borderRadius: '10px', border: '1px solid #1A1A1A',
-                  background: '#111', marginBottom: '8px', transition: 'border-color 0.2s',
+                  padding: '12px', borderRadius: '10px', border: '1px solid var(--ms-border)',
+                  background: 'var(--ms-surface)', marginBottom: '8px', transition: 'border-color 0.2s',
                 }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = '#2A2A2A'}
-                onMouseLeave={e => e.currentTarget.style.borderColor = '#1A1A1A'}
+                onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--ms-border-2)'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--ms-border)'}
                 >
                   {item.posterPath ? (
                     <img src={item.posterPath} alt={item.title} style={{ width: '44px', height: '60px', borderRadius: '6px', objectFit: 'cover' }} />
                   ) : (
-                    <div style={{ width: '44px', height: '60px', borderRadius: '6px', background: '#1A1A1A' }} />
+                    <div style={{ width: '44px', height: '60px', borderRadius: '6px', background: 'var(--ms-border)' }} />
                   )}
                   <div style={{ flex: 1 }}>
-                    <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '13px', color: '#E5E5E5', margin: 0 }}>{item.title}</p>
+                    <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '13px', color: 'var(--ms-text)', margin: 0 }}>{item.title}</p>
                     {item.mediaType === 'tv' && item.season != null && (
                       <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: '#E50914', margin: '4px 0 0' }}>
                         Season {item.season} • Episode {item.episode}
                       </p>
                     )}
                     {item.progress != null && item.progress > 0 && (
-                      <div style={{ marginTop: '6px', height: '3px', background: '#2A2A2A', borderRadius: '2px', maxWidth: '200px' }}>
+                      <div style={{ marginTop: '6px', height: '3px', background: 'var(--ms-border-2)', borderRadius: '2px', maxWidth: '200px' }}>
                         <div style={{ height: '100%', width: `${item.progress}%`, background: '#E50914', borderRadius: '2px' }} />
                       </div>
                     )}
                   </div>
-                  <span style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '10px', color: '#555', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '10px', color: 'var(--ms-text-ghost)', whiteSpace: 'nowrap' }}>
                     {new Date(item.date).toLocaleDateString()}
                   </span>
                 </div>
@@ -112,7 +112,7 @@ export default function MuraStreamHistoryPage() {
           </div>
         ))
       ) : (
-        <div style={{ textAlign: 'center', padding: '64px 16px', color: '#555' }}>
+        <div style={{ textAlign: 'center', padding: '64px 16px', color: 'var(--ms-text-ghost)' }}>
           <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', marginBottom: '4px' }}>No watch history</p>
           <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '12px' }}>Start watching to build your history</p>
         </div>

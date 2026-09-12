@@ -82,16 +82,16 @@ export default function TvDetailPage() {
         {show.backdropPath ? (
           <img src={show.backdropPath} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
-          <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #0A0A0A 0%, #1A0A2E 50%, #0A0A0A 100%)' }} />
+          <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, var(--ms-bg) 0%, #1A0A2E 50%, var(--ms-bg) 100%)' }} />
         )}
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, #0A0A0A 0%, rgba(10,10,10,0.4) 40%, transparent 70%)' }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, var(--ms-bg) 0%, rgba(10,10,10,0.4) 40%, transparent 70%)' }} />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(10,10,10,0.9) 0%, transparent 50%)' }} />
         <button onClick={() => router.back()} style={{
           position: 'absolute', top: '20px', left: '20px', zIndex: 10,
           background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(12px)',
           border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px',
           padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
-          fontFamily: '-apple-system, sans-serif', fontSize: '13px', color: '#E5E5E5',
+          fontFamily: '-apple-system, sans-serif', fontSize: '13px', color: 'var(--ms-text)',
         }}>
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
             <path fillRule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8"/>
@@ -111,12 +111,12 @@ export default function TvDetailPage() {
           <div style={{ flex: 1, minWidth: '300px', paddingTop: '8px' }}>
             <h1 style={{
               fontFamily: '-apple-system, sans-serif', fontSize: '32px', fontWeight: 800,
-              color: '#F5F5F5', margin: '0 0 10px', lineHeight: '1.1',
+              color: 'var(--ms-text-strong)', margin: '0 0 10px', lineHeight: '1.1',
             }}>{show.name}</h1>
 
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px', alignItems: 'center' }}>
-              {show.year && <span style={{ fontSize: '14px', color: '#A0A0A0' }}>{show.year}</span>}
-              {epCount > 0 && <span style={{ fontSize: '14px', color: '#666' }}>· {epCount} Episodes</span>}
+              {show.year && <span style={{ fontSize: '14px', color: 'var(--ms-text-muted)' }}>{show.year}</span>}
+              {epCount > 0 && <span style={{ fontSize: '14px', color: 'var(--ms-text-faint)' }}>· {epCount} Episodes</span>}
               {show.voteAverage > 0 && <span style={{ fontSize: '14px', color: '#E50914', fontWeight: 600 }}>★ {(show.voteAverage || 0).toFixed(1)}</span>}
             </div>
 
@@ -142,19 +142,19 @@ export default function TvDetailPage() {
               <button onClick={() => toggleMyList({ id: Number(tvId), mediaType: 'tv', title: show.name, posterPath: show.posterPath, backdropPath: show.backdropPath, voteAverage: show.voteAverage, year: show.year })} style={{
                 background: inList ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.06)',
                 border: `1px solid ${inList ? 'rgba(229,9,20,0.4)' : 'rgba(255,255,255,0.1)'}`,
-                color: inList ? '#E50914' : '#A0A0A0', padding: '14px 22px', borderRadius: '12px',
+                color: inList ? '#E50914' : 'var(--ms-text-muted)', padding: '14px 22px', borderRadius: '12px',
                 fontSize: '13px', fontWeight: 600, cursor: 'pointer',
               }}>{inList ? '✓ In My List' : '+ My List'}</button>
               <button onClick={() => toggleLike({ id: Number(tvId), mediaType: 'tv', title: show.name, posterPath: show.posterPath, backdropPath: show.backdropPath, voteAverage: show.voteAverage, year: show.year })} style={{
                 background: liked ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.06)',
                 border: `1px solid ${liked ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.1)'}`,
-                color: liked ? '#ef4444' : '#A0A0A0', padding: '14px 22px', borderRadius: '12px',
+                color: liked ? '#ef4444' : 'var(--ms-text-muted)', padding: '14px 22px', borderRadius: '12px',
                 fontSize: '13px', fontWeight: 600, cursor: 'pointer',
               }}>{liked ? '❤ Liked' : '♡ Like'}</button>
             </div>
 
             {show.overview && (
-              <p style={{ fontSize: '15px', color: '#A0A0A0', lineHeight: '1.7', margin: 0 }}>
+              <p style={{ fontSize: '15px', color: 'var(--ms-text-muted)', lineHeight: '1.7', margin: 0 }}>
                 {show.overview}
               </p>
             )}
@@ -164,7 +164,7 @@ export default function TvDetailPage() {
         {/* Season/Episode list */}
         {show.seasons?.length > 0 && (
           <div style={{ marginTop: '40px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#F5F5F5', margin: '0 0 18px' }}>Episodes</h3>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--ms-text-strong)', margin: '0 0 18px' }}>Episodes</h3>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
               {show.seasons.filter((s: any) => s.seasonNumber > 0 || s.seasonNumber === 0).map((s: any) => (
                 <button key={s.seasonNumber} onClick={() => setSelectedSeason(s.seasonNumber)} style={{
@@ -172,7 +172,7 @@ export default function TvDetailPage() {
                   fontSize: '13px', fontWeight: selectedSeason === s.seasonNumber ? 700 : 400,
                   border: selectedSeason === s.seasonNumber ? '1px solid #E50914' : '1px solid rgba(255,255,255,0.1)',
                   background: selectedSeason === s.seasonNumber ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.04)',
-                  color: selectedSeason === s.seasonNumber ? '#E50914' : '#888',
+                  color: selectedSeason === s.seasonNumber ? '#E50914' : 'var(--ms-text-dim)',
                 }}>S{s.seasonNumber}</button>
               ))}
             </div>
@@ -196,7 +196,7 @@ export default function TvDetailPage() {
                     {ep.stillPath ? (
                       <img src={ep.stillPath} alt="" loading="lazy" style={{
                         width: 96, height: 54, borderRadius: 8, objectFit: 'cover', flexShrink: 0,
-                        background: '#171717',
+                        background: 'var(--ms-surface-2)',
                       }} />
                     ) : (
                       <div style={{
@@ -206,13 +206,13 @@ export default function TvDetailPage() {
                       }}>{ep.episodeNumber}</div>
                     )}
                     <div style={{ flex: 1 }}>
-                      <p style={{ fontSize: '13px', fontWeight: 600, color: '#E5E5E5', margin: 0 }}>{ep.name || `Episode ${ep.episodeNumber}`}</p>
-                      {ep.overview && <p style={{ fontSize: '12px', color: '#666', margin: '4px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ep.overview}</p>}
+                      <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ms-text)', margin: 0 }}>{ep.name || `Episode ${ep.episodeNumber}`}</p>
+                      {ep.overview && <p style={{ fontSize: '12px', color: 'var(--ms-text-faint)', margin: '4px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ep.overview}</p>}
                     </div>
                   </Link>
                 ))}
                 {seasonData.length === 0 && !seasonLoading && (
-                  <p style={{ fontSize: '13px', color: '#666', textAlign: 'center', padding: '20px' }}>No episodes found</p>
+                  <p style={{ fontSize: '13px', color: 'var(--ms-text-faint)', textAlign: 'center', padding: '20px' }}>No episodes found</p>
                 )}
               </div>
             )}
@@ -222,7 +222,7 @@ export default function TvDetailPage() {
         {/* Recommended */}
         {show.recommendations?.results?.length > 0 && (
           <div style={{ marginTop: '48px', marginBottom: '60px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#F5F5F5', margin: '0 0 18px' }}>Recommended</h3>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--ms-text-strong)', margin: '0 0 18px' }}>Recommended</h3>
             <div style={{ display: 'flex', gap: '18px', overflowX: 'auto', paddingBottom: '8px' }} className="ms-scroll">
               {show.recommendations.results.slice(0, 10).map((item: any) => (
                 <MuraStreamCard key={item.id} item={item} />

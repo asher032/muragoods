@@ -9,7 +9,7 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: () => void 
       onClick={onChange}
       style={{
         width: '40px', height: '22px', borderRadius: '11px',
-        background: enabled ? '#E50914' : '#2A2A2A',
+        background: enabled ? '#E50914' : 'var(--ms-border-2)',
         border: 'none', cursor: 'pointer', padding: 0,
         position: 'relative', transition: 'background 0.2s',
       }}
@@ -44,7 +44,7 @@ export default function MuraStreamSettingsPage() {
   return (
     <div style={{ padding: '24px 28px', maxWidth: '500px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: '#E5E5E5', margin: 0 }}>
+        <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: 'var(--ms-text)', margin: 0 }}>
           ⚙ SETTINGS
         </h1>
         {saved && (
@@ -74,8 +74,8 @@ export default function MuraStreamSettingsPage() {
             value={settings.subtitleLang}
             onChange={e => update('subtitleLang', e.target.value)}
             style={{
-              background: '#171717', border: '1px solid #2A2A2A', borderRadius: '6px',
-              color: '#E5E5E5', padding: '6px 10px', fontFamily: 'var(--font-arcade)', fontSize: '9px',
+              background: 'var(--ms-surface-2)', border: '1px solid var(--ms-border-2)', borderRadius: '6px',
+              color: 'var(--ms-text)', padding: '6px 10px', fontFamily: 'var(--font-arcade)', fontSize: '9px',
               cursor: 'pointer',
             }}
           >
@@ -108,9 +108,9 @@ export default function MuraStreamSettingsPage() {
             {(['dark', 'light', 'system'] as const).map(theme => (
               <button key={theme} onClick={() => update('appearance', theme)} style={{
                 padding: '5px 10px', borderRadius: '6px',
-                border: settings.appearance === theme ? '1px solid #E50914' : '1px solid #2A2A2A',
-                background: settings.appearance === theme ? 'rgba(229,9,20,0.12)' : '#171717',
-                color: settings.appearance === theme ? '#E50914' : '#888',
+                border: settings.appearance === theme ? '1px solid #E50914' : '1px solid var(--ms-border-2)',
+                background: settings.appearance === theme ? 'rgba(229,9,20,0.12)' : 'var(--ms-surface-2)',
+                color: settings.appearance === theme ? '#E50914' : 'var(--ms-text-dim)',
                 fontFamily: 'var(--font-arcade)', fontSize: '8px', cursor: 'pointer',
                 textTransform: 'capitalize',
               }}>
@@ -154,10 +154,10 @@ export default function MuraStreamSettingsPage() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: '28px' }}>
-      <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: '#555', letterSpacing: '0.15em', margin: '0 0 10px' }}>
+      <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: 'var(--ms-text-ghost)', letterSpacing: '0.15em', margin: '0 0 10px' }}>
         {title}
       </p>
-      <div style={{ background: '#111', borderRadius: '10px', border: '1px solid #1A1A1A', overflow: 'hidden' }}>
+      <div style={{ background: 'var(--ms-surface)', borderRadius: '10px', border: '1px solid var(--ms-border)', overflow: 'hidden' }}>
         {children}
       </div>
     </div>
@@ -168,11 +168,11 @@ function SettingRow({ label, desc, children }: { label: string; desc?: string; c
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '14px 16px', borderBottom: '1px solid #1A1A1A',
+      padding: '14px 16px', borderBottom: '1px solid var(--ms-border)',
     }}>
       <div style={{ flex: 1, marginRight: '16px' }}>
-        <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '13px', color: '#E5E5E5', margin: 0 }}>{label}</p>
-        {desc && <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '11px', color: '#666', margin: '2px 0 0' }}>{desc}</p>}
+        <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '13px', color: 'var(--ms-text)', margin: 0 }}>{label}</p>
+        {desc && <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '11px', color: 'var(--ms-text-faint)', margin: '2px 0 0' }}>{desc}</p>}
       </div>
       {children}
     </div>

@@ -96,7 +96,7 @@ export default function MuraStreamSearchPage() {
     <div style={{ padding: '24px 28px', maxWidth: '1200px', margin: '0 auto' }}>
       <h1 style={{
         fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-        fontSize: '24px', fontWeight: 700, color: '#F5F5F5', margin: '0 0 20px',
+        fontSize: '24px', fontWeight: 700, color: 'var(--ms-text-strong)', margin: '0 0 20px',
       }}>
         Search
       </h1>
@@ -113,14 +113,14 @@ export default function MuraStreamSearchPage() {
           style={{
             width: '100%', padding: '14px 44px 14px 44px',
             background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: '12px', color: '#E5E5E5', fontSize: '14px',
+            borderRadius: '12px', color: 'var(--ms-text)', fontSize: '14px',
             fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', outline: 'none',
             transition: 'border-color 0.2s, background 0.2s',
           }}
           onFocus={e => { e.currentTarget.style.borderColor = 'rgba(229,9,20,0.4)'; e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; }}
           onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
         />
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="#555"
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="var(--ms-text-ghost)"
           style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }}
           viewBox="0 0 16 16">
           <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.442.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10"/>
@@ -131,7 +131,7 @@ export default function MuraStreamSearchPage() {
               position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
               background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%',
               width: '24px', height: '24px', cursor: 'pointer', display: 'flex',
-              alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: '14px',
+              alignItems: 'center', justifyContent: 'center', color: 'var(--ms-text-dim)', fontSize: '14px',
             }}>✕</button>
         )}
       </div>
@@ -144,7 +144,7 @@ export default function MuraStreamSearchPage() {
               padding: '8px 16px', borderRadius: '8px',
               border: searchType === type ? '1px solid rgba(229,9,20,0.4)' : '1px solid rgba(255,255,255,0.06)',
               background: searchType === type ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.03)',
-              color: searchType === type ? '#E50914' : '#888',
+              color: searchType === type ? '#E50914' : 'var(--ms-text-dim)',
               fontFamily: '-apple-system, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
               transition: 'all 0.2s',
             }}>
@@ -177,11 +177,11 @@ export default function MuraStreamSearchPage() {
 
       {/* No results — NOT an error */}
       {searchState === 'no-results' && (
-        <div style={{ textAlign: 'center', padding: '48px', color: '#666' }}>
+        <div style={{ textAlign: 'center', padding: '48px', color: 'var(--ms-text-faint)' }}>
           <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>
             No results found
           </p>
-          <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '13px', color: '#555' }}>
+          <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '13px', color: 'var(--ms-text-ghost)' }}>
             Try a different search term or adjust your filters
           </p>
         </div>
@@ -197,10 +197,10 @@ export default function MuraStreamSearchPage() {
       {/* Idle */}
       {searchState === 'idle' && (
         <div style={{ textAlign: 'center', padding: '48px', color: '#444' }}>
-          <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', marginBottom: '8px', color: '#666' }}>
+          <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', marginBottom: '8px', color: 'var(--ms-text-faint)' }}>
             Search for movies & TV shows...
           </p>
-          <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '13px', color: '#555' }}>
+          <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '13px', color: 'var(--ms-text-ghost)' }}>
             Try the K-Drama filter for Korean titles
           </p>
         </div>

@@ -8,10 +8,10 @@ export default function MuraStreamLikesPage() {
 
   return (
     <div style={{ padding: '24px 28px' }}>
-      <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: '#E5E5E5', margin: '0 0 4px' }}>
+      <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: 'var(--ms-text)', margin: '0 0 4px' }}>
         <span style={{ color: '#E50914' }}>❤</span> MY LIKES
       </h1>
-      <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '12px', color: '#666', margin: '0 0 24px' }}>
+      <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '12px', color: 'var(--ms-text-faint)', margin: '0 0 24px' }}>
         {likes.length} title{likes.length !== 1 ? 's' : ''} liked
       </p>
 
@@ -37,7 +37,7 @@ export default function MuraStreamLikesPage() {
           ))}
         </div>
       ) : (
-        <div style={{ textAlign: 'center', padding: '64px 16px', color: '#555' }}>
+        <div style={{ textAlign: 'center', padding: '64px 16px', color: 'var(--ms-text-ghost)' }}>
           <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="#333" viewBox="0 0 16 16" style={{ marginBottom: '12px' }}>
             <path d="m8 2.748-.717-.737C5.6.281 2.514.878 1.4 3.053c-.523 1.023-.641 2.5.314 4.385.92 1.815 2.834 3.989 6.286 6.357 3.452-2.368 5.365-4.542 6.286-6.357.955-1.886.838-3.362.314-4.385C13.486.878 10.4.28 8.717 2.01z"/>
           </svg>

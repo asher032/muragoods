@@ -47,7 +47,7 @@ export default function MuraStreamLibraryPage() {
 
   return (
     <div style={{ padding: '24px 28px' }}>
-      <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: '#E5E5E5', margin: '0 0 16px' }}>
+      <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: 'var(--ms-text)', margin: '0 0 16px' }}>
         LIBRARY
       </h1>
 
@@ -56,9 +56,9 @@ export default function MuraStreamLibraryPage() {
         {TABS.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
             padding: '6px 14px', borderRadius: '6px',
-            border: activeTab === tab.id ? '1px solid #E50914' : '1px solid #2A2A2A',
-            background: activeTab === tab.id ? 'rgba(229,9,20,0.12)' : '#171717',
-            color: activeTab === tab.id ? '#E50914' : '#888',
+            border: activeTab === tab.id ? '1px solid #E50914' : '1px solid var(--ms-border-2)',
+            background: activeTab === tab.id ? 'rgba(229,9,20,0.12)' : 'var(--ms-surface-2)',
+            color: activeTab === tab.id ? '#E50914' : 'var(--ms-text-dim)',
             fontFamily: 'var(--font-arcade)', fontSize: '9px', cursor: 'pointer', whiteSpace: 'nowrap',
           }}>
             {tab.label}
@@ -68,13 +68,13 @@ export default function MuraStreamLibraryPage() {
 
       {/* Sort */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '20px', alignItems: 'center' }}>
-        <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px', color: '#555' }}>SORT:</span>
+        <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px', color: 'var(--ms-text-ghost)' }}>SORT:</span>
         {SORTS.map(sort => (
           <button key={sort} onClick={() => setSortBy(sort)} style={{
             padding: '4px 8px', borderRadius: '4px',
             border: sortBy === sort ? '1px solid rgba(229,9,20,0.3)' : '1px solid transparent',
             background: sortBy === sort ? 'rgba(229,9,20,0.08)' : 'transparent',
-            color: sortBy === sort ? '#E50914' : '#555',
+            color: sortBy === sort ? '#E50914' : 'var(--ms-text-ghost)',
             fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '11px', cursor: 'pointer',
           }}>
             {sort}
@@ -88,7 +88,7 @@ export default function MuraStreamLibraryPage() {
           {filtered.map(item => <MuraStreamCard key={item.id} item={item} />)}
         </div>
       ) : (
-        <div style={{ textAlign: 'center', padding: '64px 16px', color: '#555' }}>
+        <div style={{ textAlign: 'center', padding: '64px 16px', color: 'var(--ms-text-ghost)' }}>
           <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', marginBottom: '4px' }}>Nothing here yet</p>
           <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '12px' }}>Browse and add titles to build your library</p>
         </div>

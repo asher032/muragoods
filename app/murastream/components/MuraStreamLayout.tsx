@@ -11,6 +11,7 @@ const NAV_LINKS = [
   { href: '/murastream?tab=movies', label: 'Movies' },
   { href: '/murastream?tab=tv', label: 'TV Shows' },
   { href: '/murastream/kdrama', label: 'K-Drama' },
+  { href: '/murastream/genres', label: 'Genres' },
 ];
 
 const BOTTOM_NAV = [
@@ -115,7 +116,7 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
         .ms-topnav-link {
           padding: 8px 16px; border-radius: 8px; text-decoration: none;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          font-size: 13px; font-weight: 500; color: #A0A0A0;
+          font-size: 13px; font-weight: 500; color: var(--ms-text-muted);
           transition: all 0.2s; white-space: nowrap;
         }
         .ms-topnav-link:hover { color: #fff; background: rgba(255,255,255,0.06); }
@@ -129,7 +130,7 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
           width: 200px; outline: none; transition: all 0.2s;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         }
-        .ms-topnav-search::placeholder { color: #555; }
+        .ms-topnav-search::placeholder { color: var(--ms-text-ghost); }
         .ms-topnav-search:focus { border-color: rgba(229,9,20,0.4); width: 280px; background: rgba(255,255,255,0.08); }
         .ms-topnav-more {
           background: none; border: none; padding: 8px; cursor: pointer;
@@ -140,7 +141,7 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
           display: inline-flex; align-items: center; gap: 6px;
           padding: 6px 12px; border-radius: 8px; text-decoration: none;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          font-size: 12px; color: #888; transition: all 0.2s;
+          font-size: 12px; color: var(--ms-text-dim); transition: all 0.2s;
           border: 1px solid rgba(255,255,255,0.06);
         }
         .ms-topnav-back:hover { color: #fff; border-color: rgba(255,255,255,0.15); }
@@ -158,7 +159,7 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
         .ms-dropdown-link {
           display: block; padding: 10px 14px; border-radius: 8px; text-decoration: none;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          font-size: 13px; color: #A0A0A0; transition: all 0.15s;
+          font-size: 13px; color: var(--ms-text-muted); transition: all 0.15s;
         }
         .ms-dropdown-link:hover { background: rgba(229,9,20,0.1); color: #fff; }
         .ms-dropdown-divider { height: 1px; background: rgba(255,255,255,0.06); margin: 4px 8px; }
@@ -200,7 +201,7 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
         .ms-mobile-tab.active { background: rgba(229,9,20,0.12); }
         .ms-mobile-tab-label {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          font-size: 10px; color: #666; transition: color 0.2s;
+          font-size: 10px; color: var(--ms-text-faint); transition: color 0.2s;
         }
         .ms-mobile-tab.active .ms-mobile-tab-label { color: #E50914; }
         /* ─── Mobile Hamburger ──────────────────────────── */
@@ -269,7 +270,7 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
 
           {/* More menu */}
           <button className="ms-topnav-more" onClick={() => setMenuOpen(!menuOpen)} style={{ position: 'relative' }}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="#A0A0A0" viewBox="0 0 16 16">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="var(--ms-text-muted)" viewBox="0 0 16 16">
               <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-4a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-4a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
             </svg>
             {showWhatsNew && <span className="ms-whatsnew-dot" />}
@@ -307,7 +308,7 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
               <Link key={item.href} href={item.href}
                 className={`ms-mobile-tab ${isActive(item.href) ? 'active' : ''}`}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
-                  fill={isActive(item.href) ? '#E50914' : '#666'} viewBox="0 0 16 16">
+                  fill={isActive(item.href) ? '#E50914' : 'var(--ms-text-faint)'} viewBox="0 0 16 16">
                   <path d={item.icon}/>
                 </svg>
                 <span className="ms-mobile-tab-label">{item.label}</span>

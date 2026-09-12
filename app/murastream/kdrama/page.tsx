@@ -120,11 +120,11 @@ export default function DramaBrowsePage() {
     <div className="ms-page-enter" style={{ padding: '28px 32px', maxWidth: 1200 }}>
       <h1 style={{
         fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-        fontSize: 28, fontWeight: 800, color: '#F5F5F5', margin: '0 0 6px',
+        fontSize: 28, fontWeight: 800, color: 'var(--ms-text-strong)', margin: '0 0 6px',
       }}>
         {section.label}
       </h1>
-      <p style={{ fontSize: 14, color: '#A0A0A0', margin: '0 0 24px' }}>
+      <p style={{ fontSize: 14, color: 'var(--ms-text-muted)', margin: '0 0 24px' }}>
         Asian drama series — full catalog, sorted and filtered your way.
       </p>
 
@@ -135,7 +135,7 @@ export default function DramaBrowsePage() {
             padding: '10px 20px', borderRadius: 10, cursor: 'pointer',
             border: section.id === s.id ? '1px solid rgba(229,9,20,0.4)' : '1px solid rgba(255,255,255,0.06)',
             background: section.id === s.id ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.03)',
-            color: section.id === s.id ? '#E50914' : '#888',
+            color: section.id === s.id ? '#E50914' : 'var(--ms-text-dim)',
             fontFamily: '-apple-system, sans-serif', fontSize: 13, fontWeight: 600,
           }}>
             {s.label}
@@ -150,7 +150,7 @@ export default function DramaBrowsePage() {
             padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 500,
             border: genre === g.id ? '1px solid rgba(229,9,20,0.4)' : '1px solid rgba(255,255,255,0.06)',
             background: genre === g.id ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.03)',
-            color: genre === g.id ? '#E50914' : '#888',
+            color: genre === g.id ? '#E50914' : 'var(--ms-text-dim)',
           }}>
             {g.label}
           </button>
@@ -158,13 +158,13 @@ export default function DramaBrowsePage() {
       </div>
       <div style={{ display: 'flex', gap: 10, marginBottom: 28, flexWrap: 'wrap', alignItems: 'center' }}>
         <select value={year} onChange={e => setYear(e.target.value)} style={{
-          background: '#171717', color: '#E5E5E5', border: '1px solid #2A2A2A',
+          background: 'var(--ms-surface-2)', color: 'var(--ms-text)', border: '1px solid var(--ms-border-2)',
           borderRadius: 8, padding: '8px 12px', fontSize: 13, cursor: 'pointer', outline: 'none',
         }}>
           {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
         </select>
         <select value={sort} onChange={e => setSort(e.target.value)} style={{
-          background: '#171717', color: '#E5E5E5', border: '1px solid #2A2A2A',
+          background: 'var(--ms-surface-2)', color: 'var(--ms-text)', border: '1px solid var(--ms-border-2)',
           borderRadius: 8, padding: '8px 12px', fontSize: 13, cursor: 'pointer', outline: 'none',
         }}>
           {SORTS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
@@ -179,7 +179,7 @@ export default function DramaBrowsePage() {
           {hero && hero.backdropPath && (
             <div style={{
               position: 'relative', borderRadius: 16, overflow: 'hidden',
-              marginBottom: 32, minHeight: 300, background: '#111', border: '1px solid #1A1A1A',
+              marginBottom: 32, minHeight: 300, background: 'var(--ms-surface)', border: '1px solid var(--ms-border)',
             }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={hero.backdropPath} alt="" style={{
@@ -242,8 +242,8 @@ export default function DramaBrowsePage() {
           </div>
 
           {items.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '48px 16px', color: '#666' }}>
-              <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 6px', color: '#A0A0A0' }}>
+            <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--ms-text-faint)' }}>
+              <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 6px', color: 'var(--ms-text-muted)' }}>
                 No dramas match these filters
               </p>
               <p style={{ fontSize: 13, margin: 0 }}>
@@ -255,7 +255,7 @@ export default function DramaBrowsePage() {
           {/* Infinite scroll sentinel */}
           <div ref={sentinelRef} style={{ height: 1 }} />
           {loadingMore && (
-            <div style={{ textAlign: 'center', padding: '24px', color: '#666', fontSize: 13 }}>
+            <div style={{ textAlign: 'center', padding: '24px', color: 'var(--ms-text-faint)', fontSize: 13 }}>
               Loading more…
             </div>
           )}
