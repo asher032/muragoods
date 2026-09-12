@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useMuraStreamStore } from '../hooks/useMuraStreamStore';
@@ -34,6 +34,13 @@ const SOURCES: Source[] = [
       type === 'tv' && season && episode
         ? `https://www.vidking.net/embed/tv/${id}/${season}/${episode}`
         : `https://www.vidking.net/embed/movie/${id}`,
+  },
+  {
+    id: 'vidfast', name: 'Vidfast',
+    getUrl: (type, id, season, episode) =>
+      type === 'tv' && season && episode
+        ? `https://vidfast.pro/tv/${id}/${season}/${episode}`
+        : `https://vidfast.pro/movie/${id}`,
   },
   {
     id: '111movies', name: '111Movies',
@@ -75,6 +82,10 @@ function WatchContent() {
   const [showAutoPlay, setShowAutoPlay] = useState(false);
   const [autoPlayCountdown, setAutoPlayCountdown] = useState(10);
   const [failedSources, setFailedSources] = useState<Set<string>>(new Set());
+  // Server-side probe results: which providers actually have THIS title.
+  // null = probe still running (player area shows a loader).
+  const [sourceHealth, setSourceHealth] = useState<Record<string, boolean> | null>(null);
+  const manualPickRef = useRef(false);
 
   // Fetch title
   useEffect(() => {
@@ -119,7 +130,43 @@ function WatchContent() {
   // Reset failed sources when content or episode changes
   useEffect(() => {
     setFailedSources(new Set());
+    manualPickRef.current = false;
   }, [id, type, season, episode]);
+
+  // Probe which sources actually serve this title before opening the iframe.
+  // Providers that lack the title serve a 200 HTML error page and iframe
+  // onError never fires — without this the player silently sits on a dead
+  // page or, worse, on an ad-heavy provider that happened to be next.
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    setSourceHealth(null);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 9000);
+    fetch(`/api/murastream/source-check?type=${type}&id=${id}&season=${season}&episode=${episode}`, {
+      signal: controller.signal,
+    })
+      .then(r => (r.ok ? r.json() : { checks: [] }))
+      .then(data => {
+        if (cancelled) return;
+        const health: Record<string, boolean> = {};
+        for (const c of (data.checks || []) as { id: string; ok: boolean }[]) {
+          health[c.id] = c.ok;
+        }
+        setSourceHealth(health);
+      })
+      .catch(() => { if (!cancelled) setSourceHealth({}); }) // probe failed → don't block playback
+      .finally(() => clearTimeout(timeout));
+    return () => { cancelled = true; controller.abort(); clearTimeout(timeout); };
+  }, [id, type, season, episode]);
+
+  // Auto-select the first source the probe confirms healthy (unless the user
+  // already picked one manually for this content).
+  useEffect(() => {
+    if (!sourceHealth || manualPickRef.current) return;
+    const firstHealthy = SOURCES.find(s => sourceHealth[s.id]);
+    if (firstHealthy) setActiveSource(firstHealthy);
+  }, [sourceHealth]);
 
   // Auto-play next episode
   useEffect(() => {
@@ -143,16 +190,23 @@ function WatchContent() {
 
   const embedUrl = activeSource.getUrl(type, id, season, episode);
 
+  // Fallback order = sources the probe marked healthy (or all, if no probe data)
+  const orderedSources = sourceHealth
+    ? SOURCES.filter(s => sourceHealth[s.id] !== false)
+    : SOURCES;
+
   const handleIframeError = () => {
-    // Record this source as failed, then move to the next one that hasn't failed yet
-    const currentIdx = SOURCES.findIndex(s => s.id === activeSource.id);
+    // Record this source as failed, then move to the next healthy one
+    const order = orderedSources.length > 0 ? orderedSources : SOURCES;
+    const currentIdx = order.findIndex(s => s.id === activeSource.id);
     setFailedSources(prev => new Set(prev).add(activeSource.id));
+    setSourceHealth(prev => (prev ? { ...prev, [activeSource.id]: false } : prev));
     let nextIdx = currentIdx + 1;
-    while (nextIdx < SOURCES.length && failedSources.has(SOURCES[nextIdx].id)) {
+    while (nextIdx < order.length && failedSources.has(order[nextIdx].id)) {
       nextIdx++;
     }
-    if (nextIdx < SOURCES.length) {
-      setActiveSource(SOURCES[nextIdx]);
+    if (nextIdx < order.length) {
+      setActiveSource(order[nextIdx]);
     } else {
       setError('All streaming sources are currently unavailable. Please try again later.');
     }
@@ -180,17 +234,29 @@ function WatchContent() {
         <p style={{ fontSize: '14px', fontWeight: 600, color: '#fff', margin: 0, maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {title}{type === 'tv' && <span style={{ color: '#B85CFF', fontWeight: 400 }}> — S{season}E{episode}</span>}
         </p>
-        <div style={{ display: 'flex', gap: '6px' }}>
-          {SOURCES.map(s => (
-            <button key={s.id} onClick={() => setActiveSource(s)} style={{
-              padding: '6px 12px', borderRadius: '8px', cursor: 'pointer',
-              fontSize: '12px', fontWeight: 500,
-              border: activeSource.id === s.id ? '1px solid rgba(184,92,255,0.4)' : '1px solid rgba(255,255,255,0.08)',
-              background: activeSource.id === s.id ? 'rgba(184,92,255,0.15)' : 'rgba(255,255,255,0.04)',
-              color: activeSource.id === s.id ? '#B85CFF' : '#888',
-              transition: 'all 0.2s',
-            }}>{s.name}</button>
-          ))}
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {SOURCES.map(s => {
+            const healthy = sourceHealth ? sourceHealth[s.id] !== false : true;
+            const active = activeSource.id === s.id;
+            return (
+              <button key={s.id} onClick={() => { manualPickRef.current = true; setActiveSource(s); }} style={{
+                padding: '6px 12px', borderRadius: '8px', cursor: 'pointer',
+                fontSize: '12px', fontWeight: 500,
+                border: active ? '1px solid rgba(184,92,255,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                background: active ? 'rgba(184,92,255,0.15)' : 'rgba(255,255,255,0.04)',
+                color: !healthy ? '#444' : active ? '#B85CFF' : '#888',
+                transition: 'all 0.2s',
+                display: 'flex', alignItems: 'center', gap: '5px',
+              }}>
+                <span style={{
+                  width: 6, height: 6, borderRadius: '50%',
+                  background: sourceHealth ? (healthy ? '#22c55e' : '#ef4444') : '#666',
+                  flexShrink: 0,
+                }} />
+                {s.name}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -213,6 +279,11 @@ function WatchContent() {
                 ← Details
               </Link>
             </div>
+          </div>
+        ) : sourceHealth === null ? (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px' }}>
+            <div className="custom-loader" />
+            <p style={{ fontSize: '14px', color: '#666' }}>Finding the best source…</p>
           </div>
         ) : (
           <iframe
