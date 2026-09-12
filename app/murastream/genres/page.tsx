@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+import Link from 'next/link';
 import MuraStreamCard from '../components/MuraStreamCard';
 import MuraStreamLoader from '../components/MuraStreamLoader';
-import { FilmIcon, TvIcon, SparklesIcon } from '../components/MuraStreamIcons';
+import { FilmIcon, TvIcon, SparklesIcon, ShuffleIcon } from '../components/MuraStreamIcons';
 import type { MediaItem } from '../types';
 
 // Genre browse — the drama browse experience generalized to all movies and
@@ -41,13 +42,46 @@ function GenreBrowseContent() {
   const [loadingMore, setLoadingMore] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [surprising, setSurprising] = useState(false);
+  // Daily hero + chip keyboard nav
+  const [hero, setHero] = useState<MediaItem | null>(null);
+  const chipsRef = useRef<HTMLDivElement>(null);
 
   const setFilter = (key: string, value: string) => {
     const sp = new URLSearchParams(searchParams.toString());
     if (!value || value === 'All Years') sp.delete(key);
     else sp.set(key, value);
+    // Remember the resulting filter set per user (restored on next visit
+    // when the URL carries no explicit filters).
+    try {
+      localStorage.setItem('ms-genre-filters', JSON.stringify({
+        type: sp.get('type') || 'movie',
+        genre: sp.get('genre') || '',
+        year: sp.get('year') || 'All Years',
+        sort: sp.get('sort') || 'popularity.desc',
+      }));
+    } catch { /* empty */ }
     router.replace(`/murastream/genres?${sp.toString()}`, { scroll: false });
   };
+
+  // Restore last-used filters on first visit without explicit URL params.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    if (searchParams.toString()) return; // explicit URL wins
+    try {
+      const saved = JSON.parse(localStorage.getItem('ms-genre-filters') || 'null') as
+        { type?: string; genre?: string; year?: string; sort?: string } | null;
+      if (!saved) return;
+      const sp = new URLSearchParams();
+      if (saved.type === 'tv') sp.set('type', 'tv');
+      if (saved.genre) sp.set('genre', saved.genre);
+      if (saved.year && saved.year !== 'All Years') sp.set('year', saved.year);
+      if (saved.sort && saved.sort !== 'popularity.desc') sp.set('sort', saved.sort);
+      if ([...sp.keys()].length) router.replace(`/murastream/genres?${sp.toString()}`, { scroll: false });
+    } catch { /* empty */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Genre list per type (TMDB genre ids differ between movie and TV).
   useEffect(() => {
@@ -185,6 +219,19 @@ function GenreBrowseContent() {
     return () => controller.abort();
   }, [likeRows, buildUrl]);
 
+  // Daily hero: seed = today's date, so every user sees the same pick per
+  // day; it rotates through the current top-rated pool as filters change.
+  useEffect(() => {
+    if (loading) return;
+    if (items.length < 5) { setHero(null); return; }
+    const pool = items.filter(t => (t.voteAverage ?? 0) >= 6.5 && t.backdropPath);
+    if (pool.length === 0) { setHero(null); return; }
+    const seedBase = `${type}|${genre}|${new Date().toISOString().slice(0, 10)}`;
+    let h = 0;
+    for (let i = 0; i < seedBase.length; i++) h = (h * 31 + seedBase.charCodeAt(i)) >>> 0;
+    setHero(pool[h % pool.length]);
+  }, [items, loading, type, genre]);
+
   const typeName = type === 'movie' ? 'Movies' : 'TV Shows';
   const genreName = genres.find(g => String(g.id) === genre)?.name;
 
@@ -220,8 +267,100 @@ function GenreBrowseContent() {
         ))}
       </div>
 
-      {/* Genre chips */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+      {/* Daily rotating hero */}
+      {hero && (
+        <div style={{
+          position: 'relative', borderRadius: 16, overflow: 'hidden', marginBottom: 24,
+          minHeight: 220, background: 'var(--ms-surface)', border: '1px solid var(--ms-border)',
+        }}>
+          {hero.backdropPath && (
+            <img src={hero.backdropPath} alt="" style={{
+              position: 'absolute', inset: 0, width: '100%', height: '100%',
+              objectFit: 'cover',
+            }} />
+          )}
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(to right, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.45) 55%, rgba(0,0,0,0.15) 100%)',
+          }} />
+          <div style={{
+            position: 'relative', zIndex: 1, padding: '26px 28px', maxWidth: 640, minHeight: 220,
+            display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10,
+          }}>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
+              background: '#E50914', color: '#fff', fontSize: 10, fontWeight: 700,
+              letterSpacing: '0.1em', padding: '4px 10px', borderRadius: 6,
+            }}>
+              <SparklesIcon size={11} /> TOP PICK FOR TODAY
+            </span>
+            <h2 style={{
+              fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+              fontSize: 26, fontWeight: 800, color: '#fff', margin: 0, lineHeight: 1.2,
+            }}>{hero.title}</h2>
+            <p style={{
+              fontSize: 13, color: 'rgba(255,255,255,0.75)', margin: 0,
+              display: 'flex', gap: 10, alignItems: 'center',
+            }}>
+              <span style={{ color: '#E50914', fontWeight: 700 }}>★ {Math.round((hero.voteAverage ?? 0) * 10) / 10}</span>
+              {hero.year && <span>{hero.year}</span>}
+              {genreName && <span>{genreName}</span>}
+            </p>
+            {hero.overview && (
+              <p style={{
+                fontSize: 13, color: 'rgba(255,255,255,0.85)', margin: 0, lineHeight: 1.5,
+                display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+              }}>{hero.overview}</p>
+            )}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <Link href={`/murastream/watch?type=${hero.mediaType || type}&id=${hero.id}`} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 7,
+                background: '#E50914', color: '#fff', padding: '10px 20px', borderRadius: 9,
+                fontFamily: '-apple-system, sans-serif', fontSize: 13, fontWeight: 700,
+                textDecoration: 'none', boxShadow: '0 4px 18px rgba(229,9,20,0.4)',
+              }}>
+                <svg width="13" height="13" fill="#fff" viewBox="0 0 16 16"><path d="M6.271 4.138a.5.5 0 0 1 .78-.172l4 2.8a.5.5 0 0 1 0 .824l-4 2.8A.5.5 0 0 1 6 10.2V5.8a.5.5 0 0 1 .271-.414z"/></svg>
+                Watch Now
+              </Link>
+              <Link href={`/murastream/${hero.mediaType || type}/${hero.id}`} style={{
+                display: 'inline-flex', alignItems: 'center',
+                border: '1px solid rgba(255,255,255,0.35)', color: '#fff',
+                padding: '10px 18px', borderRadius: 9, textDecoration: 'none',
+                fontFamily: '-apple-system, sans-serif', fontSize: 13, fontWeight: 600,
+              }}>
+                Details
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Genre chips — arrow keys navigate, Enter/Space selects */}
+      <div
+        ref={chipsRef}
+        role="toolbar"
+        aria-label="Filter by genre"
+        tabIndex={0}
+        onKeyDown={e => {
+          const buttons = Array.from(chipsRef.current?.querySelectorAll<HTMLButtonElement>('button') || []);
+          if (buttons.length === 0) return;
+          const currentIndex = buttons.findIndex(b => b === document.activeElement);
+          if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            buttons[(currentIndex + 1 + buttons.length) % buttons.length]?.focus();
+          } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            buttons[(currentIndex - 1 + buttons.length) % buttons.length]?.focus();
+          } else if (e.key === 'Home') {
+            e.preventDefault();
+            buttons[0]?.focus();
+          } else if (e.key === 'End') {
+            e.preventDefault();
+            buttons[buttons.length - 1]?.focus();
+          }
+        }}
+        style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14, outline: 'none' }}
+      >
         <button onClick={() => setFilter('genre', '')} style={chipStyle(genre === '')}>All</button>
         {genres.map(g => (
           <button key={g.id} onClick={() => setFilter('genre', String(g.id))} style={chipStyle(genre === String(g.id))}>

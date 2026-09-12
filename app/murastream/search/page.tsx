@@ -162,7 +162,7 @@ export default function MuraStreamSearchPage() {
       {searchState === 'error' && (
         <div style={{ textAlign: 'center', padding: '48px', color: '#ef4444' }}>
           <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
-            ⚠ {errorMessage || 'Search is temporarily unavailable'}
+            Search is temporarily unavailable
           </p>
           <button onClick={() => { lastQueryRef.current = ''; doSearch(query, searchType); }}
             style={{

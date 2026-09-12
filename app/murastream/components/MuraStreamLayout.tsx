@@ -292,7 +292,7 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
             ))}
             <div className="ms-dropdown-divider" />
             <Link href="/murastream/settings" className="ms-dropdown-link" onClick={() => setMenuOpen(false)}>
-              ⚙ Settings
+              Settings
             </Link>
           </div>
         </div>

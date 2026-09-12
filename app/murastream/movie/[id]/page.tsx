@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import MuraStreamCard from '../../components/MuraStreamCard';
 import MuraStreamLoader from '../../components/MuraStreamLoader';
+import { useShareLink } from '../../hooks/useShareLink';
+import { ShareIcon, CheckIcon } from '../../components/MuraStreamIcons';
 import { useMuraStreamStore } from '../../hooks/useMuraStreamStore';
 
 type DetailData = {
@@ -38,6 +40,7 @@ export default function MovieDetailPage() {
   const movieId = params.id;
 
   const [movie, setMovie] = useState<DetailData | null>(null);
+  const { shared, copyShareLink } = useShareLink();
   const [loading, setLoading] = useState(true);
   const { isLiked, toggleLike, isInMyList, toggleMyList } = useMuraStreamStore();
   const [showTrailer, setShowTrailer] = useState(false);
@@ -185,15 +188,26 @@ export default function MovieDetailPage() {
                 padding: '14px 22px', borderRadius: '12px',
                 fontFamily: '-apple-system, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
               }}>
-                {liked ? '❤ Liked' : '♡ Like'}
+                {liked ? 'Liked' : 'Like'}
               </button>
               {trailer && (
                 <button onClick={() => setShowTrailer(true)} style={{
                   background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
                   color: 'var(--ms-text-muted)', padding: '14px 22px', borderRadius: '12px',
                   fontFamily: '-apple-system, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-                }}>▶ Trailer</button>
+                }}>Trailer</button>
               )}
+              <button onClick={() => copyShareLink({ id: movieId, mediaType: 'movie', title: movie.title || movie.name })} style={{
+                background: shared ? 'rgba(6,214,160,0.12)' : 'rgba(255,255,255,0.06)',
+                border: `1px solid ${shared ? 'rgba(6,214,160,0.4)' : 'rgba(255,255,255,0.1)'}`,
+                color: shared ? '#06d6a0' : 'var(--ms-text-muted)',
+                padding: '14px 22px', borderRadius: '12px',
+                fontFamily: '-apple-system, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 7,
+              }}>
+                {shared ? <CheckIcon size={13} /> : <ShareIcon size={13} />}
+                {shared ? 'Link Copied' : 'Share'}
+              </button>
             </div>
 
             {/* Overview */}

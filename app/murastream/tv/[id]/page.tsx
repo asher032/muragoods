@@ -6,6 +6,8 @@ import Link from 'next/link';
 import MuraStreamLoader from '../../components/MuraStreamLoader';
 import MuraStreamCard from '../../components/MuraStreamCard';
 import { useMuraStreamStore } from '../../hooks/useMuraStreamStore';
+import { useShareLink } from '../../hooks/useShareLink';
+import { ShareIcon, CheckIcon } from '../../components/MuraStreamIcons';
 
 export default function TvDetailPage() {
   const params = useParams();
@@ -19,6 +21,7 @@ export default function TvDetailPage() {
   const [seasonLoading, setSeasonLoading] = useState(false);
   const [error, setError] = useState('');
   const { isLiked, toggleLike, isInMyList, toggleMyList } = useMuraStreamStore();
+  const { shared, copyShareLink } = useShareLink();
 
   const fetchShow = useCallback(async () => {
     try {
@@ -150,7 +153,18 @@ export default function TvDetailPage() {
                 border: `1px solid ${liked ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.1)'}`,
                 color: liked ? '#ef4444' : 'var(--ms-text-muted)', padding: '14px 22px', borderRadius: '12px',
                 fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-              }}>{liked ? '❤ Liked' : '♡ Like'}</button>
+              }}>{liked ? 'Liked' : 'Like'}</button>
+              <button onClick={() => copyShareLink({ id: Number(tvId), mediaType: 'tv', title: show.name || show.title })} style={{
+                background: shared ? 'rgba(6,214,160,0.12)' : 'rgba(255,255,255,0.06)',
+                border: `1px solid ${shared ? 'rgba(6,214,160,0.4)' : 'rgba(255,255,255,0.1)'}`,
+                color: shared ? '#06d6a0' : 'var(--ms-text-muted)',
+                padding: '14px 22px', borderRadius: '12px',
+                fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 7,
+              }}>
+                {shared ? <CheckIcon size={13} /> : <ShareIcon size={13} />}
+                {shared ? 'Link Copied' : 'Share'}
+              </button>
             </div>
 
             {show.overview && (

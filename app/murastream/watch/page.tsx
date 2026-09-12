@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'rea
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useMuraStreamStore } from '../hooks/useMuraStreamStore';
+import { FlagIcon } from '../components/MuraStreamIcons';
 
 interface Source {
   id: string;
@@ -464,7 +465,7 @@ function WatchContent() {
               padding: '6px 10px', borderRadius: '8px', cursor: 'pointer',
               fontSize: '13px', color: '#888', border: '1px solid rgba(255,255,255,0.08)',
               background: 'rgba(255,255,255,0.04)', transition: 'all 0.2s',
-            }}>⚑</button>
+            }}><FlagIcon size={13} /></button>
             {showReport && (
               <div style={{
                 position: 'absolute', top: '36px', right: 0, zIndex: 60,

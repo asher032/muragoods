@@ -1,6 +1,7 @@
 'use client';
 
 import { useMuraStreamStore } from '../hooks/useMuraStreamStore';
+import { HeartIcon } from '../components/MuraStreamIcons';
 import MuraStreamCard from '../components/MuraStreamCard';
 
 export default function MuraStreamLikesPage() {
@@ -9,7 +10,7 @@ export default function MuraStreamLikesPage() {
   return (
     <div style={{ padding: '24px 28px' }}>
       <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: 'var(--ms-text)', margin: '0 0 4px' }}>
-        <span style={{ color: '#E50914' }}>❤</span> MY LIKES
+        <span style={{ color: '#E50914', display: 'inline-flex', verticalAlign: 'middle', marginRight: 6 }}><HeartIcon size={15} filled /></span> MY LIKES
       </h1>
       <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '12px', color: 'var(--ms-text-faint)', margin: '0 0 24px' }}>
         {likes.length} title{likes.length !== 1 ? 's' : ''} liked

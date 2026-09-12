@@ -45,7 +45,7 @@ export default function MuraStreamSettingsPage() {
     <div style={{ padding: '24px 28px', maxWidth: '500px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: 'var(--ms-text)', margin: 0 }}>
-          ⚙ SETTINGS
+          SETTINGS
         </h1>
         {saved && (
           <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px', color: '#06d6a0', background: 'rgba(6,214,160,0.1)', padding: '4px 10px', borderRadius: '4px' }}>

@@ -221,7 +221,7 @@ export default function DramaBrowsePage() {
                     padding: '12px 24px', fontSize: 14, fontWeight: 700, textDecoration: 'none',
                     boxShadow: '0 4px 20px rgba(229,9,20,0.35)',
                   }}>
-                    ▶ Watch Now
+                    Watch Now
                   </Link>
                   <Link href={`/murastream/tv/${hero.id}`} style={{
                     background: 'rgba(255,255,255,0.08)', color: '#fff',

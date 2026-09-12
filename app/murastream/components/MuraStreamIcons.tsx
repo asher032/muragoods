@@ -140,6 +140,30 @@ export const SparklesIcon = (p: IconProps) => (
   <Svg {...p}><path d="M12 3l1.9 5.7L19.6 10l-5.7 1.9L12 17.6l-1.9-5.7L4.4 10l5.7-1.9z" /><path d="M19 15l.9 2.6L22.5 18.5l-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z" /></Svg>
 );
 
+export const ShuffleIcon = (p: IconProps) => (
+  <Svg {...p}><path d="M16 3h5v5" /><path d="M4 20L21 3" /><path d="M21 16v5h-5" /><path d="M15 15l6 6" /><path d="M4 4l5 5" /></Svg>
+);
+
+export const PopcornIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M7 10a3 3 0 0 1-1.6-5.5A3 3 0 0 1 8 1.9 3 3 0 0 1 12 3a3 3 0 0 1 4-1.1 3 3 0 0 1 2.6 2.6A3 3 0 0 1 17 10" />
+    <path d="M5 10h14l-1.2 10a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8z" />
+    <path d="M12 10v11.8" />
+  </Svg>
+);
+
+export const ShareIcon = (p: IconProps) => (
+  <Svg {...p}><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="M8.6 13.5l6.8 4" /><path d="M15.4 6.5l-6.8 4" /></Svg>
+);
+
+export const CheckIcon = (p: IconProps) => (
+  <Svg {...p}><path d="M20 6L9 17l-5-5" /></Svg>
+);
+
+export const FlagIcon = (p: IconProps) => (
+  <Svg {...p}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><path d="M4 22v-7" /></Svg>
+);
+
 export const ScrollIcon = (p: IconProps) => (
   <Svg {...p}><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4" /><path d="M19 17V5a2 2 0 0 0-2-2H4" /></Svg>
 );

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { VAULT_ITEMS } from '../../data/vault';
+import { PopcornIcon } from '../../components/MuraStreamIcons';
 
 export default function VaultDetailPage() {
   const params = useParams<{ id: string }>();
@@ -23,7 +24,7 @@ export default function VaultDetailPage() {
         const d = await res.json();
         if (!cancelled) setArt({ poster: d.posterPath, backdrop: d.backdropPath });
       } catch {
-        /* poster fallback 🍿 is fine */
+        /* poster fallback is fine */
       }
     })();
     return () => { cancelled = true; };
@@ -80,7 +81,7 @@ export default function VaultDetailPage() {
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 onError={() => setPosterBroken(true)} />
             ) : (
-              <span style={{ fontSize: 48 }}>🍿</span>
+              <span style={{ color: 'var(--ms-text-ghost)', display: 'flex' }}><PopcornIcon size={48} strokeWidth={1.3} /></span>
             )}
           </div>
 
@@ -118,7 +119,7 @@ export default function VaultDetailPage() {
                   padding: '13px 28px', fontSize: 15, fontWeight: 700, cursor: 'pointer',
                 }}
               >
-                ▶ Watch Now
+                Watch Now
               </button>
               {item.mp4Url && (
                 <a

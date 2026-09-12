@@ -31,7 +31,7 @@ function VaultCard({ item, posterPath }: { item: VaultItem; posterPath?: string 
             onError={() => setBroken(true)}
           />
         ) : (
-          <span style={{ fontSize: 40 }}>🍿</span>
+          <span style={{ color: 'var(--ms-text-ghost)', display: 'flex' }}><PopcornIcon size={40} strokeWidth={1.4} /></span>
         )}
         <span style={{
           position: 'absolute', top: 8, left: 8, background: 'rgba(229,9,20,0.9)',
