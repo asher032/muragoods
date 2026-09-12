@@ -92,6 +92,21 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           z-index: 2;
         }
         .ms-card-rating span { color: #B85CFF; }
+        .ms-card-country {
+          position: absolute;
+          top: 8px;
+          left: 8px;
+          background: rgba(184,92,255,0.85);
+          backdrop-filter: blur(8px);
+          border-radius: 6px;
+          padding: 3px 8px;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          color: #fff;
+          z-index: 2;
+        }
         .ms-card-overlay {
           position: absolute;
           inset: 0;

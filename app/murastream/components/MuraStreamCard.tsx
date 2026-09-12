@@ -4,6 +4,13 @@ import Link from 'next/link';
 import { useMuraStreamStore } from '../hooks/useMuraStreamStore';
 import type { MediaItem } from '../types';
 
+// Country-of-origin labels for Asian drama recognition
+const COUNTRY_LABELS: Record<string, string> = {
+  ko: 'K-DRAMA',
+  zh: 'C-DRAMA',
+  ja: 'J-DRAMA',
+};
+
 export default function MuraStreamCard({
   item,
   showActions = false,
@@ -46,6 +53,11 @@ export default function MuraStreamCard({
           <div className="ms-card-rating">
             <span>★</span> {(item.voteAverage ?? 0).toFixed(1)}
           </div>
+        )}
+
+        {/* Country-of-origin badge */}
+        {item.mediaType === 'tv' && COUNTRY_LABELS[item.originalLanguage || ''] && (
+          <div className="ms-card-country">{COUNTRY_LABELS[item.originalLanguage!]}</div>
         )}
 
         {/* Hover overlay */}
