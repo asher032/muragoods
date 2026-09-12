@@ -209,7 +209,7 @@ function WatchContent() {
                 style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid #B85CFF', background: 'rgba(184,92,255,0.15)', color: '#B85CFF', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
                 ↻ Retry
               </button>
-              <Link href={type === 'tv' ? `/murastream/tv/${id}${isAnime ? `?anilist=${anilistIdParam}` : ''}` : `/murastream/movie/${id}`} style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: '#888', fontSize: '13px', textDecoration: 'none' }}>
+              <Link href={type === 'tv' ? `/murastream/tv/${id}` : `/murastream/movie/${id}`} style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: '#888', fontSize: '13px', textDecoration: 'none' }}>
                 ← Details
               </Link>
             </div>
@@ -237,7 +237,7 @@ function WatchContent() {
             <p style={{ fontSize: '12px', color: '#fff', margin: '0 0 4px' }}>{title} — S{season}E{episode + 1}</p>
             <p style={{ fontSize: '11px', color: '#888', margin: '0 0 12px' }}>Starting in {autoPlayCountdown}s...</p>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode + 1}${isAnime ? `&anilist=${anilistIdParam}` : ''}`)} style={{
+              <button onClick={() => router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode + 1}`)} style={{
                 flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #B85CFF',
                 background: 'rgba(184,92,255,0.15)', color: '#B85CFF',
                 fontSize: '12px', cursor: 'pointer', fontWeight: 600,
@@ -254,7 +254,7 @@ function WatchContent() {
       {/* Bottom bar */}
       <div style={{ background: 'rgba(15,15,26,0.95)', borderTop: '1px solid rgba(255,255,255,0.05)', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Link href={type === 'tv' ? `/murastream/tv/${id}${isAnime ? `?anilist=${anilistIdParam}` : ''}` : `/murastream/movie/${id}`} style={{
+          <Link href={type === 'tv' ? `/murastream/tv/${id}` : `/murastream/movie/${id}`} style={{
             padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)',
             background: 'transparent', color: '#888', fontSize: '12px', textDecoration: 'none',
           }}>Details</Link>
@@ -262,7 +262,7 @@ function WatchContent() {
 
         {type === 'tv' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button onClick={() => { if (episode > 1) router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode - 1}${isAnime ? `&anilist=${anilistIdParam}` : ''}`); }}
+            <button onClick={() => { if (episode > 1) router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode - 1}`); }}
               disabled={episode <= 1} style={{
                 padding: '4px 12px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)',
                 background: episode <= 1 ? 'rgba(255,255,255,0.05)' : 'rgba(184,92,255,0.15)',
