@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import MuraStreamIcon from '@/app/components/icons/MuraStreamIcon';
+import { LATEST_CHANGELOG, CHANGELOG_SEEN_KEY } from '../data/changelog';
 
 const NAV_LINKS = [
   { href: '/murastream', label: 'Home' },
@@ -34,6 +35,26 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
   const [scrolled, setScrolled] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  // "What's New" badge: on until the user has visited the changelog since
+  // the latest entry shipped. Keyed on the entry's stable id. Checked after
+  // mount so SSR and hydration always agree.
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
+
+  useEffect(() => {
+    try {
+      setShowWhatsNew(localStorage.getItem(CHANGELOG_SEEN_KEY) !== LATEST_CHANGELOG.id);
+    } catch { /* storage unavailable → stay off */ }
+  }, []);
+
+  // Mark the changelog as seen whenever the user is on that page.
+  useEffect(() => {
+    if (pathname === '/murastream/changelog') {
+      try {
+        localStorage.setItem(CHANGELOG_SEEN_KEY, LATEST_CHANGELOG.id);
+        setShowWhatsNew(false);
+      } catch { /* empty */ }
+    }
+  }, [pathname]);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -141,6 +162,26 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
         }
         .ms-dropdown-link:hover { background: rgba(184,92,255,0.1); color: #fff; }
         .ms-dropdown-divider { height: 1px; background: rgba(255,255,255,0.06); margin: 4px 8px; }
+        /* What's New badge */
+        .ms-whatsnew-row { position: relative; }
+        .ms-whatsnew-badge {
+          position: absolute; top: 6px; right: 10px;
+          background: #B85CFF; color: #fff;
+          font-family: var(--font-arcade); font-size: 7px; letter-spacing: 0.08em;
+          padding: 2px 6px; border-radius: 6px;
+          box-shadow: 0 0 10px rgba(184,92,255,0.7);
+          animation: ms-whatsnew-pulse 2.4s ease-in-out infinite;
+        }
+        @keyframes ms-whatsnew-pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.45; }
+        }
+        .ms-whatsnew-dot {
+          position: absolute; top: 5px; right: 5px;
+          width: 8px; height: 8px; border-radius: 50%;
+          background: #B85CFF; box-shadow: 0 0 8px rgba(184,92,255,0.8);
+          animation: ms-whatsnew-pulse 2.4s ease-in-out infinite;
+        }
         /* ─── Main Content ────────────────────────────────── */
         .ms-main { padding-top: 64px; min-height: 100vh; }
         /* ─── Mobile Bottom Nav ──────────────────────────── */
@@ -227,18 +268,22 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
           </Link>
 
           {/* More menu */}
-          <button className="ms-topnav-more" onClick={() => setMenuOpen(!menuOpen)}>
+          <button className="ms-topnav-more" onClick={() => setMenuOpen(!menuOpen)} style={{ position: 'relative' }}>
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="#A0A0A0" viewBox="0 0 16 16">
               <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-4a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-4a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
             </svg>
+            {showWhatsNew && <span className="ms-whatsnew-dot" />}
           </button>
 
           {/* Dropdown */}
           <div ref={menuRef} className={`ms-dropdown ${menuOpen ? 'open' : ''}`}>
             {MORE_LINKS.map(link => (
-              <Link key={link.href} href={link.href} className="ms-dropdown-link"
+              <Link key={link.href} href={link.href} className="ms-dropdown-link ms-whatsnew-row"
                 onClick={() => setMenuOpen(false)}>
                 {link.label}
+                {showWhatsNew && link.href === '/murastream/changelog' && (
+                  <span className="ms-whatsnew-badge">NEW</span>
+                )}
               </Link>
             ))}
             <div className="ms-dropdown-divider" />

@@ -38,7 +38,7 @@ const PROVIDER_NAMES: Record<string, string> = {
   multiembed: 'MultiEmbed',
 };
 
-function TrendChart({ weeks }: { weeks: TrendWeek[] }) {
+function TrendChart({ weeks, onSelectWeek }: { weeks: TrendWeek[]; onSelectWeek: (weekKey: string) => void }) {
   const max = Math.max(1, ...weeks.map(w => w.broken + w.ads));
   if (weeks.every(w => w.broken + w.ads === 0)) {
     return <p style={{ color: '#555', fontSize: 12, margin: '8px 0 4px' }}>No reports in the last 8 weeks — a quiet chart is a healthy chart.</p>;
@@ -50,16 +50,23 @@ function TrendChart({ weeks }: { weeks: TrendWeek[] }) {
         const h = (n: number) => `${(n / max) * 100}%`;
         return (
           <div key={w.weekKey} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%' }}>
-            <div style={{ flex: 1, width: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
-              title={`${w.label}: ${w.broken} broken · ${w.ads} ads`}>
-              <div style={{
-                width: '70%', maxWidth: 42, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-                height: `${(total / max) * 100}%`, minHeight: total > 0 ? 3 : 0, borderRadius: '4px 4px 0 0',
-                overflow: 'hidden', transition: 'height 0.3s',
-              }}>
-                <div style={{ height: h(w.broken), background: '#ef4444' }} />
-                <div style={{ height: h(w.ads), background: '#eab308' }} />
-              </div>
+            <div style={{ flex: 1, width: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+              <button
+                onClick={() => onSelectWeek(w.weekKey)}
+                title={`${w.label}: ${w.broken} broken · ${w.ads} ads — click for details`}
+                style={{
+                  width: '70%', maxWidth: 42, height: `${(total / max) * 100}%`, minHeight: total > 0 ? 3 : 0,
+                  borderRadius: '4px 4px 0 0', overflow: 'hidden', transition: 'height 0.3s, filter 0.15s',
+                  border: 'none', padding: 0, cursor: total > 0 ? 'pointer' : 'default',
+                  display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+                  background: 'transparent',
+                }}
+                onMouseEnter={e => { if (total > 0) e.currentTarget.style.filter = 'brightness(1.3)'; }}
+                onMouseLeave={e => { e.currentTarget.style.filter = ''; }}
+              >
+                <div style={{ height: h(w.broken), background: '#ef4444', width: '100%' }} />
+                <div style={{ height: h(w.ads), background: '#eab308', width: '100%' }} />
+              </button>
             </div>
             <span style={{ fontSize: 10, color: total > 0 ? '#888' : '#444', whiteSpace: 'nowrap' }}>{w.label}</span>
           </div>
@@ -76,6 +83,9 @@ export default function AdminSourceReportsPage() {
   const [trend, setTrend] = useState<TrendWeek[]>([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
+  // Week drill-down: clicked bar → that week's individual reports
+  const [weekDetail, setWeekDetail] = useState<{ week: string; reports: RawReport[] } | null>(null);
+  const [weekLoading, setWeekLoading] = useState(false);
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
@@ -118,6 +128,19 @@ export default function AdminSourceReportsPage() {
     }
   };
 
+  const openWeek = async (weekKey: string) => {
+    setWeekLoading(true);
+    try {
+      const res = await fetch(`/api/admin/source-reports?week=${weekKey}`);
+      const data = await res.json();
+      setWeekDetail({ week: weekKey, reports: data.reports || [] });
+    } catch {
+      setWeekDetail({ week: weekKey, reports: [] });
+    } finally {
+      setWeekLoading(false);
+    }
+  };
+
   const fmtDate = (iso: string | null) =>
     iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
@@ -152,8 +175,44 @@ export default function AdminSourceReportsPage() {
                 <span><span style={{ display: 'inline-block', width: 9, height: 9, background: '#eab308', borderRadius: 2, marginRight: 5 }} />Ads</span>
               </div>
             </div>
-            <TrendChart weeks={trend} />
+            <TrendChart weeks={trend} onSelectWeek={openWeek} />
+            {weekLoading && <p style={{ color: '#666', fontSize: 12, margin: '10px 0 0' }}>Loading week…</p>}
           </div>
+
+          {/* Week drill-down */}
+          {weekDetail && (
+            <div style={{ background: '#111', borderRadius: 12, border: '1px solid rgba(184,92,255,0.3)', padding: '16px 20px', marginBottom: 28 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <h3 style={{ fontFamily: 'var(--font-arcade)', fontSize: 11, color: '#B85CFF', margin: 0, letterSpacing: '0.1em' }}>
+                  WEEK OF {weekDetail.week} — {weekDetail.reports.length} REPORT{weekDetail.reports.length === 1 ? '' : 'S'}
+                </h3>
+                <button onClick={() => setWeekDetail(null)} style={{
+                  background: 'none', border: 'none', color: '#666', fontSize: 16, cursor: 'pointer', padding: '0 4px',
+                }} title="Close">✕</button>
+              </div>
+              {weekDetail.reports.length === 0 ? (
+                <p style={{ color: '#555', fontSize: 12 }}>No reports in this week.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {weekDetail.reports.map((r, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 5,
+                        background: r.issue === 'broken' ? 'rgba(239,68,68,0.12)' : 'rgba(234,179,8,0.12)',
+                        color: r.issue === 'broken' ? '#ef4444' : '#eab308',
+                      }}>{r.issue === 'broken' ? 'BROKEN' : 'ADS'}</span>
+                      <span style={{ color: '#E5E5E5', fontWeight: 600, minWidth: 80 }}>{PROVIDER_NAMES[r.provider] || r.provider}</span>
+                      <span style={{ color: '#888' }}>
+                        {r.mediaType === 'tv' ? `TV ${r.tmdbId} · S${r.season ?? '?'}E${r.episode ?? '?'}` : `Movie ${r.tmdbId}`}
+                      </span>
+                      {r.email && <span style={{ color: '#555', fontSize: 11 }}>{r.email}</span>}
+                      <span style={{ color: '#555', fontSize: 11, marginLeft: 'auto' }}>{fmtDate(r.createdAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Provider table */}
           <div style={{ background: '#111', borderRadius: 12, border: '1px solid #1A1A1A', overflow: 'hidden', marginBottom: 28 }}>

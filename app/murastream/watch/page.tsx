@@ -242,12 +242,24 @@ function WatchContent() {
     effectiveHealth ? SOURCES.filter(s => effectiveHealth[s.id] !== false) : SOURCES
   ), [effectiveHealth]);
 
-  // Auto-select the first source confirmed healthy (unless the user already
-  // picked one manually). A cached source is kept if the probe still vouches
-  // for it; otherwise the cache is corrected and the winner remembered.
+  // Auto-select / forced-switch effect. Two behaviors:
+  // 1. Initial: after the probe lands, pick the first confirmed-healthy source
+  //    (preferring the cached last-known-good winner) unless the user picked
+  //    one manually and it's still healthy.
+  // 2. Active-death watch: if the ACTIVE source becomes unhealthy at any point
+  //    (runtime error, community reports, or an admin disabling it via the
+  //    SSE push), switch away immediately — a manual pick does not survive
+  //    its own source dying.
   useEffect(() => {
-    if (!effectiveHealth || manualPickRef.current) return;
-    if (cachedSource && effectiveHealth[cachedSource.id]) return; // cache still good
+    if (!effectiveHealth) return;
+    const activeDead = effectiveHealth[activeSource.id] === false;
+    if (!activeDead && manualPickRef.current) return;
+    if (activeDead) manualPickRef.current = false; // forced switch resets manual mode
+    // Prefer the remembered winner if it still works.
+    if (cachedSource && effectiveHealth[cachedSource.id]) {
+      if (cachedSource.id !== activeSource.id) setActiveSource(cachedSource);
+      return;
+    }
     const firstHealthy = SOURCES.find(s => effectiveHealth[s.id]);
     if (firstHealthy && firstHealthy.id !== activeSource.id) {
       setActiveSource(firstHealthy);
@@ -255,9 +267,10 @@ function WatchContent() {
         const key = `ms-best-source:${type}:${id}${type === 'tv' ? `:S${season}E${episode}` : ''}`;
         localStorage.setItem(key, firstHealthy.id);
       } catch { /* empty */ }
+    } else if (!firstHealthy) {
+      setError('All streaming sources are currently unavailable. Please try again later.');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveHealth, cachedSource]);
+  }, [effectiveHealth, activeSource, cachedSource]);
 
   const advanceEpisode = useCallback(() => {
     router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode + 1}`);

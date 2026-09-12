@@ -23,9 +23,24 @@ function weekStartKey(d: Date): string {
   return t.toISOString().slice(0, 10);
 }
 
-export async function GET() {
+// Drill-down: GET /api/admin/source-reports?week=YYYY-MM-DD (a Monday UTC
+// date, as emitted in `trend[].weekKey`) returns that week's raw reports.
+export async function GET(request: NextRequest) {
   try {
     await dbConnect();
+
+    const weekParam = request.nextUrl.searchParams.get('week');
+    if (weekParam) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(weekParam)) {
+        return NextResponse.json({ error: 'week must be YYYY-MM-DD' }, { status: 400 });
+      }
+      const start = new Date(`${weekParam}T00:00:00.000Z`);
+      const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const reports = await SourceReport.find({ createdAt: { $gte: start, $lt: end } })
+        .sort({ createdAt: -1 }).limit(200).select('-_id -__v').lean();
+      return NextResponse.json({ week: weekParam, reports }, { headers: { 'Cache-Control': 'no-store' } });
+    }
+
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     const [agg, recent, configs, trend] = await Promise.all([
