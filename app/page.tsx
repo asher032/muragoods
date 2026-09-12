@@ -209,7 +209,7 @@ export default function Home() {
     { icon: <Icon name="coin" size={28} />, title: 'Earn Coins', desc: '0.5 coins per peso spent', color: '#ffd60a', link: '/points' },
     { icon: <Icon name="game" size={28} />, title: 'Play Games', desc: 'Win rewards & prizes', color: '#4895ef', link: '/entertainment' },
     { icon: <Icon name="envelope" size={28} />, title: 'Untold Words', desc: 'Send anonymous confessions', color: '#c896ff', link: '/untold-words' },
-    { icon: <Icon name="stream" size={28} />, title: 'MuraStream', desc: 'Movies • TV • Anime', color: '#e63946', link: '/murastream' },
+    { icon: <Icon name="stream" size={28} />, title: 'MuraStream', desc: 'Movies • TV • K-Dramas', color: '#e63946', link: '/murastream' },
   ];
 
   return (
@@ -397,7 +397,7 @@ export default function Home() {
                 <div className="highlight-content">
                   <span className="text-5xl mb-4 float-anim block">🎬</span>
                   <h3 className="font-arcade text-sm text-mario-yellow mb-2">MURASTREAM</h3>
-                  <p className="text-xs text-mario-text-muted mb-3">Movies • TV • Anime — Stream, browse, and build your watchlist.</p>
+                  <p className="text-xs text-mario-text-muted mb-3">Movies • TV • K-Dramas — Stream, browse, and build your watchlist.</p>
                   <span className="font-arcade text-[9px]" style={{ color: '#e63946', letterSpacing: '0.1em' }}>WATCH NOW →</span>
                 </div>
               </SpotlightCard>
@@ -559,7 +559,7 @@ export default function Home() {
           <Reveal direction="scale">
             <div className="text-6xl sm:text-8xl mb-6">🎬</div>
           </Reveal>            <Reveal delay={0.1}>
-              <h2 className="mario-title text-xl sm:text-3xl mb-4" style={{ color: '#B85CFF' }}>
+              <h2 className="mario-title text-xl sm:text-3xl mb-4" style={{ color: '#E50914' }}>
                 MuraStream
               </h2>
             </Reveal>
@@ -568,7 +568,7 @@ export default function Home() {
               Your next adventure starts here.
             </p>
             <p className="text-mario-text-muted/60 text-xs mb-8">
-              Movies • TV Series • Anime
+              Movies • TV Series • K-Dramas
             </p>
           </Reveal>
           <Reveal delay={0.3}>
@@ -576,7 +576,7 @@ export default function Home() {
               <Link href="/murastream">
                 <AnimatedButton
                   className="px-10 py-4 font-arcade text-sm"
-                  style={{ background: 'rgba(184,92,255,0.2)', borderColor: 'rgba(184,92,255,0.4)', color: '#B85CFF' }}
+                  style={{ background: 'rgba(229,9,20,0.2)', borderColor: 'rgba(229,9,20,0.4)', color: '#E50914' }}
                 >
                   🎬 EXPLORE MOVIES →
                 </AnimatedButton>

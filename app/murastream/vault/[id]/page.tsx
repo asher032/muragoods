@@ -35,7 +35,7 @@ export default function VaultDetailPage() {
         <p style={{ color: '#A0A0A0', fontFamily: 'var(--font-arcade)', fontSize: 14 }}>
           This vault film doesn&apos;t exist.
         </p>
-        <Link href="/murastream/downloads" style={{ color: '#B85CFF', fontSize: 14, textDecoration: 'none' }}>
+        <Link href="/murastream/downloads" style={{ color: '#E50914', fontSize: 14, textDecoration: 'none' }}>
           ← Back to the Free Vault
         </Link>
       </div>
@@ -87,7 +87,7 @@ export default function VaultDetailPage() {
           {/* Info */}
           <div style={{ flex: 1, minWidth: 280, paddingTop: 40 }}>
             <span style={{
-              display: 'inline-block', background: 'rgba(184,92,255,0.15)', color: '#B85CFF',
+              display: 'inline-block', background: 'rgba(229,9,20,0.15)', color: '#E50914',
               fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
               padding: '4px 10px', borderRadius: 6, marginBottom: 12,
             }}>
@@ -103,7 +103,7 @@ export default function VaultDetailPage() {
             <div style={{ fontSize: 14, color: '#A0A0A0', marginBottom: 16 }}>
               {item.year} · {item.runtime} · ★ {item.rating.toFixed(1)} · {item.studio}
             </div>
-            <div style={{ fontSize: 12, color: '#B85CFF', marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: '#E50914', marginBottom: 16 }}>
               {item.genres.join(' • ')}
             </div>
             <p style={{ fontSize: 15, color: '#E5E5E5', lineHeight: 1.7, maxWidth: 560, margin: '0 0 28px' }}>
@@ -114,7 +114,7 @@ export default function VaultDetailPage() {
               <button
                 onClick={() => router.push(`/murastream/vault-watch?id=${item.id}`)}
                 style={{
-                  background: '#B85CFF', color: '#fff', border: 'none', borderRadius: 10,
+                  background: '#E50914', color: '#fff', border: 'none', borderRadius: 10,
                   padding: '13px 28px', fontSize: 15, fontWeight: 700, cursor: 'pointer',
                 }}
               >

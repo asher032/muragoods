@@ -30,8 +30,8 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: 'September 2026',
     title: 'Asian drama universe',
     items: [
-      { label: '🌐', text: 'Dedicated drama browse page with K-Dramas, C-Dramas, and J-Dramas — genre, year, and sort filters plus infinite scroll.' },
-      { label: '🎬', text: 'Featured hero banner spotlighting the #1 trending drama of your current filter.' },
+      { label: 'K·C·J', text: 'Dedicated drama browse page with K-Dramas, C-Dramas, and J-Dramas — genre, year, and sort filters plus infinite scroll.' },
+      { label: 'HERO', text: 'Featured hero banner spotlighting the #1 trending drama of your current filter.' },
       { label: '🌏', text: 'Country badges (K-DRAMA / C-DRAMA / J-DRAMA) on cards across the whole app so origins are recognizable everywhere.' },
       { label: '2', text: 'Fixed episode numbering bug that made every TV episode play as Episode 1.' },
     ],
@@ -42,7 +42,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: 'September 2026',
     title: 'Real downloads, zero ads, guaranteed',
     items: [
-      { label: '📥', text: 'Four Creative-Commons films (Big Buck Bunny, Sintel, Elephants Dream, Tears of Steel) with real download buttons — fully legal.' },
+      { label: 'DL', text: 'Four Creative-Commons films (Big Buck Bunny, Sintel, Elephants Dream, Tears of Steel) with real download buttons — fully legal.' },
       { label: '⚙', text: 'Native HLS player with a true quality selector (Auto/1080p/720p/…), progress resume, and no third-party embeds.' },
       { label: '🚫', text: 'The only section where zero ads is guaranteed by construction — there is no external player to inject anything.' },
     ],

@@ -348,7 +348,7 @@ function WatchContent() {
     return (
       <div style={{ minHeight: '100vh', background: '#0A0A0A', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px' }}>
         <p style={{ fontSize: '16px', color: '#ef4444' }}>No content selected.</p>
-        <Link href="/murastream" style={{ color: '#B85CFF', fontSize: '14px', textDecoration: 'none' }}>← Browse MuraStream</Link>
+        <Link href="/murastream" style={{ color: '#E50914', fontSize: '14px', textDecoration: 'none' }}>← Browse MuraStream</Link>
       </div>
     );
   }
@@ -361,7 +361,14 @@ function WatchContent() {
     const key = `${provider}:${issue}`;
     if (reportDone.has(key)) return;
     setReportDone(prev => new Set(prev).add(key));
-    if (issue === 'broken') handleIframeError(); // instant fallback, no waiting
+    // Both issue types trigger an instant switch away from the reported source:
+    // 'broken' because it does not play, 'ads' because burned-in ad overlays
+    // make it unwatchable. Locally demote it so auto-select + fallback skip it.
+    if (issue === 'broken') {
+      handleIframeError();
+    } else {
+      setSourceHealth(prev => (prev ? { ...prev, [provider]: false } : prev));
+    }
     try {
       let email: string | undefined;
       try {
@@ -415,10 +422,10 @@ function WatchContent() {
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path fillRule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8"/></svg>
             Back
           </button>
-          <Link href="/murastream" style={{ fontSize: '13px', color: '#B85CFF', textDecoration: 'none', fontWeight: 600 }}>MuraStream</Link>
+          <Link href="/murastream" style={{ fontSize: '13px', color: '#E50914', textDecoration: 'none', fontWeight: 600 }}>MuraStream</Link>
         </div>
         <p style={{ fontSize: '14px', fontWeight: 600, color: '#fff', margin: 0, maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {title}{type === 'tv' && <span style={{ color: '#B85CFF', fontWeight: 400 }}> — S{season}E{episode}</span>}
+          {title}{type === 'tv' && <span style={{ color: '#E50914', fontWeight: 400 }}> — S{season}E{episode}</span>}
         </p>
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {SOURCES.map(s => {
@@ -428,9 +435,9 @@ function WatchContent() {
               <button key={s.id} onClick={() => { manualPickRef.current = true; setActiveSource(s); }} style={{
                 padding: '6px 12px', borderRadius: '8px', cursor: 'pointer',
                 fontSize: '12px', fontWeight: 500,
-                border: active ? '1px solid rgba(184,92,255,0.4)' : '1px solid rgba(255,255,255,0.08)',
-                background: active ? 'rgba(184,92,255,0.15)' : 'rgba(255,255,255,0.04)',
-                color: !healthy ? '#444' : active ? '#B85CFF' : '#888',
+                border: active ? '1px solid rgba(229,9,20,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                background: active ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.04)',
+                color: !healthy ? '#444' : active ? '#E50914' : '#888',
                 transition: 'all 0.2s',
                 display: 'flex', alignItems: 'center', gap: '5px',
               }}>
@@ -443,7 +450,7 @@ function WatchContent() {
                 {QUALITY[s.id] && healthy && (
                   <span style={{
                     fontSize: 8, fontWeight: 700, letterSpacing: '0.04em',
-                    color: '#B85CFF', border: '1px solid rgba(184,92,255,0.45)',
+                    color: '#E50914', border: '1px solid rgba(229,9,20,0.45)',
                     borderRadius: 4, padding: '0 4px', lineHeight: '13px',
                   }}>{QUALITY[s.id]}</span>
                 )}
@@ -477,7 +484,7 @@ function WatchContent() {
                         borderRadius: 6, cursor: done ? 'default' : 'pointer', fontSize: 12,
                         color: done ? '#555' : '#E5E5E5', border: 'none', background: 'transparent',
                       }}
-                      onMouseEnter={e => { if (!done) e.currentTarget.style.background = 'rgba(184,92,255,0.1)'; }}
+                      onMouseEnter={e => { if (!done) e.currentTarget.style.background = 'rgba(229,9,20,0.1)'; }}
                       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
                     >
                       {issue === 'broken' ? '⚠ Broken / won\u2019t play' : '◆ Too many ads'} {done && '✓ reported'}
@@ -502,7 +509,7 @@ function WatchContent() {
             <p style={{ fontSize: '14px', color: '#ef4444', textAlign: 'center', maxWidth: '400px' }}>{error}</p>
             <div style={{ display: 'flex', gap: '10px' }}>
               <button onClick={() => { setError(''); setActiveSource(SOURCES[0]); }}
-                style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid #B85CFF', background: 'rgba(184,92,255,0.15)', color: '#B85CFF', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid #E50914', background: 'rgba(229,9,20,0.15)', color: '#E50914', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
                 ↻ Retry
               </button>
               <Link href={type === 'tv' ? `/murastream/tv/${id}` : `/murastream/movie/${id}`} style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: '#888', fontSize: '13px', textDecoration: 'none' }}>
@@ -530,17 +537,17 @@ function WatchContent() {
         {showAutoPlay && type === 'tv' && (
           <div style={{
             position: 'absolute', bottom: '80px', right: '16px', zIndex: 20,
-            background: 'rgba(10,10,24,0.95)', border: '1px solid rgba(184,92,255,0.3)',
+            background: 'rgba(10,10,24,0.95)', border: '1px solid rgba(229,9,20,0.3)',
             borderRadius: '12px', padding: '16px', width: '300px',
             backdropFilter: 'blur(10px)',
           }}>
-            <p style={{ fontSize: '11px', color: '#B85CFF', margin: '0 0 8px', fontWeight: 600 }}>▶ NEXT EPISODE</p>
+            <p style={{ fontSize: '11px', color: '#E50914', margin: '0 0 8px', fontWeight: 600 }}>▶ NEXT EPISODE</p>
             <p style={{ fontSize: '12px', color: '#fff', margin: '0 0 4px' }}>{title} — S{season}E{episode + 1}</p>
             <p style={{ fontSize: '11px', color: '#888', margin: '0 0 12px' }}>Starting in {autoPlayCountdown}s...</p>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={() => router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode + 1}`)} style={{
-                flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #B85CFF',
-                background: 'rgba(184,92,255,0.15)', color: '#B85CFF',
+                flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #E50914',
+                background: 'rgba(229,9,20,0.15)', color: '#E50914',
                 fontSize: '12px', cursor: 'pointer', fontWeight: 600,
               }}>▶ Play Now</button>
               <button onClick={() => setShowAutoPlay(false)} style={{
@@ -584,13 +591,13 @@ function WatchContent() {
             <button onClick={() => { if (episode > 1) router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode - 1}`); }}
               disabled={episode <= 1} style={{
                 padding: '4px 12px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)',
-                background: episode <= 1 ? 'rgba(255,255,255,0.05)' : 'rgba(184,92,255,0.15)',
-                color: episode <= 1 ? '#444' : '#B85CFF', fontSize: '12px', cursor: episode <= 1 ? 'default' : 'pointer',
+                background: episode <= 1 ? 'rgba(255,255,255,0.05)' : 'rgba(229,9,20,0.15)',
+                color: episode <= 1 ? '#444' : '#E50914', fontSize: '12px', cursor: episode <= 1 ? 'default' : 'pointer',
               }}>← Prev</button>
             <span style={{ fontSize: '12px', color: '#888' }}>S{season}E{episode}</span>
             <button onClick={() => { setShowAutoPlay(true); setAutoPlayCountdown(10); }} style={{
-              padding: '4px 12px', borderRadius: '6px', border: '1px solid #B85CFF',
-              background: 'rgba(184,92,255,0.15)', color: '#B85CFF', fontSize: '12px', cursor: 'pointer',
+              padding: '4px 12px', borderRadius: '6px', border: '1px solid #E50914',
+              background: 'rgba(229,9,20,0.15)', color: '#E50914', fontSize: '12px', cursor: 'pointer',
             }}>Next →</button>
           </div>
         )}

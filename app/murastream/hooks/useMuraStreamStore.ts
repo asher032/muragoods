@@ -48,8 +48,8 @@ export const DEFAULT_SETTINGS: MuraStreamSettings = {
   shortcutsEnabled: true,
 };
 
-export type AnimeProgress = {
-  id: number; // MAL or TMDB id
+export type EpisodeProgress = {
+  id: number; // TMDB id (TV/drama series)
   title: string;
   posterPath?: string | null;
   totalEpisodes?: number | null;
@@ -63,8 +63,19 @@ const KEYS = {
   myList: 'ms-mylist',
   history: 'ms-history',
   settings: 'ms-settings',
-  animeProgress: 'ms-anime-progress',
+  episodeProgress: 'ms-episode-progress',
 } as const;
+
+// One-time local migration: legacy 'ms-anime-progress' key carries the exact
+// same shape — move it BEFORE any component reads initial state.
+if (typeof window !== 'undefined') {
+  try {
+    if (!localStorage.getItem(KEYS.episodeProgress) && localStorage.getItem('ms-anime-progress')) {
+      localStorage.setItem(KEYS.episodeProgress, localStorage.getItem('ms-anime-progress')!);
+      localStorage.removeItem('ms-anime-progress');
+    }
+  } catch { /* empty */ }
+}
 
 // ─── Hook ────────────────────────────────────────────────────────
 export function useMuraStreamStore() {
@@ -120,9 +131,9 @@ export function useMuraStreamStore() {
     removeKey(KEYS.history);
   }, []);
 
-  // ─── Anime Episode Progress ──────────────────────────────
-  const [animeProgress, setAnimeProgressState] = useState<AnimeProgress[]>(() =>
-    readJSON<AnimeProgress[]>(KEYS.animeProgress, [])
+  // ─── Episode Progress (TV / dramas) ──────────────────────
+  const [episodeProgress, setEpisodeProgressState] = useState<EpisodeProgress[]>(() =>
+    readJSON<EpisodeProgress[]>(KEYS.episodeProgress, [])
   );
 
   const markEpisodeWatched = useCallback((
@@ -133,10 +144,10 @@ export function useMuraStreamStore() {
     totalEpisodes?: number | null,
     genres?: string[]
   ) => {
-    setAnimeProgressState(prev => {
+    setEpisodeProgressState(prev => {
       const existing = prev.find(a => a.id === animeId);
       const watched = existing ? [...new Set([...existing.watchedEpisodes, episode])].sort((a, b) => a - b) : [episode];
-      const entry: AnimeProgress = {
+      const entry: EpisodeProgress = {
         id: animeId,
         title,
         posterPath,
@@ -146,40 +157,40 @@ export function useMuraStreamStore() {
         genres: genres ?? existing?.genres,
       };
       const next = [entry, ...prev.filter(a => a.id !== animeId)].slice(0, 50);
-      writeJSON(KEYS.animeProgress, next);
+      writeJSON(KEYS.episodeProgress, next);
       return next;
     });
   }, []);
 
   const isEpisodeWatched = useCallback((
-    animeId: number,
+    seriesId: number,
     episode: number
   ): boolean => {
-    const prog = animeProgress.find(a => a.id === animeId);
+    const prog = episodeProgress.find(a => a.id === seriesId);
     return prog ? prog.watchedEpisodes.includes(episode) : false;
-  }, [animeProgress]);
+  }, [episodeProgress]);
 
-  const getAnimeProgress = useCallback((animeId: number): AnimeProgress | undefined => {
-    return animeProgress.find(a => a.id === animeId);
-  }, [animeProgress]);
+  const getEpisodeProgress = useCallback((seriesId: number): EpisodeProgress | undefined => {
+    return episodeProgress.find(a => a.id === seriesId);
+  }, [episodeProgress]);
 
-  const removeAnimeProgress = useCallback((animeId: number) => {
-    setAnimeProgressState(prev => {
-      const next = prev.filter(a => a.id !== animeId);
-      writeJSON(KEYS.animeProgress, next);
+  const removeEpisodeProgress = useCallback((seriesId: number) => {
+    setEpisodeProgressState(prev => {
+      const next = prev.filter(a => a.id !== seriesId);
+      writeJSON(KEYS.episodeProgress, next);
       return next;
     });
   }, []);
 
-  const animeContinueWatching = useMemo(() => {
-    return animeProgress
+  const episodeContinueWatching = useMemo(() => {
+    return episodeProgress
       .filter(a => {
         const total = a.totalEpisodes || 0;
         return a.watchedEpisodes.length > 0 && (total === 0 || a.watchedEpisodes.length < total);
       })
       .sort((a, b) => new Date(b.lastWatched).getTime() - new Date(a.lastWatched).getTime())
       .slice(0, 10);
-  }, [animeProgress]);
+  }, [episodeProgress]);
 
   // Derived
   const continueWatching = useMemo(() => {
@@ -209,11 +220,11 @@ export function useMuraStreamStore() {
     setLikesState([]);
     setMyListState([]);
     setHistoryState([]);
-    setAnimeProgressState([]);
+    setEpisodeProgressState([]);
     removeKey(KEYS.likes);
     removeKey(KEYS.myList);
     removeKey(KEYS.history);
-    removeKey(KEYS.animeProgress);
+    removeKey(KEYS.episodeProgress);
   }, []);
 
   // Remove individual item from any list
@@ -256,7 +267,7 @@ export function useMuraStreamStore() {
         if (data.likes?.length) { setLikesState(data.likes); writeJSON(KEYS.likes, data.likes); }
         if (data.myList?.length) { setMyListState(data.myList); writeJSON(KEYS.myList, data.myList); }
         if (data.history?.length) { setHistoryState(data.history); writeJSON(KEYS.history, data.history); }
-        if (data.animeProgress?.length) { setAnimeProgressState(data.animeProgress); writeJSON(KEYS.animeProgress, data.animeProgress); }
+        if (data.episodeProgress?.length) { setEpisodeProgressState(data.episodeProgress); writeJSON(KEYS.episodeProgress, data.episodeProgress); }
         if (data.settings && Object.keys(data.settings).length > 0) {
           setSettingsState(prev => { const merged = { ...prev, ...data.settings }; writeJSON(KEYS.settings, merged); return merged; });
         }
@@ -275,11 +286,11 @@ export function useMuraStreamStore() {
         await fetch('/api/murastream/library', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, likes, myList, history, animeProgress, settings }),
+          body: JSON.stringify({ email, likes, myList, history, episodeProgress, settings }),
         });
       } catch (err) { console.error('[Library sync save]', err); }
     }, 2000);
-  }, [likes, myList, history, animeProgress, settings]);
+  }, [likes, myList, history, episodeProgress, settings]);
 
   useEffect(() => { saveToMongo(); }, [saveToMongo]);
 
@@ -301,13 +312,13 @@ export function useMuraStreamStore() {
     history,
     addToHistory,
     clearHistory,
-    // Anime Episode Progress
-    animeProgress,
+    // Episode Progress (TV / dramas)
+    episodeProgress,
     markEpisodeWatched,
     isEpisodeWatched,
-    getAnimeProgress,
-    removeAnimeProgress,
-    animeContinueWatching,
+    getEpisodeProgress,
+    removeEpisodeProgress,
+    episodeContinueWatching,
     // Settings
     settings,
     updateSettings,

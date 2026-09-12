@@ -157,7 +157,21 @@ export default function AdminSourceReportsPage() {
             Community flags from the MuraStream player (last 30 days). Disable a provider to drop it globally.
           </p>
         </div>
-        <Link href="/admin" style={{ color: '#B85CFF', fontSize: 13, textDecoration: 'none' }}>← Dashboard</Link>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <a href="/api/admin/source-reports/export" download style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            color: '#E50914', fontSize: 13, textDecoration: 'none', fontWeight: 600,
+            border: '1px solid rgba(229,9,20,0.4)', borderRadius: 8, padding: '7px 12px',
+            background: 'rgba(229,9,20,0.08)',
+          }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/>
+              <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/>
+            </svg>
+            Export CSV
+          </a>
+          <Link href="/admin" style={{ color: '#E50914', fontSize: 13, textDecoration: 'none' }}>← Dashboard</Link>
+        </div>
       </div>
 
       {loading ? (
@@ -181,9 +195,9 @@ export default function AdminSourceReportsPage() {
 
           {/* Week drill-down */}
           {weekDetail && (
-            <div style={{ background: '#111', borderRadius: 12, border: '1px solid rgba(184,92,255,0.3)', padding: '16px 20px', marginBottom: 28 }}>
+            <div style={{ background: '#111', borderRadius: 12, border: '1px solid rgba(229,9,20,0.3)', padding: '16px 20px', marginBottom: 28 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <h3 style={{ fontFamily: 'var(--font-arcade)', fontSize: 11, color: '#B85CFF', margin: 0, letterSpacing: '0.1em' }}>
+                <h3 style={{ fontFamily: 'var(--font-arcade)', fontSize: 11, color: '#E50914', margin: 0, letterSpacing: '0.1em' }}>
                   WEEK OF {weekDetail.week} — {weekDetail.reports.length} REPORT{weekDetail.reports.length === 1 ? '' : 'S'}
                 </h3>
                 <button onClick={() => setWeekDetail(null)} style={{

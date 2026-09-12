@@ -185,7 +185,7 @@ export default function VaultWatchPage() {
             <p style={{ color: '#E5E5E5', fontSize: 14, margin: 0 }}>{error}</p>
             {item.mp4Url && (
               <a href={item.mp4Url} download target="_blank" rel="noreferrer"
-                style={{ background: '#B85CFF', color: '#fff', padding: '10px 20px', borderRadius: 8, textDecoration: 'none', fontWeight: 700 }}>
+                style={{ background: '#E50914', color: '#fff', padding: '10px 20px', borderRadius: 8, textDecoration: 'none', fontWeight: 700 }}>
                 ⬇ Download instead
               </a>
             )}
@@ -222,9 +222,9 @@ export default function VaultWatchPage() {
                 onClick={() => pickLevel(-1)}
                 style={{
                   padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12,
-                  background: currentLevel === -1 ? '#B85CFF' : '#171717',
+                  background: currentLevel === -1 ? '#E50914' : '#171717',
                   color: currentLevel === -1 ? '#fff' : '#A0A0A0',
-                  border: '1px solid ' + (currentLevel === -1 ? '#B85CFF' : '#2A2A2A'),
+                  border: '1px solid ' + (currentLevel === -1 ? '#E50914' : '#2A2A2A'),
                 }}
               >
                 Auto
@@ -235,9 +235,9 @@ export default function VaultWatchPage() {
                   onClick={() => pickLevel(levels.indexOf(l))}
                   style={{
                     padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12,
-                    background: currentLevel === levels.indexOf(l) ? '#B85CFF' : '#171717',
+                    background: currentLevel === levels.indexOf(l) ? '#E50914' : '#171717',
                     color: currentLevel === levels.indexOf(l) ? '#fff' : '#A0A0A0',
-                    border: '1px solid ' + (currentLevel === levels.indexOf(l) ? '#B85CFF' : '#2A2A2A'),
+                    border: '1px solid ' + (currentLevel === levels.indexOf(l) ? '#E50914' : '#2A2A2A'),
                   }}
                 >
                   {l.height ? `${l.height}p` : `${Math.round(l.bitrate / 1000)} kbps`}

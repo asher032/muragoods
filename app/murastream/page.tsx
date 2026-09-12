@@ -51,8 +51,8 @@ function FeaturedHero({ item }: { item: MediaItem | null }) {
           <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
             <span style={{
               fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-              fontSize: '11px', fontWeight: 700, color: '#B85CFF',
-              background: 'rgba(184,92,255,0.2)', padding: '4px 12px', borderRadius: '6px',
+              fontSize: '11px', fontWeight: 700, color: '#E50914',
+              background: 'rgba(229,9,20,0.2)', padding: '4px 12px', borderRadius: '6px',
               letterSpacing: '0.08em', textTransform: 'uppercase',
             }}>Featured</span>
             {year && (
@@ -83,7 +83,7 @@ function FeaturedHero({ item }: { item: MediaItem | null }) {
           {/* Rating */}
           {(item.voteAverage ?? 0) > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
-              <span style={{ color: '#B85CFF', fontSize: '16px' }}>★</span>
+              <span style={{ color: '#E50914', fontSize: '16px' }}>★</span>
               <span style={{
                 fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
                 fontSize: '14px', fontWeight: 600, color: '#E5E5E5'
@@ -103,11 +103,11 @@ function FeaturedHero({ item }: { item: MediaItem | null }) {
           {/* Buttons */}
           <div style={{ display: 'flex', gap: '12px' }}>
             <span style={{
-              background: '#B85CFF', color: '#FFF', padding: '12px 28px',
+              background: '#E50914', color: '#FFF', padding: '12px 28px',
               borderRadius: '10px', display: 'inline-flex', alignItems: 'center', gap: '8px',
               fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
               fontSize: '14px', fontWeight: 700,
-              boxShadow: '0 4px 20px rgba(184,92,255,0.4)',
+              boxShadow: '0 4px 20px rgba(229,9,20,0.4)',
               transition: 'transform 0.2s, box-shadow 0.2s',
             }}>
               <svg width="16" height="16" fill="#fff" viewBox="0 0 16 16">
@@ -327,7 +327,7 @@ export default function MuraStreamHome() {
                 fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
                 outline: 'none', transition: 'all 0.2s',
               }}
-              onFocus={e => { e.currentTarget.style.borderColor = 'rgba(184,92,255,0.4)'; e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; }}
+              onFocus={e => { e.currentTarget.style.borderColor = 'rgba(229,9,20,0.4)'; e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; }}
               onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
             />
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#555"
@@ -371,19 +371,19 @@ export default function MuraStreamHome() {
               overflowX: 'auto', paddingBottom: '4px',
             }}>
               {[
-                { id: 'trending', label: '🔥 Trending' },
-                { id: 'movies', label: '🎬 Movies' },
-                { id: 'tv', label: '📺 TV Shows' },
-                { id: 'kdrama', label: '🌏 Dramas' },
+                { id: 'trending', label: 'Trending' },
+                { id: 'movies', label: 'Movies' },
+                { id: 'tv', label: 'TV Shows' },
+                { id: 'kdrama', label: 'Dramas' },
               ].map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   style={{
                     padding: '10px 20px', borderRadius: '10px',
-                    border: activeTab === tab.id ? '1px solid rgba(184,92,255,0.4)' : '1px solid rgba(255,255,255,0.06)',
-                    background: activeTab === tab.id ? 'rgba(184,92,255,0.15)' : 'rgba(255,255,255,0.03)',
-                    color: activeTab === tab.id ? '#B85CFF' : '#888',
+                    border: activeTab === tab.id ? '1px solid rgba(229,9,20,0.4)' : '1px solid rgba(255,255,255,0.06)',
+                    background: activeTab === tab.id ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.03)',
+                    color: activeTab === tab.id ? '#E50914' : '#888',
                     fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
                     fontSize: '13px', fontWeight: 600, cursor: 'pointer',
                     transition: 'all 0.2s', whiteSpace: 'nowrap',
@@ -433,12 +433,12 @@ export default function MuraStreamHome() {
                 ))}
                 <div style={{
                   textAlign: 'center', marginTop: '20px', padding: '24px',
-                  background: 'rgba(184,92,255,0.05)', borderRadius: '16px',
-                  border: '1px solid rgba(184,92,255,0.12)',
+                  background: 'rgba(229,9,20,0.05)', borderRadius: '16px',
+                  border: '1px solid rgba(229,9,20,0.12)',
                 }}>
                   <p style={{
                     fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-                    fontSize: '16px', fontWeight: 700, color: '#B85CFF', margin: '0 0 6px',
+                    fontSize: '16px', fontWeight: 700, color: '#E50914', margin: '0 0 6px',
                   }}>
                     🌏 Full Drama Experience
                   </p>
@@ -450,10 +450,10 @@ export default function MuraStreamHome() {
                   </p>
                   <Link href="/murastream/kdrama" style={{
                     display: 'inline-flex', alignItems: 'center', gap: '6px',
-                    background: '#B85CFF', color: '#FFF', padding: '12px 28px',
+                    background: '#E50914', color: '#FFF', padding: '12px 28px',
                     borderRadius: '10px', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
                     fontSize: '13px', fontWeight: 700, textDecoration: 'none',
-                    boxShadow: '0 4px 20px rgba(184,92,255,0.3)',
+                    boxShadow: '0 4px 20px rgba(229,9,20,0.3)',
                   }}>
                     🌏 Browse Dramas →
                   </Link>

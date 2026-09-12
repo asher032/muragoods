@@ -11,16 +11,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Missing email' }, { status: 400 });
     }
 
-    let library = await UserLibrary.findOne({ email: email.toLowerCase() }).lean();
+    const library = await UserLibrary.findOne({ email: email.toLowerCase() }).lean<Record<string, unknown>>();
     if (!library) {
-      library = { email: email.toLowerCase(), likes: [], myList: [], history: [], animeProgress: [], settings: {} };
+      return NextResponse.json({ likes: [], myList: [], history: [], episodeProgress: [], settings: {} });
     }
+
+    // Accept both names when reading legacy docs: episodeProgress (new) or
+    // animeProgress (old field written before the rename).
+    const progress = (library.episodeProgress || library.animeProgress || []) as unknown[];
 
     return NextResponse.json({
       likes: library.likes || [],
       myList: library.myList || [],
       history: library.history || [],
-      animeProgress: library.animeProgress || [],
+      episodeProgress: progress,
       settings: library.settings || {},
     });
   } catch (error) {
@@ -34,7 +38,7 @@ export async function POST(request: NextRequest) {
   try {
     await dbConnect();
     const body = await request.json();
-    const { email, likes, myList, history, animeProgress, settings } = body;
+    const { email, likes, myList, history, episodeProgress, settings } = body;
 
     if (!email) {
       return NextResponse.json({ error: 'Missing email' }, { status: 400 });
@@ -44,7 +48,7 @@ export async function POST(request: NextRequest) {
     if (likes !== undefined) update.likes = likes;
     if (myList !== undefined) update.myList = myList;
     if (history !== undefined) update.history = history;
-    if (animeProgress !== undefined) update.animeProgress = animeProgress;
+    if (episodeProgress !== undefined) update.episodeProgress = episodeProgress;
     if (settings !== undefined) update.settings = settings;
 
     const library = await UserLibrary.findOneAndUpdate(
@@ -71,7 +75,7 @@ export async function DELETE(request: NextRequest) {
 
     await UserLibrary.findOneAndUpdate(
       { email: email.toLowerCase() },
-      { $set: { likes: [], myList: [], history: [], animeProgress: [], updatedAt: new Date() } }
+      { $set: { likes: [], myList: [], history: [], episodeProgress: [], updatedAt: new Date() } }
     );
 
     return NextResponse.json({ success: true });

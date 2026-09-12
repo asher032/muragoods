@@ -63,7 +63,7 @@ export default function MovieDetailPage() {
     return (
       <div style={{ padding: '80px 24px', textAlign: 'center' }}>
         <p style={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: '16px', color: '#666' }}>Movie not found</p>
-        <Link href="/murastream" style={{ color: '#B85CFF', fontSize: '14px', textDecoration: 'none' }}>← Back to MuraStream</Link>
+        <Link href="/murastream" style={{ color: '#E50914', fontSize: '14px', textDecoration: 'none' }}>← Back to MuraStream</Link>
       </div>
     );
   }
@@ -139,7 +139,7 @@ export default function MovieDetailPage() {
               {movie.year && <span style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', color: '#A0A0A0' }}>{movie.year}</span>}
               {movie.runtime > 0 && <span style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', color: '#666' }}>· {runtimeH}h {runtimeM}m</span>}
               {movie.voteAverage > 0 && (
-                <span style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', color: '#B85CFF', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', color: '#E50914', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
                   ★ {movie.voteAverage.toFixed(1)}
                 </span>
               )}
@@ -151,8 +151,8 @@ export default function MovieDetailPage() {
                 <span key={g.id} style={{
                   fontFamily: '-apple-system, sans-serif', fontSize: '12px', fontWeight: 500,
                   padding: '5px 14px', borderRadius: '8px',
-                  border: '1px solid rgba(184,92,255,0.25)', color: '#B85CFF',
-                  background: 'rgba(184,92,255,0.08)',
+                  border: '1px solid rgba(229,9,20,0.25)', color: '#E50914',
+                  background: 'rgba(229,9,20,0.08)',
                 }}>{g.name}</span>
               ))}
             </div>
@@ -160,18 +160,18 @@ export default function MovieDetailPage() {
             {/* Action buttons */}
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '24px' }}>
               <Link href={`/murastream/watch?type=movie&id=${movieId}`} style={{
-                background: '#B85CFF', color: '#FFF', padding: '14px 28px', borderRadius: '12px',
+                background: '#E50914', color: '#FFF', padding: '14px 28px', borderRadius: '12px',
                 fontFamily: '-apple-system, sans-serif', fontSize: '14px', fontWeight: 700,
                 textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px',
-                boxShadow: '0 4px 20px rgba(184,92,255,0.4)',
+                boxShadow: '0 4px 20px rgba(229,9,20,0.4)',
               }}>
                 <svg width="16" height="16" fill="#fff" viewBox="0 0 16 16"><path d="M6.271 4.138a.5.5 0 0 1 .78-.172l4 2.8a.5.5 0 0 1 0 .824l-4 2.8A.5.5 0 0 1 6 10.2V5.8a.5.5 0 0 1 .271-.414z"/></svg>
                 Watch Now
               </Link>
               <button onClick={() => toggleMyList(mediaItem)} style={{
-                background: inList ? 'rgba(184,92,255,0.15)' : 'rgba(255,255,255,0.06)',
-                border: `1px solid ${inList ? 'rgba(184,92,255,0.4)' : 'rgba(255,255,255,0.1)'}`,
-                color: inList ? '#B85CFF' : '#A0A0A0',
+                background: inList ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.06)',
+                border: `1px solid ${inList ? 'rgba(229,9,20,0.4)' : 'rgba(255,255,255,0.1)'}`,
+                color: inList ? '#E50914' : '#A0A0A0',
                 padding: '14px 22px', borderRadius: '12px',
                 fontFamily: '-apple-system, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
                 backdropFilter: 'blur(8px)',

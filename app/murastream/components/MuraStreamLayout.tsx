@@ -104,7 +104,7 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
           box-shadow: 0 4px 30px rgba(0,0,0,0.4);
         }
         .ms-topnav-logo {
-          font-family: var(--font-arcade); font-size: 16px; color: #B85CFF;
+          font-family: var(--font-arcade); font-size: 16px; color: #E50914;
           text-decoration: none; letter-spacing: 0.08em; margin-right: 32px;
           display: flex; align-items: center; gap: 8px; white-space: nowrap;
         }
@@ -119,7 +119,7 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
           transition: all 0.2s; white-space: nowrap;
         }
         .ms-topnav-link:hover { color: #fff; background: rgba(255,255,255,0.06); }
-        .ms-topnav-link.active { color: #fff; background: rgba(184,92,255,0.15); }
+        .ms-topnav-link.active { color: #fff; background: rgba(229,9,20,0.15); }
         .ms-topnav-right {
           display: flex; align-items: center; gap: 12px;
         }
@@ -130,7 +130,7 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         }
         .ms-topnav-search::placeholder { color: #555; }
-        .ms-topnav-search:focus { border-color: rgba(184,92,255,0.4); width: 280px; background: rgba(255,255,255,0.08); }
+        .ms-topnav-search:focus { border-color: rgba(229,9,20,0.4); width: 280px; background: rgba(255,255,255,0.08); }
         .ms-topnav-more {
           background: none; border: none; padding: 8px; cursor: pointer;
           border-radius: 8px; transition: background 0.2s; display: flex; align-items: center;
@@ -160,16 +160,16 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
           font-size: 13px; color: #A0A0A0; transition: all 0.15s;
         }
-        .ms-dropdown-link:hover { background: rgba(184,92,255,0.1); color: #fff; }
+        .ms-dropdown-link:hover { background: rgba(229,9,20,0.1); color: #fff; }
         .ms-dropdown-divider { height: 1px; background: rgba(255,255,255,0.06); margin: 4px 8px; }
         /* What's New badge */
         .ms-whatsnew-row { position: relative; }
         .ms-whatsnew-badge {
           position: absolute; top: 6px; right: 10px;
-          background: #B85CFF; color: #fff;
+          background: #E50914; color: #fff;
           font-family: var(--font-arcade); font-size: 7px; letter-spacing: 0.08em;
           padding: 2px 6px; border-radius: 6px;
-          box-shadow: 0 0 10px rgba(184,92,255,0.7);
+          box-shadow: 0 0 10px rgba(229,9,20,0.7);
           animation: ms-whatsnew-pulse 2.4s ease-in-out infinite;
         }
         @keyframes ms-whatsnew-pulse {
@@ -179,7 +179,7 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
         .ms-whatsnew-dot {
           position: absolute; top: 5px; right: 5px;
           width: 8px; height: 8px; border-radius: 50%;
-          background: #B85CFF; box-shadow: 0 0 8px rgba(184,92,255,0.8);
+          background: #E50914; box-shadow: 0 0 8px rgba(229,9,20,0.8);
           animation: ms-whatsnew-pulse 2.4s ease-in-out infinite;
         }
         /* ─── Main Content ────────────────────────────────── */
@@ -197,12 +197,12 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
           padding: 6px 10px; border-radius: 10px; text-decoration: none; min-width: 52px;
           transition: all 0.2s;
         }
-        .ms-mobile-tab.active { background: rgba(184,92,255,0.12); }
+        .ms-mobile-tab.active { background: rgba(229,9,20,0.12); }
         .ms-mobile-tab-label {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
           font-size: 10px; color: #666; transition: color 0.2s;
         }
-        .ms-mobile-tab.active .ms-mobile-tab-label { color: #B85CFF; }
+        .ms-mobile-tab.active .ms-mobile-tab-label { color: #E50914; }
         /* ─── Mobile Hamburger ──────────────────────────── */
         .ms-hamburger {
           display: none; background: none; border: none; padding: 8px; cursor: pointer;
@@ -227,7 +227,7 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
       <nav className={`ms-topnav ${scrolled ? 'scrolled' : ''}`}>
         {/* Mobile hamburger */}
         <button className="ms-hamburger" onClick={() => setMenuOpen(!menuOpen)}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="#B85CFF" viewBox="0 0 16 16">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="#E50914" viewBox="0 0 16 16">
             {menuOpen ? (
               <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708"/>
             ) : (
@@ -238,7 +238,7 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
 
         {/* Logo */}
         <Link href="/murastream" className="ms-topnav-logo">
-          <MuraStreamIcon size={22} color="#B85CFF" />
+          <MuraStreamIcon size={22} color="#E50914" />
           MURASTREAM
         </Link>
 
@@ -307,7 +307,7 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
               <Link key={item.href} href={item.href}
                 className={`ms-mobile-tab ${isActive(item.href) ? 'active' : ''}`}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
-                  fill={isActive(item.href) ? '#B85CFF' : '#666'} viewBox="0 0 16 16">
+                  fill={isActive(item.href) ? '#E50914' : '#666'} viewBox="0 0 16 16">
                   <path d={item.icon}/>
                 </svg>
                 <span className="ms-mobile-tab-label">{item.label}</span>

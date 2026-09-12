@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMuraStreamStore } from '../hooks/useMuraStreamStore';
+import { ClockIcon } from '../components/MuraStreamIcons';
 
 export default function MuraStreamHistoryPage() {
   const { history, clearHistory } = useMuraStreamStore();
@@ -34,7 +35,7 @@ export default function MuraStreamHistoryPage() {
     <div style={{ padding: '24px 28px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: '#E5E5E5', margin: 0 }}>
-          <span style={{ color: '#B85CFF' }}>🕐</span> WATCH HISTORY
+          <span style={{ color: '#E50914', display: 'inline-flex', verticalAlign: 'middle', marginRight: 6 }}><ClockIcon size={15} /></span> WATCH HISTORY
         </h1>
         {history.length > 0 && (
           <>
@@ -92,13 +93,13 @@ export default function MuraStreamHistoryPage() {
                   <div style={{ flex: 1 }}>
                     <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '13px', color: '#E5E5E5', margin: 0 }}>{item.title}</p>
                     {item.mediaType === 'tv' && item.season != null && (
-                      <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: '#B85CFF', margin: '4px 0 0' }}>
+                      <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: '#E50914', margin: '4px 0 0' }}>
                         Season {item.season} • Episode {item.episode}
                       </p>
                     )}
                     {item.progress != null && item.progress > 0 && (
                       <div style={{ marginTop: '6px', height: '3px', background: '#2A2A2A', borderRadius: '2px', maxWidth: '200px' }}>
-                        <div style={{ height: '100%', width: `${item.progress}%`, background: '#B85CFF', borderRadius: '2px' }} />
+                        <div style={{ height: '100%', width: `${item.progress}%`, background: '#E50914', borderRadius: '2px' }} />
                       </div>
                     )}
                   </div>

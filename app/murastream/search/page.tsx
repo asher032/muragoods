@@ -117,7 +117,7 @@ export default function MuraStreamSearchPage() {
             fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', outline: 'none',
             transition: 'border-color 0.2s, background 0.2s',
           }}
-          onFocus={e => { e.currentTarget.style.borderColor = 'rgba(184,92,255,0.4)'; e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; }}
+          onFocus={e => { e.currentTarget.style.borderColor = 'rgba(229,9,20,0.4)'; e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; }}
           onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
         />
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="#555"
@@ -142,13 +142,13 @@ export default function MuraStreamSearchPage() {
           <button key={type} onClick={() => { setSearchType(type); lastQueryRef.current = ''; }}
             style={{
               padding: '8px 16px', borderRadius: '8px',
-              border: searchType === type ? '1px solid rgba(184,92,255,0.4)' : '1px solid rgba(255,255,255,0.06)',
-              background: searchType === type ? 'rgba(184,92,255,0.15)' : 'rgba(255,255,255,0.03)',
-              color: searchType === type ? '#B85CFF' : '#888',
+              border: searchType === type ? '1px solid rgba(229,9,20,0.4)' : '1px solid rgba(255,255,255,0.06)',
+              background: searchType === type ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.03)',
+              color: searchType === type ? '#E50914' : '#888',
               fontFamily: '-apple-system, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
               transition: 'all 0.2s',
             }}>
-            {type === 'all' ? 'All' : '🌐 K-Drama'}
+            {type === 'all' ? 'All' : 'K-Drama'}
           </button>
         ))}
       </div>
@@ -166,8 +166,8 @@ export default function MuraStreamSearchPage() {
           </p>
           <button onClick={() => { lastQueryRef.current = ''; doSearch(query, searchType); }}
             style={{
-              padding: '10px 20px', borderRadius: '8px', border: '1px solid rgba(184,92,255,0.3)',
-              background: 'rgba(184,92,255,0.1)', color: '#B85CFF',
+              padding: '10px 20px', borderRadius: '8px', border: '1px solid rgba(229,9,20,0.3)',
+              background: 'rgba(229,9,20,0.1)', color: '#E50914',
               fontFamily: '-apple-system, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
             }}>
             Retry

@@ -48,7 +48,7 @@ export default function MuraStreamLibraryPage() {
   return (
     <div style={{ padding: '24px 28px' }}>
       <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: '#E5E5E5', margin: '0 0 16px' }}>
-        📚 LIBRARY
+        LIBRARY
       </h1>
 
       {/* Tabs */}
@@ -56,9 +56,9 @@ export default function MuraStreamLibraryPage() {
         {TABS.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
             padding: '6px 14px', borderRadius: '6px',
-            border: activeTab === tab.id ? '1px solid #B85CFF' : '1px solid #2A2A2A',
-            background: activeTab === tab.id ? 'rgba(184,92,255,0.12)' : '#171717',
-            color: activeTab === tab.id ? '#B85CFF' : '#888',
+            border: activeTab === tab.id ? '1px solid #E50914' : '1px solid #2A2A2A',
+            background: activeTab === tab.id ? 'rgba(229,9,20,0.12)' : '#171717',
+            color: activeTab === tab.id ? '#E50914' : '#888',
             fontFamily: 'var(--font-arcade)', fontSize: '9px', cursor: 'pointer', whiteSpace: 'nowrap',
           }}>
             {tab.label}
@@ -72,9 +72,9 @@ export default function MuraStreamLibraryPage() {
         {SORTS.map(sort => (
           <button key={sort} onClick={() => setSortBy(sort)} style={{
             padding: '4px 8px', borderRadius: '4px',
-            border: sortBy === sort ? '1px solid rgba(184,92,255,0.3)' : '1px solid transparent',
-            background: sortBy === sort ? 'rgba(184,92,255,0.08)' : 'transparent',
-            color: sortBy === sort ? '#B85CFF' : '#555',
+            border: sortBy === sort ? '1px solid rgba(229,9,20,0.3)' : '1px solid transparent',
+            background: sortBy === sort ? 'rgba(229,9,20,0.08)' : 'transparent',
+            color: sortBy === sort ? '#E50914' : '#555',
             fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '11px', cursor: 'pointer',
           }}>
             {sort}

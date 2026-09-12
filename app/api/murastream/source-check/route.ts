@@ -65,6 +65,9 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(
     { checks: results },
-    { headers: { 'Cache-Control': 'public, max-age=300' } } // 5-min edge cache
+    // 60s edge cache: still cuts repeat-probe storms, but a freshly disabled
+    // or newly ad-flagged provider is reflected within a minute instead of
+    // being locked in for 5 (which kept users stuck on a bad source).
+    { headers: { 'Cache-Control': 'public, max-age=60' } }
   );
 }

@@ -9,8 +9,8 @@ const MediaItemSchema = new mongoose.Schema({
   voteAverage: { type: Number, default: 0 },
   year: { type: String, default: '' },
   overview: { type: String, default: '' },
-  anilistId: { type: Number, default: null },
-  malId: { type: Number, default: null },
+  anilistId: { type: Number, default: null }, // legacy, kept for stored docs
+  malId: { type: Number, default: null }, // legacy, kept for stored docs
   genres: { type: [String], default: [] },
   episodes: { type: Number, default: null },
   status: { type: String, default: '' },
@@ -28,7 +28,7 @@ const HistoryItemSchema = new mongoose.Schema({
   progress: { type: Number, default: null },
 }, { _id: false });
 
-const AnimeProgressSchema = new mongoose.Schema({
+const EpisodeProgressSchema = new mongoose.Schema({
   id: { type: Number, required: true },
   title: { type: String, default: '' },
   posterPath: { type: String, default: null },
@@ -55,7 +55,7 @@ const UserLibrarySchema = new mongoose.Schema({
   likes: { type: [MediaItemSchema], default: [] },
   myList: { type: [MediaItemSchema], default: [] },
   history: { type: [HistoryItemSchema], default: [] },
-  animeProgress: { type: [AnimeProgressSchema], default: [] },
+  episodeProgress: { type: [EpisodeProgressSchema], default: [] },
   settings: { type: SettingsSchema, default: () => ({}) },
   updatedAt: { type: Date, default: Date.now },
 });

@@ -14,7 +14,7 @@ function VaultCard({ item, posterPath }: { item: VaultItem; posterPath?: string 
         background: '#111', border: '1px solid #2A2A2A', borderRadius: 10,
         padding: 10, textDecoration: 'none', transition: 'all 0.3s', cursor: 'pointer',
       }}
-      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-10px)'; e.currentTarget.style.borderColor = '#B85CFF'; }}
+      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-10px)'; e.currentTarget.style.borderColor = '#E50914'; }}
       onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = '#2A2A2A'; }}
     >
       <div style={{
@@ -34,7 +34,7 @@ function VaultCard({ item, posterPath }: { item: VaultItem; posterPath?: string 
           <span style={{ fontSize: 40 }}>🍿</span>
         )}
         <span style={{
-          position: 'absolute', top: 8, left: 8, background: 'rgba(184,92,255,0.9)',
+          position: 'absolute', top: 8, left: 8, background: 'rgba(229,9,20,0.9)',
           color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
           letterSpacing: '0.06em',
         }}>
@@ -98,7 +98,7 @@ export default function MuraStreamVaultPage() {
           font-size: 14px; color: #A0A0A0; max-width: 560px; margin: 0; line-height: 1.6;
         }
         .vault-badge {
-          display: inline-block; background: rgba(184,92,255,0.15); color: #B85CFF;
+          display: inline-block; background: rgba(229,9,20,0.15); color: #E50914;
           font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
           padding: 5px 12px; border-radius: 8px; margin-bottom: 14px;
         }

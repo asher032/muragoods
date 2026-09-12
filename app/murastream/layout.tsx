@@ -2,7 +2,11 @@
 
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import MuraStreamLayout from './components/MuraStreamLayout';
+import { ScrollIcon } from './components/MuraStreamIcons';
+import { useMuraStreamStore } from './hooks/useMuraStreamStore';
+import { LATEST_CHANGELOG, CHANGELOG_SEEN_KEY } from './data/changelog';
 
 export default function MuraStreamLayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -23,8 +27,36 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
     setDisplayChildren(children);
   }, [children]);
 
+  // Settings → real behavior: theme + card density classes on <html>.
+  // (Autoplay-next is consumed directly by the watch page; these two are
+  // global presentation concerns owned here.)
+  const { settings } = useMuraStreamStore();
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('ms-light', settings.appearance === 'light');
+    root.classList.toggle('ms-compact', settings.compactCards);
+  }, [settings.appearance, settings.compactCards]);
+
+  // One-time "What's New" toast for returning users when a fresh changelog
+  // entry ships. Dismissing marks it seen (same key the nav badge uses).
+  const [toast, setToast] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(CHANGELOG_SEEN_KEY) !== LATEST_CHANGELOG.id) {
+        setToast(true);
+        const t = setTimeout(() => setToast(false), 15000);
+        return () => clearTimeout(t);
+      }
+    } catch { /* empty */ }
+  }, []);
+  const dismissToast = (visit: boolean) => {
+    setToast(false);
+    try { localStorage.setItem(CHANGELOG_SEEN_KEY, LATEST_CHANGELOG.id); } catch { /* empty */ }
+    if (visit) window.location.href = '/murastream/changelog';
+  };
+
   return (
-    <div style={{ background: '#0A0A0A', minHeight: '100vh' }}>
+    <div className="ms-root">
       <style jsx global>{`
         /* ─── Card System ────────────────────────────────── */
         .ms-card {
@@ -91,12 +123,12 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           color: #fff;
           z-index: 2;
         }
-        .ms-card-rating span { color: #B85CFF; }
+        .ms-card-rating span { color: #E50914; }
         .ms-card-country {
           position: absolute;
           top: 8px;
           left: 8px;
-          background: rgba(184,92,255,0.85);
+          background: rgba(229,9,20,0.85);
           backdrop-filter: blur(8px);
           border-radius: 6px;
           padding: 3px 8px;
@@ -126,13 +158,13 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           width: 44px;
           height: 44px;
           border-radius: 50%;
-          background: rgba(184, 92, 255, 0.9);
+          background: rgba(229, 9, 20, 0.9);
           display: flex;
           align-items: center;
           justify-content: center;
           transform: scale(0.8);
           transition: transform 0.2s ease;
-          box-shadow: 0 4px 20px rgba(184,92,255,0.4);
+          box-shadow: 0 4px 20px rgba(229,9,20,0.4);
         }
         .ms-card:hover .ms-card-play { transform: scale(1); }
         .ms-card-actions-row {
@@ -163,7 +195,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           transition: all 0.15s;
         }
         .ms-card-action-btn.primary {
-          background: #B85CFF;
+          background: #E50914;
           color: #fff;
         }
         .ms-card-action-btn.primary:hover { background: #a04fe0; }
@@ -184,7 +216,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
         }
         .ms-card-progress-bar {
           height: 100%;
-          background: linear-gradient(90deg, #B85CFF, #9333EA);
+          background: linear-gradient(90deg, #E50914, #B20710);
           border-radius: 0 3px 0 0;
           transition: width 0.3s;
         }
@@ -211,7 +243,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
           color: #777;
         }
-        .ms-card-episode { color: #B85CFF; font-weight: 600; }
+        .ms-card-episode { color: #E50914; font-weight: 600; }
         /* ─── Scroll Row ──────────────────────────────── */
         .ms-scroll::-webkit-scrollbar { height: 4px; }
         .ms-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -236,7 +268,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
         .ms-row-more {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
           font-size: 13px;
-          color: #B85CFF;
+          color: #E50914;
           text-decoration: none;
           font-weight: 500;
           transition: opacity 0.2s;
@@ -259,7 +291,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.12em;
-          color: #B85CFF;
+          color: #E50914;
           margin-bottom: 16px;
         }
         /* ─── Smooth page transitions ──────────────────── */
@@ -277,7 +309,42 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
         .ms-page-transition-exit {
           animation: msPageExit 0.15s ease-in forwards;
         }
+        /* ─── Root / settings-driven appearance ─────────── */
+        .ms-root { background: #0A0A0A; min-height: 100vh; }
+        html.ms-compact .ms-card { width: 150px; }
+        html.ms-light .ms-root { background: #F5F5F5; }
+        html.ms-light .ms-card-title { color: #111; }
+        html.ms-light .ms-card-meta { color: #666; }
+        html.ms-light .ms-row-title { color: #111; }
+        html.ms-light .ms-section-label { color: #B20710; }
       `}</style>
+      {/* What's New toast (one-time per changelog entry) */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 84, right: 20, zIndex: 500,
+          background: 'rgba(20,20,20,0.97)', border: '1px solid rgba(229,9,20,0.4)',
+          borderRadius: 12, padding: '14px 16px', width: 300, maxWidth: 'calc(100vw - 32px)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)',
+        }}>
+          <p style={{ margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <ScrollIcon size={13} color="#E50914" />
+            <span style={{ fontFamily: 'var(--font-arcade)', fontSize: 9, color: '#E50914', letterSpacing: '0.1em' }}>WHAT'S NEW IN MURASTREAM</span>
+          </p>
+          <p style={{ margin: '0 0 12px', fontSize: 13, color: '#E5E5E5', fontWeight: 600 }}>
+            {LATEST_CHANGELOG.title}
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => dismissToast(true)} style={{
+              flex: 1, padding: '8px', borderRadius: 6, border: '1px solid #E50914',
+              background: 'rgba(229,9,20,0.15)', color: '#E50914', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            }}>See what's new</button>
+            <button onClick={() => dismissToast(false)} style={{
+              padding: '8px 12px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)',
+              background: 'transparent', color: '#888', fontSize: 12, cursor: 'pointer',
+            }}>Dismiss</button>
+          </div>
+        </div>
+      )}
       <MuraStreamLayout>
         <div className={`ms-page-transition-${transitionStage}`}>
           {displayChildren}

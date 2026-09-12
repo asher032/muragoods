@@ -9,7 +9,7 @@ export default function MuraStreamLikesPage() {
   return (
     <div style={{ padding: '24px 28px' }}>
       <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: '#E5E5E5', margin: '0 0 4px' }}>
-        <span style={{ color: '#B85CFF' }}>❤</span> MY LIKES
+        <span style={{ color: '#E50914' }}>❤</span> MY LIKES
       </h1>
       <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '12px', color: '#666', margin: '0 0 24px' }}>
         {likes.length} title{likes.length !== 1 ? 's' : ''} liked
@@ -42,7 +42,7 @@ export default function MuraStreamLikesPage() {
             <path d="m8 2.748-.717-.737C5.6.281 2.514.878 1.4 3.053c-.523 1.023-.641 2.5.314 4.385.92 1.815 2.834 3.989 6.286 6.357 3.452-2.368 5.365-4.542 6.286-6.357.955-1.886.838-3.362.314-4.385C13.486.878 10.4.28 8.717 2.01z"/>
           </svg>
           <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', marginBottom: '4px' }}>No likes yet</p>
-          <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '12px' }}>Browse movies and tap ❤️ to add likes</p>
+          <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '12px' }}>Browse movies and tap the heart to add likes</p>
         </div>
       )}
     </div>
