@@ -68,6 +68,7 @@ function WatchContent() {
   const [posterPath, setPosterPath] = useState('');
   const [showAutoPlay, setShowAutoPlay] = useState(false);
   const [autoPlayCountdown, setAutoPlayCountdown] = useState(10);
+  const [failedSources, setFailedSources] = useState<Set<string>>(new Set());
 
   // Fetch title
   useEffect(() => {
@@ -126,6 +127,11 @@ function WatchContent() {
     }
   }, [id, type, episode, title, posterPath, loading, error, markEpisodeWatched]);
 
+  // Reset failed sources when content or episode changes
+  useEffect(() => {
+    setFailedSources(new Set());
+  }, [id, type, season, episode]);
+
   // Auto-play next episode
   useEffect(() => {
     if (!showAutoPlay || type !== 'tv') return;
@@ -149,8 +155,9 @@ function WatchContent() {
   const embedUrl = activeSource.getUrl(type, id, season, episode);
 
   const handleIframeError = () => {
-    // Find next source (skip sources that already failed this session)
+    // Record this source as failed, then move to the next one that hasn't failed yet
     const currentIdx = SOURCES.findIndex(s => s.id === activeSource.id);
+    setFailedSources(prev => new Set(prev).add(activeSource.id));
     let nextIdx = currentIdx + 1;
     while (nextIdx < SOURCES.length && failedSources.has(SOURCES[nextIdx].id)) {
       nextIdx++;
