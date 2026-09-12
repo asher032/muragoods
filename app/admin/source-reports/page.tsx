@@ -26,6 +26,8 @@ type RawReport = {
   createdAt: string;
 };
 
+type TrendWeek = { label: string; weekKey: string; broken: number; ads: number };
+
 const PROVIDER_NAMES: Record<string, string> = {
   vidlink: 'VidLink',
   videasy: 'Videasy',
@@ -36,10 +38,42 @@ const PROVIDER_NAMES: Record<string, string> = {
   multiembed: 'MultiEmbed',
 };
 
+function TrendChart({ weeks }: { weeks: TrendWeek[] }) {
+  const max = Math.max(1, ...weeks.map(w => w.broken + w.ads));
+  if (weeks.every(w => w.broken + w.ads === 0)) {
+    return <p style={{ color: '#555', fontSize: 12, margin: '8px 0 4px' }}>No reports in the last 8 weeks — a quiet chart is a healthy chart.</p>;
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 130, padding: '0 4px' }}>
+      {weeks.map(w => {
+        const total = w.broken + w.ads;
+        const h = (n: number) => `${(n / max) * 100}%`;
+        return (
+          <div key={w.weekKey} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%' }}>
+            <div style={{ flex: 1, width: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+              title={`${w.label}: ${w.broken} broken · ${w.ads} ads`}>
+              <div style={{
+                width: '70%', maxWidth: 42, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+                height: `${(total / max) * 100}%`, minHeight: total > 0 ? 3 : 0, borderRadius: '4px 4px 0 0',
+                overflow: 'hidden', transition: 'height 0.3s',
+              }}>
+                <div style={{ height: h(w.broken), background: '#ef4444' }} />
+                <div style={{ height: h(w.ads), background: '#eab308' }} />
+              </div>
+            </div>
+            <span style={{ fontSize: 10, color: total > 0 ? '#888' : '#444', whiteSpace: 'nowrap' }}>{w.label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function AdminSourceReportsPage() {
   const router = useRouter();
   const [providers, setProviders] = useState<ProviderStat[]>([]);
   const [recent, setRecent] = useState<RawReport[]>([]);
+  const [trend, setTrend] = useState<TrendWeek[]>([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
 
@@ -59,6 +93,7 @@ export default function AdminSourceReportsPage() {
       const data = await res.json();
       setProviders(data.providers || []);
       setRecent(data.recent || []);
+      setTrend(data.trend || []);
     } catch {
       /* leave empty */
     } finally {
@@ -106,6 +141,20 @@ export default function AdminSourceReportsPage() {
         <p style={{ color: '#666', fontFamily: 'var(--font-arcade)', fontSize: 12 }}>Loading…</p>
       ) : (
         <>
+          {/* Weekly trend chart */}
+          <div style={{ background: '#111', borderRadius: 12, border: '1px solid #1A1A1A', padding: '18px 20px', marginBottom: 28 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+              <h2 style={{ fontFamily: 'var(--font-arcade)', fontSize: 12, color: '#888', margin: 0, letterSpacing: '0.1em' }}>
+                REPORT TREND — LAST 8 WEEKS
+              </h2>
+              <div style={{ display: 'flex', gap: 14, fontSize: 11, color: '#666' }}>
+                <span><span style={{ display: 'inline-block', width: 9, height: 9, background: '#ef4444', borderRadius: 2, marginRight: 5 }} />Broken</span>
+                <span><span style={{ display: 'inline-block', width: 9, height: 9, background: '#eab308', borderRadius: 2, marginRight: 5 }} />Ads</span>
+              </div>
+            </div>
+            <TrendChart weeks={trend} />
+          </div>
+
           {/* Provider table */}
           <div style={{ background: '#111', borderRadius: 12, border: '1px solid #1A1A1A', overflow: 'hidden', marginBottom: 28 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>

@@ -133,7 +133,7 @@ function WatchContent() {
     return () => controller.abort();
   }, [id, type, season, episode]);
 
-  const { markEpisodeWatched } = useMuraStreamStore();
+  const { markEpisodeWatched, settings } = useMuraStreamStore();
 
   // Record to watch history
   useEffect(() => {
@@ -200,12 +200,29 @@ function WatchContent() {
     return () => { cancelled = true; };
   }, [id, type]);
 
-  // Global admin disables (2-min CDN cache, cheap)
+  // Global admin disables (2-min CDN cache, cheap) + live refresh: when an
+  // admin disables a provider, active players hear about it and switch away
+  // within a second.
   useEffect(() => {
-    fetch('/api/murastream/provider-config')
+    const refresh = () => fetch('/api/murastream/provider-config')
       .then(r => (r.ok ? r.json() : { disabled: [] }))
       .then(d => setDisabledProviders(new Set(d.disabled || [])))
       .catch(() => { /* empty */ });
+    refresh();
+
+    // Live push (SSE): sub-second reaction to admin disable/enable.
+    const es = new EventSource('/api/murastream/provider-events');
+    es.onmessage = (e) => {
+      try {
+        const d = JSON.parse(e.data) as { disabled?: string[] };
+        if (Array.isArray(d.disabled)) setDisabledProviders(new Set(d.disabled));
+      } catch { /* ignore malformed frames */ }
+    };
+    es.onerror = () => { /* browser auto-reconnects; poll below covers gaps */ };
+
+    // 60s polling safety net (also covers SSE being blocked by proxies)
+    const poll = setInterval(refresh, 60000);
+    return () => { es.close(); clearInterval(poll); };
   }, []);
 
   // Probe results merged with community reports: sources downvoted to trust 0
@@ -278,9 +295,11 @@ function WatchContent() {
     return () => window.removeEventListener('message', onMessage);
   }, [type, advanceEpisode]);
 
-  // Keyboard shortcuts: S = cycle source, N = next episode, F = fullscreen.
+  // Keyboard shortcuts: S = cycle source, N = next episode, F = fullscreen,
+  // M = mute, ←/→ = prev/next episode. Honors settings.shortcutsEnabled.
   // Must live above the `if (!id)` early return (Rules of Hooks).
   useEffect(() => {
+    if (settings.shortcutsEnabled === false) return;
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
@@ -293,16 +312,24 @@ function WatchContent() {
         setActiveSource(order[(idx + 1) % order.length]);
       } else if (key === 'n' && type === 'tv') {
         advanceEpisode();
+      } else if (key === 'm') {
+        const iframe = playerRef.current?.querySelector('iframe');
+        iframe?.focus();
+        try { iframe?.contentWindow?.postMessage({ type: 'mute' }, '*'); } catch { /* cross-origin */ }
       } else if (key === 'f') {
         if (document.fullscreenElement) void document.exitFullscreen();
         else void playerRef.current?.requestFullscreen();
+      } else if (e.key === 'ArrowRight' && type === 'tv') {
+        advanceEpisode();
+      } else if (e.key === 'ArrowLeft' && type === 'tv' && episode > 1) {
+        router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode - 1}`);
       } else if (key === 'escape') {
         setShowReport(false);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [orderedSources, activeSource, type, advanceEpisode]);
+  }, [orderedSources, activeSource, type, advanceEpisode, episode, id, season, router, settings.shortcutsEnabled]);
 
   if (!id) {
     return (

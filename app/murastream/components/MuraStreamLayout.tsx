@@ -24,6 +24,7 @@ const MORE_LINKS = [
   { href: '/murastream/history', label: 'Continue Watching' },
   { href: '/murastream/library', label: 'Library' },
   { href: '/murastream/downloads', label: 'Downloads' },
+  { href: '/murastream/changelog', label: 'What\'s New' },
   { href: '/murastream/settings', label: 'Settings' },
 ];
 
