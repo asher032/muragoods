@@ -425,7 +425,7 @@ export default function MuraStreamHome() {
                 {DRAMA_SECTIONS.map(s => (
                   <MediaRow
                     key={s.id}
-                    title={`${s.flag} Popular ${s.label}`}
+                    title={`Popular ${s.label}`}
                     items={dramaLists[s.id] || []}
                     loading={loading}
                     viewAllHref="/murastream/kdrama"
