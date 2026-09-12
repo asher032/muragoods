@@ -50,7 +50,11 @@ export async function GET(request: NextRequest) {
           headers: { 'User-Agent': UA },
           cache: 'no-store',
         });
-        return { id: p.id, ok: res.ok, status: res.status };
+        // 403/429 = provider is alive but bot-blocks datacenter fetches
+        // (Cloudflare etc.) while still serving browser iframes — treat as
+        // healthy. Only 4xx/5xx like 404 (title missing) count as dead.
+        const ok = res.ok || res.status === 403 || res.status === 429;
+        return { id: p.id, ok, status: res.status };
       } catch {
         return { id: p.id, ok: false, status: 0 };
       } finally {
