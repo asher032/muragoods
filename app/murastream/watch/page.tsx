@@ -40,6 +40,14 @@ const SOURCES: Source[] = [
         ? `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${season}&e=${episode}`
         : `https://multiembed.mov/?video_id=${id}&tmdb=1`,
   },
+  {
+    id: 'dailymotion', name: 'Dailymotion',
+    getUrl: (_type, id) => `https://geo.dailymotion.com/player.html?video=${id}`,
+  },
+  {
+    id: 'cinecom', name: 'CineCom',
+    getUrl: (_type, id) => `https://cinecom.net/embed/${id}`,
+  },
 ];
 
 function WatchContent() {
@@ -141,11 +149,14 @@ function WatchContent() {
   const embedUrl = activeSource.getUrl(type, id, season, episode);
 
   const handleIframeError = () => {
-    // Find next source
+    // Find next source (skip sources that already failed this session)
     const currentIdx = SOURCES.findIndex(s => s.id === activeSource.id);
-    const nextSource = SOURCES[currentIdx + 1];
-    if (nextSource) {
-      setActiveSource(nextSource);
+    let nextIdx = currentIdx + 1;
+    while (nextIdx < SOURCES.length && failedSources.has(SOURCES[nextIdx].id)) {
+      nextIdx++;
+    }
+    if (nextIdx < SOURCES.length) {
+      setActiveSource(SOURCES[nextIdx]);
     } else {
       setError('All streaming sources are currently unavailable. Please try again later.');
     }
