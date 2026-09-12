@@ -6,15 +6,16 @@ import MuraStreamLoader from '../components/MuraStreamLoader';
 import { DRAMA_SECTIONS, type DramaSection } from '../data/dramas';
 import type { MediaItem } from '../types';
 
-// TMDB TV genre ids mapped to friendly chips
+// TMDB TV genre ids — chosen to return solid result sets for Asian TV.
+// (TMDB tags most modern K-dramas as Drama(18) only; narrow chips like
+// Romance(10749) can return zero rows when combined with a year filter.)
 const GENRES: { id: string; label: string }[] = [
   { id: '', label: 'All Genres' },
   { id: '18', label: 'Drama' },
   { id: '35', label: 'Comedy' },
-  { id: '10749', label: 'Romance' },
-  { id: '80', label: 'Thriller' },
-  { id: '10759', label: 'Action' },
-  { id: '10765', label: 'Fantasy' },
+  { id: '10759', label: 'Action & Adventure' },
+  { id: '10765', label: 'Sci-Fi & Fantasy' },
+  { id: '9648', label: 'Mystery' },
 ];
 
 const YEARS = ['All Years', '2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2016', '2014'];
@@ -144,6 +145,16 @@ export default function DramaBrowsePage() {
           <Row title="🔥 Trending Now" items={trending} Grid={Grid} />
           <Row title="🏆 Top Rated" items={topRated} Grid={Grid} />
           <Row title="🆕 Newest Releases" items={newest} Grid={Grid} />
+          {trending.length === 0 && topRated.length === 0 && newest.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '48px 16px', color: '#666' }}>
+              <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 6px', color: '#A0A0A0' }}>
+                No dramas match these filters
+              </p>
+              <p style={{ fontSize: 13, margin: 0 }}>
+                Try clearing the genre or year — Asian dramas are often tagged simply as “Drama”.
+              </p>
+            </div>
+          )}
         </>
       )}
     </div>
