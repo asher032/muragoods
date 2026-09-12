@@ -124,6 +124,24 @@ export async function GET(request: NextRequest) {
       case 'tv_season':
         url = `/tv/${searchParams.get('id')}/season/${searchParams.get('season')}?language=${language}`;
         break;
+      case 'discover': {
+        // Generic TMDB discover — used for K-Dramas (with_genres=18 & with_origin_country=KR
+        // & sort_by=popularity.desc) and any other curated verticals.
+        const dsp = new URLSearchParams({
+          sort_by: searchParams.get('sort_by') || 'popularity.desc',
+          page,
+          language,
+          ...(searchParams.get('with_genres') ? { with_genres: searchParams.get('with_genres')! } : {}),
+          ...(searchParams.get('with_origin_country') ? { with_origin_country: searchParams.get('with_origin_country')! } : {}),
+          ...(searchParams.get('with_original_language') ? { with_original_language: searchParams.get('with_original_language')! } : {}),
+          ...(searchParams.get('with_keywords') ? { with_keywords: searchParams.get('with_keywords')! } : {}),
+          ...(searchParams.get('with_networks') ? { with_networks: searchParams.get('with_networks')! } : {}),
+          ...(searchParams.get('primary_release_year') ? { primary_release_year: searchParams.get('primary_release_year')! } : {}),
+          'vote_count.gte': searchParams.get('vote_count_gte') || '0',
+        });
+        url = `/discover/${searchParams.get('type') || 'tv'}?${dsp}`;
+        break;
+      }
       case 'genres':
         url = `/genre/${searchParams.get('type') || 'movie'}/list?language=${language}`;
         break;

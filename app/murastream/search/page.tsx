@@ -12,7 +12,7 @@ export default function MuraStreamSearchPage() {
   const [results, setResults] = useState<MediaItem[]>([]);
   const [searchState, setSearchState] = useState<SearchState>('idle');
   const [errorMessage, setErrorMessage] = useState('');
-  const [searchType, setSearchType] = useState<'all' | 'anime'>('all');
+  const [searchType, setSearchType] = useState<'all' | 'kdrama'>('all');
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastQueryRef = useRef('');
@@ -38,33 +38,15 @@ export default function MuraStreamSearchPage() {
     try {
       let items: MediaItem[] = [];
 
-      if (type === 'anime') {
-        // Anime-only search via AniList/Jikan
-        const res = await fetch(`/api/murastream/anilist?action=search&q=${encodeURIComponent(q.trim())}`, {
-          signal: controller.signal,
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        items = (data.results || []).map((r: Record<string, unknown>) => ({
-          ...r,
-          mediaType: 'tv',
-        })) as MediaItem[];
-      } else {
-        // Multi-search: try both TMDB and anime
-        const [tmdbRes, animeRes] = await Promise.allSettled([
-          fetch(`/api/murastream/tmdb?action=search&q=${encodeURIComponent(q.trim())}`, { signal: controller.signal }),
-          fetch(`/api/murastream/anilist?action=search&q=${encodeURIComponent(q.trim())}`, { signal: controller.signal }),
-        ]);
-
-        const tmdbItems: MediaItem[] = tmdbRes.status === 'fulfilled' && tmdbRes.value.ok
-          ? (await tmdbRes.value.json()).results || []
-          : [];
-
-        const animeItems: MediaItem[] = animeRes.status === 'fulfilled' && animeRes.value.ok
-          ? ((await animeRes.value.json()).results || []).map((r: Record<string, unknown>) => ({ ...r, mediaType: 'tv' }))
-          : [];
-
-        items = [...animeItems, ...tmdbItems];
+      // Single multi-search; K-Drama filter narrows to Korean-language titles.
+      const res = await fetch(`/api/murastream/tmdb?action=search&q=${encodeURIComponent(q.trim())}`, {
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      items = (data.results || []) as MediaItem[];
+      if (type === 'kdrama') {
+        items = items.filter(r => r.originalLanguage === 'ko');
       }
 
       if (controller.signal.aborted) return;
@@ -74,7 +56,7 @@ export default function MuraStreamSearchPage() {
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('[MuraStream Search]', err);
-      setErrorMessage('Anime search is temporarily unavailable. Please try again.');
+      setErrorMessage('Search is temporarily unavailable. Please try again.');
       setSearchState('error');
       setResults([]);
     }
@@ -123,7 +105,7 @@ export default function MuraStreamSearchPage() {
       <div style={{ position: 'relative', maxWidth: '500px', marginBottom: '20px' }}>
         <input
           type="text"
-          placeholder="Search anime, movies, TV series..."
+          placeholder="Search movies & TV shows..."
           value={query}
           onChange={e => setQuery(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && query.trim()) doSearch(query, searchType); }}
@@ -156,7 +138,7 @@ export default function MuraStreamSearchPage() {
 
       {/* Type filter */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-        {(['all', 'anime'] as const).map(type => (
+        {(['all', 'kdrama'] as const).map(type => (
           <button key={type} onClick={() => { setSearchType(type); lastQueryRef.current = ''; }}
             style={{
               padding: '8px 16px', borderRadius: '8px',
@@ -166,7 +148,7 @@ export default function MuraStreamSearchPage() {
               fontFamily: '-apple-system, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
               transition: 'all 0.2s',
             }}>
-            {type === 'all' ? 'All' : '🍥 Anime'}
+            {type === 'all' ? 'All' : '🌐 K-Drama'}
           </button>
         ))}
       </div>
@@ -216,10 +198,10 @@ export default function MuraStreamSearchPage() {
       {searchState === 'idle' && (
         <div style={{ textAlign: 'center', padding: '48px', color: '#444' }}>
           <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', marginBottom: '8px', color: '#666' }}>
-            Search for an anime...
+            Search for movies & TV shows...
           </p>
           <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '13px', color: '#555' }}>
-            Powered by AniList • Japanese anime metadata
+            Try the K-Drama filter for Korean titles
           </p>
         </div>
       )}

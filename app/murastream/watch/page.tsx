@@ -66,8 +66,6 @@ function WatchContent() {
   const id = Number(searchParams.get('id'));
   const season = Number(searchParams.get('season')) || 1;
   const episode = Number(searchParams.get('episode')) || 1;
-  const anilistIdParam = searchParams.get('anilist');
-  const isAnime = !!anilistIdParam;
 
   const [title, setTitle] = useState('');
   const [activeSource, setActiveSource] = useState<Source>(SOURCES[0]);
@@ -86,28 +84,12 @@ function WatchContent() {
       return;
     }
 
-    console.log('[Watch] Loading:', { type, id, season, episode, isAnime, anilistIdParam });
+    console.log('[Watch] Loading:', { type, id, season, episode });
 
     const controller = new AbortController();
 
-    if (isAnime && anilistIdParam) {
-      fetch(`/api/murastream/anilist?action=details&id=${anilistIdParam}`, { signal: controller.signal })
-        .then(r => r.json())
-        .then(data => {
-          console.log('[Watch] AniList title:', data?.title);
-          setTitle(data.title || 'Anime');
-          setPosterPath(data.posterPath || '');
-          setLoading(false);
-        })
-        .catch(err => {
-          if (err.name === 'AbortError') return;
-          console.error('[Watch] AniList failed:', err);
-          setTitle('Anime');
-          setLoading(false);
-        });
-    } else {
-      const action = type === 'tv' ? 'tv_details' : 'movie_details';
-      fetch(`/api/murastream/tmdb?action=${action}&id=${id}`, { signal: controller.signal })
+    const action = type === 'tv' ? 'tv_details' : 'movie_details';
+    fetch(`/api/murastream/tmdb?action=${action}&id=${id}`, { signal: controller.signal })
         .then(r => r.json())
         .then(data => {
           console.log('[Watch] TMDB title:', data?.title || data?.name);
@@ -121,9 +103,8 @@ function WatchContent() {
           setTitle(type === 'tv' ? 'TV Show' : 'Movie');
           setLoading(false);
         });
-    }
     return () => controller.abort();
-  }, [id, type, isAnime, anilistIdParam, season, episode]);
+  }, [id, type, season, episode]);
 
   const { markEpisodeWatched } = useMuraStreamStore();
 
@@ -144,12 +125,12 @@ function WatchContent() {
   useEffect(() => {
     if (!showAutoPlay || type !== 'tv') return;
     if (autoPlayCountdown <= 0) {
-      router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode + 1}${isAnime ? `&anilist=${anilistIdParam}` : ''}`);
+      router.push(`/murastream/watch?type=tv&id=${id}&season=${season}&episode=${episode + 1}`);
       return;
     }
     const timer = setTimeout(() => setAutoPlayCountdown(prev => prev - 1), 1000);
     return () => clearTimeout(timer);
-  }, [showAutoPlay, autoPlayCountdown, type, id, season, episode, router, isAnime, anilistIdParam]);
+  }, [showAutoPlay, autoPlayCountdown, type, id, season, episode, router]);
 
   if (!id) {
     return (

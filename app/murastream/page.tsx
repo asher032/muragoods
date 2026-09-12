@@ -197,7 +197,7 @@ export default function MuraStreamHome() {
   const [trendingTV, setTrendingTV] = useState<MediaItem[]>([]);
   const [popularMovies, setPopularMovies] = useState<MediaItem[]>([]);
   const [popularTV, setPopularTV] = useState<MediaItem[]>([]);
-  const [animeList, setAnimeList] = useState<MediaItem[]>([]);
+  const [kdramas, setKdramas] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<MediaItem[]>([]);
@@ -237,10 +237,10 @@ export default function MuraStreamHome() {
         setPopularTV(pTV.results || []);
 
         try {
-          const animeRes = await fetch('/api/murastream/anime?action=trending&limit=15');
-          const animeData = await animeRes.json();
-          setAnimeList(animeData.data || []);
-        } catch { setAnimeList([]); }
+          const kdRes = await fetch('/api/murastream/tmdb?action=discover&type=tv&with_original_language=ko&with_genres=18&vote_count_gte=20');
+          const kdData = await kdRes.json();
+          setKdramas(kdData.results || []);
+        } catch { setKdramas([]); }
 
       } catch (err) {
         console.error('Failed to load MuraStream data:', err);
@@ -307,7 +307,7 @@ export default function MuraStreamHome() {
           <div style={{ position: 'relative', maxWidth: '480px' }}>
             <input
               type="text"
-              placeholder="Search movies, TV shows & anime..."
+              placeholder="Search movies & TV shows..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               style={{
@@ -365,7 +365,7 @@ export default function MuraStreamHome() {
                 { id: 'trending', label: '🔥 Trending' },
                 { id: 'movies', label: '🎬 Movies' },
                 { id: 'tv', label: '📺 TV Shows' },
-                { id: 'anime', label: '🍥 Anime' },
+                { id: 'kdrama', label: '🌐 K-Drama' },
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -397,6 +397,7 @@ export default function MuraStreamHome() {
                 <MediaRow title="Trending Movies" items={trendingMovies} loading={loading} viewAllHref="/murastream?tab=movies" />
                 <MediaRow title="Trending TV Shows" items={trendingTV} loading={loading} viewAllHref="/murastream?tab=tv" />
                 <MediaRow title="Popular Movies" items={popularMovies} loading={loading} viewAllHref="/murastream?tab=movies" />
+                <MediaRow title="K-Dramas Everyone's Watching" items={kdramas} loading={loading} viewAllHref="/murastream?tab=kdrama" />
               </>
             )}
             {activeTab === 'movies' && (
@@ -410,43 +411,10 @@ export default function MuraStreamHome() {
                 <MediaRow title="Popular TV Shows" items={popularTV} loading={loading} />
                 <MediaRow title="Trending TV" items={trendingTV} loading={loading} />
               </>
-            )}
-            {activeTab === 'anime' && (
+            )}            {activeTab === 'kdrama' && (
               <>
-                <MediaRow title="Trending Anime" items={animeList} loading={loading} viewAllHref="/murastream/anime" />
-                {animeList.length === 0 && !loading && (
-                  <div style={{ textAlign: 'center', padding: '60px 16px', color: '#555' }}>
-                    <MuraStreamLoader fullScreen={false} text="No anime found" />
-                  </div>
-                )}
-                {/* Link to full anime page */}
-                <div style={{
-                  textAlign: 'center', marginTop: '20px', padding: '24px',
-                  background: 'rgba(184,92,255,0.05)', borderRadius: '16px',
-                  border: '1px solid rgba(184,92,255,0.12)',
-                }}>
-                  <p style={{
-                    fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-                    fontSize: '16px', fontWeight: 700, color: '#B85CFF', margin: '0 0 6px',
-                  }}>
-                    🍥 Full Anime Experience
-                  </p>
-                  <p style={{
-                    fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-                    fontSize: '13px', color: '#888', margin: '0 0 16px',
-                  }}>
-                    Top anime, seasonal releases, genre filters & more
-                  </p>
-                  <Link href="/murastream/anime" style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '6px',
-                    background: '#B85CFF', color: '#FFF', padding: '12px 28px',
-                    borderRadius: '10px', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-                    fontSize: '13px', fontWeight: 700, textDecoration: 'none',
-                    boxShadow: '0 4px 20px rgba(184,92,255,0.3)',
-                  }}>
-                    🍥 Explore Anime →
-                  </Link>
-                </div>
+                <MediaRow title="Popular K-Dramas" items={kdramas} loading={loading} />
+                <MediaRow title="Trending TV Shows" items={trendingTV} loading={loading} />
               </>
             )}
           </>
@@ -461,7 +429,7 @@ export default function MuraStreamHome() {
             fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
             fontSize: '12px', color: '#444', letterSpacing: '0.05em',
           }}>
-            MURASTREAM — Powered by TMDB and & MyAnimeList
+            MURASTREAM — Powered by TMDB
           </p>
         </div>
       </div>

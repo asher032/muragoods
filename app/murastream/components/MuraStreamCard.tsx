@@ -19,15 +19,11 @@ export default function MuraStreamCard({
 }) {
   const { toggleMyList, isInMyList } = useMuraStreamStore();
 
-  // Build href with anilistId and malId as query params when available
+  // Build href (anime query params removed with the anime section)
   const baseHref = item.mediaType === 'tv'
     ? `/murastream/tv/${item.id}`
     : `/murastream/movie/${item.id}`;
-  const params = new URLSearchParams();
-  if (item.anilistId) params.set('anilist', String(item.anilistId));
-  if (item.malId) params.set('mal', String(item.malId));
-  const qs = params.toString();
-  const href = qs ? `${baseHref}?${qs}` : baseHref;
+  const href = baseHref;
 
   const inList = isInMyList(item.id);
 

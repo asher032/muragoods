@@ -26,7 +26,7 @@ function StatCard({ label, value, icon }: { label: string; value: string | numbe
 
 export default function MuraStreamProfilePage() {
   const router = useRouter();
-  const { likes, myList, history, animeProgress, settings, clearAllLibrary } = useMuraStreamStore();
+  const { likes, myList, history, settings, clearAllLibrary } = useMuraStreamStore();
   const [user, setUser] = useState<UserProfile>(null);
   const [loading, setLoading] = useState(true);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -69,8 +69,7 @@ export default function MuraStreamProfilePage() {
 
   const moviesWatched = history.filter(h => h.mediaType === 'movie').length;
   const tvWatched = history.filter(h => h.mediaType === 'tv').length;
-  const animeWatched = animeProgress.length;
-  const totalEpisodes = animeProgress.reduce((sum, a) => sum + a.watchedEpisodes.length, 0);
+  const totalEpisodes = history.filter(h => h.mediaType === 'tv' && h.episode).length;
 
   return (
     <div style={{ padding: '24px 28px', maxWidth: '600px' }}>
@@ -117,7 +116,6 @@ export default function MuraStreamProfilePage() {
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <StatCard label="MOVIES" value={moviesWatched} icon="🎬" />
           <StatCard label="TV SHOWS" value={tvWatched} icon="📺" />
-          <StatCard label="ANIME" value={animeWatched} icon="🍥" />
           <StatCard label="EPISODES" value={totalEpisodes} icon="▶" />
         </div>
       </div>
@@ -141,8 +139,8 @@ export default function MuraStreamProfilePage() {
             <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#B85CFF' }}>{history.length}</span>
           </div>
           <div style={{ padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontFamily: '"Lucida Sans", sans-serif', fontSize: '13px', color: '#E5E5E5' }}>🍥 Anime Progress</span>
-            <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#B85CFF' }}>{animeProgress.length}</span>
+            <span style={{ fontFamily: '"Lucida Sans", sans-serif', fontSize: '13px', color: '#E5E5E5' }}>⚙️ Settings</span>
+            <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#B85CFF' }}>{settings.autoplayNext ? 'AUTOPLAY ON' : 'AUTOPLAY OFF'}</span>
           </div>
         </div>
       </div>
