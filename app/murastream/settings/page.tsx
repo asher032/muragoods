@@ -96,6 +96,12 @@ export default function MuraStreamSettingsPage() {
       </Section>
 
       {/* APPEARANCE */}
+      <Section title="KEYBOARD SHORTCUTS">
+        <SettingRow label="Enable shortcuts" desc="S source · N next · F fullscreen · M mute · ←/→ episodes">
+          <Toggle enabled={settings.shortcutsEnabled} onChange={() => toggle('shortcutsEnabled')} />
+        </SettingRow>
+      </Section>
+
       <Section title="APPEARANCE">
         <SettingRow label="Theme" desc="Choose your interface theme">
           <div style={{ display: 'flex', gap: '6px' }}>

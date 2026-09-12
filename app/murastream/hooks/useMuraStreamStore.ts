@@ -32,6 +32,7 @@ export type MuraStreamSettings = {
   compactCards: boolean;
   watchHistory: boolean;
   recommendations: boolean;
+  shortcutsEnabled: boolean;
 };
 
 export const DEFAULT_SETTINGS: MuraStreamSettings = {
@@ -44,6 +45,7 @@ export const DEFAULT_SETTINGS: MuraStreamSettings = {
   compactCards: false,
   watchHistory: true,
   recommendations: true,
+  shortcutsEnabled: true,
 };
 
 export type AnimeProgress = {
