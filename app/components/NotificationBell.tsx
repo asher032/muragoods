@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useNotifications, type Notification } from './NotificationSystem';
-
+import { Bell, CircleCheck, CircleX, Info, MessageCircle, Package, TriangleAlert } from 'lucide-react';
 export function NotificationBell() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearNotifications } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
@@ -27,13 +27,13 @@ export function NotificationBell() {
     return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  const typeIcons: Record<string, string> = {
-    info: 'ℹ️',
-    success: '✅',
-    warning: '⚠️',
-    error: '❌',
-    support: '💬',
-    order: '📦',
+  const typeIcons: Record<string, React.ReactNode> = {
+    info: <Info className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, 
+    success: <CircleCheck color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
+    warning: <TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
+    error: <CircleX color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
+    support: <MessageCircle className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
+    order: <Package className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
   };
 
   return (
@@ -57,7 +57,7 @@ export function NotificationBell() {
         onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,214,10,0.3)'; e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
         onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
       >
-        <span style={{ fontSize: '16px' }}>🔔</span>
+        <span style={{ fontSize: '16px' }}><Bell className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
         {unreadCount > 0 && (
           <span style={{
             position: 'absolute',
@@ -123,7 +123,7 @@ export function NotificationBell() {
           <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
             {notifications.length === 0 ? (
               <div style={{ padding: '40px 20px', textAlign: 'center' }}>
-                <p style={{ fontSize: '28px', marginBottom: '8px' }}>🔔</p>
+                <p style={{ fontSize: '28px', marginBottom: '8px' }}><Bell className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
                 <p style={{ fontSize: '11px', color: 'var(--mario-text-muted)' }}>No notifications yet</p>
               </div>
             ) : (
@@ -131,7 +131,7 @@ export function NotificationBell() {
                 <NotificationItem
                   key={notif.id}
                   notification={notif}
-                  icon={typeIcons[notif.type] || 'ℹ️'}
+                  icon={typeIcons[notif.type] || <Info className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />}
                   formatTime={formatTime}
                   onClick={() => {
                     markAsRead(notif.id);
@@ -161,7 +161,7 @@ export function NotificationBell() {
   );
 }
 
-function NotificationItem({ notification, icon, formatTime, onClick }: { notification: Notification; icon: string; formatTime: (ts: number) => string; onClick: () => void }) {
+function NotificationItem({ notification, icon, formatTime, onClick }: { notification: Notification; icon: React.ReactNode; formatTime: (ts: number) => string; onClick: () => void }) {
   return (
     <div
       onClick={onClick}

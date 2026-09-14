@@ -7,8 +7,7 @@ import Image from 'next/image';
 import { useCoins } from '@/app/hooks/useCoins';
 import MuraStreamIcon from '@/app/components/icons/MuraStreamIcon';
 import FlappyBirdIcon from '@/app/components/icons/FlappyBirdIcon';
-
-
+import { Coins, User } from 'lucide-react';
 interface SidebarProps {
   open: boolean;
   onClose: () => void;
@@ -103,7 +102,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                   {(user.name || user.email || 'P').charAt(0).toUpperCase()}
                 </span>
               ) : (
-                <span style={{ fontSize: '20px' }}>👤</span>
+                <span style={{ fontSize: '20px' }}><User className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
               )}
             </div>
             <div>
@@ -111,7 +110,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                 {user?.name || 'Guest'}
               </p>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-                <span style={{ fontSize: '10px' }}>🪙</span>
+                <span style={{ fontSize: '10px' }}><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
                 <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: 'var(--mario-green)' }}>
                   {coins} coins
                 </span>

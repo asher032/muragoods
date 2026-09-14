@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
-
+import { BookOpen, Heart, Mail, Search, Sparkles } from 'lucide-react';
 interface Letter {
   _id: string;
   recipientName: string;
@@ -67,7 +67,7 @@ export default function UnsentHome() {
           {/* Search */}
           <form onSubmit={handleSearch} className="mt-10 max-w-md mx-auto">
             <label className="block text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] mb-3" style={{ fontFamily: 'var(--font-arcade)' }}>
-              🔍 Search for a name
+              <Search className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Search for a name
             </label>
             <div className="flex gap-2">
               <input
@@ -83,9 +83,9 @@ export default function UnsentHome() {
 
           {/* Quick Links */}
           <div className="mt-8 flex flex-wrap gap-3 justify-center">
-            <Link href="/unsent/archive" className="deco-btn rounded-xl">📚 Browse Archive</Link>
+            <Link href="/unsent/archive" className="deco-btn rounded-xl"><BookOpen className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Browse Archive</Link>
             {isLoggedIn && (
-              <Link href="/unsent/submit" className="deco-btn deco-btn-gold rounded-xl">✉️ Submit a Letter</Link>
+              <Link href="/unsent/submit" className="deco-btn deco-btn-gold rounded-xl"><Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Submit a Letter</Link>
             )}
           </div>
         </div>
@@ -102,7 +102,7 @@ export default function UnsentHome() {
       <section className="px-4 py-12 sm:px-8">
         <div className="deco-container" style={{ maxWidth: '48rem' }}>
           <h2 className="text-xl text-[var(--cream)] uppercase text-center mb-8" style={{ fontFamily: 'var(--font-arcade)', textShadow: '2px 2px 0px var(--gold-dark)' }}>
-            ✨ Recently Written
+            <Sparkles color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Recently Written
           </h2>
 
           {loading && (
@@ -131,7 +131,7 @@ export default function UnsentHome() {
                   <p className="text-[10px] text-[var(--pewter)] mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>To: {letter.recipientName}</p>
                   <p className="text-sm text-[var(--cream-muted)] leading-relaxed line-clamp-3">{letter.content}</p>
                   <div className="mt-3 flex items-center gap-3">
-                    <span className="text-[9px] text-[var(--pewter)]">❤️ {letter.likes}</span>
+                    <span className="text-[9px] text-[var(--pewter)]"><Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {letter.likes}</span>
                   </div>
                 </div>
               ))}
@@ -139,7 +139,7 @@ export default function UnsentHome() {
           )}
 
           <div className="text-center mt-8">
-            <Link href="/unsent/archive" className="deco-btn deco-btn-gold rounded-xl">📚 View Full Archive</Link>
+            <Link href="/unsent/archive" className="deco-btn deco-btn-gold rounded-xl"><BookOpen className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> View Full Archive</Link>
           </div>
         </div>
       </section>
@@ -149,7 +149,7 @@ export default function UnsentHome() {
         <section className="px-4 pb-16 sm:px-8">
           <div className="deco-container" style={{ maxWidth: '40rem' }}>
             <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.05)] rounded-2xl p-8 text-center">
-              <p className="text-3xl mb-4">✉️</p>
+              <p className="text-3xl mb-4"><Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
               <h3 className="text-sm text-[var(--cream)] uppercase mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>Have something to say?</h3>
               <p className="text-sm text-[var(--pewter)] mb-4">Log in to submit your own unsent letter to the archive.</p>
               <Link href="/login" className="deco-btn deco-btn-gold rounded-xl">Log In to Submit</Link>

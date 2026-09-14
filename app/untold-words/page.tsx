@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
-
+import { Bird, Cloud, Eye, Flower2, Handshake, Heart, HeartCrack, Inbox, Mail, Music } from 'lucide-react';
 interface GalleryItem {
   type: 'letter' | 'confession' | 'song';
   id: string;
@@ -24,14 +24,14 @@ const themeAccents: Record<string, string> = {
   default: '#ff6496', midnight: '#6496ff', sunset: '#ffb464', garden: '#64ff96', lavender: '#c896ff',
 };
 
-const catColors: Record<string, { emoji: string; color: string }> = {
-  Confession: { emoji: '💜', color: '#c896ff' },
-  Appreciation: { emoji: '💛', color: '#ffd60a' },
-  'Missing Someone': { emoji: '💔', color: '#ff6496' },
-  Friendship: { emoji: '🤝', color: '#64ff96' },
-  Crush: { emoji: '🩷', color: '#ffb4da' },
-  'Moving On': { emoji: '🦋', color: '#6496ff' },
-  'Random Thoughts': { emoji: '💭', color: '#ffb464' },
+const catColors: Record<string, { emoji: React.ReactNode; color: string }> = {
+  Confession: { emoji: <Heart color={'#c896ff'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color: '#c896ff' },
+  Appreciation: { emoji: <Heart color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color: '#ffd60a' },
+  'Missing Someone': { emoji: <HeartCrack color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'#ff6496' },
+  Friendship: { emoji: <Handshake className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color: '#64ff96' },
+  Crush: { emoji: <Flower2 color={'#ff4d8d'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color: '#ffb4da' },
+  'Moving On': { emoji: <Bird className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'#6496ff' },
+  'Random Thoughts': { emoji: <Cloud className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'#ffb464' },
 };
 
 export default function UntoldWordsHome() {
@@ -134,7 +134,7 @@ export default function UntoldWordsHome() {
         {/* Hero */}
         <div style={{ textAlign: 'center', marginBottom: '40px', opacity: loaded ? 1 : 0, transform: loaded ? 'translateY(0)' : 'translateY(20px)', transition: 'all 0.8s ease' }}>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginBottom: '20px' }}>
-            {['💌', '🎵', '💌'].map((e, i) => (
+            {[<Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, , <Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />].map((e, i) => (
               <span key={i} style={{ fontSize: '24px', animation: `float ${3 + i * 0.5}s ease-in-out infinite`, animationDelay: `${i * 0.3}s` }}>{e}</span>
             ))}
           </div>
@@ -149,7 +149,7 @@ export default function UntoldWordsHome() {
 
         {/* Filter Tabs */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', justifyContent: 'center' }}>
-          {([['all', '✨ All'], ['letters', '💌 Letters'], ['songs', '🎵 Songs']] as const).map(([t, label]) => (
+          {([['all', 'All'], ['letters', 'Letters'], ['songs', 'Songs']] as const).map(([t, label]) => (
             <button key={t} onClick={() => setTab(t)} style={{ padding: '8px 20px', borderRadius: '10px', border: `1px solid ${tab === t ? 'rgba(255,214,10,0.4)' : 'rgba(255,255,255,0.08)'}`, background: tab === t ? 'rgba(255,214,10,0.1)' : 'rgba(255,255,255,0.03)', color: tab === t ? '#ffd60a' : 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer', transition: 'all 0.2s' }}>
               {label}
             </button>
@@ -170,7 +170,7 @@ export default function UntoldWordsHome() {
                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px) scale(1.02)'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(200,150,255,0.1)'; }}
                 onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0) scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
               >
-                <span style={{ fontSize: '32px', display: 'block', marginBottom: '8px' }}>💜</span>
+                <span style={{ fontSize: '32px', display: 'block', marginBottom: '8px' }}><Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
                 <h3 style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: '#c896ff', marginBottom: '6px' }}>Anonymous Confession</h3>
                 <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', lineHeight: 1.5 }}>Short thoughts, feelings, things you want off your chest</p>
               </div>
@@ -180,7 +180,7 @@ export default function UntoldWordsHome() {
                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px) scale(1.02)'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(255,100,150,0.1)'; }}
                 onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0) scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
               >
-                <span style={{ fontSize: '32px', display: 'block', marginBottom: '8px' }}>💌</span>
+                <span style={{ fontSize: '32px', display: 'block', marginBottom: '8px' }}><Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
                 <h3 style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: '#ffb4a2', marginBottom: '6px' }}>Anonymous Letter</h3>
                 <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', lineHeight: 1.5 }}>Longer personal letters, completely anonymous</p>
               </div>
@@ -190,7 +190,7 @@ export default function UntoldWordsHome() {
                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px) scale(1.02)'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(30,215,96,0.08)'; }}
                 onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0) scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
               >
-                <span style={{ fontSize: '32px', display: 'block', marginBottom: '8px' }}>🎵</span>
+                <span style={{ fontSize: '32px', display: 'block', marginBottom: '8px' }}><Music color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
                 <h3 style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: '#1ed760', marginBottom: '6px' }}>Send a Song</h3>
                 <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', lineHeight: 1.5 }}>Express your message through a song</p>
               </div>
@@ -210,7 +210,7 @@ export default function UntoldWordsHome() {
 
           {!loading && filtered.length === 0 && (
             <div style={{ textAlign: 'center', padding: '60px 20px', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '20px' }}>
-              <p style={{ fontSize: '48px', marginBottom: '16px' }}>📭</p>
+              <p style={{ fontSize: '48px', marginBottom: '16px' }}><Inbox className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
               <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '12px', color: 'rgba(255,255,255,0.3)', marginBottom: '12px' }}>No letters yet</p>
               <Link href="/untold-words/letter/create" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#ffd60a', textDecoration: 'none' }}>Be the first →</Link>
             </div>
@@ -241,9 +241,9 @@ export default function UntoldWordsHome() {
                       <div style={{ padding: '18px', flex: 1, display: 'flex', flexDirection: 'column' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                           <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '7px', color: accent, background: accent + '18', padding: '3px 8px', borderRadius: '6px', letterSpacing: '0.1em' }}>
-                            {item.type === 'confession' ? '✨ CONFESSION' : item.type === 'song' ? '🎵 SONG' : '💌 LETTER'}
+                            {item.type === 'confession' ? 'CONFESSION' : item.type === 'song' ? 'SONG' : 'LETTER'}
                           </span>
-                          {item.views > 0 && <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)' }}>👁 {item.views}</span>}
+                          {item.views > 0 && <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)' }}><Eye className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {item.views}</span>}
                         </div>
                         <h3 style={{ fontFamily: 'Georgia, serif', fontSize: '15px', color: accent, marginBottom: '6px', lineHeight: 1.3, flexShrink: 0 }}>{`“${item.title}”`}</h3>
                         {item.artist && <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginBottom: '4px', flexShrink: 0 }}>{item.artist}</p>}
@@ -267,7 +267,7 @@ export default function UntoldWordsHome() {
                 const accent = item.type === 'confession'
                   ? (catColors[item.category || '']?.color || '#c896ff')
                   : item.type === 'song' ? '#1ed760' : '#ffb4a2';
-                const typeLabel = item.type === 'confession' ? '✨ CONFESSION' : item.type === 'song' ? '🎵 SONG' : '💌 LETTER';
+                const typeLabel = item.type === 'confession' ? 'CONFESSION' : item.type === 'song' ? 'SONG' : 'LETTER';
                 const viewPath = item.type === 'confession' ? `/untold-words/confession/${item.id}` : item.type === 'song' ? `/untold-words/song/${item.id}` : `/untold-words/letter/${item.id}`;
                 return (
                   <Link key={item.id} href={viewPath} style={{ textDecoration: 'none', breakInside: 'avoid', marginBottom: '16px', display: 'block' }}>
@@ -279,7 +279,7 @@ export default function UntoldWordsHome() {
                       <div style={{ padding: '20px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                           <span style={{ fontSize: '8px', fontFamily: 'var(--font-arcade)', color: accent, background: accent + '15', padding: '3px 8px', borderRadius: '6px', letterSpacing: '0.1em' }}>{typeLabel}</span>
-                          {item.views > 0 && <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)' }}>👁 {item.views}</span>}
+                          {item.views > 0 && <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)' }}><Eye className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {item.views}</span>}
                         </div>
                         <h3 style={{ fontFamily: item.type === 'song' ? 'var(--font-arcade)' : 'Georgia, serif', fontSize: item.type === 'song' ? '13px' : '16px', color: accent, marginBottom: '8px', lineHeight: 1.4 }}>
                           {item.type === 'song' ? item.title : `\u201C${item.title}\u201D`}

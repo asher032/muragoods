@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/app/contexts/AuthContext';
+import { TriangleAlert } from 'lucide-react';
 
 export default function LoginPage() {
   const { user, state, login } = useAuth();
@@ -119,7 +120,7 @@ export default function LoginPage() {
 
             {error && (
               <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-3 text-sm text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
-                ⚠ {error}
+                <TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {error}
               </div>
             )}
 

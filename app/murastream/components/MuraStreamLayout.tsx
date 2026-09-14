@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
+import { House, Search, Bookmark, Heart, CircleUserRound } from 'lucide-react';
 import MuraStreamIcon from '@/app/components/icons/MuraStreamIcon';
 import { LATEST_CHANGELOG, CHANGELOG_SEEN_KEY } from '../data/changelog';
 
@@ -15,11 +16,11 @@ const NAV_LINKS = [
 ];
 
 const BOTTOM_NAV = [
-  { href: '/murastream', label: 'Home', icon: 'M10.707 2.293a1 1 0 0 0-1.414 0l-7 7a1 1 0 0 0 1.414 1.414L4 10.414V17a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-6.586l.293.293a1 1 0 0 0 1.414-1.414l-7-7z' },
-  { href: '/murastream/search', label: 'Search', icon: 'M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.442.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10' },
-  { href: '/murastream/my-list', label: 'My List', icon: 'M2 2v2h2V2zm4 0v2h8V2zm-4 4v2h12V6zm-4 4v2h16v-2zm-4 4v2h20v-2z' },
-  { href: '/murastream/likes', label: 'Likes', icon: 'M8 1.314C12.439-3.248 23.534 4.735 8 15-7.534 4.736 3.561-3.248 8 1.314' },
-  { href: '/murastream/profile', label: 'Profile', icon: 'M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6' },
+  { href: '/murastream', label: 'Home', Icon: House },
+  { href: '/murastream/search', label: 'Search', Icon: Search },
+  { href: '/murastream/my-list', label: 'My List', Icon: Bookmark },
+  { href: '/murastream/likes', label: 'Likes', Icon: Heart },
+  { href: '/murastream/profile', label: 'Profile', Icon: CircleUserRound },
 ];
 
 const MORE_LINKS = [
@@ -307,14 +308,11 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
       {isMobile && (
         <nav className="ms-mobile-nav">
           <div className="ms-mobile-nav-inner">
-            {BOTTOM_NAV.map(item => (
-              <Link key={item.href} href={item.href}
-                className={`ms-mobile-tab ${isActive(item.href) ? 'active' : ''}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
-                  fill={isActive(item.href) ? '#E50914' : 'var(--ms-text-faint)'} viewBox="0 0 16 16">
-                  <path d={item.icon}/>
-                </svg>
-                <span className="ms-mobile-tab-label">{item.label}</span>
+            {BOTTOM_NAV.map(({ href, label, Icon }) => (
+              <Link key={href} href={href}
+                className={`ms-mobile-tab ${isActive(href) ? 'active' : ''}`}>
+                <Icon size={20} color={isActive(href) ? '#E50914' : 'var(--ms-text-faint)'} strokeWidth={isActive(href) ? 2.4 : 2} />
+                <span className="ms-mobile-tab-label">{label}</span>
               </Link>
             ))}
           </div>

@@ -9,15 +9,15 @@ import { useProducts } from '@/app/hooks/useProducts';
 import { useCoins } from '@/app/hooks/useCoins';
 import { NavBar } from '@/app/components/NavBar';
 import { ReceiptGenerator } from '@/app/components/ReceiptGenerator';
-
+import { Banknote, Check, ClipboardList, Coins, Gift, Inbox, Landmark, MapPin, MessageCircle, Moon, Sun, Sunrise, Tag, TriangleAlert } from 'lucide-react';
 const LocationPicker = dynamic(() => import('@/app/components/LocationPicker'), { ssr: false });
 
 const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
 const timeSlotOptions = [
-  { value: 'morning', label: 'Morning', time: '9:00 AM – 12:00 PM', icon: '🌅' },
-  { value: 'afternoon', label: 'Afternoon', time: '12:00 PM – 5:00 PM', icon: '☀️' },
-  { value: 'evening', label: 'Evening', time: '5:00 PM – 8:00 PM', icon: '🌙' },
+  { value: 'morning', label: 'Morning', time: '9:00 AM – 12:00 PM', icon: <Sunrise color={'#fb8500'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> },
+  { value: 'afternoon', label: 'Afternoon', time: '12:00 PM – 5:00 PM', icon: <Sun color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> },
+  { value: 'evening', label: 'Evening', time: '5:00 PM – 8:00 PM', icon: <Moon className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> },
 ];
 
 type PaymentMethod = 'GCash' | 'Cash on Delivery';
@@ -290,7 +290,7 @@ export default function CheckoutPage() {
       <div style={{ maxWidth: '900px', margin: '0 auto', padding: '20px 16px' }}>
         {error && (
           <div style={{ background: 'rgba(230,57,70,0.1)', border: '1px solid rgba(230,57,70,0.3)', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', color: '#e63946', fontSize: '12px', fontWeight: 600 }}>
-            ⚠ {error}
+            <TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {error}
           </div>
         )}
 
@@ -336,27 +336,27 @@ export default function CheckoutPage() {
                 <div className="cart-steps">
                   {restrictedItems.length > 0 && (
                     <div style={{ background: 'rgba(230,57,70,0.08)', border: '1px solid rgba(230,57,70,0.25)', borderRadius: '6px', padding: '10px 12px', fontSize: '11px', color: '#e63946', marginBottom: '8px' }}>
-                      ⚠ Coffee Jelly & Cookies are only for DWCL pickup!
+                      <TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Some items in your cart are only for DWCL pickup!
                     </div>
                   )}
                   {!isDwcl && !isCustom && totalItems < 2 && (
                     <div style={{ background: 'rgba(255,214,10,0.08)', border: '1px solid rgba(255,214,10,0.25)', borderRadius: '6px', padding: '10px 12px', fontSize: '11px', color: '#ffd60a', marginBottom: '8px' }}>
-                      ⚠ Minimum 2 items for delivery outside DWCL.
+                      <TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Minimum 2 items for delivery outside DWCL.
                     </div>
                   )}
 
                   {isDaraga && (
                     <div style={{ background: 'rgba(6,214,160,0.08)', border: '1px solid rgba(6,214,160,0.25)', borderRadius: '6px', padding: '10px 12px', fontSize: '11px', color: '#06d6a0', marginBottom: '8px' }}>
-                      📍 Daraga/Legazpi: ₱30 delivery fee. {subtotal >= 200 ? '✨ FREE SHIPPING UNLOCKED!' : `Add ₱${200 - subtotal} more for free shipping!`}
+                      <MapPin color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Daraga/Legazpi: ₱30 delivery fee. {subtotal >= 200 ? 'FREE SHIPPING UNLOCKED!' : `Add ₱${200 - subtotal} more for free shipping!`}
                     </div>
                   )}
 
                   {isCustom && (
                     <div style={{ background: 'rgba(255,214,10,0.06)', border: '1px solid rgba(255,214,10,0.2)', borderRadius: '6px', padding: '12px', marginBottom: '8px' }}>
-                      <p style={{ fontSize: '11px', fontWeight: 600, color: '#ffd60a', marginBottom: '6px' }}>📬 Custom Delivery</p>
+                      <p style={{ fontSize: '11px', fontWeight: 600, color: '#ffd60a', marginBottom: '6px' }}><Inbox className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Custom Delivery</p>
                       <p style={{ fontSize: '11px', color: '#bbb' }}>Fee and schedule discussed via Instagram DM.</p>
                       <a href="https://www.instagram.com/muragoods_/" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '8px', padding: '6px 14px', background: '#555', borderRadius: '5px', color: '#fff', fontSize: '10px', fontWeight: 600, textDecoration: 'none' }}>
-                        💬 Message @muragoods_
+                        <MessageCircle className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Message @muragoods_
                       </a>
                     </div>
                   )}
@@ -431,7 +431,7 @@ export default function CheckoutPage() {
                         padding: '16px 12px', borderRadius: '8px', border: isGCash ? '1px solid #ffd60a' : '1px solid #2e2e2e',
                         background: isGCash ? 'rgba(255,214,10,0.08)' : '#333', color: '#fff', cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s'
                       }}>
-                      <div style={{ fontSize: '20px', marginBottom: '6px' }}>🏦</div>
+                      <div style={{ fontSize: '20px', marginBottom: '6px' }}><Landmark className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
                       <p style={{ fontSize: '11px', fontWeight: 600 }}>GCash</p>
                       <p style={{ fontSize: '9px', color: '#bbb', marginTop: '4px' }}>QR + proof required</p>
                     </button>
@@ -442,7 +442,7 @@ export default function CheckoutPage() {
                         background: !isDwcl && !isDaraga ? '#2a2a2a' : paymentMethod === 'Cash on Delivery' ? 'rgba(6,214,160,0.08)' : '#333',
                         color: !isDwcl && !isDaraga ? '#555' : '#fff', cursor: !isDwcl && !isDaraga ? 'not-allowed' : 'pointer', textAlign: 'center', transition: 'all 0.2s', opacity: !isDwcl && !isDaraga ? 0.4 : 1
                       }}>
-                      <div style={{ fontSize: '20px', marginBottom: '6px' }}>💵</div>
+                      <div style={{ fontSize: '20px', marginBottom: '6px' }}><Banknote color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
                       <p style={{ fontSize: '11px', fontWeight: 600 }}>Cash on Delivery</p>
                       <p style={{ fontSize: '9px', color: '#bbb', marginTop: '4px' }}>{isDwcl ? 'DWCL pickup' : isDaraga ? 'Daraga/Legazpi' : 'Unavailable'}</p>
                     </button>
@@ -472,7 +472,7 @@ export default function CheckoutPage() {
                       </div>
 
                       <div style={{ marginBottom: '10px', background: 'rgba(255,214,10,0.06)', border: '1px solid rgba(255,214,10,0.15)', borderRadius: '8px', padding: '10px 12px' }}>
-                        <p style={{ fontSize: '10px', color: '#ffd60a', fontWeight: 600 }}>📋 After paying, enter your GCash reference number below</p>
+                        <p style={{ fontSize: '10px', color: '#ffd60a', fontWeight: 600 }}><ClipboardList className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> After paying, enter your GCash reference number below</p>
                       </div>
                       <div style={{ marginBottom: '10px' }}>
                         <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--mario-text)', marginBottom: '6px' }}>Reference Number *</p>
@@ -488,7 +488,7 @@ export default function CheckoutPage() {
 
                   {!isGCash && (
                     <div style={{ marginTop: '12px', background: 'rgba(6,214,160,0.06)', border: '1px solid rgba(6,214,160,0.2)', borderRadius: '12px', padding: '16px' }}>
-                      <p style={{ fontSize: '11px', fontWeight: 600, color: '#06d6a0' }}>💵 Cash on Delivery</p>
+                      <p style={{ fontSize: '11px', fontWeight: 600, color: '#06d6a0' }}><Banknote color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Cash on Delivery</p>
                       <p style={{ fontSize: '12px', color: '#fff', marginTop: '6px' }}>{isDwcl ? 'Pay in cash when you pick up your order. No payment proof needed!' : 'Pay in cash when delivered. No payment proof needed!'}</p>
                     </div>
                   )}
@@ -503,7 +503,7 @@ export default function CheckoutPage() {
                   {unusedCodes.length > 0 && (
                     <div style={{ background: 'rgba(255,214,10,0.06)', border: '1px solid rgba(255,214,10,0.15)', borderRadius: '10px', padding: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                        <p style={{ fontSize: '11px', fontWeight: 600, color: '#ffd60a' }}>🎁 Your Codes ({unusedCodes.length} available)</p>
+                        <p style={{ fontSize: '11px', fontWeight: 600, color: '#ffd60a' }}><Gift color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Your Codes ({unusedCodes.length} available)</p>
                         {!discountApplied && (
                           <button type="button" onClick={autoApplyBestCode} style={{ fontSize: '9px', padding: '4px 10px', background: 'rgba(255,214,10,0.15)', border: '1px solid rgba(255,214,10,0.3)', borderRadius: '5px', color: '#ffd60a', cursor: 'pointer', fontWeight: 600, fontFamily: 'var(--font-arcade)' }}>AUTO-APPLY BEST</button>
                         )}
@@ -538,11 +538,11 @@ export default function CheckoutPage() {
 
                   {/* Discount Code */}
                   <div className="step">
-                    <span>🎁 Discount Code</span>
+                    <span><Gift color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Discount Code</span>
                     {discountApplied ? (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(6,214,160,0.08)', border: '1px solid rgba(6,214,160,0.25)', borderRadius: '6px', padding: '10px 12px' }}>
                         <div>
-                          <p style={{ fontSize: '10px', color: '#06d6a0', fontWeight: 600 }}>✓ {discountApplied.code} — {discountApplied.label}</p>
+                          <p style={{ fontSize: '10px', color: '#06d6a0', fontWeight: 600 }}><Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {discountApplied.code} — {discountApplied.label}</p>
                           <p style={{ fontSize: '11px', color: '#fff', marginTop: '2px' }}>You save ₱{discountAmount}!</p>
                         </div>
                         <button type="button" onClick={handleRemoveCode} style={{ padding: '4px 10px', background: 'rgba(230,57,70,0.15)', border: '1px solid rgba(230,57,70,0.3)', borderRadius: '4px', color: '#e63946', fontSize: '9px', fontWeight: 600, cursor: 'pointer' }}>Remove</button>
@@ -553,16 +553,16 @@ export default function CheckoutPage() {
                         <button type="button" onClick={handleApplyCode} className="promo-btn">Apply</button>
                       </div>
                     )}
-                    {discountError && <p style={{ fontSize: '9px', color: '#e63946', marginTop: '4px' }}>⚠ {discountError}</p>}
+                    {discountError && <p style={{ fontSize: '9px', color: '#e63946', marginTop: '4px' }}><TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {discountError}</p>}
                   </div>
 
                   {/* Promo Code */}
                   <div className="step">
-                    <span>🏷️ Promo Code</span>
+                    <span><Tag className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Promo Code</span>
                     {promoApplied ? (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(6,214,160,0.08)', border: '1px solid rgba(6,214,160,0.25)', borderRadius: '6px', padding: '10px 12px' }}>
                         <div>
-                          <p style={{ fontSize: '10px', color: '#06d6a0', fontWeight: 600 }}>✓ {promoApplied.code} — {promoApplied.type === 'percent' ? `${promoApplied.value}% OFF` : `₱${promoApplied.value} OFF`}</p>
+                          <p style={{ fontSize: '10px', color: '#06d6a0', fontWeight: 600 }}> {promoApplied.code} — {promoApplied.type ==='percent' ? `${promoApplied.value}% OFF` : `₱${promoApplied.value} OFF`}</p>
                           <p style={{ fontSize: '11px', color: '#fff', marginTop: '2px' }}>You save ₱{promoDiscountAmount}!</p>
                         </div>
                         <button type="button" onClick={handleRemovePromo} style={{ padding: '4px 10px', background: 'rgba(230,57,70,0.15)', border: '1px solid rgba(230,57,70,0.3)', borderRadius: '4px', color: '#e63946', fontSize: '9px', fontWeight: 600, cursor: 'pointer' }}>Remove</button>
@@ -573,7 +573,7 @@ export default function CheckoutPage() {
                         <button type="button" onClick={handleApplyPromo} className="promo-btn">Apply</button>
                       </div>
                     )}
-                    {promoError && <p style={{ fontSize: '9px', color: '#e63946', marginTop: '4px' }}>⚠ {promoError}</p>}
+                    {promoError && <p style={{ fontSize: '9px', color: '#e63946', marginTop: '4px' }}><TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {promoError}</p>}
                   </div>
                 </div>
               </div>
@@ -599,7 +599,7 @@ export default function CheckoutPage() {
                   </div>
                   {pointsEarned > 0 && (
                     <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #2e2e2e' }}>
-                      <p style={{ fontSize: '11px', color: '#ffd60a', fontWeight: 600 }}>🪙 You&apos;ll earn {pointsEarned} coins!</p>
+                      <p style={{ fontSize: '11px', color: '#ffd60a', fontWeight: 600 }}><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> You&apos;ll earn {pointsEarned} coins!</p>
                     </div>
                   )}
                 </div>
@@ -623,11 +623,11 @@ export default function CheckoutPage() {
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="checkout-title" style={{ borderRadius: '19px 19px 0 0' }}>ORDER PLACED!</div>
             <div style={{ padding: '30px 20px', textAlign: 'center' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(6,214,160,0.15)', border: '1px solid rgba(6,214,160,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '20px', color: '#06d6a0' }}>✓</div>
+              <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(6,214,160,0.15)', border: '1px solid rgba(6,214,160,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '20px', color: '#06d6a0' }}><Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
               <p style={{ color: '#fff', fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
                 {isGCash ? 'Message @muragoods_ on Instagram to confirm!' : 'Pay cash when you pick up!'}
               </p>
-              <p style={{ fontSize: '11px', color: '#ffd60a', marginBottom: '20px' }}>🪙 Earn {pointsEarned} coins after delivery!</p>
+              <p style={{ fontSize: '11px', color: '#ffd60a', marginBottom: '20px' }}><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Earn {pointsEarned} coins after delivery!</p>
               {isGCash && (
                 <a href="https://www.instagram.com/muragoods_/" target="_blank" rel="noopener noreferrer" style={{ display: 'block', padding: '10px', background: '#555', borderRadius: '5px', color: '#fff', fontSize: '11px', fontWeight: 600, textDecoration: 'none', marginBottom: '10px' }}>
                   Open Instagram @muragoods_

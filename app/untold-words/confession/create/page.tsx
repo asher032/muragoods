@@ -3,15 +3,15 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
-
+import { Bird, ClipboardList, Cloud, Flower2, Handshake, Heart, HeartCrack, Sparkles } from 'lucide-react';
 const categories = [
-  { id: 'Confession', emoji: '💜', color: '#c896ff' },
-  { id: 'Appreciation', emoji: '💛', color: '#ffd60a' },
-  { id: 'Missing Someone', emoji: '💔', color: '#ff6496' },
-  { id: 'Friendship', emoji: '🤝', color: '#64ff96' },
-  { id: 'Crush', emoji: '🩷', color: '#ffb4da' },
-  { id: 'Moving On', emoji: '🦋', color: '#6496ff' },
-  { id: 'Random Thoughts', emoji: '💭', color: '#ffb464' },
+  { id: 'Confession', emoji: <Heart color={'#c896ff'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'#c896ff' },
+  { id: 'Appreciation', emoji: <Heart color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'#ffd60a' },
+  { id: 'Missing Someone', emoji: <HeartCrack color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'#ff6496' },
+  { id: 'Friendship', emoji: <Handshake className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'#64ff96' },
+  { id: 'Crush', emoji: <Flower2 color={'#ff4d8d'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'#ffb4da' },
+  { id: 'Moving On', emoji: <Bird className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'#6496ff' },
+  { id: 'Random Thoughts', emoji: <Cloud className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'#ffb464' },
 ];
 
 export default function CreateConfession() {
@@ -47,17 +47,17 @@ export default function CreateConfession() {
         <NavBar pageLabel="Confession Published" />
         <div style={{ minHeight: '90vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 20px' }}>
           <div style={{ textAlign: 'center', maxWidth: '480px', width: '100%' }}>
-            <div style={{ fontSize: '64px', marginBottom: '20px', animation: 'float 3s ease-in-out infinite' }}>💜</div>
+            <div style={{ fontSize: '64px', marginBottom: '20px', animation: 'float 3s ease-in-out infinite' }}><Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
             <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '20px', color: '#ffd60a', marginBottom: '8px' }}>Your confession is live!</h1>
             <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', marginBottom: '32px' }}>
               It&apos;s now part of the Untold Words gallery.
             </p>
             <>
               <div style={{ background: 'rgba(200,150,255,0.06)', border: '1px solid rgba(200,150,255,0.2)', borderRadius: '16px', padding: '24px', marginBottom: '16px', textAlign: 'center' }}>
-                <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: '#c896ff', marginBottom: '8px' }}>✨ Your confession is now live!</p>
+                <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: '#c896ff', marginBottom: '8px' }}><Sparkles color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Your confession is now live!</p>
                 <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', marginBottom: '16px' }}>Share it with anyone using the link below.</p>
                 <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '10px 14px', marginBottom: '12px', wordBreak: 'break-all', fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>{typeof window !== 'undefined' ? window.location.origin : ''}/untold-words/confession/{created}</div>
-                <button onClick={() => navigator.clipboard.writeText((typeof window !== 'undefined' ? window.location.origin : '') + '/untold-words/confession/' + created)} style={{ padding: '10px 24px', borderRadius: '10px', border: '1px solid rgba(200,150,255,0.4)', background: 'rgba(200,150,255,0.12)', color: '#c896ff', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}>📋 Copy Link</button>
+                <button onClick={() => navigator.clipboard.writeText((typeof window !== 'undefined' ? window.location.origin : '') + '/untold-words/confession/' + created)} style={{ padding: '10px 24px', borderRadius: '10px', border: '1px solid rgba(200,150,255,0.4)', background: 'rgba(200,150,255,0.12)', color: '#c896ff', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}><ClipboardList className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Copy Link</button>
               </div>
               <Link href="/untold-words" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'rgba(255,255,255,0.4)', textDecoration: 'none' }}>← Back to Untold Words</Link>
             </>
@@ -75,7 +75,7 @@ export default function CreateConfession() {
       <NavBar pageLabel="Anonymous Confession" />
       <div style={{ maxWidth: '600px', margin: '0 auto', padding: '80px 20px 100px' }}>
         <div style={{ textAlign: 'center', marginBottom: '32px', opacity: loaded ? 1 : 0, transform: loaded ? 'translateY(0)' : 'translateY(20px)', transition: 'all 0.6s ease' }}>
-          <span style={{ fontSize: '36px', display: 'block', marginBottom: '12px' }}>💜</span>
+          <span style={{ fontSize: '36px', display: 'block', marginBottom: '12px' }}><Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
           <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: '#c896ff', marginBottom: '8px' }}>Anonymous Confession</h1>
           <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, maxWidth: '400px', margin: '0 auto' }}>Short thoughts, feelings, or things you want to get off your chest.</p>
         </div>
@@ -109,7 +109,7 @@ export default function CreateConfession() {
 
           {/* Submit */}
           <button onClick={handleCreate} disabled={creating || !title.trim() || !content.trim()} style={{ padding: '16px', borderRadius: '14px', border: `2px solid ${selectedCat?.color || '#c896ff'}44`, background: creating ? `${selectedCat?.color || '#c896ff'}05` : `${selectedCat?.color || '#c896ff'}18`, color: selectedCat?.color || '#c896ff', fontFamily: 'var(--font-arcade)', fontSize: '12px', cursor: creating || !title.trim() || !content.trim() ? 'not-allowed' : 'pointer', opacity: !title.trim() || !content.trim() ? 0.4 : 1, transition: 'all 0.2s' }}>
-            {creating ? 'PUBLISHING...' : '💜 PUBLISH ANONYMOUSLY'}
+            {creating ? 'PUBLISHING...' : 'PUBLISH ANONYMOUSLY'}
           </button>
         </div>
 

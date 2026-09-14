@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useAuth } from '@/app/contexts/AuthContext';
 import MuraStreamLoader from '@/app/murastream/components/MuraStreamLoader';
+import { Check } from 'lucide-react';
 
 export default function AuthGate({ children }: { children: React.ReactNode }) {
   const { user, state, login, signup } = useAuth();
@@ -255,7 +256,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
                 background: 'rgba(6,214,160,0.1)', border: '1px solid rgba(6,214,160,0.2)',
                 fontFamily: '-apple-system, sans-serif', fontSize: '13px', color: '#06d6a0',
               }}>
-                ✓ {success}
+                <Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {success}
               </div>
             )}
 

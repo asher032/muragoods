@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { NavBar } from '@/app/components/NavBar';
 import { useNotifications } from '@/app/components/NotificationSystem';
-
+import { Bot, MessageCircle } from 'lucide-react';
 type Message = {
   sender: string;
   senderName: string;
@@ -26,14 +26,14 @@ type Ticket = {
 };
 
 const categories = [
-  { value: 'General', label: '💬 General Question' },
-  { value: 'Order', label: '📦 Order Issue' },
-  { value: 'Payment', label: '💳 Payment Problem' },
-  { value: 'Delivery', label: '🚚 Delivery Question' },
-  { value: 'Refund', label: '💰 Refund Request' },
-  { value: 'Account', label: '👤 Account Issue' },
-  { value: 'Feedback', label: '⭐ Feedback' },
-  { value: 'Bug', label: '🐛 Bug Report' },
+  { value: 'General', label: 'General Question' },
+  { value: 'Order', label: 'Order Issue' },
+  { value: 'Payment', label: 'Payment Problem' },
+  { value: 'Delivery', label: 'Delivery Question' },
+  { value: 'Refund', label: 'Refund Request' },
+  { value: 'Account', label: 'Account Issue' },
+  { value: 'Feedback', label: 'Feedback' },
+  { value: 'Bug', label: 'Bug Report' },
 ];
 
 export default function SupportPage() {
@@ -82,7 +82,7 @@ export default function SupportPage() {
               const lastAdminMsg = newMsgs[newMsgs.length - 1];
               addNotification(
                 'support',
-                `💬 Reply: ${ticket.subject}`,
+                `Reply: ${ticket.subject}`,
                 lastAdminMsg.text.slice(0, 120),
                 `/support`
               );
@@ -236,7 +236,7 @@ export default function SupportPage() {
           <div className="space-y-3">
             {tickets.length === 0 ? (
               <div className="border-2 border-[rgba(255,255,255,0.08)] bg-[var(--charcoal)] p-8 rounded-2xl text-center">
-                <p style={{ fontSize: '32px', marginBottom: '12px' }}>💬</p>
+                <p style={{ fontSize: '32px', marginBottom: '12px' }}><MessageCircle className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
                 <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: 'var(--mario-text)' }}>No support tickets yet</p>
                 <p style={{ fontSize: '12px', color: 'var(--mario-text-muted)', marginTop: '6px' }}>Need help? Create a new ticket!</p>
               </div>
@@ -295,7 +295,7 @@ export default function SupportPage() {
                   alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
                 }}>
                   {msg.isAutoReply && (
-                    <div style={{ fontSize: '8px', color: 'var(--mario-blue)', marginBottom: '3px', fontFamily: 'var(--font-arcade)' }}>🤖 Auto-Reply</div>
+                    <div style={{ fontSize: '8px', color: 'var(--mario-blue)', marginBottom: '3px', fontFamily: 'var(--font-arcade)' }}><Bot className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Auto-Reply</div>
                   )}
                   <div style={{
                     padding: '10px 14px',
@@ -304,7 +304,7 @@ export default function SupportPage() {
                     border: msg.sender === 'user' ? '1px solid rgba(255,214,10,0.2)' : msg.isAutoReply ? '1px solid rgba(72,149,239,0.15)' : '1px solid rgba(255,255,255,0.08)',
                   }}>
                     <p style={{ fontSize: '8px', color: 'var(--mario-text-muted)', marginBottom: '4px', fontFamily: 'var(--font-arcade)' }}>
-                      {msg.sender === 'user' ? '👤 ' : '💬 '}{msg.senderName}
+                      {msg.sender === 'user' ? '' : ''}{msg.senderName}
                     </p>
                     <p style={{ fontSize: '13px', color: 'var(--mario-text)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{msg.text}</p>
                     <p style={{ fontSize: '8px', color: 'var(--pewter)', marginTop: '4px', textAlign: 'right' }}>{formatTime(msg.timestamp)}</p>

@@ -7,7 +7,7 @@ import { NavBar } from '@/app/components/NavBar';
 import dynamic from 'next/dynamic';
 import { useScrollPosition, useScrollReveal, useMousePosition, useElementMouse, useCountUp } from '@/app/components/useScrollEffects';
 import { Icon } from '@/app/components/Icon';
-
+import { BookOpen, Clapperboard, Cloudy, Coins, Gamepad2, Heart, Mail, Pizza, Sparkles, Star } from 'lucide-react';
 const LightBloom = dynamic(() => import('@/app/components/ui/LightBloom'), { ssr: false });
 const MaskedHeading = dynamic(() => import('@/app/components/ui/MaskedHeading'), { ssr: false });
 const AnimatedButton = dynamic(() => import('@/app/components/ui/AnimatedButton'), { ssr: false });
@@ -152,8 +152,7 @@ function MarqueeBanner() {
     { text: 'PLAY GAMES', icon: <Icon name="game" size={12} /> },
     { text: 'SEND LETTERS', icon: <Icon name="envelope" size={12} /> },
     { text: 'WATCH MOVIES', icon: <Icon name="stream" size={12} /> },
-    { text: 'COFFEE JELLY', icon: <Icon name="food" size={12} /> },
-    { text: 'COOKIES', icon: <Icon name="food" size={12} /> },
+    { text: 'CHEESY BREAD', icon: <Icon name="food" size={12} /> },
     { text: 'RATED 4.9', icon: <Icon name="star" size={12} /> },
     { text: 'FREE DELIVERY', icon: <Icon name="box" size={12} /> },
   ];
@@ -200,8 +199,7 @@ export default function Home() {
   const featuredProducts = [
     { name: 'Musubi', image: '/images/product-musubi.png', price: '₱40', desc: 'Regular / With Egg / With Flakes', color: '#06d6a0' },
     { name: 'Mini Churros', image: '/images/product-churros.png', price: '₱70', desc: 'Cinnamon Sugar / Option 2', color: '#ffd60a' },
-    { name: 'Coffee Jelly', image: '/images/product-coffee-jelly.png', price: '₱15', desc: 'Classic / Premium', color: '#4895ef' },
-    { name: 'Cookies', image: '/images/product-cookies.png', price: '₱25', desc: 'Regular / Cookies & Cream', color: '#e63946' },
+    { name: 'Milky Cheesy Bread', image: '/images/product-cheesy-bread.svg', price: '₱35', desc: 'Regular / Large / Box of 4', color: '#fb8500' },
   ];
 
   const features = [
@@ -240,10 +238,10 @@ export default function Home() {
 
         {/* Parallax floating elements */}
         <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-          <div className="absolute top-20 left-[10%] text-4xl opacity-20 float-anim" style={{ animationDelay: '0s' }}>🪙</div>
-          <div className="absolute top-32 right-[15%] text-3xl opacity-15 float-anim" style={{ animationDelay: '1s' }}>⭐</div>
-          <div className="absolute bottom-40 left-[20%] text-2xl opacity-10 float-anim" style={{ animationDelay: '2s' }}>🍄</div>
-          <div className="absolute top-[60%] right-[8%] text-3xl opacity-15 float-anim" style={{ animationDelay: '0.5s' }}>✨</div>
+          <div className="absolute top-20 left-[10%] text-4xl opacity-20 float-anim" style={{ animationDelay: '0s' }}><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
+          <div className="absolute top-32 right-[15%] text-3xl opacity-15 float-anim" style={{ animationDelay: '1s' }}><Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
+          <div className="absolute bottom-40 left-[20%] text-2xl opacity-10 float-anim" style={{ animationDelay: '2s' }}><Cloudy className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
+          <div className="absolute top-[60%] right-[8%] text-3xl opacity-15 float-anim" style={{ animationDelay: '0.5s' }}><Sparkles color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
         </div>
 
         {/* Hero Content */}
@@ -257,7 +255,7 @@ export default function Home() {
             {/* Coin badge */}
             <Reveal delay={0.1}>
               <div className="mb-6 inline-flex items-center gap-2 mario-badge mario-badge-gold">
-                <span className="coin-float">🪙</span>
+                <span className="coin-float"><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
                 <span>EARN 0.5 COINS PER PESO SPENT!</span>
               </div>
             </Reveal>
@@ -301,7 +299,7 @@ export default function Home() {
                     className="px-10 py-3 font-arcade text-sm"
                     style={{ background: 'rgba(6,214,160,0.15)', borderColor: 'rgba(6,214,160,0.3)', color: '#06d6a0' }}
                   >
-                    🍕 ORDER NOW
+                    <Pizza className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> ORDER NOW
                   </AnimatedButton>
                 </Link>
                 <Link href="/murastream">
@@ -309,7 +307,7 @@ export default function Home() {
                     className="px-10 py-3 font-arcade text-sm"
                     style={{ background: 'rgba(230,57,70,0.15)', borderColor: 'rgba(230,57,70,0.3)', color: '#e63946' }}
                   >
-                    🎬 MOVIES
+                    <Clapperboard className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> MOVIES
                   </AnimatedButton>
                 </Link>
               </div>
@@ -375,9 +373,9 @@ export default function Home() {
             <Reveal delay={0.1}>
               <SpotlightCard href="/menu" className="highlight-card block" bgStyle={{ background: 'linear-gradient(135deg, rgba(6,214,160,0.12), rgba(255,214,10,0.08))' }}>
                 <div className="highlight-content">
-                  <span className="text-5xl mb-4 float-anim block">🍕</span>
+                  <span className="text-5xl mb-4 float-anim block"><Pizza className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
                   <h3 className="font-arcade text-sm text-mario-yellow mb-2">ORDER NOW</h3>
-                  <p className="text-xs text-mario-text-muted mb-3">Browse our full food menu — Musubi, Churros, Coffee Jelly, Cookies & more!</p>
+                  <p className="text-xs text-mario-text-muted mb-3">Browse our full food menu — Musubi, Churros, Milky Cheesy Bread & more!</p>
                   <span className="font-arcade text-[9px] text-emerald-400" style={{ letterSpacing: '0.1em' }}>EXPLORE →</span>
                 </div>
               </SpotlightCard>
@@ -385,7 +383,7 @@ export default function Home() {
             <Reveal delay={0.2}>
               <SpotlightCard href="/untold-words" className="highlight-card block" bgStyle={{ background: 'linear-gradient(135deg, rgba(123,47,247,0.12), rgba(255,100,150,0.08))' }}>
                 <div className="highlight-content">
-                  <span className="text-5xl mb-4 float-anim block">✉️</span>
+                  <span className="text-5xl mb-4 float-anim block"><Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
                   <h3 className="font-arcade text-sm text-mario-yellow mb-2">UNTOLD WORDS</h3>
                   <p className="text-xs text-mario-text-muted mb-3">Some things are easier to say through a letter, a confession, or a song.</p>
                   <span className="font-arcade text-[9px]" style={{ color: '#c896ff', letterSpacing: '0.1em' }}>EXPLORE NOW →</span>
@@ -395,7 +393,7 @@ export default function Home() {
             <Reveal delay={0.3}>
               <SpotlightCard href="/murastream" className="highlight-card block" bgStyle={{ background: 'linear-gradient(135deg, rgba(230,57,70,0.12), rgba(255,100,150,0.08))' }}>
                 <div className="highlight-content">
-                  <span className="text-5xl mb-4 float-anim block">🎬</span>
+                  <span className="text-5xl mb-4 float-anim block"><Clapperboard className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
                   <h3 className="font-arcade text-sm text-mario-yellow mb-2">MURASTREAM</h3>
                   <p className="text-xs text-mario-text-muted mb-3">Movies • TV • K-Dramas — Stream, browse, and build your watchlist.</p>
                   <span className="font-arcade text-[9px]" style={{ color: '#e63946', letterSpacing: '0.1em' }}>WATCH NOW →</span>
@@ -502,7 +500,7 @@ export default function Home() {
 
           <div className="mario-container relative z-10 text-center">
             <Reveal direction="scale">
-              <div className="text-6xl sm:text-8xl mb-6">🎮</div>
+              <div className="text-6xl sm:text-8xl mb-6"><Gamepad2 color={'#c896ff'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
             </Reveal>
             <Reveal delay={0.1}>
               <h2 className="mario-title text-xl sm:text-3xl mb-4 neon-text">
@@ -522,7 +520,7 @@ export default function Home() {
                     className="px-10 py-4 font-arcade text-sm"
                     style={{ background: 'rgba(6,214,160,0.2)', borderColor: 'rgba(6,214,160,0.4)', color: '#06d6a0' }}
                   >
-                    🍕 ORDER NOW
+                    <Pizza className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> ORDER NOW
                   </AnimatedButton>
                 </Link>
                 <Link href="/entertainment">
@@ -530,7 +528,7 @@ export default function Home() {
                     className="px-10 py-4 font-arcade text-sm"
                     style={{ background: 'rgba(72,149,239,0.2)', borderColor: 'rgba(72,149,239,0.4)', color: '#4895ef' }}
                   >
-                    🎮 PLAY GAMES
+                    <Gamepad2 color={'#c896ff'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> PLAY GAMES
                   </AnimatedButton>
                 </Link>
                 <Link href="/untold-words">
@@ -538,7 +536,7 @@ export default function Home() {
                     className="px-10 py-4 font-arcade text-sm"
                     style={{ background: 'rgba(200,150,255,0.2)', borderColor: 'rgba(200,150,255,0.4)', color: '#c896ff' }}
                   >
-                    💌 UNTOLD WORDS
+                    <Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> UNTOLD WORDS
                   </AnimatedButton>
                 </Link>
               </div>
@@ -557,7 +555,7 @@ export default function Home() {
         </div>
         <div className="mario-container relative z-10 text-center">
           <Reveal direction="scale">
-            <div className="text-6xl sm:text-8xl mb-6">🎬</div>
+            <div className="text-6xl sm:text-8xl mb-6"><Clapperboard className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
           </Reveal>            <Reveal delay={0.1}>
               <h2 className="mario-title text-xl sm:text-3xl mb-4" style={{ color: '#E50914' }}>
                 MuraStream
@@ -578,7 +576,7 @@ export default function Home() {
                   className="px-10 py-4 font-arcade text-sm"
                   style={{ background: 'rgba(229,9,20,0.2)', borderColor: 'rgba(229,9,20,0.4)', color: '#E50914' }}
                 >
-                  🎬 EXPLORE MOVIES →
+                  <Clapperboard className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> EXPLORE MOVIES →
                 </AnimatedButton>
               </Link>
               <Link href="/murastream/library">
@@ -586,7 +584,7 @@ export default function Home() {
                   className="px-10 py-4 font-arcade text-sm"
                   style={{ background: 'rgba(255,214,10,0.15)', borderColor: 'rgba(255,214,10,0.3)', color: '#ffd60a' }}
                 >
-                  📚 MY LIBRARY
+                  <BookOpen className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> MY LIBRARY
                 </AnimatedButton>
               </Link>
             </div>
@@ -603,7 +601,7 @@ export default function Home() {
             © 2026 Muragoods — World 1-1 Food
           </p>
           <p className="text-[10px] text-mario-text-muted/50">
-            Made with 💛 for hungry adventurers
+            Made with <Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> for hungry adventurers
           </p>
         </Reveal>
       </footer>

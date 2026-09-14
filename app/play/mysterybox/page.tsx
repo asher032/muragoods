@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useCoins } from '@/app/hooks/useCoins';
 import { Icon } from '@/app/components/Icon';
-
+import { Coins, Flame, Gift } from 'lucide-react';
 const BOX_COST = 10;
 
 interface Prize {
@@ -60,8 +60,8 @@ const LEGENDARY_TIERS = [
 
 const rarityLabels: Record<string, string> = {
   common: 'COMMON',
-  rare: '✦ RARE',
-  legendary: '★ LEGENDARY',
+  rare: 'RARE',
+  legendary: 'LEGENDARY',
 };
 
 const rarityColors: Record<string, string> = {
@@ -230,11 +230,11 @@ export default function MysteryBoxPage() {
               className="text-2xl sm:text-3xl text-[var(--cream)] uppercase"
               style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}
             >
-              🎁 Mystery Box
+              <Gift color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Mystery Box
             </h1>
             <p className="mt-3 text-base text-[var(--gold)]">Spend 10 coins to reveal a random reward!</p>
             <div className="mt-3 inline-flex items-center gap-2 border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.1)] px-5 py-2 rounded-xl">
-              <span className="coin-float">🪙</span>
+              <span className="coin-float"><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
               <span className="text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '12px' }}>{coins}</span>
               <span className="text-[var(--pewter)] text-sm">coins</span>
             </div>
@@ -317,7 +317,7 @@ export default function MysteryBoxPage() {
                 className={`deco-btn deco-btn-lg rounded-2xl ${isOpening ? 'opacity-60 cursor-not-allowed' : coins < BOX_COST ? 'opacity-40 cursor-not-allowed' : 'deco-btn-gold pulse-glow'}`}
                 style={{ fontFamily: 'var(--font-arcade)', minWidth: '220px' }}
               >
-                {isOpening ? '🌀 OPENING...' : coins < BOX_COST ? 'NOT ENOUGH COINS' : `🎁 OPEN (🪙 ${BOX_COST})`}
+                {isOpening ? 'OPENING...' : coins < BOX_COST ? 'NOT ENOUGH COINS' : `<Gift color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> OPEN (<Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> ${BOX_COST})`}
               </button>
             ) : (
               <button
@@ -325,7 +325,7 @@ export default function MysteryBoxPage() {
                 className="deco-btn deco-btn-gold deco-btn-lg rounded-2xl"
                 style={{ fontFamily: 'var(--font-arcade)', minWidth: '220px' }}
               >
-                🎁 OPEN AGAIN (🪙 {BOX_COST})
+                <Gift color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> OPEN AGAIN (<Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {BOX_COST})
               </button>
             )}
           </div>
@@ -363,7 +363,7 @@ export default function MysteryBoxPage() {
                 )}
                 {(revealPrize.type === 'coins' || revealPrize.type === 'jackpot') && (
                   <p className="text-sm text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>
-                    +{revealPrize.value} coins added! 🪙
+                    +{revealPrize.value} coins added! <Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />
                   </p>
                 )}
               </div>
@@ -401,7 +401,7 @@ export default function MysteryBoxPage() {
               { label: 'Spent', value: `${totalSpent}`, icon: <Icon name="coin" size={20} /> },
               { label: 'Balance', value: String(coins), icon: <Icon name="coin" size={16} /> },
               { label: 'Legendaries', value: String(legendaryCount), icon: <Icon name="star" size={16} /> },
-              { label: 'Best Streak', value: String(maxStreak), icon: '🔥' },
+              { label: 'Best Streak', value: String(maxStreak), icon: <Flame color={'#fb8500'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> },
             ].map(stat => (
               <div key={stat.label} className="power-card p-4 text-center rounded-xl">
                 <span className="text-lg">{stat.icon}</span>

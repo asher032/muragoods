@@ -117,7 +117,7 @@ export default function DramaBrowsePage() {
   const hero = items[0] || null;
 
   return (
-    <div className="ms-page-enter" style={{ padding: '28px 32px', maxWidth: 1200 }}>
+    <div className="ms-page-enter ms-page-pad">
       <h1 style={{
         fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
         fontSize: 28, fontWeight: 800, color: 'var(--ms-text-strong)', margin: '0 0 6px',
@@ -205,7 +205,7 @@ export default function DramaBrowsePage() {
                   {hero.title}
                 </h2>
                 <div style={{ fontSize: 13, color: '#D0D0D0', marginBottom: 10 }}>
-                  {hero.year}{hero.voteAverage ? ` · ★ ${hero.voteAverage.toFixed(1)}` : ''}
+                  {hero.year}{hero.voteAverage ? `· ${hero.voteAverage.toFixed(1)}` : ''}
                 </div>
                 {hero.overview && (
                   <p style={{
@@ -237,7 +237,11 @@ export default function DramaBrowsePage() {
           )}
 
           {/* Paginated grid */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
+            gap: '36px 28px',
+          }}>
             {items.map(item => <MuraStreamCard key={item.id} item={item} />)}
           </div>
 

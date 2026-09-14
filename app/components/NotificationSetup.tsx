@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { BellRing } from 'lucide-react';
 
 const VAPID_PUBLIC_KEY = 'BF_2cqhc2nDPiUxapJmKZ7Ehj1r1ZABKScFwPpFgNt7BjC-FE332ikV9qgwgy8bx5l7wz7ADg4xMsbyVKAgP_w8';
 
@@ -80,11 +81,9 @@ export function NotificationSetup() {
   const [supported, setSupported] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin] = useState(false);
 
   useEffect(() => {
-    // Only show for admin users
-    setIsAdmin(isAdminUser());
 
     // Register service worker immediately
     if ('serviceWorker' in navigator) {
@@ -107,10 +106,14 @@ export function NotificationSetup() {
           });
         });
       }
-      // Show prompt after 5 seconds if admin and not yet decided
-      if (Notification.permission === 'default' && isAdminUser()) {
-        const timer = setTimeout(() => setShowPrompt(true), 5000);
-        return () => clearTimeout(timer);
+      // Show the opt-in prompt to signed-in users after 5 seconds
+      // (order status changes push to customers, new orders push to admins)
+      if (Notification.permission === 'default' && isAdminUser() === false) {
+        const signedIn = !!localStorage.getItem('user');
+        if (signedIn) {
+          const timer = setTimeout(() => setShowPrompt(true), 5000);
+          return () => clearTimeout(timer);
+        }
       }
     }
   }, []);
@@ -134,7 +137,7 @@ export function NotificationSetup() {
         setIsSubscribed(subscribed);
 
         // Send a test notification
-        new Notification('🎉 Notifications Enabled!', {
+        new Notification('Notifications Enabled!', {
           body: 'You\'ll now receive real-time order updates — even when the browser is closed!',
           icon: '/images/muragoods-logo.png',
         });
@@ -171,19 +174,19 @@ export function NotificationSetup() {
     return () => window.removeEventListener('request-notification-permission', handler);
   }, [isSubscribed]);
 
-  if (!supported || !showPrompt || !isAdmin) return null;
+  if (!supported || !showPrompt) return null;
 
   return (
     <div className="fixed bottom-20 right-4 z-40 max-w-xs">
       <div className="border border-[var(--gold)] bg-[var(--charcoal)] p-3 rounded-lg shadow-[0_0_12px_rgba(212,175,55,0.15)]">
         <div className="flex items-center gap-2">
-          <span className="text-lg">🔔</span>
+          <BellRing size={18} color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />
           <div className="flex-1">
             <p className="text-[9px] text-[var(--gold-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>
               Order Alerts
             </p>
             <p className="text-[10px] text-[var(--cream-muted)] mt-0.5">
-              Get notified when new orders come in.
+              Get notified when your order status changes.
             </p>
           </div>
         </div>

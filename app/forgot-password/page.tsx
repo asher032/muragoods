@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-
+import { Check, Key, TriangleAlert } from 'lucide-react';
 type Step = 'email' | 'verify' | 'reset';
 
 export default function ForgotPasswordPage() {
@@ -99,7 +99,7 @@ export default function ForgotPasswordPage() {
         <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-8">
           <div className="flex flex-col items-center gap-3 mb-8">
             <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(255,214,10,0.15)', border: '2px solid rgba(255,214,10,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>
-              🔑
+              <Key color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />
             </div>
             <div className="text-center">
               <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>
@@ -120,8 +120,8 @@ export default function ForgotPasswordPage() {
                   <span className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2 block" style={{ fontFamily: 'var(--font-arcade)' }}>Email Address</span>
                   <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="deco-input" placeholder="your@email.com" />
                 </label>
-                {error && <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-3 text-[9px] text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)' }}>⚠ {error}</div>}
-                {success && <div className="border-2 border-[var(--emerald)] bg-[rgba(6,214,160,0.1)] p-3 text-[9px] text-[var(--emerald)]" style={{ fontFamily: 'var(--font-arcade)' }}>✓ {success}</div>}
+                {error && <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-3 text-[9px] text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)' }}><TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {error}</div>}
+                {success && <div className="border-2 border-[var(--emerald)] bg-[rgba(6,214,160,0.1)] p-3 text-[9px] text-[var(--emerald)]" style={{ fontFamily: 'var(--font-arcade)' }}><Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {success}</div>}
                 <button type="submit" disabled={loading} className="deco-btn deco-btn-gold w-full deco-btn-lg mt-4">
                   {loading ? 'GENERATING...' : 'GET CODE'}
                 </button>
@@ -139,8 +139,8 @@ export default function ForgotPasswordPage() {
                   <span className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2 block" style={{ fontFamily: 'var(--font-arcade)' }}>Verification Code</span>
                   <input type="text" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} className="deco-input" placeholder="000000" maxLength={6} style={{ textAlign: 'center', fontSize: '24px', letterSpacing: '8px', fontFamily: 'var(--font-arcade)' }} />
                 </label>
-                {error && <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-3 text-[9px] text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)' }}>⚠ {error}</div>}
-                {success && <div className="border-2 border-[var(--emerald)] bg-[rgba(6,214,160,0.1)] p-3 text-[9px] text-[var(--emerald)]" style={{ fontFamily: 'var(--font-arcade)' }}>✓ {success}</div>}
+                {error && <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-3 text-[9px] text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)' }}><TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {error}</div>}
+                {success && <div className="border-2 border-[var(--emerald)] bg-[rgba(6,214,160,0.1)] p-3 text-[9px] text-[var(--emerald)]" style={{ fontFamily: 'var(--font-arcade)' }}><Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {success}</div>}
                 <button type="submit" disabled={loading} className="deco-btn deco-btn-gold w-full deco-btn-lg mt-4">
                   {loading ? 'VERIFYING...' : 'VERIFY CODE'}
                 </button>
@@ -161,8 +161,8 @@ export default function ForgotPasswordPage() {
                   <span className="text-[9px] text-[var(--gold)] uppercase tracking-[0.15em] mb-2 block" style={{ fontFamily: 'var(--font-arcade)' }}>Confirm Password</span>
                   <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="deco-input" placeholder="••••••••" />
                 </label>
-                {error && <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-3 text-[9px] text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)' }}>⚠ {error}</div>}
-                {success && <div className="border-2 border-[var(--emerald)] bg-[rgba(6,214,160,0.1)] p-3 text-[9px] text-[var(--emerald)]" style={{ fontFamily: 'var(--font-arcade)' }}>✓ {success}</div>}
+                {error && <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-3 text-[9px] text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)' }}><TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {error}</div>}
+                {success && <div className="border-2 border-[var(--emerald)] bg-[rgba(6,214,160,0.1)] p-3 text-[9px] text-[var(--emerald)]" style={{ fontFamily: 'var(--font-arcade)' }}><Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {success}</div>}
                 <button type="submit" disabled={loading} className="deco-btn deco-btn-gold w-full deco-btn-lg mt-4">
                   {loading ? 'RESETTING...' : 'RESET PASSWORD'}
                 </button>

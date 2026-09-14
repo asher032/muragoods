@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { NavBar } from '@/app/components/NavBar';
 import { CoinBalance } from '@/app/components/CoinBalance';
 import { Icon } from '@/app/components/Icon';
-
+import { BookOpen, Circle, Pencil, Sparkles, Store, Users } from 'lucide-react';
 export default function HubPage() {
   const [user, setUser] = useState<{ name?: string; email?: string } | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -47,9 +47,9 @@ export default function HubPage() {
       href: '/archive',
       items: [
         { label: 'Open Archive', href: '/unsent', icon: <Icon name="envelope" size={24} /> },
-        { label: 'Submit a Letter', href: '/unsent/submit', icon: '✏️' },
-        { label: 'My Submissions', href: '/unsent/mine', icon: '📚' },
-        { label: 'Coming Soon...', href: '#', icon: '🔜' },
+        { label: 'Submit a Letter', href: '/unsent/submit', icon: <Pencil className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> },
+        { label: 'My Submissions', href: '/unsent/mine', icon: <BookOpen className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> },
+        { label: 'Coming Soon...', href: '#', icon: <Circle className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> },
       ],
     },
     {
@@ -64,7 +64,22 @@ export default function HubPage() {
         { label: 'Full Menu', href: '/menu', icon: <Icon name="food" size={24} /> },
         { label: 'Favorites', href: '/favorites', icon: <Icon name="heart" size={16} color="#e63946" /> },
         { label: 'Cart', href: '/checkout', icon: <Icon name="cart" size={16} /> },
-        { label: 'Rewards Shop', href: '/rewards', icon: '🏪' },
+        { label: 'Rewards Shop', href: '/rewards', icon: <Store className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> },
+      ],
+    },
+    {
+      title: 'MuraStream',
+      icon: <Icon name="stream" size={24} />,
+      description: 'Stream movies, TV shows and K-Dramas — free, right in your browser.',
+      color: '#e63946',
+      bgColor: 'rgba(230,57,70,0.1)',
+      borderColor: 'rgba(230,57,70,0.2)',
+      href: '/murastream',
+      items: [
+        { label: 'Browse MuraStream', href: '/murastream', icon: <Icon name="stream" size={24} /> },
+        { label: 'My Library', href: '/murastream/library', icon: <Icon name="box" size={16} /> },
+        { label: 'Browse by Genre', href: '/murastream/genres', icon: <Sparkles className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> },
+        { label: 'Watch Party', href: '/murastream/watch?type=movie&id=27205', icon: <Users className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> },
       ],
     },
     {
@@ -77,7 +92,7 @@ export default function HubPage() {
       href: '/points',
       items: [
         { label: 'My Points', href: '/points', icon: <Icon name="coin" size={24} /> },
-        { label: 'Rewards Shop', href: '/rewards', icon: '🏪' },
+        { label: 'Rewards Shop', href: '/rewards', icon: <Store className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> },
         { label: 'Leaderboard', href: '/leaderboard', icon: <Icon name="trophy" size={16} /> },
         { label: 'Play Games', href: '/entertainment', icon: <Icon name="game" size={16} /> },
       ],
@@ -238,11 +253,11 @@ export default function HubPage() {
           gap: '8px',
         }}>
           {[
-            { href: '/', label: '🏠 Home' },
-            { href: '/terms', label: '📜 Terms' },
-            { href: '/play/mysterybox', label: '🎁 Mystery Box' },
-            { href: '/my-codes', label: '🎟️ My Codes' },
-            { href: '/play/trivia', label: '🧠 Trivia' },
+            { href: '/', label: 'Home' },
+            { href: '/terms', label: 'Terms' },
+            { href: '/play/mysterybox', label: 'Mystery Box' },
+            { href: '/my-codes', label: 'My Codes' },
+            { href: '/play/trivia', label: 'Trivia' },
           ].map(link => (
             <Link key={link.href} href={link.href} className="mario-btn mario-btn-sm" style={{ fontSize: '9px' }}>
               {link.label}

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Flag, X } from 'lucide-react';
 
 type ProviderStat = {
   id: string;
@@ -151,7 +152,7 @@ export default function AdminSourceReportsPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: 18, color: '#E5E5E5', margin: '0 0 6px' }}>
-            ⚑ SOURCE REPORTS
+            <Flag className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> SOURCE REPORTS
           </h1>
           <p style={{ fontSize: 13, color: '#888', margin: 0 }}>
             Community flags from the MuraStream player (last 30 days). Disable a provider to drop it globally.
@@ -202,7 +203,7 @@ export default function AdminSourceReportsPage() {
                 </h3>
                 <button onClick={() => setWeekDetail(null)} style={{
                   background: 'none', border: 'none', color: '#666', fontSize: 16, cursor: 'pointer', padding: '0 4px',
-                }} title="Close">✕</button>
+                }} title="Close"><X className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></button>
               </div>
               {weekDetail.reports.length === 0 ? (
                 <p style={{ color: '#555', fontSize: 12 }}>No reports in this week.</p>
@@ -281,7 +282,7 @@ export default function AdminSourceReportsPage() {
             RECENT REPORTS
           </h2>
           {recent.length === 0 ? (
-            <p style={{ color: '#555', fontSize: 13 }}>No reports yet — the ⚑ button in the player feeds this table.</p>
+            <p style={{ color: '#555', fontSize: 13 }}>No reports yet — the <Flag className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> button in the player feeds this table.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {recent.map((r, i) => (

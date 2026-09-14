@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useMuraStreamStore, type MuraStreamSettings } from '../hooks/useMuraStreamStore';
+import { Check } from 'lucide-react';
 
 function Toggle({ enabled, onChange }: { enabled: boolean; onChange: () => void }) {
   return (
@@ -49,7 +50,7 @@ export default function MuraStreamSettingsPage() {
         </h1>
         {saved && (
           <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px', color: '#06d6a0', background: 'rgba(6,214,160,0.1)', padding: '4px 10px', borderRadius: '4px' }}>
-            ✓ Saved
+            <Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Saved
           </span>
         )}
       </div>

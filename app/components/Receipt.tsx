@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
-
+import { Cloudy, Coins, Printer, Star } from 'lucide-react';
 interface ReceiptItem {
   name: string;
   variant: string;
@@ -95,12 +95,12 @@ export default function Receipt({
 
         {/* Store Header */}
         <div className="receipt-section receipt-header">
-          <div className="receipt-stars">★ ★ ★ ★ ★ ★ ★ ★ ★ ★</div>
+          <div className="receipt-stars"> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
           <h1 className="receipt-store-name">{storeName}</h1>
           <p className="receipt-store-tagline">{storeTagline}</p>
           <p className="receipt-store-info">{storeAddress}</p>
           <p className="receipt-store-info">{storeContact}</p>
-          <div className="receipt-stars">★ ★ ★ ★ ★ ★ ★ ★ ★ ★</div>
+          <div className="receipt-stars"> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
         </div>
 
         <p className="receipt-divider">{divider}</p>
@@ -232,16 +232,16 @@ export default function Receipt({
           <div className="receipt-section receipt-points">
             <div className="receipt-row">
               <span className="receipt-bold">COINS EARNED:</span>
-              <span className="receipt-bold">+{pointsEarned} 🪙</span>
+              <span className="receipt-bold">+{pointsEarned} <Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
             </div>
           </div>
         )}
 
         {/* Footer */}
         <div className="receipt-section receipt-footer">
-          <div className="receipt-stars">★ ★ ★ ★ ★ ★ ★ ★ ★ ★</div>
+          <div className="receipt-stars"> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
           <p className="receipt-thankyou">THANK YOU FOR YOUR ORDER!</p>
-          <p className="receipt-footer-info">Power up your day! 🍄</p>
+          <p className="receipt-footer-info">Power up your day! <Cloudy className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
           <p className="receipt-footer-info">Questions? DM @muragoods_</p>
           <div className="receipt-barcode">
             <div className="barcode-lines">
@@ -251,7 +251,7 @@ export default function Receipt({
             </div>
             <p className="barcode-text">{orderId.slice(-12).toUpperCase()}</p>
           </div>
-          <div className="receipt-stars">★ ★ ★ ★ ★ ★ ★ ★ ★ ★</div>
+          <div className="receipt-stars"> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
         </div>
 
         {/* Bottom tear effect */}
@@ -261,7 +261,7 @@ export default function Receipt({
       {/* Print Button */}
       <div className="receipt-actions">
         <button onClick={handlePrint} className="receipt-print-btn">
-          🖨️ Print Receipt
+          <Printer className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Print Receipt
         </button>
       </div>
 

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import MuraStreamCard from '../components/MuraStreamCard';
 import MuraStreamLoader from '../components/MuraStreamLoader';
 import type { MediaItem } from '../types';
+import { X } from 'lucide-react';
 
 type SearchState = 'idle' | 'loading' | 'success' | 'error' | 'no-results';
 
@@ -93,7 +94,7 @@ export default function MuraStreamSearchPage() {
   }, []);
 
   return (
-    <div style={{ padding: '24px 28px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="ms-page-pad">
       <h1 style={{
         fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
         fontSize: '24px', fontWeight: 700, color: 'var(--ms-text-strong)', margin: '0 0 20px',
@@ -132,7 +133,7 @@ export default function MuraStreamSearchPage() {
               background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%',
               width: '24px', height: '24px', cursor: 'pointer', display: 'flex',
               alignItems: 'center', justifyContent: 'center', color: 'var(--ms-text-dim)', fontSize: '14px',
-            }}>✕</button>
+            }}><X className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></button>
         )}
       </div>
 

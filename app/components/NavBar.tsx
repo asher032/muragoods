@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
 import { NotificationBell } from '@/app/components/NotificationBell';
 import { Sidebar } from '@/app/components/Sidebar';
+import { ShoppingCart } from 'lucide-react';
 
 
 interface NavBarProps {
@@ -121,7 +122,7 @@ export function NavBar({ pageLabel, cartCount }: NavBarProps) {
                 border: '1px solid rgba(230,57,70,0.3)',
                 borderRadius: '8px',
               }}>
-                🛒 {cartCount}
+                <ShoppingCart className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {cartCount}
               </Link>
             )}
           </div>

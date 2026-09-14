@@ -38,14 +38,14 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
       className="page-transition-wrapper"
       style={{
         opacity: state === 'exiting' ? 0 : 1,
-        transform: state === 'exiting'
-          ? 'translateY(8px) scale(0.99)'
-          : state === 'entering'
-          ? 'translateY(0) scale(1)'
-          : 'translateY(0) scale(1)',
-        filter: state === 'exiting' ? 'blur(4px)' : 'blur(0px)',
-        transition: 'opacity 0.3s cubic-bezier(0.4,0,0.2,1), transform 0.4s cubic-bezier(0.4,0,0.2,1), filter 0.3s cubic-bezier(0.4,0,0.2,1)',
-        willChange: 'opacity, transform, filter',
+        // Transform/filter only while actually animating: in the idle state
+        // they would create a permanent stacking context, which traps
+        // position:fixed children (chat sidebar) and breaks their viewport
+        // positioning.
+        transform: state === 'idle' ? undefined : state === 'exiting' ? 'translateY(8px) scale(0.99)' : 'translateY(0) scale(1)',
+        filter: state === 'exiting' ? 'blur(4px)' : undefined,
+        transition: state === 'idle' ? undefined : 'opacity 0.3s cubic-bezier(0.4,0,0.2,1), transform 0.4s cubic-bezier(0.4,0,0.2,1), filter 0.3s cubic-bezier(0.4,0,0.2,1)',
+        willChange: state === 'idle' ? undefined : 'opacity, transform, filter',
       }}
     >
       {displayChildren}

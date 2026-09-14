@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { VAULT_ITEMS, type VaultItem } from '../data/vault';
 import { PopcornIcon } from '../components/MuraStreamIcons';
+import { Star } from 'lucide-react';
 
 function VaultCard({ item, posterPath }: { item: VaultItem; posterPath?: string | null }) {
   const [broken, setBroken] = useState(false);
@@ -46,7 +47,7 @@ function VaultCard({ item, posterPath }: { item: VaultItem; posterPath?: string 
         {item.title}
       </div>
       <div style={{ fontSize: 12, color: 'var(--ms-text-muted)', marginBottom: 6 }}>
-        {item.year} · {item.runtime} · ★ {item.rating.toFixed(1)}
+        {item.year} · {item.runtime} · <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {item.rating.toFixed(1)}
       </div>
       <div style={{
         fontSize: 12, color: 'var(--ms-text-muted)', display: '-webkit-box', WebkitLineClamp: 2,
@@ -83,7 +84,7 @@ export default function MuraStreamVaultPage() {
   }, []);
 
   return (
-    <div style={{ padding: '28px 32px', maxWidth: 1200 }}>
+    <div className="ms-page-pad">
       <style jsx global>{`
         .vault-hero {
           position: relative; border-radius: 16px; overflow: hidden;

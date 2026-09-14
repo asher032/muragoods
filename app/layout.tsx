@@ -43,7 +43,7 @@ export const metadata: Metadata = {
     default: "Muragoods — Campus Power-Up Food",
     template: "%s | Muragoods",
   },
-  description: "Order fresh musubi, churros, coffee jelly & cookies. Play games, earn coins, and share untold words.",
+  description: "Order fresh musubi, churros & milky cheesy bread. Play games, earn coins, and share untold words.",
   manifest: "/manifest.json",
   icons: {
     icon: "/icons/icon-192.png",
@@ -56,7 +56,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "Muragoods — Campus Power-Up Food",
-    description: "Order fresh musubi, churros, coffee jelly & cookies. Play games, earn coins, and share untold words.",
+    description: "Order fresh musubi, churros & milky cheesy bread. Play games, earn coins, and share untold words.",
     siteName: "Muragoods",
     images: [
       {
@@ -72,7 +72,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Muragoods — Campus Power-Up Food",
-    description: "Order fresh musubi, churros, coffee jelly & cookies. Play games, earn coins, and share untold words.",
+    description: "Order fresh musubi, churros & milky cheesy bread. Play games, earn coins, and share untold words.",
     images: ["https://muragoods.vercel.app/api/og"],
   },
   other: {

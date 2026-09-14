@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useCoins } from '@/app/hooks/useCoins';
 import { Icon } from '@/app/components/Icon';
-
+import { Brain, Calendar, Check, Coins, Crown, Drumstick, Gift, Megaphone, PartyPopper, Search, ShoppingCart, Star, Store, Tag, Ticket, Truck, Users, Wrench, Zap } from 'lucide-react';
 interface Reward {
   id: string;
   name: string;
@@ -18,22 +18,22 @@ interface Reward {
 
 const rewards: Reward[] = [
   // Discount Vouchers
-  { id: 'free_shipping', name: 'Free Shipping Voucher', description: 'Free delivery for your next order outside DWCL.', cost: 300, icon: '🚚', category: 'Vouchers' },
-  { id: 'voucher_10', name: '₱10 Off Voucher', description: 'Get ₱10 off your next order. No minimum.', cost: 200, icon: '🏷️', category: 'Vouchers' },
-  { id: 'voucher_50', name: '₱50 Off Voucher', description: 'Get ₱50 off your next order. Minimum order ₱75.', cost: 600, icon: '🏷️', category: 'Vouchers' },
-  { id: 'double_points', name: '2x Points (Next Order)', description: 'Earn double coins on your next order for 24 hours.', cost: 500, icon: '✨', category: 'Vouchers' },
-  { id: 'free_musubi', name: 'Free Musubi', description: 'Get a free regular musubi on your next order.', cost: 100, icon: '🍙', category: 'Vouchers' },
+  { id: 'free_shipping', name: 'Free Shipping Voucher', description: 'Free delivery for your next order outside DWCL.', cost: 300, icon: <Truck className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, category:'Vouchers' },
+  { id: 'voucher_10', name: '₱10 Off Voucher', description: 'Get ₱10 off your next order. No minimum.', cost: 200, icon: <Ticket className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, category:'Vouchers' },
+  { id: 'voucher_50', name: '₱50 Off Voucher', description: 'Get ₱50 off your next order. Minimum order ₱75.', cost: 600, icon: <Ticket className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, category:'Vouchers' },
+  { id: 'double_points', name: '2x Points (Next Order)', description: 'Earn double coins on your next order for 24 hours.', cost: 500, icon: <Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, category:'Vouchers' },
+  { id: 'free_musubi', name: 'Free Musubi', description: 'Get a free regular musubi on your next order.', cost: 100, icon: <Drumstick className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, category:'Vouchers' },
 
   // Special Perks
-  { id: 'priority_order', name: 'Priority Order', description: 'Skip the queue — your order gets prepared first.', cost: 400, icon: '⚡', category: 'Perks' },
+  { id: 'priority_order', name: 'Priority Order', description: 'Skip the queue — your order gets prepared first.', cost: 400, icon: <Zap color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, category:'Perks' },
   { id: 'mystery_upgrade', name: 'Mystery Box Upgrade', description: 'Your next mystery box is guaranteed Rare or above.', cost: 800, icon: <Icon name="gift" size={20} />, category: 'Perks' },
-  { id: 'custom_shoutout', name: 'Shoutout on Instagram', description: 'Get a personalized shoutout on the Muragoods Instagram page.', cost: 1000, icon: '📱', category: 'Perks' },
-  { id: 'gold_member', name: 'Gold Member Badge', description: 'Permanent gold badge on your profile — shows you\'re a top supporter. Perks: priority support, exclusive early access to new items, and a special gold border on your profile.', cost: 2000, icon: '👑', category: 'Perks' },
+  { id: 'custom_shoutout', name: 'Shoutout on Instagram', description: 'Get a personalized shoutout on the Muragoods Instagram page.', cost: 1000, icon: <Megaphone className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, category:'Perks' },
+  { id: 'gold_member', name: 'Gold Member Badge', description: 'Permanent gold badge on your profile — shows you\'re a top supporter. Perks: priority support, exclusive early access to new items, and a special gold border on your profile.', cost: 2000, icon: <Crown color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, category:'Perks' },
 ];
 
-const categoryEmojis: Record<string, string> = {
-  Vouchers: '🏷️',
-  Perks: '⭐',
+const categoryEmojis: Record<string, React.ReactNode> = {
+  Vouchers: <Tag className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
+  Perks: <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
 };
 
 const rewardCategories = ['All', 'Vouchers', 'Perks'];
@@ -184,7 +184,7 @@ export default function RewardsPage() {
           {/* Header */}
           <div className="text-center mb-8">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}>
-              🏪 Rewards Shop
+              <Store className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Rewards Shop
             </h1>
             <p className="mt-3 text-base text-[var(--gold)]">Spend your coins on real rewards!</p>
 
@@ -197,7 +197,7 @@ export default function RewardsPage() {
                 </div>
               )}
               <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.1)] px-5 py-2 rounded-xl">
-                <span className="coin-float inline-block">🪙</span>
+                <span className="coin-float inline-block"><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
                 <span className="text-[var(--gold-bright)] ml-2" style={{ fontFamily: 'var(--font-arcade)', fontSize: '14px' }}>{coins.toLocaleString()}</span>
                 <span className="text-[var(--pewter)] text-sm ml-1">coins</span>
               </div>
@@ -231,7 +231,7 @@ export default function RewardsPage() {
                   <div className="flex items-start justify-between mb-4">
                     <span className="text-3xl">{reward.icon}</span>
                     <span className={`text-[9px] px-3 py-1 rounded-lg border ${isPurchased ? 'border-[var(--emerald-bright)] bg-[rgba(30,61,47,0.2)] text-[var(--emerald-bright)]' : 'border-[var(--gold)] bg-[rgba(212,175,55,0.1)] text-[var(--gold-bright)]'}`} style={{ fontFamily: 'var(--font-arcade)' }}>
-                      {isPurchased ? '✓ OWNED' : `🪙 ${reward.cost.toLocaleString()}`}
+                      {isPurchased ? 'OWNED' : `${reward.cost.toLocaleString()}`}
                     </span>
                   </div>
                   <h3 className="text-[10px] text-[var(--cream)] uppercase mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>{reward.name}</h3>
@@ -242,7 +242,7 @@ export default function RewardsPage() {
                   {isPurchased ? (
                     <div className="border-2 border-[var(--emerald-bright)] bg-[rgba(30,61,47,0.1)] rounded-xl p-3 text-center">
                       <p className="text-[9px] text-[var(--emerald-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>
-                        ✓ Owned — Show this at DWCL
+                        <Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Owned — Show this at DWCL
                       </p>
                     </div>
                   ) : (
@@ -252,7 +252,7 @@ export default function RewardsPage() {
                       className={`w-full deco-btn rounded-xl ${canAfford ? 'deco-btn-gold' : 'deco-btn-dark opacity-40 cursor-not-allowed'}`}
                       style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}
                     >
-                      {canAfford ? `🪙 Buy for ${reward.cost.toLocaleString()}` : `Need ${(reward.cost - coins).toLocaleString()} more coins`}
+                      {canAfford ? `Buy for ${reward.cost.toLocaleString()}` : `Need ${(reward.cost - coins).toLocaleString()} more coins`}
                     </button>
                   )}
                 </div>
@@ -263,7 +263,7 @@ export default function RewardsPage() {
           {/* Admin Panel */}
           {isAdmin && (
             <div className="mt-10 border-2 border-[var(--crimson)] bg-[var(--charcoal)] rounded-2xl p-6">
-              <h2 className="text-sm text-[var(--crimson)] uppercase mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>🔧 Admin: Manage User Perks</h2>
+              <h2 className="text-sm text-[var(--crimson)] uppercase mb-4" style={{ fontFamily: 'var(--font-arcade)' }}><Wrench className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Admin: Manage User Perks</h2>
               <div className="flex gap-2 mb-4">
                 <input
                   type="text"
@@ -273,7 +273,7 @@ export default function RewardsPage() {
                   className="deco-input rounded-xl flex-1"
                 />
                 <button onClick={handleAdminSearch} disabled={searching} className="deco-btn deco-btn-crimson rounded-xl">
-                  {searching ? '...' : '🔍'}
+                  {searching ? '...' : <Search className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />}
                 </button>
               </div>
 
@@ -321,7 +321,7 @@ export default function RewardsPage() {
                                 >
                                   <span className="text-sm">{reward.icon}</span>
                                   <p className="text-[8px] text-[var(--cream)] mt-1" style={{ fontFamily: 'var(--font-arcade)' }}>{reward.name}</p>
-                                  <p className="text-[7px] text-[var(--pewter)]">{hasPerk ? '✓ Already has' : 'Click to add'}</p>
+                                  <p className="text-[7px] text-[var(--pewter)]">{hasPerk ? 'Already has' : 'Click to add'}</p>
                                 </button>
                               );
                             })}
@@ -339,11 +339,11 @@ export default function RewardsPage() {
           <div className="mt-10 border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal)] rounded-2xl p-6 text-center">
             <h3 className="text-[10px] text-[var(--gold)] uppercase mb-3" style={{ fontFamily: 'var(--font-arcade)' }}>Need more coins?</h3>
             <div className="flex flex-wrap gap-3 justify-center">
-              <Link href="/menu" className="deco-btn deco-btn-sm rounded-xl">🛒 Order & Earn</Link>
-              <Link href="/play/checkin" className="deco-btn deco-btn-sm rounded-xl">📅 Check In</Link>
-              <Link href="/play/trivia" className="deco-btn deco-btn-sm deco-btn-crimson rounded-xl">🧠 Trivia</Link>
-              <Link href="/play/refer" className="deco-btn deco-btn-sm rounded-xl">👥 Refer</Link>
-              <Link href="/play/mysterybox" className="deco-btn deco-btn-sm rounded-xl">🎁 Mystery Box</Link>
+              <Link href="/menu" className="deco-btn deco-btn-sm rounded-xl"><ShoppingCart className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Order & Earn</Link>
+              <Link href="/play/checkin" className="deco-btn deco-btn-sm rounded-xl"><Calendar className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Check In</Link>
+              <Link href="/play/trivia" className="deco-btn deco-btn-sm deco-btn-crimson rounded-xl"><Brain color={'#ff4d8d'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Trivia</Link>
+              <Link href="/play/refer" className="deco-btn deco-btn-sm rounded-xl"><Users className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Refer</Link>
+              <Link href="/play/mysterybox" className="deco-btn deco-btn-sm rounded-xl"><Gift color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Mystery Box</Link>
             </div>
           </div>
         </div>
@@ -365,12 +365,12 @@ export default function RewardsPage() {
               )}
               <div className="border border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] rounded-xl p-3">
                 <p className="text-[9px] text-[var(--pewter)]" style={{ fontFamily: 'var(--font-arcade)' }}>Cost</p>
-                <p className="coin-price text-lg">🪙 {showConfirm.cost.toLocaleString()}</p>
+                <p className="coin-price text-lg"><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {showConfirm.cost.toLocaleString()}</p>
                 <p className="text-[8px] text-[var(--pewter)] mt-1">Remaining: {(coins - showConfirm.cost).toLocaleString()} coins</p>
               </div>
               <div className="flex gap-3">
                 <button onClick={() => setShowConfirm(null)} className="deco-btn flex-1 rounded-xl">Cancel</button>
-                <button onClick={confirmBuy} className="deco-btn deco-btn-gold flex-1 rounded-xl">🪙 Buy Now</button>
+                <button onClick={confirmBuy} className="deco-btn deco-btn-gold flex-1 rounded-xl"><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Buy Now</button>
               </div>
             </div>
           </div>
@@ -382,7 +382,7 @@ export default function RewardsPage() {
         <div className="deco-overlay" onClick={() => setShowSuccess(null)}>
           <div className="deco-modal bounce-in rounded-2xl max-w-sm" onClick={(e) => e.stopPropagation()}>
             <div className="deco-modal-header text-center rounded-t-2xl" style={{ background: 'linear-gradient(135deg, #1E3D2F, var(--emerald-bright))' }}>
-              <h2 className="text-sm text-[var(--gold-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>🎉 Reward Claimed!</h2>
+              <h2 className="text-sm text-[var(--gold-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}><PartyPopper color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Reward Claimed!</h2>
             </div>
             <div className="deco-modal-body text-center space-y-4">
               <span className="text-5xl">{showSuccess.icon}</span>

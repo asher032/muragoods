@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-
+import { Heart, X } from 'lucide-react';
 interface FavoriteItem {
   id: string;
   name: string;
@@ -59,7 +59,7 @@ export function FavoriteButton({ item, isFav, onToggle }: {
       className="fav-btn"
       aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
     >
-      {isFav ? '❤️' : '🤍'}
+      {isFav ? <Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : <Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />}
     </button>
   );
 }
@@ -70,7 +70,7 @@ export function FavoritesList() {
   if (favorites.length === 0) {
     return (
       <div className="favorites-empty">
-        <p className="text-3xl mb-3">🤍</p>
+        <p className="text-3xl mb-3"><Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
         <p style={{ color: 'var(--mario-text)', fontSize: '12px', fontWeight: 600 }}>No favorites yet</p>
         <p style={{ color: 'var(--mario-text-muted)', fontSize: '10px', marginTop: '4px' }}>
           Tap the heart on menu items to save them here!
@@ -91,7 +91,7 @@ export function FavoritesList() {
             <p style={{ color: 'var(--mario-text)', fontSize: '11px', fontWeight: 600 }}>{item.name}</p>
             <div className="fav-card-actions">
               <Link href="/menu" className="fav-add-btn">+ Add</Link>
-              <button onClick={() => removeFavorite(item.id)} className="fav-remove-btn">✕</button>
+              <button onClick={() => removeFavorite(item.id)} className="fav-remove-btn"><X className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></button>
             </div>
           </div>
         </div>

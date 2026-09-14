@@ -24,11 +24,11 @@ export default function MuraStreamLoader({ fullScreen = true, text }: { fullScre
           padding: 8px;
         }
         .ms-loader {
-          width: 44.8px;
-          height: 44.8px;
-          color: #554cb5;
+          width: 56px;
+          height: 56px;
+          color: #E50914;
           position: relative;
-          background: radial-gradient(11.2px, currentColor 94%, #0000);
+          background: radial-gradient(14px, currentColor 94%, #0000);
         }
         .ms-loader:before {
           content: '';
@@ -36,21 +36,21 @@ export default function MuraStreamLoader({ fullScreen = true, text }: { fullScre
           inset: 0;
           border-radius: 50%;
           background:
-            radial-gradient(10.08px at bottom right, #0000 94%, currentColor) top left,
-            radial-gradient(10.08px at bottom left, #0000 94%, currentColor) top right,
-            radial-gradient(10.08px at top right, #0000 94%, currentColor) bottom left,
-            radial-gradient(10.08px at top left, #0000 94%, currentColor) bottom right;
-          background-size: 22.4px 22.4px;
+            radial-gradient(12.6px at bottom right, #0000 94%, currentColor) top left,
+            radial-gradient(12.6px at bottom left, #0000 94%, currentColor) top right,
+            radial-gradient(12.6px at top right, #0000 94%, currentColor) bottom left,
+            radial-gradient(12.6px at top left, #0000 94%, currentColor) bottom right;
+          background-size: 28px 28px;
           background-repeat: no-repeat;
           animation: msLoaderSpin 1.5s infinite cubic-bezier(0.3, 1, 0, 1);
         }
         @keyframes msLoaderSpin {
           33% {
-            inset: -11.2px;
+            inset: -14px;
             transform: rotate(0deg);
           }
           66% {
-            inset: -11.2px;
+            inset: -14px;
             transform: rotate(90deg);
           }
           100% {
@@ -61,12 +61,15 @@ export default function MuraStreamLoader({ fullScreen = true, text }: { fullScre
       `}</style>
       <div style={{
         position: 'fixed', inset: 0, zIndex: 9999,
-        background: '#0A0A0A',
+        background: 'rgba(10,10,10,0.88)',
+        backdropFilter: 'blur(8px)',
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         gap: '16px',
       }}>
         {loader}
-        {text && <p style={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: '13px', color: '#A0A0A0' }}>{text}</p>}
+        <p style={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: '13px', color: '#A0A0A0', margin: 0 }}>
+          {text || 'Loading…'}
+        </p>
       </div>
     </>
   );

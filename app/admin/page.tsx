@@ -5,7 +5,7 @@ import { products, type InventoryStatus, type Order, type OrderStatus, type Prod
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { UsersCoinsPanel } from '@/app/components/UsersCoinsPanel';
-
+import { BarChart3, CircleCheck, Coins, Flag, Gift, Megaphone, MessageCircle, X } from 'lucide-react';
 const statusOptions = [
   'Pending Payment',
   'Payment Verified',
@@ -103,23 +103,8 @@ export default function AdminPage() {
       const historyEntry = { status: nextStatus, timestamp: new Date().toISOString() };
       const updateData: Record<string, unknown> = { status: nextStatus, $push: { statusHistory: historyEntry } };
 
-      // Award points when marking as Delivered
-      if (nextStatus === 'Delivered') {
-        const order = orders.find(o => (o._id || o.id) === orderId);
-        if (order && order.userId && order.pointsEarned && order.pointsEarned > 0) {
-          // Add coins to user's server-side balance
-          await fetch('/api/admin/coins', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: order.userId,
-              action: 'add',
-              amount: order.pointsEarned,
-              reason: `Order #${orderId.slice(-8).toUpperCase()} delivered`,
-            }),
-          }).catch(() => {});
-        }
-      }
+      // NOTE: coins are awarded server-side (idempotently) by PATCH /api/orders
+      // when the status transitions to Delivered — no client-side award here.
 
       const res = await fetch(`/api/orders?id=${orderId}`, {
         method: 'PATCH',
@@ -185,7 +170,7 @@ export default function AdminPage() {
         {/* Alert Banner */}
         {alert.show && (
           <div className="mb-8 border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.1)] p-4 text-sm text-[var(--gold-bright)] animate-pulse rounded-xl" style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px' }}>
-            📢 {alert.message}
+            <Megaphone className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {alert.message}
           </div>
         )}
 
@@ -197,10 +182,11 @@ export default function AdminPage() {
           </div>
           <div className="flex gap-3">
             <a href="/" className="deco-btn deco-btn-sm">Back to Shop</a>
-            <a href="/admin/analytics" className="deco-btn deco-btn-sm deco-btn-gold">📊 Analytics</a>
-            <a href="/admin/source-reports" className="deco-btn deco-btn-sm deco-btn-gold">⚑ Source Reports</a>
-            <a href="/admin/promo-codes" className="deco-btn deco-btn-sm deco-btn-gold">🎁 Promos</a>
-            <a href="/admin/support" className="deco-btn deco-btn-sm deco-btn-gold">💬 Support</a>
+            <a href="/admin/analytics" className="deco-btn deco-btn-sm deco-btn-gold"><BarChart3 className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Analytics</a>
+            <a href="/admin/source-reports" className="deco-btn deco-btn-sm deco-btn-gold"><Flag className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Source Reports</a>
+            <a href="/admin/promo-codes" className="deco-btn deco-btn-sm deco-btn-gold"><Gift color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Promos</a>
+            <a href="/admin/support" className="deco-btn deco-btn-sm deco-btn-gold"><MessageCircle className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Support</a>
+            <a href="/admin/delivered" className="deco-btn deco-btn-sm deco-btn-gold"><CircleCheck color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Delivered</a>
             <button type="button" onClick={() => setIsAuthenticated(false)} className="deco-btn deco-btn-crimson">LOG OUT</button>
           </div>
         </header>
@@ -236,7 +222,7 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.filter(o => o.status !== 'Cancelled').map((order, idx) => (
+                  {orders.filter(o => o.status !== 'Cancelled' && o.status !== 'Delivered').map((order, idx) => (
                     <tr key={String(order._id || order.id)} className={`border-t border-[rgba(242,240,228,0.08)] transition-colors hover:bg-[var(--charcoal-light)] ${idx % 2 === 0 ? '' : 'bg-[rgba(212,175,55,0.02)]'}`}>
                       <td className="px-3 py-3 text-xs text-[var(--cream-muted)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>{String(order._id || order.id || '').slice(-8).toUpperCase()}</td>
                       <td className="px-3 py-3">
@@ -255,7 +241,7 @@ export default function AdminPage() {
                           </button>
                         )}
                         {order.pointsEarned !== undefined && order.pointsEarned > 0 && (
-                          <div className="text-[9px] text-[var(--gold-bright)]">🪙 +{order.pointsEarned} pts</div>
+                          <div className="text-[9px] text-[var(--gold-bright)]"><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> +{order.pointsEarned} pts</div>
                         )}
                       </td>
                       <td className="px-3 py-3">
@@ -304,7 +290,7 @@ export default function AdminPage() {
           <div className="deco-modal max-w-2xl bounce-in rounded-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="deco-modal-header flex items-center justify-between rounded-t-2xl">
               <h3 className="text-sm text-[var(--gold-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Payment Receipt</h3>
-              <button onClick={() => setPreviewReceipt('')} className="text-[var(--pewter)] text-lg hover:text-[var(--crimson)] transition-colors">✕</button>
+              <button onClick={() => setPreviewReceipt('')} className="text-[var(--pewter)] text-lg hover:text-[var(--crimson)] transition-colors"><X className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></button>
             </div>
             <div className="p-4 bg-[var(--charcoal-light)] rounded-b-2xl">
               <img src={previewReceipt} alt="Payment Receipt" className="w-full h-auto border-2 border-[var(--gold)] rounded-xl" />

@@ -8,7 +8,7 @@ import MuraStreamLoader from '../../components/MuraStreamLoader';
 import { useShareLink } from '../../hooks/useShareLink';
 import { ShareIcon, CheckIcon } from '../../components/MuraStreamIcons';
 import { useMuraStreamStore } from '../../hooks/useMuraStreamStore';
-
+import { Star } from 'lucide-react';
 type DetailData = {
   id: number;
   title: string;
@@ -71,7 +71,12 @@ export default function MovieDetailPage() {
     );
   }
 
-  const trailer = movie.videos?.find((v: { type: string }) => v.type === 'Trailer') || movie.videos?.[0];
+  // videos arrives as a flat array from the API; some cached payloads may
+  // still carry the old { results: [] } shape — normalize before reading.
+  const videos: Array<{ type: string; url?: string }> = Array.isArray(movie.videos)
+    ? movie.videos
+    : ((movie.videos as unknown as { results?: Array<{ type: string; url?: string }> } | null)?.results ?? []);
+  const trailer = videos.find((v) => v.type === 'Trailer') || videos[0];
   const director = movie.credits?.crew?.find((c: { job: string }) => c.job === 'Director');
   const runtimeH = movie.runtime ? Math.floor(movie.runtime / 60) : 0;
   const runtimeM = movie.runtime ? movie.runtime % 60 : 0;
@@ -143,7 +148,7 @@ export default function MovieDetailPage() {
               {movie.runtime > 0 && <span style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', color: 'var(--ms-text-faint)' }}>· {runtimeH}h {runtimeM}m</span>}
               {movie.voteAverage > 0 && (
                 <span style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', color: '#E50914', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  ★ {movie.voteAverage.toFixed(1)}
+                  <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {movie.voteAverage.toFixed(1)}
                 </span>
               )}
             </div>
@@ -179,7 +184,7 @@ export default function MovieDetailPage() {
                 fontFamily: '-apple-system, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
                 backdropFilter: 'blur(8px)',
               }}>
-                {inList ? '✓ In My List' : '+ My List'}
+                {inList ? 'In My List' : '+ My List'}
               </button>
               <button onClick={() => toggleLike(mediaItem)} style={{
                 background: liked ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.06)',
@@ -236,7 +241,7 @@ export default function MovieDetailPage() {
               fontFamily: '-apple-system, sans-serif', fontSize: '18px', fontWeight: 700,
               color: 'var(--ms-text-strong)', margin: '0 0 18px',
             }}>Cast</h3>
-            <div style={{ display: 'flex', gap: '16px', overflowX: 'auto', paddingBottom: '8px' }} className="ms-scroll">
+            <div style={{ display: 'flex', gap: '20px', overflowX: 'auto', paddingBottom: '8px' }} className="ms-scroll">
               {movie.credits.cast.slice(0, 12).map((person: { id: number; name: string; character: string; profilePath: string | null }) => (
                 <div key={person.id} style={{ textAlign: 'center', flexShrink: 0, width: '90px' }}>
                   {person.profilePath ? (
@@ -269,7 +274,7 @@ export default function MovieDetailPage() {
               fontFamily: '-apple-system, sans-serif', fontSize: '18px', fontWeight: 700,
               color: 'var(--ms-text-strong)', margin: '0 0 18px',
             }}>Recommended</h3>
-            <div style={{ display: 'flex', gap: '18px', overflowX: 'auto', paddingBottom: '8px' }} className="ms-scroll">
+            <div style={{ display: 'flex', gap: '20px', overflowX: 'auto', paddingBottom: '8px' }} className="ms-scroll">
               {(movie.recommendations?.results || movie.similar?.results || []).slice(0, 10).map(
                 (item: { id: number; title: string; posterPath: string | null; voteAverage: number; year: string; mediaType: string }) => (
                   <MuraStreamCard key={item.id} item={item} />

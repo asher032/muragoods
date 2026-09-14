@@ -8,6 +8,7 @@ import MuraStreamCard from '../components/MuraStreamCard';
 import MuraStreamLoader from '../components/MuraStreamLoader';
 import { FilmIcon, TvIcon, SparklesIcon, ShuffleIcon } from '../components/MuraStreamIcons';
 import type { MediaItem } from '../types';
+import { Star } from 'lucide-react';
 
 // Genre browse — the drama browse experience generalized to all movies and
 // TV. Type toggle (Movies / TV Shows), TMDB genre chips, year + sort filters,
@@ -236,7 +237,7 @@ function GenreBrowseContent() {
   const genreName = genres.find(g => String(g.id) === genre)?.name;
 
   return (
-    <div style={{ padding: '28px 32px', maxWidth: 1200 }}>
+    <div className="ms-page-pad">
       <h1 style={{
         fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
         fontSize: 28, fontWeight: 800, color: 'var(--ms-text-strong)', margin: '0 0 6px',
@@ -302,7 +303,7 @@ function GenreBrowseContent() {
               fontSize: 13, color: 'rgba(255,255,255,0.75)', margin: 0,
               display: 'flex', gap: 10, alignItems: 'center',
             }}>
-              <span style={{ color: '#E50914', fontWeight: 700 }}>★ {Math.round((hero.voteAverage ?? 0) * 10) / 10}</span>
+              <span style={{ color: '#E50914', fontWeight: 700 }}><Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {Math.round((hero.voteAverage ?? 0) * 10) / 10}</span>
               {hero.year && <span>{hero.year}</span>}
               {genreName && <span>{genreName}</span>}
             </p>
@@ -406,7 +407,7 @@ function GenreBrowseContent() {
       ) : (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
           gap: '22px 16px',
         }}>
           {items.map(item => (

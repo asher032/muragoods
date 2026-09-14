@@ -8,7 +8,7 @@ import { type Order, type OrderStatus, products } from '@/app/lib/muragoods-data
 import { NavBar } from '@/app/components/NavBar';
 import { PixelDivider } from '@/app/components/PixelDivider';
 import { PixelArt } from '@/app/components/PixelArt';
-
+import { Check, Coins, Lock, RefreshCw, TriangleAlert } from 'lucide-react';
 const statusFlow: OrderStatus[] = [
   'Pending Payment',
   'Payment Verified',
@@ -160,7 +160,7 @@ export default function OrdersPage() {
           {/* Error */}
           {error && (
             <div className="mb-6 border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-4 text-sm text-[var(--crimson)] rounded-xl" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>
-              ⚠ {error}
+              <TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {error}
             </div>
           )}
 
@@ -227,11 +227,11 @@ export default function OrdersPage() {
                             className="deco-btn deco-btn-sm deco-btn-crimson disabled:opacity-50 rounded-xl"
                             style={{ minHeight: '36px', padding: '8px 16px' }}
                           >
-                            {cancellingId === (order._id || order.id) ? 'Cancelling...' : '✖ Cancel Order'}
+                            {cancellingId === (order._id || order.id) ? 'Cancelling...' : 'Cancel Order'}
                           </button>
                         )}
                         {!canCancel && !isCancelled && (
-                          <span className="deco-badge deco-badge-cream rounded-lg opacity-60">🔒 Locked</span>
+                          <span className="deco-badge deco-badge-cream rounded-lg opacity-60"><Lock className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Locked</span>
                         )}
                         {order.status === 'Delivered' && (
                           <button
@@ -239,7 +239,7 @@ export default function OrdersPage() {
                             className="deco-btn deco-btn-sm deco-btn-gold rounded-xl"
                             style={{ minHeight: '36px', padding: '8px 16px' }}
                           >
-                            🔄 Reorder
+                            <RefreshCw className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Reorder
                           </button>
                         )}
                       </div>
@@ -262,7 +262,7 @@ export default function OrdersPage() {
                                   }`}
                                   style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px' }}
                                 >
-                                  {active && index > 0 ? '✓' : index + 1}
+                                  {active && index > 0 ? <Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : index + 1}
                                 </div>
                                 <p
                                   className="mt-2 text-[9px] text-[var(--pewter)] uppercase tracking-wider leading-tight"
@@ -287,7 +287,7 @@ export default function OrdersPage() {
                             className={`mt-3 text-base uppercase ${isCancelled ? 'text-[var(--crimson)]' : 'text-[var(--gold-bright)]'}`}
                             style={{ fontFamily: 'var(--font-arcade)' }}
                           >
-                            {isCancelled ? '✖ CANCELLED' : order.status}
+                            {isCancelled ? 'CANCELLED' : order.status}
                           </p>
                         </div>
                       </div>
@@ -323,7 +323,7 @@ export default function OrdersPage() {
                           {order.pointsEarned !== undefined && order.pointsEarned > 0 && (
                             <li className="pt-2 border-t border-[rgba(242,240,228,0.1)]">
                               <span className="text-sm text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>
-                                🪙 +{order.pointsEarned} Coins Earned!
+                                <Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> +{order.pointsEarned} Coins Earned!
                               </span>
                             </li>
                           )}

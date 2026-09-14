@@ -3,19 +3,18 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { gsap } from 'gsap';
 import './MagicBento.css';
-
 const DEFAULT_PARTICLE_COUNT = 12;
 const DEFAULT_SPOTLIGHT_RADIUS = 300;
 const DEFAULT_GLOW_COLOR = '255, 214, 10';
 const MOBILE_BREAKPOINT = 768;
 
 const cardData = [
-  { color: '#1e1e32', title: 'Daily Check-In', description: 'Log in daily to earn bonus coins!', label: '📅 Coins', icon: '/images/daily.png' },
-  { color: '#1e1e32', title: 'Refer a Friend', description: 'Invite friends and earn 50 coins each!', label: '👥 Social', icon: '/images/social-media.png' },
-  { color: '#1e1e32', title: 'Leaderboard', description: "See who's the top spender on campus!", label: '🏆 Rankings', icon: '/images/ranking.png' },
-  { color: '#1e1e32', title: 'Mystery Box', description: 'Spend 10 coins for a chance to win big!', label: '🎁 Rewards', icon: '/images/mystery.png' },
-  { color: '#1e1e32', title: 'Trivia Challenge', description: 'Test your knowledge and earn coins!', label: '🧠 Play', icon: '/images/trivia.png' },
-  { color: '#1e1e32', title: 'Open Archive', description: 'Write unsent letters to anyone!', label: '💌 Letters', icon: '/images/archieve.png' },
+  { color: '#1e1e32', title: 'Daily Check-In', description: 'Log in daily to earn bonus coins!', label: 'Coins', icon: '/images/daily.png' },
+  { color: '#1e1e32', title: 'Refer a Friend', description: 'Invite friends and earn 50 coins each!', label: 'Social', icon: '/images/social-media.png' },
+  { color: '#1e1e32', title: 'Leaderboard', description: "See who's the top spender on campus!", label: 'Rankings', icon: '/images/ranking.png' },
+  { color: '#1e1e32', title: 'Mystery Box', description: 'Spend 10 coins for a chance to win big!', label: 'Rewards', icon: '/images/mystery.png' },
+  { color: '#1e1e32', title: 'Trivia Challenge', description: 'Test your knowledge and earn coins!', label: 'Play', icon: '/images/trivia.png' },
+  { color: '#1e1e32', title: 'Open Archive', description: 'Write unsent letters to anyone!', label: 'Letters', icon: '/images/archieve.png' },
 ];
 
 const createParticleElement = (x: number, y: number, color = DEFAULT_GLOW_COLOR) => {

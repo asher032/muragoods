@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { NavBar } from '@/app/components/NavBar';
 import { PixelArt } from '@/app/components/PixelArt';
-
+import { Check, CircleX, Lock } from 'lucide-react';
 const statusFlow: OrderStatus[] = [
   'Pending Payment',
   'Payment Verified',
@@ -151,11 +151,11 @@ export default function AccountOrdersPage() {
                       {isCancelled && <span className="deco-badge deco-badge-crimson rounded-lg">CANCELLED</span>}
                       {canCancel && (
                         <button onClick={() => handleCancelOrder(order._id || order.id)} className="deco-btn deco-btn-sm deco-btn-crimson rounded-xl" style={{ minHeight: '36px', padding: '8px 16px' }}>
-                          ✖ Cancel
+                          <CircleX color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Cancel
                         </button>
                       )}
                       {!canCancel && !isCancelled && (
-                        <span className="deco-badge deco-badge-cream rounded-lg opacity-60">🔒 Locked</span>
+                        <span className="deco-badge deco-badge-cream rounded-lg opacity-60"><Lock className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Locked</span>
                       )}
                     </div>
                   </div>
@@ -170,7 +170,7 @@ export default function AccountOrdersPage() {
                           return (
                             <div key={step} className="relative">
                               <div className={`flex h-12 w-12 items-center justify-center border-2 text-sm transition-all ${active ? 'border-[var(--gold)] bg-[var(--gold)] text-[var(--obsidian)] pulse-badge' : 'border-[rgba(242,240,228,0.2)] bg-[var(--charcoal-light)] text-[var(--pewter)]'}`} style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px' }}>
-                                {active && index > 0 ? '✓' : index + 1}
+                                {active && index > 0 ? <Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : index + 1}
                               </div>
                               <p className="mt-2 text-[9px] text-[var(--pewter)] uppercase tracking-wider leading-tight" style={{ fontFamily: 'var(--font-arcade)' }}>{step}</p>
                             </div>
@@ -180,7 +180,7 @@ export default function AccountOrdersPage() {
                       <div className={`border-2 p-5 rounded-xl ${isCancelled ? 'border-[var(--crimson)] bg-[rgba(229,37,33,0.05)]' : 'border-[var(--gold)] bg-[rgba(212,175,55,0.05)]'}`}>
                         <p className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>Current Status</p>
                         <p className={`mt-3 text-base uppercase ${isCancelled ? 'text-[var(--crimson)]' : 'text-[var(--gold-bright)]'}`} style={{ fontFamily: 'var(--font-arcade)' }}>
-                          {isCancelled ? '✖ CANCELLED' : order.status}
+                          {isCancelled ? 'CANCELLED' : order.status}
                         </p>
                       </div>
                     </div>

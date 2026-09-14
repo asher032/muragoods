@@ -8,28 +8,27 @@ import { products as staticProducts, type Product, type CartItem, deliveryZones,
 import { useProducts } from '@/app/hooks/useProducts';
 import { NavBar } from '@/app/components/NavBar';
 import { useFavorites, FavoriteButton } from '@/app/components/Favorites';
-
-const dwclOnlyProducts = ['cookies', 'coffee-jelly'];
-const categories = ['All', 'Musubi & Churros', 'Coffee Jelly & Cookies'];
+import { Eye, Flame, MapPin, Search, ShoppingCart, Sparkles, Star, TriangleAlert, Utensils, X } from 'lucide-react';
+const dwclOnlyProducts: string[] = [];
+const categories = ['All', 'Musubi & Churros', 'Bakery'];
 const sortOptions = [
-  { value: 'popular', label: '🔥 Popular' },
-  { value: 'price-low', label: '💰 Price: Low → High' },
-  { value: 'price-high', label: '💎 Price: High → Low' },
-  { value: 'name', label: '🔤 Name A-Z' },
-  { value: 'newest', label: '🆕 Newest' },
+  { value: 'popular', label: 'Popular' },
+  { value: 'price-low', label: 'Price: Low → High' },
+  { value: 'price-high', label: 'Price: High → Low' },
+  { value: 'name', label: 'Name A-Z' },
+  { value: 'newest', label: 'Newest' },
 ];
 
 // Simulated ratings & popularity data
 const productMeta: Record<string, { rating: number; reviews: number; popular: boolean; isNew: boolean; tags: string[] }> = {
   musubi: { rating: 4.8, reviews: 124, popular: true, isNew: false, tags: ['Bestseller', 'Student Favorite'] },
   churros: { rating: 4.6, reviews: 89, popular: true, isNew: false, tags: ['Crunchy', 'Sweet'] },
-  'coffee-jelly': { rating: 4.7, reviews: 67, popular: false, isNew: true, tags: ['New!', 'Chilled'] },
-  cookies: { rating: 4.5, reviews: 45, popular: false, isNew: true, tags: ['Fresh Baked'] },
+  'milky-cheesy-bread': { rating: 4.9, reviews: 72, popular: true, isNew: true, tags: ['New!', 'Fresh Baked', 'Bestseller'] },
 };
 
 // Combo deals
 const comboDeals = [
-  { id: 'combo3', name: 'Musubi + Churros', original: 110, combo: 95, items: ['musubi', 'churros'], emoji: '🍱🍩', desc: 'Power-up duo' },
+  { id: 'combo3', name: 'Musubi + Churros', original: 110, combo: 95, items: ['musubi', 'churros'], desc: 'Power-up duo' },
 ];
 
 function StarRating({ rating, reviews }: { rating: number; reviews: number }) {
@@ -40,7 +39,7 @@ function StarRating({ rating, reviews }: { rating: number; reviews: number }) {
       <div style={{ display: 'flex', gap: '1px' }}>
         {Array.from({ length: 5 }, (_, i) => (
           <span key={i} style={{ fontSize: '10px', color: i < full ? '#ffd60a' : i === full && half ? '#ffd60a' : '#555' }}>
-            {i < full ? '★' : i === full && half ? '★' : '☆'}
+            {i < full ? <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : i === full && half ? <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />}
           </span>
         ))}
       </div>
@@ -248,13 +247,13 @@ export default function MenuPage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="🔍 Search menu..."
+              placeholder="Search menu..."
               className="deco-input"
               style={{ fontSize: '12px', paddingLeft: '12px' }}
             />
             {searchQuery && (
               <button onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--mario-text-muted)', cursor: 'pointer', fontSize: '14px' }}>
-                ✕
+                <X className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />
               </button>
             )}
           </div>
@@ -270,7 +269,7 @@ export default function MenuPage() {
         {/* Restriction Message */}
         {restrictionMessage && (
           <div style={{ background: 'rgba(230,57,70,0.08)', border: '1px solid rgba(230,57,70,0.25)', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', color: '#e63946', fontSize: '11px', fontWeight: 600 }}>
-            ⚠ {restrictionMessage}
+            <TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {restrictionMessage}
           </div>
         )}
 
@@ -294,7 +293,7 @@ export default function MenuPage() {
 
         {/* Zone Selector */}
         <div style={{ marginBottom: '16px' }}>
-          <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--mario-text)', marginBottom: '6px', display: 'block' }}>📍 Delivery / Pickup Zone</label>
+          <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--mario-text)', marginBottom: '6px', display: 'block' }}><MapPin color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Delivery / Pickup Zone</label>
           <select value={location} onChange={(e) => setLocation(e.target.value as ZoneKey)} style={{
             padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)',
             background: 'var(--mario-bg-input)', color: 'var(--mario-text)', fontSize: '12px', cursor: 'pointer',
@@ -302,8 +301,8 @@ export default function MenuPage() {
           }}>
             {deliveryZones.map(zone => <option key={zone.code} value={zone.code}>{zone.label}</option>)}
           </select>
-          {!isDwcl && (
-            <p style={{ marginTop: '6px', fontSize: '10px', color: 'var(--mario-orange)' }}>⚠ Cookies & Coffee Jelly are DWCL pickup only!</p>
+          {!isDwcl && dwclOnlyProducts.length > 0 && (
+            <p style={{ marginTop: '6px', fontSize: '10px', color: 'var(--mario-orange)' }}><TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Some items are DWCL pickup only!</p>
           )}
         </div>
 
@@ -311,8 +310,8 @@ export default function MenuPage() {
         {showCombos && (
           <div style={{ marginBottom: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-              <h2 style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: 'var(--mario-orange)', textTransform: 'uppercase' }}>🔥 Combo Deals — Save More!</h2>
-              <button onClick={() => setShowCombos(false)} style={{ background: 'none', border: 'none', color: 'var(--mario-text-muted)', cursor: 'pointer', fontSize: '12px' }}>✕</button>
+              <h2 style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: 'var(--mario-orange)', textTransform: 'uppercase' }}><Flame color={'#fb8500'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Combo Deals — Save More!</h2>
+              <button onClick={() => setShowCombos(false)} style={{ background: 'none', border: 'none', color: 'var(--mario-text-muted)', cursor: 'pointer', fontSize: '12px' }}><X className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
               {comboDeals.map(combo => (
@@ -331,7 +330,7 @@ export default function MenuPage() {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                    <span style={{ fontSize: '20px' }}>{combo.emoji}</span>
+                    <Utensils size={20} color={'#fb8500'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />
                     <div>
                       <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--mario-text)' }}>{combo.name}</p>
                       <p style={{ fontSize: '9px', color: 'var(--mario-text-muted)' }}>{combo.desc}</p>
@@ -353,7 +352,7 @@ export default function MenuPage() {
         {/* ─── Recently Viewed ──────────────────────────── */}
         {recentlyViewed.length > 0 && (
           <div style={{ marginBottom: '24px' }}>
-            <h2 style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'var(--mario-text-muted)', marginBottom: '10px', textTransform: 'uppercase' }}>👁️ Recently Viewed</h2>
+            <h2 style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'var(--mario-text-muted)', marginBottom: '10px', textTransform: 'uppercase' }}><Eye className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Recently Viewed</h2>
             <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px' }}>
               {recentlyViewed.slice(0, 5).map(id => {
                 const p = products.find(pr => pr.id === id);
@@ -378,7 +377,7 @@ export default function MenuPage() {
         {/* ─── Product Grid ──────────────────────────────── */}
         {filteredProducts.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-            <p style={{ fontSize: '36px', marginBottom: '12px' }}>🔍</p>
+            <p style={{ fontSize: '36px', marginBottom: '12px' }}><Search className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
             <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '12px', color: 'var(--mario-text)' }}>No items found</p>
             <p style={{ fontSize: '12px', color: 'var(--mario-text-muted)', marginTop: '6px' }}>Try a different search or category</p>
           </div>
@@ -401,12 +400,12 @@ export default function MenuPage() {
                     <div style={{ position: 'absolute', top: '8px', left: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       {meta?.popular && (
                         <span style={{ padding: '3px 8px', background: 'rgba(230,57,70,0.9)', borderRadius: '4px', color: '#fff', fontSize: '8px', fontWeight: 700, fontFamily: 'var(--font-arcade)' }}>
-                          🔥 POPULAR
+                          <Flame color={'#fb8500'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> POPULAR
                         </span>
                       )}
                       {meta?.isNew && (
                         <span style={{ padding: '3px 8px', background: 'rgba(6,214,160,0.9)', borderRadius: '4px', color: '#0f0f1a', fontSize: '8px', fontWeight: 700, fontFamily: 'var(--font-arcade)' }}>
-                          ✨ NEW
+                          <Sparkles color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> NEW
                         </span>
                       )}
                     </div>
@@ -423,7 +422,7 @@ export default function MenuPage() {
                     {/* Cart quantity badge */}
                     {cartQty > 0 && (
                       <div style={{ position: 'absolute', bottom: '8px', right: '8px', padding: '3px 8px', background: 'var(--mario-green)', borderRadius: '6px', color: '#0f0f1a', fontSize: '9px', fontWeight: 700, fontFamily: 'var(--font-arcade)' }}>
-                        🛒 {cartQty}
+                        <ShoppingCart className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {cartQty}
                       </div>
                     )}
 
@@ -490,7 +489,7 @@ export default function MenuPage() {
                             cursor: 'pointer', fontFamily: 'var(--font-arcade)', boxShadow: '0 2px 0 rgba(255,214,10,0.2)',
                             transition: 'all 0.15s',
                           }}>
-                          🛒 CHOOSE & ADD
+                          <ShoppingCart className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> CHOOSE & ADD
                         </button>
                       </div>
                     ) : (
@@ -516,7 +515,7 @@ export default function MenuPage() {
           <div className="modal-card" style={{ maxWidth: '500px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-title" style={{ justifyContent: 'space-between', paddingRight: '16px' }}>
               <span>{showDetailModal.name.toUpperCase()}</span>
-              <button onClick={() => setShowDetailModal(null)} style={{ background: 'none', border: 'none', color: 'var(--mario-text-muted)', cursor: 'pointer', fontSize: '16px' }}>✕</button>
+              <button onClick={() => setShowDetailModal(null)} style={{ background: 'none', border: 'none', color: 'var(--mario-text-muted)', cursor: 'pointer', fontSize: '16px' }}><X className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></button>
             </div>
             <div style={{ padding: '20px' }}>
               {/* Big image */}
@@ -641,7 +640,7 @@ export default function MenuPage() {
             cursor: 'pointer', boxShadow: '0 4px 0 var(--mario-green-dark), 0 8px 32px rgba(0,0,0,0.3)', fontFamily: 'var(--font-arcade)',
             transition: 'all 0.15s',
           }}>
-            🛒 Cart ({totalItems}) — ₱{totalPrice}
+            <ShoppingCart className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Cart ({totalItems}) — ₱{totalPrice}
           </button>
         </div>
       )}

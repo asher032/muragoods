@@ -3,7 +3,6 @@
 import { useEffect, useRef } from 'react';
 import { useNotifications } from './NotificationSystem';
 import { sendNotification } from './NotificationSetup';
-
 type OrderData = {
   _id: string;
   id: string;
@@ -74,11 +73,11 @@ export function OrderNotificationPoller() {
 
           if (prevStatus && prevStatus !== order.status) {
             const statusMessages: Record<string, { title: string; body: string }> = {
-              'Payment Verified': { title: '✅ Payment Verified', body: `Order #${orderId.slice(-5).toUpperCase()} payment verified!` },
-              'Preparing': { title: '👨‍🍳 Preparing Order', body: `Order #${orderId.slice(-5).toUpperCase()} is being prepared!` },
-              'Out for Delivery': { title: '🚚 Out for Delivery!', body: `Order #${orderId.slice(-5).toUpperCase()} is on its way!` },
-              'Delivered': { title: '🎉 Order Delivered!', body: `Order #${orderId.slice(-5).toUpperCase()} delivered! 🪙 Points earned.` },
-              'Cancelled': { title: '❌ Order Cancelled', body: `Order #${orderId.slice(-5).toUpperCase()} has been cancelled.` },
+              'Payment Verified': { title: 'Payment Verified', body: `Order #${orderId.slice(-5).toUpperCase()} payment verified!` },
+              'Preparing': { title: 'Preparing Order', body: `Order #${orderId.slice(-5).toUpperCase()} is being prepared!` },
+              'Out for Delivery': { title: 'Out for Delivery!', body: `Order #${orderId.slice(-5).toUpperCase()} is on its way!` },
+              'Delivered': { title: 'Order Delivered!', body: `Order #${orderId.slice(-5).toUpperCase()} delivered! Points earned.` },
+              'Cancelled': { title: 'Order Cancelled', body: `Order #${orderId.slice(-5).toUpperCase()} has been cancelled.` },
             };
 
             const msg = statusMessages[order.status];
@@ -101,11 +100,11 @@ export function OrderNotificationPoller() {
             const isNewCustomerOrder = order.status === 'Pending' || order.status === 'Payment Pending';
             if (isNewCustomerOrder) {
               const shortId = orderId.slice(-5).toUpperCase();
-              addNotification('order', '🆕 New Order!', `New order #${shortId} from ${order.customer || 'Customer'} — ₱${order.total}`, `/order/${orderId}`);
+              addNotification('order', 'New Order!', `New order #${shortId} from ${order.customer || 'Customer'} — ₱${order.total}`, `/order/${orderId}`);
 
               // Send real push notification for new orders
               sendPushNotification(
-                '🆕 New Order Received!',
+                'New Order Received!',
                 `Order #${shortId} from ${order.customer || 'Customer'} — ₱${order.total}`,
                 `/order/${orderId}`
               );

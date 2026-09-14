@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/app/contexts/AuthContext';
+import { Mail, TriangleAlert } from 'lucide-react';
 
 export default function SignupPage() {
   const { user, state, signup } = useAuth();
@@ -204,7 +205,7 @@ export default function SignupPage() {
 
             {error && (
               <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-3 text-sm text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
-                ⚠ {error}
+                <TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {error}
               </div>
             )}
 
@@ -239,7 +240,7 @@ export default function SignupPage() {
           <div className="w-full max-w-md border-2 border-[var(--emerald)] bg-[var(--charcoal)] p-8" style={{ borderRadius: '16px' }}>
             <div className="text-center">
               <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(6,214,160,0.15)', border: '2px solid rgba(6,214,160,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '24px' }}>
-                📧
+                <Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />
               </div>
               <h2 className="text-lg mb-2 text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)' }}>ACCOUNT CREATED!</h2>
               <p className="text-sm text-[var(--cream-muted)] mb-4">

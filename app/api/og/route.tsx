@@ -114,8 +114,8 @@ export async function GET() {
             {[
               { emoji: '🍣', label: 'Musubi', color: '#ffd60a' },
               { emoji: '🍩', label: 'Churros', color: '#fb8500' },
-              { emoji: '☕', label: 'Coffee Jelly', color: '#4895ef' },
-              { emoji: '🍪', label: 'Cookies', color: '#06d6a0' },
+              { emoji: '🧀', label: 'Cheesy Bread', color: '#f5a623' },
+              { emoji: '🍱', label: 'Musubi', color: '#06d6a0' },
             ].map((item) => (
               <div
                 key={item.label}

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { NavBar } from '@/app/components/NavBar';
 import Link from 'next/link';
+import { Gift, ShoppingCart } from 'lucide-react';
 
 type DiscountCode = {
   code: string;
@@ -68,7 +69,7 @@ export default function MyCodesPage() {
         {/* Codes List */}
         {codes.length === 0 ? (
           <div className="border-2 border-[rgba(255,255,255,0.08)] bg-[var(--charcoal)] p-8 rounded-2xl text-center">
-            <p style={{ fontSize: '36px', marginBottom: '12px' }}>🎁</p>
+            <p style={{ fontSize: '36px', marginBottom: '12px' }}><Gift color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
             <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: 'var(--mario-text)' }}>No codes yet!</p>
             <p style={{ fontSize: '12px', color: 'var(--mario-text-muted)', marginTop: '6px' }}>Open Mystery Boxes to win discount codes</p>
             <Link href="/play/mysterybox" className="deco-btn deco-btn-gold mt-4" style={{ display: 'inline-flex' }}>
@@ -122,10 +123,10 @@ export default function MyCodesPage() {
         {/* Quick links */}
         <div style={{ marginTop: '24px', textAlign: 'center' }}>
           <Link href="/play/mysterybox" className="deco-btn deco-btn-sm" style={{ marginRight: '8px' }}>
-            🎁 More Mystery Boxes
+            <Gift color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> More Mystery Boxes
           </Link>
           <Link href="/checkout" className="deco-btn deco-btn-sm deco-btn-gold">
-            🛒 Go to Checkout
+            <ShoppingCart className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Go to Checkout
           </Link>
         </div>
       </div>

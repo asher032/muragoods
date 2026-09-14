@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
-
+import { Mail, Music } from 'lucide-react';
 interface Letter {
   shortId: string;
   recipientName: string;
@@ -62,7 +62,7 @@ export default function ExplorePage() {
         <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
           {(['letters', 'songs'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: `1px solid ${tab === t ? 'rgba(255,214,10,0.4)' : 'rgba(255,255,255,0.08)'}`, background: tab === t ? 'rgba(255,214,10,0.1)' : 'rgba(255,255,255,0.03)', color: tab === t ? '#ffd60a' : 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer', transition: 'all 0.2s' }}>
-              {t === 'letters' ? '💌 Letters' : '🎵 Songs'}
+              {t === 'letters' ? 'Letters' : 'Songs'}
             </button>
           ))}
         </div>
@@ -71,7 +71,7 @@ export default function ExplorePage() {
 
         {!loading && tab === 'letters' && letters.length === 0 && (
           <div style={{ textAlign: 'center', padding: '60px 20px', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px' }}>
-            <p style={{ fontSize: '36px', marginBottom: '12px' }}>💌</p>
+            <p style={{ fontSize: '36px', marginBottom: '12px' }}><Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
             <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>No public letters yet</p>
             <Link href="/untold-words/letter/create" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#ffd60a', textDecoration: 'none', display: 'inline-block', marginTop: '12px' }}>Be the first →</Link>
           </div>
@@ -79,7 +79,7 @@ export default function ExplorePage() {
 
         {!loading && tab === 'songs' && songs.length === 0 && (
           <div style={{ textAlign: 'center', padding: '60px 20px', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px' }}>
-            <p style={{ fontSize: '36px', marginBottom: '12px' }}>🎵</p>
+            <p style={{ fontSize: '36px', marginBottom: '12px' }}><Music color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
             <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>No public songs yet</p>
             <Link href="/untold-words/song/create" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#ffd60a', textDecoration: 'none', display: 'inline-block', marginTop: '12px' }}>Be the first →</Link>
           </div>
@@ -109,7 +109,7 @@ export default function ExplorePage() {
                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.transform = 'translateY(0)'; }}
               >
                 <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'linear-gradient(135deg, #7b2ff7, #ff6496)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <span style={{ fontSize: '20px' }}>🎵</span>
+                  <span style={{ fontSize: '20px' }}><Music color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
                 </div>
                 <div>
                   <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: '#e8b4f8', marginBottom: '2px' }}>{s.songTitle}</p>

@@ -208,7 +208,11 @@ export default function VaultWatchPage() {
       <div style={{ padding: '20px 32px', maxWidth: 1000 }}>
         <h1 style={{ color: '#fff', fontSize: 22, margin: '0 0 6px', fontWeight: 700 }}>{item.title}</h1>
         <div style={{ color: '#A0A0A0', fontSize: 13, marginBottom: 18 }}>
-          {item.year} · {item.runtime} · {playing ? '▶ Playing' : progress > 0 ? `⏸ ${fmt(progress)} / ${fmt(duration)}` : 'Ready'}
+          {item.year} · {item.runtime} · {playing
+            ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><svg width="10" height="10" viewBox="0 0 16 16" fill="#E50914"><path d="M6.271 4.138a.5.5 0 0 1 .78-.172l4 2.8a.5.5 0 0 1 0 .824l-4 2.8A.5.5 0 0 1 6 10.2V5.8a.5.5 0 0 1 .271-.414z"/></svg> Playing</span>
+            : progress > 0
+              ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><svg width="10" height="10" viewBox="0 0 16 16" fill="#888"><rect x="3" y="3" width="3.5" height="10" rx="1"/><rect x="9.5" y="3" width="3.5" height="10" rx="1"/></svg> {fmt(progress)} / {fmt(duration)}</span>
+              : 'Ready'}
         </div>
 
         {/* Quality selector (HLS adaptive) */}

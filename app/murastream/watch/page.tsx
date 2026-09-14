@@ -4,8 +4,9 @@ import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'rea
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useMuraStreamStore } from '../hooks/useMuraStreamStore';
+import { useWatchParty } from '../hooks/useWatchParty';
 import { FlagIcon } from '../components/MuraStreamIcons';
-
+import { Volume2, VolumeX } from 'lucide-react';
 interface Source {
   id: string;
   name: string;
@@ -98,16 +99,59 @@ function WatchContent() {
   // Globally-disabled providers (admin dashboard)
   const [disabledProviders, setDisabledProviders] = useState<Set<string>>(new Set());
   const playerRef = useRef<HTMLDivElement>(null);
+  const [muted, setMuted] = useState(false);
   const [reportDone, setReportDone] = useState<Set<string>>(new Set());
   const [showReport, setShowReport] = useState(false);
   // Last-known-good provider for this exact title (per-title cache) — lets
   // repeat plays skip the probe delay entirely.
   const [cachedSource, setCachedSource] = useState<Source | null>(null);
 
+  // ─── Watch Party (logic lives in useWatchParty) ──────────
+  const watchParty = useWatchParty({
+    type, id, season, episode,
+    activeSourceId: activeSource.id,
+    urlPartyCode: searchParams.get('party'),
+  });
+  const party = watchParty.party;
+  const partyMembers = watchParty.members;
+  const partyMessages = watchParty.messages;
+  const partyTyping = watchParty.typing;
+  const partyError = watchParty.error;
+  const partyBusy = watchParty.busy;
+  const showParty = watchParty.panelOpen;
+  const setShowParty = watchParty.setPanelOpen;
+  const [chatDraft, setChatDraft] = useState('');
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const [joinCode, setJoinCode] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  // Guest: apply a host-commanded provider switch against our source list
+  useEffect(() => {
+    if (!watchParty.followSource) return;
+    const src = SOURCES.find(x => x.id === watchParty.followSource);
+    if (src) { manualPickRef.current = true; setActiveSource(src); }
+  }, [watchParty.followSource]);
+
+  // Keep party chat pinned to the newest message while the panel is open.
+  useEffect(() => {
+    if (showParty && chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [partyMessages.length, showParty]);
+
+  // ?partyPanel=1 (homepage card) opens the chat panel on arrival.
+  useEffect(() => {
+    if (searchParams.get('partyPanel') === '1') setShowParty(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Fetch title
   useEffect(() => {
     if (!id) {
-      setError('No content selected.');
+      // Party guests arriving via an invite link have no ?id= yet — they sit
+      // on the joining screen until the host's state navigates them to the
+      // title. Only a truly bare visit is an error.
+      if (!party) setError('No content selected.');
       setLoading(false);
       return;
     }
@@ -312,6 +356,12 @@ function WatchContent() {
   // Keyboard shortcuts: S = cycle source, N = next episode, F = fullscreen,
   // M = mute, ←/→ = prev/next episode. Honors settings.shortcutsEnabled.
   // Must live above the `if (!id)` early return (Rules of Hooks).
+  const toggleMute = useCallback(() => {
+    setMuted(m => !m);
+    // Best-effort: some providers (e.g. vidlink) honor a postMessage mute.
+    const iframe = playerRef.current?.querySelector('iframe');
+    try { iframe?.contentWindow?.postMessage({ type: 'mute' }, '*'); } catch { /* cross-origin */ }
+  }, []);
   useEffect(() => {
     if (settings.shortcutsEnabled === false) return;
     const onKey = (e: KeyboardEvent) => {
@@ -327,9 +377,7 @@ function WatchContent() {
       } else if (key === 'n' && type === 'tv') {
         advanceEpisode();
       } else if (key === 'm') {
-        const iframe = playerRef.current?.querySelector('iframe');
-        iframe?.focus();
-        try { iframe?.contentWindow?.postMessage({ type: 'mute' }, '*'); } catch { /* cross-origin */ }
+        toggleMute();
       } else if (key === 'f') {
         if (document.fullscreenElement) void document.exitFullscreen();
         else void playerRef.current?.requestFullscreen();
@@ -343,12 +391,27 @@ function WatchContent() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [orderedSources, activeSource, type, advanceEpisode, episode, id, season, router, settings.shortcutsEnabled]);
+  }, [orderedSources, activeSource, type, advanceEpisode, episode, id, season, router, settings.shortcutsEnabled, toggleMute]);
 
   if (!id) {
+    // Active party: the host's snapshot will navigate us to the title.
+    if (party) {
+      return (
+        <div style={{ minHeight: '100vh', background: '#0A0A0A', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px' }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: '50%',
+            border: '3px solid rgba(229,9,20,0.25)', borderTopColor: '#E50914',
+            animation: 'customLoaderSpin 0.9s linear infinite',
+          }} />
+          <p style={{ fontSize: 15, color: '#fff', margin: 0 }}>Joining party <span style={{ fontFamily: 'var(--font-arcade)', color: '#E50914', letterSpacing: '0.2em' }}>{party.code}</span>…</p>
+          <p style={{ fontSize: 12, color: '#888', margin: 0 }}>Taking you to what the host is watching.</p>
+          {partyError && <p style={{ fontSize: 13, color: '#ef4444', margin: 0 }}>{partyError}</p>}
+        </div>
+      );
+    }
     return (
       <div style={{ minHeight: '100vh', background: '#0A0A0A', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px' }}>
-        <p style={{ fontSize: '16px', color: '#ef4444' }}>No content selected.</p>
+        <p style={{ fontSize: '16px', color: '#ef4444' }}>{partyError || error || 'No content selected.'}</p>
         <Link href="/murastream" style={{ color: '#E50914', fontSize: '14px', textDecoration: 'none' }}>← Browse MuraStream</Link>
       </div>
     );
@@ -412,7 +475,8 @@ function WatchContent() {
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '10px 20px', background: 'rgba(10,10,10,0.9)',
-        backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(255,255,255,0.06)',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        position: 'relative', zIndex: 200,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button onClick={() => router.back()} style={{
@@ -459,6 +523,195 @@ function WatchContent() {
             );
           })}
 
+          {/* Watch party — button carries the unread badge; open state is a
+              fixed right-side chat sidebar so it never hides behind the player */}
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setShowParty(!showParty)} title="Watch Party — watch together in sync" aria-expanded={showParty} style={{
+              position: 'relative',
+              padding: '6px 10px', borderRadius: '8px', cursor: 'pointer',
+              fontSize: '13px', color: showParty || party ? '#E50914' : '#888',
+              border: `1px solid ${showParty || party ? 'rgba(229,9,20,0.45)' : 'rgba(255,255,255,0.08)'}`,
+              background: showParty || party ? 'rgba(229,9,20,0.12)' : 'rgba(255,255,255,0.04)',
+              transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 5,
+            }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+              {party ? party.code : 'Party'}
+              {!showParty && watchParty.unreadCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: -7, right: -7,
+                  minWidth: 17, height: 17, borderRadius: 9, padding: '0 4px',
+                  background: '#E50914', color: '#fff', fontSize: 9.5, fontWeight: 800,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  border: '1.5px solid #0A0A0A',
+                }} aria-label={`${watchParty.unreadCount} unread party messages`}>
+                  {watchParty.unreadCount > 9 ? '9+' : watchParty.unreadCount}
+                </span>
+              )}
+            </button>
+            {showParty && (
+              <div style={{
+                position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 400,
+                width: 320, maxWidth: '100vw',
+                background: 'rgba(16,16,22,0.98)', borderLeft: '1px solid rgba(255,255,255,0.12)',
+                boxShadow: '-16px 0 48px rgba(0,0,0,0.65)',
+                display: 'flex', flexDirection: 'column', padding: 14,
+                overflowY: 'auto',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 2 }}>
+                  <button onClick={() => setShowParty(false)} aria-label="Close chat panel" style={{
+                    background: 'none', border: 'none', color: '#888', fontSize: 20,
+                    cursor: 'pointer', lineHeight: 1, padding: '2px 6px',
+                  }}>×</button>
+                </div>
+                {!party ? (
+                  <>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: '#fff', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#E50914" strokeWidth="2" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+                      WATCH PARTY
+                    </p>
+                    <p style={{ fontSize: 11, color: '#888', margin: '0 0 10px' }}>
+                      Watch the same movie or show in sync with friends.
+                    </p>
+                    <button onClick={() => void watchParty.create()} disabled={partyBusy} style={{
+                      width: '100%', padding: '8px', borderRadius: 7, cursor: partyBusy ? 'wait' : 'pointer',
+                      border: '1px solid #E50914', background: 'rgba(229,9,20,0.15)',
+                      color: '#E50914', fontSize: 12, fontWeight: 700, marginBottom: 8,
+                    }}>
+                      {partyBusy ? 'Starting…' : 'Start a party (host)'}
+                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input
+                        value={joinCode}
+                        onChange={e => setJoinCode(e.target.value.toUpperCase())}
+                        onKeyDown={e => { if (e.key === 'Enter') void watchParty.join(joinCode); }}
+                        placeholder="Code or invite link"
+                        maxLength={200}
+                        aria-label="Party code or invite link"
+                        style={{
+                          flex: 1, padding: '8px', borderRadius: 7, border: '1px solid rgba(255,255,255,0.15)',
+                          background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 12,
+                          letterSpacing: '0.2em', textTransform: 'uppercase', outline: 'none', minWidth: 0,
+                        }}
+                      />
+                      <button onClick={() => void watchParty.join(joinCode)} disabled={partyBusy} style={{
+                        padding: '8px 12px', borderRadius: 7, cursor: 'pointer',
+                        border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.08)',
+                        color: '#fff', fontSize: 12, fontWeight: 600,
+                      }}>Join</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: '#fff', margin: '0 0 2px' }}>
+                      WATCH PARTY · {party.isHost ? 'HOST' : 'GUEST'}
+                    </p>
+                    <p style={{ fontSize: 10, color: '#888', margin: '0 0 8px' }}>
+                      {party.isHost ? 'You control playback — everyone follows you.' : 'Following the host automatically.'}
+                    </p>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.2)',
+                      borderRadius: 8, padding: '10px', marginBottom: 8,
+                    }}>
+                      <span style={{ fontFamily: 'var(--font-arcade)', fontSize: 18, color: '#E50914', letterSpacing: '0.25em' }}>
+                        {party.code}
+                      </span>
+                    </div>
+                    <button onClick={() => { navigator.clipboard?.writeText(watchParty.inviteLink).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {}); }} style={{
+                      width: '100%', padding: '8px', borderRadius: 7, cursor: 'pointer',
+                      border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.08)',
+                      color: copied ? '#22c55e' : '#fff', fontSize: 12, fontWeight: 600, marginBottom: 8,
+                    }}>
+                      {copied ? 'Invite link copied!' : 'Copy invite link'}
+                    </button>
+                    {partyMembers.length > 0 && (
+                      <div style={{ marginBottom: 8 }}>
+                        <p style={{ fontSize: 9, color: '#666', letterSpacing: '0.08em', margin: '0 0 4px' }}>
+                          WATCHING NOW ({partyMembers.length})
+                        </p>
+                        {partyMembers.map((m, i) => (
+                          <p key={`${m.email}-${i}`} style={{ fontSize: 12, color: '#ccc', margin: '0 0 2px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
+                            {m.name}{m.email && party.hostEmail === m.email ? ' (host)' : ''}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                    {/* Live chat — fills the remaining sidebar height */}
+                    <div
+                      ref={chatScrollRef}
+                      style={{
+                        flex: 1, minHeight: 180, overflowY: 'auto', marginBottom: 8,
+                        border: '1px solid rgba(255,255,255,0.08)', borderRadius: 7,
+                        padding: '6px 8px', background: 'rgba(0,0,0,0.3)',
+                      }}
+                    >
+                      {partyMessages.length === 0 ? (
+                        <p style={{ fontSize: 11, color: '#555', margin: '12px 0', textAlign: 'center' }}>
+                          Say hi to your party…
+                        </p>
+                      ) : (
+                        partyMessages.map((msg, i) => (
+                          <p key={`${msg.at}-${i}`} style={{ fontSize: 11.5, margin: '0 0 5px', lineHeight: 1.35 }}>
+                            <span style={{ color: msg.email === (party.hostEmail || '') ? '#E50914' : '#888', fontWeight: 700 }}>{msg.name}</span>
+                            <span style={{ color: '#ddd' }}> {msg.text}</span>
+                          </p>
+                        ))
+                      )}
+                    </div>
+                    {partyTyping.length > 0 && (
+                      <p style={{ fontSize: 10.5, color: '#E50914', margin: '0 0 6px', fontStyle: 'italic' }}>
+                        {partyTyping.join(', ')} {partyTyping.length === 1 ? 'is' : 'are'} typing…
+                      </p>
+                    )}
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                      <input
+                        value={chatDraft}
+                        onChange={e => { setChatDraft(e.target.value); watchParty.notifyTyping(); }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && chatDraft.trim()) {
+                            void watchParty.sendMessage(chatDraft);
+                            setChatDraft('');
+                          }
+                        }}
+                        placeholder="Message the party…"
+                        maxLength={300}
+                        aria-label="Chat message"
+                        style={{
+                          flex: 1, padding: '7px 9px', borderRadius: 7,
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 12,
+                        }}
+                      />
+                      <button
+                        onClick={() => { if (chatDraft.trim()) { void watchParty.sendMessage(chatDraft); setChatDraft(''); } }}
+                        disabled={!chatDraft.trim()}
+                        aria-label="Send chat"
+                        style={{
+                          padding: '7px 10px', borderRadius: 7, cursor: chatDraft.trim() ? 'pointer' : 'default',
+                          border: '1px solid #E50914', background: 'rgba(229,9,20,0.15)',
+                          color: chatDraft.trim() ? '#E50914' : '#666', fontSize: 12, fontWeight: 700,
+                        }}
+                      >Send</button>
+                    </div>
+                    <button onClick={() => void watchParty.leave()} style={{
+                      width: '100%', padding: '8px', borderRadius: 7, cursor: 'pointer',
+                      border: '1px solid rgba(239,68,68,0.4)', background: 'transparent',
+                      color: '#ef4444', fontSize: 12, fontWeight: 600,
+                    }}>
+                      {party.isHost ? 'End party' : 'Leave party'}
+                    </button>
+                  </>
+                )}
+                {partyError && (
+                  <p style={{ fontSize: 11, color: '#ef4444', margin: '8px 0 0' }}>{partyError}</p>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Report active source */}
           <div style={{ position: 'relative' }}>
             <button onClick={() => setShowReport(v => !v)} title="Report this source" style={{
@@ -468,7 +721,7 @@ function WatchContent() {
             }}><FlagIcon size={13} /></button>
             {showReport && (
               <div style={{
-                position: 'absolute', top: '36px', right: 0, zIndex: 60,
+                position: 'absolute', top: '36px', right: 0, zIndex: 300,
                 background: 'rgba(20,20,20,0.97)', border: '1px solid rgba(255,255,255,0.1)',
                 borderRadius: 10, padding: 6, minWidth: 200, boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
               }}>
@@ -488,7 +741,7 @@ function WatchContent() {
                       onMouseEnter={e => { if (!done) e.currentTarget.style.background = 'rgba(229,9,20,0.1)'; }}
                       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
                     >
-                      {issue === 'broken' ? '⚠ Broken / won\u2019t play' : '◆ Too many ads'} {done && '✓ reported'}
+                      {issue === 'broken' ? 'Broken / won\u2019t play' : 'Too many ads'} {done && 'reported'}
                     </button>
                   );
                 })}
@@ -497,6 +750,16 @@ function WatchContent() {
           </div>
         </div>
       </div>
+
+      {/* Party-ended / party error banner (the panel may be closed) */}
+      {partyError && !showParty && (
+        <div style={{
+          background: 'rgba(239,68,68,0.12)', borderBottom: '1px solid rgba(239,68,68,0.35)',
+          color: '#fca5a5', fontSize: 12, padding: '6px 20px',
+        }}>
+          {partyError}
+        </div>
+      )}
 
       {/* Player */}
       <div ref={playerRef} style={{ flex: 1, position: 'relative', minHeight: '60vh' }}>
@@ -511,7 +774,8 @@ function WatchContent() {
             <div style={{ display: 'flex', gap: '10px' }}>
               <button onClick={() => { setError(''); setActiveSource(SOURCES[0]); }}
                 style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid #E50914', background: 'rgba(229,9,20,0.15)', color: '#E50914', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
-                ↻ Retry
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                Retry
               </button>
               <Link href={type === 'tv' ? `/murastream/tv/${id}` : `/murastream/movie/${id}`} style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: '#888', fontSize: '13px', textDecoration: 'none' }}>
                 ← Details
@@ -537,12 +801,15 @@ function WatchContent() {
         {/* Auto-play overlay */}
         {showAutoPlay && type === 'tv' && (
           <div style={{
-            position: 'absolute', bottom: '80px', right: '16px', zIndex: 20,
+            position: 'absolute', bottom: '80px', right: '16px', zIndex: 100,
             background: 'rgba(10,10,24,0.95)', border: '1px solid rgba(229,9,20,0.3)',
             borderRadius: '12px', padding: '16px', width: '300px',
             backdropFilter: 'blur(10px)',
           }}>
-            <p style={{ fontSize: '11px', color: '#E50914', margin: '0 0 8px', fontWeight: 600 }}>▶ NEXT EPISODE</p>
+            <p style={{ fontSize: '11px', color: '#E50914', margin: '0 0 8px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <svg width="9" height="9" viewBox="0 0 16 16" fill="currentColor"><path d="M6.271 4.138a.5.5 0 0 1 .78-.172l4 2.8a.5.5 0 0 1 0 .824l-4 2.8A.5.5 0 0 1 6 10.2V5.8a.5.5 0 0 1 .271-.414z"/></svg>
+              NEXT EPISODE
+            </p>
             <p style={{ fontSize: '12px', color: '#fff', margin: '0 0 4px' }}>{title} — S{season}E{episode + 1}</p>
             <p style={{ fontSize: '11px', color: '#888', margin: '0 0 12px' }}>Starting in {autoPlayCountdown}s...</p>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -550,7 +817,10 @@ function WatchContent() {
                 flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #E50914',
                 background: 'rgba(229,9,20,0.15)', color: '#E50914',
                 fontSize: '12px', cursor: 'pointer', fontWeight: 600,
-              }}>▶ Play Now</button>
+              }}>
+                <svg width="9" height="9" viewBox="0 0 16 16" fill="currentColor"><path d="M6.271 4.138a.5.5 0 0 1 .78-.172l4 2.8a.5.5 0 0 1 0 .824l-4 2.8A.5.5 0 0 1 6 10.2V5.8a.5.5 0 0 1 .271-.414z"/></svg>
+                Play Now
+              </button>
               <button onClick={() => setShowAutoPlay(false)} style={{
                 flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)',
                 background: 'transparent', color: '#888', fontSize: '12px', cursor: 'pointer',
@@ -562,7 +832,21 @@ function WatchContent() {
 
       {/* Bottom bar */}
       <div style={{ background: 'rgba(15,15,26,0.95)', borderTop: '1px solid rgba(255,255,255,0.05)', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>            <Link href={type === 'tv' ? `/murastream/tv/${id}` : `/murastream/movie/${id}`} style={{
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={toggleMute}
+              title={muted ? 'Unmute (M)' : 'Mute (M)'}
+              aria-label={muted ? 'Unmute' : 'Mute'}
+              style={{
+                padding: '5px 9px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)',
+                background: muted ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.06)',
+                color: muted ? '#E50914' : '#ccc', fontSize: '12px', cursor: 'pointer',
+                display: 'flex', alignItems: 'center',
+              }}
+            >
+              {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+            </button>
+            <Link href={type === 'tv' ? `/murastream/tv/${id}` : `/murastream/movie/${id}`} style={{
               padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)',
               background: 'transparent', color: '#888', fontSize: '12px', textDecoration: 'none',
             }}>Details</Link>
@@ -609,8 +893,14 @@ function WatchContent() {
 
 export default function WatchPage() {
   return (
-    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', color: '#666' }}>Loading...</div>}>
+    <Suspense fallback={
+      <div style={{ minHeight: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14 }}>
+        <div className="custom-loader" />
+        <p style={{ fontSize: '13px', color: '#888', fontFamily: '-apple-system, sans-serif' }}>Loading player…</p>
+      </div>
+    }>
       <WatchContent />
     </Suspense>
   );
 }
+

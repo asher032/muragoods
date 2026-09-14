@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { useCoins } from '@/app/hooks/useCoins';
+import { Film, CircleUserRound } from 'lucide-react';
 
 const tabs = [
   { href: '/', label: 'Home', icon: (active: boolean) => (
@@ -25,21 +25,15 @@ const tabs = [
     </svg>
   )},
   { href: '/murastream', label: 'Movies', icon: (active: boolean) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill={active ? '#ffd60a' : '#888'} viewBox="0 0 16 16">
-      <path d="M0 11a1 1 0 0 1 1 1H4a1 1 0 0 1-1-1zm-2.05-.5a.5.5 0 0 1 .42-.49c.31-.05.65-.07 1.03-.07.38 0 .72.02 1.03.07a.5.5 0 0 1-.41.99 5.2 5.2 0 0 0-1.04 0 .5.5 0 0 1-.49-.42zM12 9a1 1 0 0 1 1 1 3 3 0 0 1-6 0 1 1 0 0 1 1-1z"/>
-      <path d="M4 6.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5M4 11.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5"/>
-    </svg>
+    <Film size={22} color={active ? '#ffd60a' : '#888'} strokeWidth={active ? 2.4 : 2} />
   )},
   { href: '/account/profile', label: 'Profile', icon: (active: boolean) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill={active ? '#ffd60a' : '#888'} viewBox="0 0 16 16">
-      <path d="M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6"/>
-    </svg>
+    <CircleUserRound size={22} color={active ? '#ffd60a' : '#888'} strokeWidth={active ? 2.4 : 2} />
   )},
 ];
 
 export function BottomNavBar({ cartCount }: { cartCount?: number }) {
   const pathname = usePathname();
-  const { coins } = useCoins();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
@@ -128,22 +122,6 @@ export function BottomNavBar({ cartCount }: { cartCount?: number }) {
           padding: 0 4px;
           box-shadow: 0 2px 6px rgba(230, 57, 70, 0.4);
         }
-        .coin-pill {
-          position: absolute;
-          top: -2px;
-          right: -14px;
-          display: flex;
-          align-items: center;
-          gap: 2px;
-          background: rgba(255, 214, 10, 0.2);
-          border: 1px solid rgba(255, 214, 10, 0.3);
-          border-radius: 8px;
-          padding: 1px 5px;
-          font-family: var(--font-arcade);
-          font-size: 7px;
-          color: #ffd60a;
-          white-space: nowrap;
-        }
         .active-dot {
           width: 4px;
           height: 4px;
@@ -164,9 +142,6 @@ export function BottomNavBar({ cartCount }: { cartCount?: number }) {
                   {tab.icon(isActive)}
                   {tab.href === '/menu' && cartCount !== undefined && cartCount > 0 && (
                     <span className="tab-badge">{cartCount}</span>
-                  )}
-                  {tab.href === '/account/profile' && (
-                    <span className="coin-pill">🪙 {coins}</span>
                   )}
                 </div>
                 <span className="tab-label">{tab.label}</span>

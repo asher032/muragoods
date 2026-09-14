@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
+import { CircleCheck, CircleX, Coins, PartyPopper, Star } from 'lucide-react';
 interface MarioWalkerProps {
   /** Current status index (0-4) or -1 for cancelled */
   currentStage: number;
@@ -81,7 +81,7 @@ export function MarioWalker({
                 }`}
                 style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px' }}
               >
-                {isCurrent ? '★' : stageActive ? '✓' : '?'}
+                {isCurrent ? <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : stageActive ? <CircleCheck color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : '?'}
               </div>
               {/* Stage label */}
               <p
@@ -145,7 +145,7 @@ export function MarioWalker({
               {/* Gold coin sparkle above head when walking */}
               {isWalking && (
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 coin-float" style={{ fontSize: '10px' }}>
-                  🪙
+                  <Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />
                 </div>
               )}
             </div>
@@ -155,16 +155,16 @@ export function MarioWalker({
         {/* Celebration effects at Delivered */}
         {isAtEnd && hasAnimated && (
           <>
-            <div className="absolute top-2 left-1/4 text-lg coin-float" style={{ animationDelay: '0s' }}>🎉</div>
-            <div className="absolute top-1 right-1/4 text-lg coin-float" style={{ animationDelay: '0.5s' }}>⭐</div>
-            <div className="absolute top-3 left-1/2 text-sm coin-float" style={{ animationDelay: '1s' }}>🪙</div>
+            <div className="absolute top-2 left-1/4 text-lg coin-float" style={{ animationDelay: '0s' }}><PartyPopper color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
+            <div className="absolute top-1 right-1/4 text-lg coin-float" style={{ animationDelay: '0.5s' }}><Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
+            <div className="absolute top-3 left-1/2 text-sm coin-float" style={{ animationDelay: '1s' }}><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
           </>
         )}
 
         {/* Cancelled — fallen Mario */}
         {isCancelled && hasAnimated && (
           <div className="absolute bottom-10 left-4 text-center w-full">
-            <span className="text-sm" style={{ fontFamily: 'var(--font-arcade)' }}>✖ GAME OVER</span>
+            <span className="text-sm" style={{ fontFamily: 'var(--font-arcade)' }}><CircleX color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> GAME OVER</span>
           </div>
         )}
       </div>
