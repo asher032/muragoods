@@ -32,8 +32,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Invalid code' }, { status: 400 });
     }
 
-    // Update password and clear reset code
-    user.password = newPassword;
+    // Update password (bcrypt) and clear reset code
+    const { hashPassword } = await import('@/app/lib/password');
+    user.password = await hashPassword(newPassword);
     user.passwordResetCode = null;
     user.passwordResetExpires = null;
     await user.save();

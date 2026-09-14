@@ -10,7 +10,7 @@ import { useMuraStreamStore } from './hooks/useMuraStreamStore';
 import type { MediaItem, ContinueWatchingItem } from './types';
 import { GENRE_MAP } from './types';
 import { DRAMA_SECTIONS } from './data/dramas';
-import { Star } from 'lucide-react';
+import { Star, Baby, Flame } from 'lucide-react';
 
 function FeaturedHero({ item }: { item: MediaItem | null }) {
   if (!item) return null;
@@ -252,8 +252,8 @@ function WatchPartyCard({ partyCode, hero }: { partyCode: string | null; hero: M
   );
 }
 
-function MediaRow({ title, items, loading, viewAllHref, ranked }: {
-  title: string; items: MediaItem[]; loading: boolean; viewAllHref?: string; ranked?: boolean;
+function MediaRow({ title, items, loading, viewAllHref, ranked, icon: RowIcon }: {
+  title: string; items: MediaItem[]; loading: boolean; viewAllHref?: string; ranked?: boolean; icon?: React.ComponentType<{ size?: number | string; color?: string; 'aria-hidden'?: boolean | 'true' | 'false'; style?: React.CSSProperties }>;
 }) {
   if (loading) {
     return (
@@ -278,7 +278,10 @@ function MediaRow({ title, items, loading, viewAllHref, ranked }: {
   return (
     <div className={`ms-row${ranked ? ' ms-rank-row' : ''}`}>
       <div className="ms-row-header">
-        <p className="ms-row-title">{title}</p>
+        <p className="ms-row-title">
+          {RowIcon && <RowIcon size={15} color="#E50914" aria-hidden style={{ verticalAlign: '-0.15em', marginRight: '6px', flexShrink: 0 }} />}
+          {title}
+        </p>
         {viewAllHref && (
           <Link href={viewAllHref} className="ms-row-more">View All →</Link>
         )}
@@ -328,17 +331,14 @@ function MuraStreamHomeContent() {
   const [dramaLists, setDramaLists] = useState<Record<string, MediaItem[]>>({});
   // Extra discover rows: cartoons (genre 16) and all-time famous TV.
   const [extraLists, setExtraLists] = useState<Record<string, MediaItem[]>>({});
+  // Draft text for the navigational search bar (Enter → full search page).
+  const [searchDraft, setSearchDraft] = useState('');
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<MediaItem[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState(false);
   const { continueWatching } = useMuraStreamStore();
   const [activeTab, setActiveTab] = useState('trending');
   // Party code from ?party= — the card is informational.
   const [partyCode, setPartyCode] = useState<string | null>(null);
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const searchAbortRef = useRef<AbortController | null>(null);
 
   const fetchTMDB = useCallback(async (action: string, params: Record<string, string> = {}) => {
     const sp = new URLSearchParams({ action, ...params });
@@ -359,27 +359,41 @@ function MuraStreamHomeContent() {
     if (m) setPartyCode(m[1].toUpperCase());
   }, [searchString]);
 
+  // Depth: pull 2 TMDB pages per row (~40 titles each) so rows feel Netflix-deep.
+  const fetchDeep = useCallback(async (action: string, params: Record<string, string> = {}) => {
+    const [p1, p2] = await Promise.all([
+      fetchTMDB(action, { ...params, page: '1' }),
+      fetchTMDB(action, { ...params, page: '2' }).catch(() => ({ results: [] })),
+    ]);
+    const seen = new Set<number>();
+    const merged: MediaItem[] = [];
+    for (const item of [...(p1.results || []), ...(p2.results || [])]) {
+      if (seen.has(item.id)) continue;
+      seen.add(item.id);
+      merged.push(item);
+    }
+    return merged;
+  }, [fetchTMDB]);
+
   useEffect(() => {
     async function load() {
       try {
         setLoading(true);
         const [tM, tTV, pM, pTV] = await Promise.all([
-          fetchTMDB('trending', { type: 'movie', window: 'week' }),
-          fetchTMDB('trending', { type: 'tv', window: 'week' }),
-          fetchTMDB('popular', { type: 'movie' }),
-          fetchTMDB('popular', { type: 'tv' }),
+          fetchDeep('trending', { type: 'movie', window: 'week' }),
+          fetchDeep('trending', { type: 'tv', window: 'week' }),
+          fetchDeep('popular', { type: 'movie' }),
+          fetchDeep('popular', { type: 'tv' }),
         ]);
-        setTrendingMovies(tM.results || []);
-        setTrendingTV(tTV.results || []);
-        setPopularMovies(pM.results || []);
-        setPopularTV(pTV.results || []);
+        setTrendingMovies(tM);
+        setTrendingTV(tTV);
+        setPopularMovies(pM);
+        setPopularTV(pTV);
 
         try {
           const dramaRes = await Promise.all(
             DRAMA_SECTIONS.map(s =>
-              fetch(`/api/murastream/tmdb?action=discover&type=tv&with_original_language=${s.lang}&with_genres=18&vote_count_gte=20`)
-                .then(r => (r.ok ? r.json() : { results: [] }))
-                .then(d => d.results || [])
+              fetchDeep('discover', { type: 'tv', with_original_language: s.lang, with_genres: '18', 'vote_count.gte': '20' })
                 .catch(() => [] as MediaItem[])
             )
           );
@@ -391,14 +405,14 @@ function MuraStreamHomeContent() {
         // Cartoons + famous rows (independent — never block the main rows).
         try {
           const [cM, cTV, fTV] = await Promise.all([
-            fetchTMDB('discover', { type: 'movie', with_genres: '16', 'vote_count.gte': '200' }).catch(() => ({ results: [] })),
-            fetchTMDB('discover', { type: 'tv', with_genres: '16', 'vote_count.gte': '100' }).catch(() => ({ results: [] })),
-            fetchTMDB('discover', { type: 'tv', 'vote_count.gte': '1000' }).catch(() => ({ results: [] })),
+            fetchDeep('discover', { type: 'movie', with_genres: '16', 'vote_count.gte': '200' }).catch(() => [] as MediaItem[]),
+            fetchDeep('discover', { type: 'tv', with_genres: '16', 'vote_count.gte': '100' }).catch(() => [] as MediaItem[]),
+            fetchDeep('discover', { type: 'tv', 'vote_count.gte': '1000' }).catch(() => [] as MediaItem[]),
           ]);
           setExtraLists({
-            cartoonMovies: cM.results || [],
-            cartoonTV: cTV.results || [],
-            famousTV: fTV.results || [],
+            cartoonMovies: cM,
+            cartoonTV: cTV,
+            famousTV: fTV,
           });
         } catch { setExtraLists({}); }
 
@@ -410,38 +424,6 @@ function MuraStreamHomeContent() {
     }
     load();
   }, [fetchTMDB]);
-
-  // Search with debounce + AbortController
-  useEffect(() => {
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    if (searchAbortRef.current) searchAbortRef.current.abort();
-    if (!searchQuery.trim()) { setSearchResults([]); setSearching(false); setSearchError(false); return; }
-    setSearching(true);
-    setSearchError(false);
-    searchTimerRef.current = setTimeout(async () => {
-      try {
-        const controller = new AbortController();
-        searchAbortRef.current = controller;
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
-        const sp = new URLSearchParams({ action: 'search', q: searchQuery });
-        const res = await fetch(`/api/murastream/tmdb?${sp}`, { signal: controller.signal });
-        clearTimeout(timeoutId);
-        if (!res.ok) throw new Error('Search failed');
-        const data = await res.json();
-        setSearchResults(data.results || []);
-      } catch (err: unknown) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        setSearchResults([]);
-        setSearchError(true);
-      } finally {
-        setSearching(false);
-      }
-    }, 350);
-    return () => {
-      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-      if (searchAbortRef.current) searchAbortRef.current.abort();
-    };
-  }, [searchQuery]);
 
   const heroItem = activeTab === 'trending' && trendingMovies.length > 0
     ? trendingMovies[0]
@@ -468,8 +450,9 @@ function MuraStreamHomeContent() {
             <input
               type="text"
               placeholder="Search movies & TV shows..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              value={searchDraft}
+              onChange={e => setSearchDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && searchDraft.trim()) router.push(`/murastream/search?q=${encodeURIComponent(searchDraft.trim())}`); }}
               style={{
                 width: '100%', padding: '14px 18px 14px 44px',
                 background: 'rgba(255,255,255,0.05)',
@@ -489,38 +472,7 @@ function MuraStreamHomeContent() {
           </div>
         </div>
 
-        {/* ─── Search Results ─────────────────────────── */}
-        {searchQuery.trim() && (
-          <div style={{ marginBottom: '40px' }}>
-            <p className="ms-row-title" style={{ marginBottom: '16px' }}>
-              {searching ? 'Searching...' : `Results for "${searchQuery}"`}
-            </p>
-            {searching ? (
-              <MuraStreamLoader fullScreen={false} text="Searching..." />
-            ) : searchError ? (
-              <div style={{ textAlign: 'center', padding: '24px', color: '#ef4444' }}>
-                <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '13px' }}>Search failed. Please try again.</p>
-              </div>
-            ) : searchResults.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '24px', color: 'var(--ms-text-faint)' }}>
-                <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '13px' }}>No results found</p>
-              </div>
-            ) : (
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
-                gap: '36px 28px',
-              }}>
-                {searchResults.map(item => <MuraStreamCard key={item.id} item={item} />)}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* ─── Main Content ──────────────────────────── */}
-        {!searchQuery.trim() && (
-          <>
-            {/* Tabs */}
             <div style={{
               display: 'flex', gap: '6px', marginBottom: '28px',
               overflowX: 'auto', paddingBottom: '4px',
@@ -565,25 +517,26 @@ function MuraStreamHomeContent() {
                 <MediaRow title="Trending TV Shows" items={trendingTV} loading={loading} viewAllHref="/murastream?tab=tv" />
                 <MediaRow title="Popular Movies" items={popularMovies} loading={loading} viewAllHref="/murastream?tab=movies" />
                 <MediaRow title="K-Dramas Everyone's Watching" items={dramaLists.kdrama || []} loading={loading} viewAllHref="/murastream/kdrama" />
-                <MediaRow title="Cartoons & Animation 🎨" items={[...(extraLists.cartoonMovies || []), ...(extraLists.cartoonTV || [])].slice(0, 20)} loading={loading} viewAllHref="/murastream/genres?type=movie&genre=16" />
-                <MediaRow title="Famous TV Shows 🔥" items={extraLists.famousTV || []} loading={loading} viewAllHref="/murastream/genres?type=tv" />
+                <MediaRow title="Cartoons & Animation" icon={Baby} items={[...(extraLists.cartoonMovies || []), ...(extraLists.cartoonTV || [])].slice(0, 20)} loading={loading} viewAllHref="/murastream/genres?type=movie&genre=16" />
+                <MediaRow title="Famous TV Shows" icon={Flame} items={extraLists.famousTV || []} loading={loading} viewAllHref="/murastream/genres?type=tv" />
               </>
             )}
             {activeTab === 'movies' && (
               <>
                 <MediaRow title="Popular Movies" items={popularMovies} loading={loading} />
                 <MediaRow title="Trending Movies" items={trendingMovies} loading={loading} />
-                <MediaRow title="Cartoon Movies 🎨" items={extraLists.cartoonMovies || []} loading={loading} viewAllHref="/murastream/genres?type=movie&genre=16" />
+                <MediaRow title="Cartoon Movies" icon={Baby} items={extraLists.cartoonMovies || []} loading={loading} viewAllHref="/murastream/genres?type=movie&genre=16" />
               </>
             )}
             {activeTab === 'tv' && (
               <>
                 <MediaRow title="Popular TV Shows" items={popularTV} loading={loading} />
                 <MediaRow title="Trending TV" items={trendingTV} loading={loading} />
-                <MediaRow title="Famous TV Shows 🔥" items={extraLists.famousTV || []} loading={loading} viewAllHref="/murastream/genres?type=tv" />
-                <MediaRow title="Cartoon TV Shows 🎨" items={extraLists.cartoonTV || []} loading={loading} viewAllHref="/murastream/genres?type=tv&genre=16" />
+                <MediaRow title="Famous TV Shows" icon={Flame} items={extraLists.famousTV || []} loading={loading} viewAllHref="/murastream/genres?type=tv" />
+                <MediaRow title="Cartoon TV Shows" icon={Baby} items={extraLists.cartoonTV || []} loading={loading} viewAllHref="/murastream/genres?type=tv&genre=16" />
               </>
-            )}            {activeTab === 'kdrama' && (
+            )}
+            {activeTab === 'kdrama' && (
               <>
                 {DRAMA_SECTIONS.map(s => (
                   <MediaRow
@@ -623,8 +576,6 @@ function MuraStreamHomeContent() {
                 </div>
               </>
             )}
-          </>
-        )}
 
         {/* Footer */}
         <div style={{

@@ -1,6 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+// MuraStream search — URL-driven. The query lives in ?q= and the filter in
+// ?type=, so a search can never get stuck in a stale client state: pasting a
+// link, pressing Enter, or the home search bar all land here and the effect
+// re-runs from the URL itself. The input updates the URL (debounced) and the
+// effect fetches — one direction of flow, no guards to deadlock.
+
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import MuraStreamCard from '../components/MuraStreamCard';
 import MuraStreamLoader from '../components/MuraStreamLoader';
 import type { MediaItem } from '../types';
@@ -8,96 +15,89 @@ import { X } from 'lucide-react';
 
 type SearchState = 'idle' | 'loading' | 'success' | 'error' | 'no-results';
 
-export default function MuraStreamSearchPage() {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<MediaItem[]>([]);
-  const [searchState, setSearchState] = useState<SearchState>('idle');
-  const [errorMessage, setErrorMessage] = useState('');
-  const [searchType, setSearchType] = useState<'all' | 'kdrama'>('all');
-  const abortRef = useRef<AbortController | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Key of the last *issued* request ("query|type") so re-runs of the effect
-  // (e.g. doSearch identity changing) never re-enter the loading state for a
-  // search that already has results — the old results.length-based guard
-  // stalled the page on "Searching..." after every successful search.
-  const lastKeyRef = useRef('');
+function SearchContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const doSearch = useCallback(async (q: string, type: string) => {
-    if (!q.trim()) {
+  const urlQuery = searchParams.get('q') || '';
+  const urlType = (searchParams.get('type') === 'kdrama' ? 'kdrama' : 'all') as 'all' | 'kdrama';
+
+  // Local input state follows the URL; typing writes back to the URL debounced.
+  const [input, setInput] = useState(urlQuery);
+  const [results, setResults] = useState<MediaItem[]>([]);
+  const [searchState, setSearchState] = useState<SearchState>(urlQuery.trim() ? 'loading' : 'idle');
+  const [errorMessage, setErrorMessage] = useState('');
+  const abortRef = useRef<AbortController | null>(null);
+  const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Keep the input in sync when the URL changes from outside (nav, back button).
+  useEffect(() => { setInput(urlQuery); }, [urlQuery]);
+
+  useEffect(() => {
+    const q = urlQuery.trim();
+    if (!q) {
+      abortRef.current?.abort();
       setResults([]);
       setSearchState('idle');
       return;
     }
 
-    // Cancel previous request
-    abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-
     setSearchState('loading');
     setErrorMessage('');
 
-    try {
-      let items: MediaItem[] = [];
-
-      // Single multi-search; K-Drama filter narrows to Korean-language titles.
-      const res = await fetch(`/api/murastream/tmdb?action=search&q=${encodeURIComponent(q.trim())}`, {
-        signal: controller.signal,
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      items = (data.results || []) as MediaItem[];
-      if (type === 'kdrama') {
-        items = items.filter(r => r.originalLanguage === 'ko');
+    (async () => {
+      try {
+        const res = await fetch(`/api/murastream/tmdb?action=search&q=${encodeURIComponent(q)}`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        let items: MediaItem[] = data.results || [];
+        if (urlType === 'kdrama') items = items.filter(r => r.originalLanguage === 'ko');
+        if (controller.signal.aborted) return;
+        setResults(items);
+        setSearchState(items.length > 0 ? 'success' : 'no-results');
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        console.error('[MuraStream Search]', err);
+        setErrorMessage('Search is temporarily unavailable. Please try again.');
+        setSearchState('error');
+        setResults([]);
       }
+    })();
 
-      if (controller.signal.aborted) return;
+    return () => controller.abort();
+  }, [urlQuery, urlType]);
 
-      setResults(items);
-      setSearchState(items.length > 0 ? 'success' : 'no-results');
-    } catch (err: unknown) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      console.error('[MuraStream Search]', err);
-      setErrorMessage('Search is temporarily unavailable. Please try again.');
-      setSearchState('error');
-      setResults([]);
-    }
-  }, []);
-
-  // Debounced search — only issues a request when the query/filter combo
-  // actually changed.
-  useEffect(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-
-    if (!query.trim()) {
-      abortRef.current?.abort();
-      setResults([]);
-      setSearchState('idle');
-      lastKeyRef.current = '';
-      return;
-    }
-
-    const key = `${query.trim()}|${searchType}`;
-    if (key === lastKeyRef.current) return; // already showing these results
-
-    setSearchState('loading');
-    timerRef.current = setTimeout(() => {
-      lastKeyRef.current = key;
-      doSearch(query, searchType);
+  // Debounced URL sync while typing (keeps the input responsive).
+  const onInput = (value: string) => {
+    setInput(value);
+    if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+    pushTimerRef.current = setTimeout(() => {
+      const q = value.trim();
+      const sp = new URLSearchParams();
+      if (q) sp.set('q', q);
+      if (urlType === 'kdrama') sp.set('type', 'kdrama');
+      router.replace(`/murastream/search?${sp.toString()}`, { scroll: false });
     }, 350);
+  };
 
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [query, searchType, doSearch]);
+  const setType = (t: 'all' | 'kdrama') => {
+    const q = urlQuery.trim();
+    const sp = new URLSearchParams();
+    if (q) sp.set('q', q);
+    if (t === 'kdrama') sp.set('type', 'kdrama');
+    router.replace(`/murastream/search?${sp.toString()}`, { scroll: false });
+  };
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      abortRef.current?.abort();
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, []);
+  const clear = () => {
+    setInput('');
+    inputRef.current?.focus();
+    router.replace('/murastream/search', { scroll: false });
+  };
 
   return (
     <div className="ms-page-pad">
@@ -111,11 +111,12 @@ export default function MuraStreamSearchPage() {
       {/* Search input */}
       <div style={{ position: 'relative', maxWidth: '500px', marginBottom: '20px' }}>
         <input
+          ref={inputRef}
           type="text"
           placeholder="Search movies & TV shows..."
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && query.trim()) doSearch(query, searchType); }}
+          value={input}
+          onChange={e => onInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { if (pushTimerRef.current) clearTimeout(pushTimerRef.current); onInput(input); } }}
           autoFocus
           style={{
             width: '100%', padding: '14px 44px 14px 44px',
@@ -132,8 +133,8 @@ export default function MuraStreamSearchPage() {
           viewBox="0 0 16 16">
           <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.442.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10"/>
         </svg>
-        {query && (
-          <button onClick={() => { setQuery(''); lastKeyRef.current = ''; }}
+        {input && (
+          <button onClick={clear} aria-label="Clear search"
             style={{
               position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
               background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%',
@@ -145,17 +146,17 @@ export default function MuraStreamSearchPage() {
 
       {/* Type filter */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-        {(['all', 'kdrama'] as const).map(type => (
-          <button key={type} onClick={() => { setSearchType(type); lastKeyRef.current = ''; }}
+        {(['all', 'kdrama'] as const).map(t => (
+          <button key={t} onClick={() => setType(t)}
             style={{
               padding: '8px 16px', borderRadius: '8px',
-              border: searchType === type ? '1px solid rgba(229,9,20,0.4)' : '1px solid rgba(255,255,255,0.06)',
-              background: searchType === type ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.03)',
-              color: searchType === type ? '#E50914' : 'var(--ms-text-dim)',
+              border: urlType === t ? '1px solid rgba(229,9,20,0.4)' : '1px solid rgba(255,255,255,0.06)',
+              background: urlType === t ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.03)',
+              color: urlType === t ? '#E50914' : 'var(--ms-text-dim)',
               fontFamily: '-apple-system, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
               transition: 'all 0.2s',
             }}>
-            {type === 'all' ? 'All' : 'K-Drama'}
+            {t === 'all' ? 'All' : 'K-Drama'}
           </button>
         ))}
       </div>
@@ -171,7 +172,7 @@ export default function MuraStreamSearchPage() {
           <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
             Search is temporarily unavailable
           </p>
-          <button onClick={() => { lastKeyRef.current = ''; doSearch(query, searchType); }}
+          <button onClick={() => router.replace(`/murastream/search?q=${encodeURIComponent(urlQuery)}${urlType === 'kdrama' ? '&type=kdrama' : ''}`)}
             style={{
               padding: '10px 20px', borderRadius: '8px', border: '1px solid rgba(229,9,20,0.3)',
               background: 'rgba(229,9,20,0.1)', color: '#E50914',
@@ -196,9 +197,14 @@ export default function MuraStreamSearchPage() {
 
       {/* Results */}
       {searchState === 'success' && results.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '18px' }}>
-          {results.map(item => <MuraStreamCard key={item.id} item={item} />)}
-        </div>
+        <>
+          <p style={{ fontSize: 12.5, color: 'var(--ms-text-ghost)', margin: '0 0 14px' }}>
+            {results.length} result{results.length === 1 ? '' : 's'} for “{urlQuery.trim()}”
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '18px' }}>
+            {results.map(item => <MuraStreamCard key={item.id} item={item} />)}
+          </div>
+        </>
       )}
 
       {/* Idle */}
@@ -213,5 +219,13 @@ export default function MuraStreamSearchPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function MuraStreamSearchPage() {
+  return (
+    <Suspense fallback={<MuraStreamLoader fullScreen={false} text="Loading search..." />}>
+      <SearchContent />
+    </Suspense>
   );
 }
