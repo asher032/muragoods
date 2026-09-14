@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
-
+import { BookOpen, Coins, MessageCircle, Users } from 'lucide-react';
 export default function ReferPage() {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -51,7 +51,7 @@ export default function ReferPage() {
         <div className="deco-container" style={{ maxWidth: '48rem' }}>
           <div className="text-center mb-8">
             <h1 className="text-2xl sm:text-3xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}>
-              👥 Refer a Friend
+              <Users className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Refer a Friend
             </h1>
             <p className="mt-3 text-base text-[var(--gold)]">Invite friends and earn 50 coins for each referral!</p>
           </div>
@@ -67,7 +67,7 @@ export default function ReferPage() {
                 onClick={handleCopy}
                 className="deco-btn deco-btn-sm deco-btn-gold rounded-lg"
               >
-                {copied ? '✓ Copied!' : '📋 Copy'}
+                {copied ? 'Copied!' : 'Copy'}
               </button>
             </div>
           </div>
@@ -75,12 +75,12 @@ export default function ReferPage() {
           {/* Stats */}
           <div className="grid grid-cols-2 gap-4 mb-8">
             <div className="power-card p-6 text-center rounded-xl">
-              <span className="text-2xl">👥</span>
+              <span className="text-2xl"><Users className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
               <p className="text-[10px] text-[var(--gold)] uppercase mt-2" style={{ fontFamily: 'var(--font-arcade)' }}>Friends Referred</p>
               <p className="text-xl text-[var(--cream)] mt-1" style={{ fontFamily: 'var(--font-arcade)' }}>{referralCount}</p>
             </div>
             <div className="power-card p-6 text-center rounded-xl">
-              <span className="text-2xl">🪙</span>
+              <span className="text-2xl"><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
               <p className="text-[10px] text-[var(--gold)] uppercase mt-2" style={{ fontFamily: 'var(--font-arcade)' }}>Coins Earned</p>
               <p className="text-xl text-[var(--gold-bright)] mt-1" style={{ fontFamily: 'var(--font-arcade)' }}>{referralCount * 50}</p>
             </div>
@@ -113,15 +113,15 @@ export default function ReferPage() {
               rel="noopener noreferrer"
               className="deco-btn deco-btn-gold rounded-xl flex-1 text-center"
             >
-              📘 Share on Facebook
+              <BookOpen className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Share on Facebook
             </a>
             <a
-              href={`https://wa.me/?text=Hey! Use my referral code ${referralCode} on Muragoods and we both get 50 coins! 🪙`}
+              href={`https://wa.me/?text=Hey! Use my referral code ${referralCode} on Muragoods and we both get 50 coins!`}
               target="_blank"
               rel="noopener noreferrer"
               className="deco-btn rounded-xl flex-1 text-center"
             >
-              💬 Share on WhatsApp
+              <MessageCircle className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Share on WhatsApp
             </a>
           </div>
 

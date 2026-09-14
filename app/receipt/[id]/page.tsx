@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { NavBar } from '@/app/components/NavBar';
+import { Receipt as ReceiptIcon } from 'lucide-react';
 
 const Receipt = dynamic(() => import('@/app/components/Receipt'), { ssr: false });
 
@@ -79,7 +80,7 @@ export default function ReceiptPage() {
         <NavBar pageLabel="Receipt" />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
           <div style={{ textAlign: 'center' }}>
-            <p style={{ color: 'var(--mario-red)', fontSize: '14px', marginBottom: '8px' }}>⚠ {error || 'Order not found'}</p>
+            <p style={{ color: 'var(--mario-red)', fontSize: '14px', marginBottom: '8px'}}> {error ||'Order not found'}</p>
             <button onClick={() => router.push('/orders')} style={{ padding: '8px 20px', background: 'rgba(255,214,10,0.15)', border: '1px solid rgba(255,214,10,0.3)', borderRadius: '6px', color: 'var(--mario-yellow)', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}>
               Back to Orders
             </button>
@@ -128,7 +129,7 @@ export default function ReceiptPage() {
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '20px' }}>
           <h1 style={{ color: 'var(--mario-yellow)', fontFamily: 'var(--font-arcade)', fontSize: '16px', marginBottom: '4px' }}>
-            🧾 ORDER RECEIPT
+            <ReceiptIcon className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> ORDER RECEIPT
           </h1>
           <p style={{ color: 'var(--mario-text-muted)', fontSize: '11px' }}>
             Order #{orderId.slice(-8).toUpperCase()}

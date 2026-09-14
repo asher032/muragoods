@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 
 const COINS_KEY = 'muragoods_coins';
+const SERVER_COINS_KEY = 'muragoods_coins_server';
 const HISTORY_KEY = 'muragoods_points_history';
 const RESTRICTIONS_KEY = 'muragoods_coin_restrictions';
 const DEFAULT_BALANCE = 0;
@@ -86,6 +87,52 @@ export function useCoins() {
     }
     setLoaded(true);
   }, []);
+
+  // Server reconciliation: order-delivery awards happen server-side, so the
+  // badge follows the server's coinBalance — but as a DELTA, never an
+  // overwrite. Local spends (cart, rewards) must survive; only positive
+  // server movements (new deliveries) are added on top. The last synced
+  // server balance is remembered so each award is counted exactly once.
+  useEffect(() => {
+    if (!loaded) return;
+    let cancelled = false;
+    const sync = async () => {
+      try {
+        const raw = localStorage.getItem('user');
+        if (!raw) return;
+        const email = (JSON.parse(raw) as { email?: string }).email;
+        if (!email) return;
+        const res = await fetch(`/api/account/profile?email=${encodeURIComponent(email)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const serverBalance = typeof data?.data?.coinBalance === 'number' ? data.data.coinBalance : null;
+        if (cancelled || serverBalance === null) return;
+
+        const storedRaw = localStorage.getItem(SERVER_COINS_KEY);
+        if (storedRaw === null) {
+          // First sync for this device: adopt whichever is higher so an
+          // established server balance is not double-counted nor lost.
+          setCoins(prev => {
+            const next = Math.max(prev, serverBalance);
+            return next;
+          });
+        } else {
+          const delta = serverBalance - (Number(storedRaw) || 0);
+          if (delta > 0) {
+            setCoins(prev => prev + delta);
+            const tx: Transaction = { type: 'earn', amount: delta, label: 'Order delivered', date: new Date().toISOString() };
+            setHistory(h => [tx, ...h].slice(0, 100));
+          }
+        }
+        localStorage.setItem(SERVER_COINS_KEY, String(serverBalance));
+      } catch { /* offline: keep local value */ }
+    };
+    void sync();
+    const onStorage = (e: StorageEvent) => { if (e.key === 'user') void sync(); };
+    window.addEventListener('storage', onStorage);
+    const iv = setInterval(sync, 30_000);
+    return () => { cancelled = true; clearInterval(iv); window.removeEventListener('storage', onStorage); };
+  }, [loaded]);
 
   // Persist whenever coins change
   useEffect(() => {
@@ -190,6 +237,7 @@ export function useCoins() {
     setRestrictions(getDefaultRestrictions());
     localStorage.removeItem(HISTORY_KEY);
     localStorage.removeItem(RESTRICTIONS_KEY);
+    localStorage.removeItem(SERVER_COINS_KEY);
   }, []);
 
   return {

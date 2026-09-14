@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { PixelDivider } from '@/app/components/PixelDivider';
 import { PixelArt } from '@/app/components/PixelArt';
-
+import { Coins, Crown, MapPin, Medal, ShoppingCart, Trophy, Users } from 'lucide-react';
 interface LeaderboardEntry {
   rank: number;
   name: string;
@@ -29,10 +29,10 @@ const rankColors: Record<number, string> = {
   3: '#CD7F32',
 };
 
-const rankIcons: Record<number, string> = {
-  1: '👑',
-  2: '🥈',
-  3: '🥉',
+const rankIcons: Record<number, React.ReactNode> = {
+  1: <Crown color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
+  2: <Medal color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
+  3: <Medal color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
 };
 
 const tierBgs: Record<number, string> = {
@@ -91,7 +91,7 @@ export default function LeaderboardPage() {
               className="text-3xl sm:text-4xl lg:text-5xl text-[var(--cream)] uppercase"
               style={{ fontFamily: 'var(--font-arcade)', textShadow: '4px 4px 0px var(--gold-dark)' }}
             >
-              🏆 HIGH SCORES
+              <Trophy color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> HIGH SCORES
             </h1>
             <div className="h-[2px] w-48 bg-gradient-to-r from-transparent via-[var(--gold)] to-transparent mx-auto mt-4" />
             <p className="mt-4 text-base text-[var(--gold)]">
@@ -138,7 +138,7 @@ export default function LeaderboardPage() {
                     >
                       {/* Crown for 1st */}
                       {isFirst && (
-                        <div className="text-3xl sm:text-4xl mb-2 coin-float">👑</div>
+                        <div className="text-3xl sm:text-4xl mb-2 coin-float"><Crown color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
                       )}
 
                       {/* Avatar / Badge */}
@@ -187,7 +187,7 @@ export default function LeaderboardPage() {
                           className="text-[8px] text-[var(--gold)] mt-1"
                           style={{ fontFamily: 'var(--font-arcade)' }}
                         >
-                          🪙 {entry.coinsEarned}
+                          <Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {entry.coinsEarned}
                         </p>
                       </div>
 
@@ -276,7 +276,7 @@ export default function LeaderboardPage() {
 
                     {/* Coins */}
                     <div className="hidden sm:flex items-center justify-end">
-                      <span className="text-xs text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>🪙 {entry.coinsEarned}</span>
+                      <span className="text-xs text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {entry.coinsEarned}</span>
                     </div>
 
                     {/* Total */}
@@ -296,7 +296,7 @@ export default function LeaderboardPage() {
             return (
               <div className="mt-4 border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.08)] rounded-2xl p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="text-lg">📍</span>
+                  <span className="text-lg"><MapPin color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
                   <div>
                     <p className="text-[9px] text-[var(--gold)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Your Rank</p>
                     <p className="text-sm text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)' }}>#{yourEntry.rank} — {yourEntry.displayName}</p>
@@ -304,7 +304,7 @@ export default function LeaderboardPage() {
                 </div>
                 <div className="text-right">
                   <span className="coin-price">₱{yourEntry.totalSpent}</span>
-                  <p className="text-[8px] text-[var(--gold)]" style={{ fontFamily: 'var(--font-arcade)' }}>🪙 {yourEntry.coinsEarned}</p>
+                  <p className="text-[8px] text-[var(--gold)]" style={{ fontFamily: 'var(--font-arcade)' }}><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {yourEntry.coinsEarned}</p>
                 </div>
               </div>
             );
@@ -314,8 +314,8 @@ export default function LeaderboardPage() {
           <div className="text-center mt-10">
             <PixelDivider variant="ziggurat" />
             <div className="mt-6 flex flex-wrap gap-4 justify-center">
-              <Link href="/menu" className="deco-btn deco-btn-gold rounded-xl">🛒 Place an Order</Link>
-              <Link href="/play/refer" className="deco-btn rounded-xl">👥 Refer Friends</Link>
+              <Link href="/menu" className="deco-btn deco-btn-gold rounded-xl"><ShoppingCart className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Place an Order</Link>
+              <Link href="/play/refer" className="deco-btn rounded-xl"><Users className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Refer Friends</Link>
             </div>
             <p className="mt-6 text-[8px] text-[var(--pewter)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>
               Rankings update with every confirmed order — keep ordering to climb!

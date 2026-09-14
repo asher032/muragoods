@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { type Order, type OrderStatus } from '@/app/lib/muragoods-data';
 import { NavBar } from '@/app/components/NavBar';
 import ShareOrder from '@/app/components/ShareOrder';
-
+import { Check, CircleCheck, CircleHelp, CircleX, ClipboardList, Coins, CookingPot, Hourglass, Package, PartyPopper, Receipt, Truck } from 'lucide-react';
 const statusFlow: OrderStatus[] = [
   'Pending Payment',
   'Payment Verified',
@@ -15,13 +15,13 @@ const statusFlow: OrderStatus[] = [
   'Delivered',
 ];
 
-const statusEmojis: Record<string, string> = {
-  'Pending Payment': '⏳',
-  'Payment Verified': '✅',
-  'Preparing': '👨‍🍳',
-  'Out for Delivery': '🚚',
-  'Delivered': '🎉',
-  'Cancelled': '✖',
+const statusEmojis: Record<string, React.ReactNode> = {
+  'Pending Payment': <Hourglass className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
+  'Payment Verified': <CircleCheck color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
+  'Preparing': <CookingPot className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
+  'Out for Delivery': <Truck className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
+  'Delivered': <PartyPopper color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
+  'Cancelled': <CircleX color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
 };
 
 export default function OrderDetailPage() {
@@ -102,7 +102,7 @@ export default function OrderDetailPage() {
       <main className="min-h-screen" style={{ background: 'var(--mario-bg)' }}>
         <NavBar pageLabel="Order Not Found" />
         <div style={{ maxWidth: '600px', margin: '0 auto', padding: '60px 16px', textAlign: 'center' }}>
-          <span style={{ fontSize: '48px' }}>❓</span>
+          <span style={{ fontSize: '48px' }}><CircleHelp className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
           <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '14px', color: 'var(--mario-text)', marginTop: '20px' }}>
             ORDER NOT FOUND
           </h1>
@@ -155,7 +155,7 @@ export default function OrderDetailPage() {
                   fontSize: '9px',
                   color: 'var(--mario-red)',
                   marginTop: '4px',
-                }}>✖ This order has been cancelled</p>
+                }}><CircleX color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> This order has been cancelled</p>
               )}
             </div>
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
@@ -198,7 +198,7 @@ export default function OrderDetailPage() {
                     transition: 'all 0.2s',
                     transform: current ? 'scale(1.1)' : 'scale(1)',
                   }}>
-                    {active && index > 0 ? '✓' : statusEmojis[step] || (index + 1)}
+                    {active && index > 0 ? <Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : statusEmojis[step] || (index + 1)}
                   </div>
                   <p style={{
                     fontFamily: 'var(--font-arcade)',
@@ -258,7 +258,7 @@ export default function OrderDetailPage() {
                 className="mario-btn mario-btn-red mario-btn-sm"
                 style={{ width: '100%', opacity: cancelling ? 0.5 : 1 }}
               >
-                {cancelling ? 'Cancelling...' : '✖ Cancel Order'}
+                {cancelling ? 'Cancelling...' : 'Cancel Order'}
               </button>
               <p style={{
                 fontSize: '10px',
@@ -287,7 +287,7 @@ export default function OrderDetailPage() {
             textTransform: 'uppercase',
             letterSpacing: '0.1em',
             marginBottom: '12px',
-          }}>📋 Status Timeline</p>
+          }}><ClipboardList className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Status Timeline</p>
           <div style={{ position: 'relative' }}>
             <div style={{
               position: 'absolute',
@@ -311,7 +311,7 @@ export default function OrderDetailPage() {
                   justifyContent: 'center',
                   fontSize: '12px',
                   zIndex: 1,
-                }}>📦</div>
+                }}><Package className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
                 <div>
                   <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '8px', color: 'var(--mario-yellow)' }}>Order Placed</p>
                   <p style={{ fontSize: '11px', color: 'var(--mario-text-muted)', marginTop: '2px' }}>
@@ -336,7 +336,7 @@ export default function OrderDetailPage() {
                       fontSize: '12px',
                       zIndex: 1,
                     }}>
-                      {statusEmojis[entry.status] || '✓'}
+                      {statusEmojis[entry.status] || <Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />}
                     </div>
                     <div>
                       <p style={{
@@ -438,7 +438,7 @@ export default function OrderDetailPage() {
                   fontFamily: 'var(--font-arcade)',
                   fontSize: '10px',
                   color: order.status === 'Delivered' ? 'var(--mario-green)' : 'var(--mario-yellow)',
-                }}>🪙 +{order.pointsEarned}</span>
+                }}><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> +{order.pointsEarned}</span>
               </div>
             )}
           </div>
@@ -508,7 +508,7 @@ export default function OrderDetailPage() {
               </div>
               <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                 <Link href={`/receipt/${order._id || order.id}`} className="mario-btn mario-btn-yellow mario-btn-sm" style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
-                  🧾 View Receipt
+                  <Receipt className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> View Receipt
                 </Link>
               </div>
             </div>

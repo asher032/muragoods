@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
-
+import { Bot, Inbox } from 'lucide-react';
 type Message = {
   sender: string;
   senderName: string;
@@ -140,7 +140,7 @@ export default function AdminSupportPage() {
             <div className="space-y-2">
               {filteredTickets.length === 0 ? (
                 <div className="border-2 border-[rgba(255,255,255,0.08)] bg-[var(--charcoal)] p-6 rounded-2xl text-center">
-                  <p style={{ fontSize: '24px', marginBottom: '8px' }}>📭</p>
+                  <p style={{ fontSize: '24px', marginBottom: '8px' }}><Inbox className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
                   <p style={{ fontSize: '11px', color: 'var(--mario-text-muted)' }}>No tickets</p>
                 </div>
               ) : (
@@ -200,7 +200,7 @@ export default function AdminSupportPage() {
                 {activeTicket.messages.map((msg, i) => (
                   <div key={i} style={{ maxWidth: '85%', alignSelf: msg.sender === 'admin' ? 'flex-end' : 'flex-start' }}>
                     {msg.isAutoReply && (
-                      <div style={{ fontSize: '8px', color: 'var(--mario-blue)', marginBottom: '3px', fontFamily: 'var(--font-arcade)' }}>🤖 Auto-Reply</div>
+                      <div style={{ fontSize: '8px', color: 'var(--mario-blue)', marginBottom: '3px', fontFamily: 'var(--font-arcade)' }}><Bot className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Auto-Reply</div>
                     )}
                     <div style={{
                       padding: '10px 14px',
@@ -209,7 +209,7 @@ export default function AdminSupportPage() {
                       border: msg.sender === 'admin' ? '1px solid rgba(6,214,160,0.2)' : '1px solid rgba(255,255,255,0.08)',
                     }}>
                       <p style={{ fontSize: '8px', color: 'var(--mario-text-muted)', marginBottom: '4px', fontFamily: 'var(--font-arcade)' }}>
-                        {msg.sender === 'admin' ? '🔧 ' : '👤 '}{msg.senderName}
+                        {msg.sender === 'admin' ? '' : ''}{msg.senderName}
                       </p>
                       <p style={{ fontSize: '13px', color: 'var(--mario-text)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{msg.text}</p>
                       <p style={{ fontSize: '8px', color: 'var(--pewter)', marginTop: '4px', textAlign: 'right' }}>{formatTime(msg.timestamp)}</p>

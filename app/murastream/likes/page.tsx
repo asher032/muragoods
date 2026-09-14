@@ -8,7 +8,7 @@ export default function MuraStreamLikesPage() {
   const { likes, removeFromLikes } = useMuraStreamStore();
 
   return (
-    <div style={{ padding: '24px 28px' }}>
+    <div className="ms-page-pad">
       <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: 'var(--ms-text)', margin: '0 0 4px' }}>
         <span style={{ color: '#E50914', display: 'inline-flex', verticalAlign: 'middle', marginRight: 6 }}><HeartIcon size={15} filled /></span> MY LIKES
       </h1>
@@ -17,7 +17,11 @@ export default function MuraStreamLikesPage() {
       </p>
 
       {likes.length > 0 ? (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
+          gap: '36px 28px',
+        }}>
           {likes.map(item => (
             <div key={item.id} style={{ position: 'relative' }}>
               <MuraStreamCard item={item} />

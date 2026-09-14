@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
-
+import { Bird, BookOpen, Bookmark, Camera, CloudRain, Handshake, Heart, Inbox, PenLine, Search } from 'lucide-react';
 interface Letter {
   _id: string;
   recipientName: string;
@@ -18,9 +18,9 @@ interface Letter {
 }
 
 const categories = ['All', 'Love', 'Friendship', 'Appreciation', 'Regret', 'Memories', 'Moving On', 'Other'];
-const categoryEmojis: Record<string, string> = {
-  Love: '❤️', Friendship: '🤝', Appreciation: '💛', Regret: '😔',
-  Memories: '📷', 'Moving On': '🦋', Other: '📝',
+const categoryEmojis: Record<string, React.ReactNode> = {
+  Love: <Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, Friendship: <Handshake className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, Appreciation: <Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, Regret: <CloudRain className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
+  Memories: <Camera className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, 'Moving On': <Bird className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, Other: <PenLine className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
 };
 
 function ArchiveContent() {
@@ -118,7 +118,7 @@ function ArchiveContent() {
             placeholder="Search by name..."
             className="deco-input rounded-xl flex-1"
           />
-          <button type="submit" className="deco-btn deco-btn-gold rounded-xl">🔍</button>
+          <button type="submit" className="deco-btn deco-btn-gold rounded-xl"><Search className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></button>
         </div>
       </form>
 
@@ -154,7 +154,7 @@ function ArchiveContent() {
 
       {!loading && letters.length === 0 && (
         <div className="text-center py-16 border border-[rgba(242,240,228,0.12)] bg-[var(--charcoal)] rounded-2xl">
-          <p className="text-4xl mb-4">📭</p>
+          <p className="text-4xl mb-4"><Inbox className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
           <p className="text-sm text-[var(--pewter)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>
             {searchName ? `No letters for "${searchName}"` : 'No letters yet'}
           </p>
@@ -175,7 +175,7 @@ function ArchiveContent() {
               <div className="p-5">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[8px] px-3 py-1 border border-[rgba(242,240,228,0.15)] rounded-lg text-[var(--gold)]" style={{ fontFamily: 'var(--font-arcade)' }}>
-                    {categoryEmojis[letter.category] || '📝'} {letter.category}
+                    {categoryEmojis[letter.category] || <PenLine className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />} {letter.category}
                   </span>
                   <span className="text-[8px] text-[var(--pewter)]">{new Date(letter.createdAt).toLocaleDateString()}</span>
                 </div>
@@ -191,11 +191,11 @@ function ArchiveContent() {
               </div>
               <div className="border-t border-[rgba(242,240,228,0.08)] px-5 py-3 flex items-center gap-4">
                 <button onClick={() => handleLike(letter)} className={`flex items-center gap-1.5 text-[9px] transition-colors ${isLiked ? 'text-[var(--crimson)]' : 'text-[var(--pewter)] hover:text-[var(--crimson)]'}`}>
-                  <span>{isLiked ? '❤️' : '🤍'}</span>
+                  <span>{isLiked ? <Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : <Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />}</span>
                   <span style={{ fontFamily: 'var(--font-arcade)' }}>{letter.likes || 0}</span>
                 </button>
                 <button onClick={() => handleBookmark(letter)} className={`flex items-center gap-1.5 text-[9px] transition-colors ${isBookmarked ? 'text-[var(--gold-bright)]' : 'text-[var(--pewter)] hover:text-[var(--gold-bright)]'}`}>
-                  <span>{isBookmarked ? '🔖' : '📑'}</span>
+                  <span>{isBookmarked ? <Bookmark className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : <Bookmark className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />}</span>
                   <span style={{ fontFamily: 'var(--font-arcade)' }}>{letter.bookmarks || 0}</span>
                 </button>
               </div>
@@ -222,7 +222,7 @@ export default function ArchivePage() {
         <div className="deco-container" style={{ maxWidth: '48rem' }}>
           <div className="text-center mb-8">
             <h1 className="text-2xl sm:text-3xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}>
-              📚 The Archive
+              <BookOpen className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> The Archive
             </h1>
             <p className="mt-2 text-sm text-[var(--pewter)]">Browse unsent letters written for people</p>
           </div>

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { Icon } from '@/app/components/Icon';
-
+import { Banknote, BarChart3, CircleCheck, CircleX, TrendingUp } from 'lucide-react';
 interface AnalyticsData {
   summary: {
     totalOrders: number;
@@ -76,7 +76,7 @@ export default function AnalyticsPage() {
           <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-2xl sm:text-3xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}>
-                📊 Sales Analytics
+                <BarChart3 className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Sales Analytics
               </h1>
               <p className="mt-2 text-sm text-[var(--pewter)]">Real-time sales data and insights</p>
             </div>
@@ -92,12 +92,12 @@ export default function AnalyticsPage() {
               {/* Summary Cards */}
               <div className="grid gap-4 grid-cols-2 lg:grid-cols-6 mb-8">
                 {[
-                  { label: 'Total Revenue', value: `₱${data.summary.totalRevenue.toLocaleString()}`, icon: '💰', color: 'var(--gold-bright)' },
+                  { label: 'Total Revenue', value: `₱${data.summary.totalRevenue.toLocaleString()}`, icon: <Banknote className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'var(--gold-bright)' },
                   { label: 'Total Orders', value: String(data.summary.totalOrders), icon: <Icon name="box" size={16} />, color: 'var(--cream)' },
-                  { label: 'Avg Order', value: `₱${data.summary.avgOrderValue}`, icon: '📈', color: 'var(--gold)' },
+                  { label: 'Avg Order', value: `₱${data.summary.avgOrderValue}`, icon: <TrendingUp color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color: 'var(--gold)' },
                   { label: 'Active', value: String(data.summary.activeOrders), icon: '⏳', color: 'var(--gold-bright)' },
-                  { label: 'Delivered', value: String(data.summary.delivered), icon: '✅', color: 'var(--emerald-bright)' },
-                  { label: 'Cancelled', value: String(data.summary.cancelled), icon: '✖', color: 'var(--crimson)' },
+                  { label: 'Delivered', value: String(data.summary.delivered), icon: <CircleCheck color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'var(--emerald-bright)' },
+                  { label: 'Cancelled', value: String(data.summary.cancelled), icon: <CircleX color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'var(--crimson)' },
                 ].map(card => (
                   <div key={card.label} className="power-card p-4 text-center rounded-xl">
                     {card.icon}
@@ -110,7 +110,7 @@ export default function AnalyticsPage() {
               {/* Weekly Earnings Report */}
               {data.weeklyRevenue && data.weeklyRevenue.length > 0 && (
                 <div className="mb-8 border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-2xl p-6">
-                  <h2 className="text-[10px] text-[var(--gold)] uppercase mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>📈 Weekly Earnings Report</h2>
+                  <h2 className="text-[10px] text-[var(--gold)] uppercase mb-4" style={{ fontFamily: 'var(--font-arcade)' }}><TrendingUp color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Weekly Earnings Report</h2>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     {data.weeklyRevenue.map((week, i) => (
                       <div key={i} className="border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] rounded-xl p-4">

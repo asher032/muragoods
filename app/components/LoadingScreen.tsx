@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Cloudy } from 'lucide-react';
 
 export function LoadingScreen() {
   const [phase, setPhase] = useState<'logo' | 'text' | 'done'>('logo');
@@ -30,7 +31,7 @@ export function LoadingScreen() {
         <div className="loader-ring loader-ring-inner" />
 
         <div className="loader-orb">
-          <span className="loader-mushroom">🍄</span>
+          <span className="loader-mushroom"><Cloudy className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
           <div className="loader-dot" />
         </div>
       </div>

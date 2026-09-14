@@ -8,7 +8,7 @@ import MuraStreamCard from '../../components/MuraStreamCard';
 import { useMuraStreamStore } from '../../hooks/useMuraStreamStore';
 import { useShareLink } from '../../hooks/useShareLink';
 import { ShareIcon, CheckIcon } from '../../components/MuraStreamIcons';
-
+import { Star } from 'lucide-react';
 export default function TvDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -120,7 +120,7 @@ export default function TvDetailPage() {
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px', alignItems: 'center' }}>
               {show.year && <span style={{ fontSize: '14px', color: 'var(--ms-text-muted)' }}>{show.year}</span>}
               {epCount > 0 && <span style={{ fontSize: '14px', color: 'var(--ms-text-faint)' }}>· {epCount} Episodes</span>}
-              {show.voteAverage > 0 && <span style={{ fontSize: '14px', color: '#E50914', fontWeight: 600 }}>★ {(show.voteAverage || 0).toFixed(1)}</span>}
+              {show.voteAverage > 0 && <span style={{ fontSize: '14px', color: '#E50914', fontWeight: 600 }}><Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {(show.voteAverage || 0).toFixed(1)}</span>}
             </div>
 
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px' }}>
@@ -147,7 +147,7 @@ export default function TvDetailPage() {
                 border: `1px solid ${inList ? 'rgba(229,9,20,0.4)' : 'rgba(255,255,255,0.1)'}`,
                 color: inList ? '#E50914' : 'var(--ms-text-muted)', padding: '14px 22px', borderRadius: '12px',
                 fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-              }}>{inList ? '✓ In My List' : '+ My List'}</button>
+              }}>{inList ? 'In My List' : '+ My List'}</button>
               <button onClick={() => toggleLike({ id: Number(tvId), mediaType: 'tv', title: show.name, posterPath: show.posterPath, backdropPath: show.backdropPath, voteAverage: show.voteAverage, year: show.year })} style={{
                 background: liked ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.06)',
                 border: `1px solid ${liked ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.1)'}`,
@@ -175,12 +175,16 @@ export default function TvDetailPage() {
           </div>
         </div>
 
-        {/* Season/Episode list */}
-        {show.seasons?.length > 0 && (
+        {/* Season/Episode list — always offered for shows, even when the
+            catalog has no season metadata (fallback serves synthetic ones) */}
+        {true && (
           <div style={{ marginTop: '40px' }}>
             <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--ms-text-strong)', margin: '0 0 18px' }}>Episodes</h3>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
-              {show.seasons.filter((s: any) => s.seasonNumber > 0 || s.seasonNumber === 0).map((s: any) => (
+              {(show.seasons?.length > 0
+                ? show.seasons.filter((s: any) => s.seasonNumber > 0 || s.seasonNumber === 0)
+                : [1, 2, 3].map(n => ({ seasonNumber: n }))
+              ).map((s: any) => (
                 <button key={s.seasonNumber} onClick={() => setSelectedSeason(s.seasonNumber)} style={{
                   padding: '8px 16px', borderRadius: '8px', cursor: 'pointer',
                   fontSize: '13px', fontWeight: selectedSeason === s.seasonNumber ? 700 : 400,

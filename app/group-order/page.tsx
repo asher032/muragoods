@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { products as staticProducts } from '@/app/lib/muragoods-data';
-
+import { CircleX, ClipboardList, Link2, Lock, PiggyBank, Plus, TriangleAlert, Users } from 'lucide-react';
 interface GroupItem {
   _id: string;
   userId: string;
@@ -186,14 +186,14 @@ export default function GroupOrderPage() {
           {/* Header */}
           <div className="mb-8 text-center">
             <h1 className="text-2xl sm:text-3xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}>
-              👥 Group Order
+              <Users className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Group Order
             </h1>
             <p className="mt-2 text-sm text-[var(--gold)]">Order together, pay separately!</p>
           </div>
 
           {error && (
             <div className="mb-4 border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-3 rounded-xl text-center">
-              <p className="text-[9px] text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)' }}>⚠ {error}</p>
+              <p className="text-[9px] text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)' }}><TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {error}</p>
             </div>
           )}
 
@@ -201,12 +201,12 @@ export default function GroupOrderPage() {
           {mode === 'home' && !groupOrder && (
             <div className="space-y-4">
               <button onClick={() => setMode('create')} className="deco-btn w-full rounded-xl p-6 text-center">
-                <span className="text-2xl">➕</span>
+                <span className="text-2xl"><Plus className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
                 <p className="text-[10px] text-[var(--cream)] mt-2 uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Create Group Order</p>
                 <p className="text-xs text-[var(--pewter)] mt-1">Start a shared cart for your group</p>
               </button>
               <button onClick={() => setMode('join')} className="deco-btn w-full rounded-xl p-6 text-center">
-                <span className="text-2xl">🔗</span>
+                <span className="text-2xl"><Link2 className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
                 <p className="text-[10px] text-[var(--cream)] mt-2 uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Join Group Order</p>
                 <p className="text-xs text-[var(--pewter)] mt-1">Enter a code to join an existing order</p>
               </button>
@@ -223,7 +223,7 @@ export default function GroupOrderPage() {
               </label>
               <div className="flex gap-3">
                 <button onClick={handleCreate} disabled={loading} className="deco-btn deco-btn-gold rounded-xl flex-1 disabled:opacity-50">
-                  {loading ? 'Creating...' : '🎁 Create'}
+                  {loading ? 'Creating...' : 'Create'}
                 </button>
                 <button onClick={() => setMode('home')} className="deco-btn deco-btn-dark rounded-xl">Cancel</button>
               </div>
@@ -240,7 +240,7 @@ export default function GroupOrderPage() {
               </label>
               <div className="flex gap-3">
                 <button onClick={handleJoin} disabled={loading || groupCode.length < 6} className="deco-btn deco-btn-gold rounded-xl flex-1 disabled:opacity-50">
-                  {loading ? 'Joining...' : '🔗 Join'}
+                  {loading ? 'Joining...' : 'Join'}
                 </button>
                 <button onClick={() => { setMode('home'); setGroupCode(''); }} className="deco-btn deco-btn-dark rounded-xl">Cancel</button>
               </div>
@@ -254,12 +254,12 @@ export default function GroupOrderPage() {
               <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-2xl p-5 text-center">
                 <p className="text-[9px] text-[var(--pewter)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Share this code with friends</p>
                 <p className="text-3xl text-[var(--gold-bright)] mt-2 tracking-[0.4em]" style={{ fontFamily: 'var(--font-arcade)' }}>{groupOrder.code}</p>
-                <p className="text-[8px] text-[var(--pewter)] mt-1">Status: {groupOrder.status === 'open' ? '🟢 Open' : '🔴 Closed'}</p>
+                <p className="text-[8px] text-[var(--pewter)] mt-1">Status: {groupOrder.status === 'open' ? 'Open' : 'Closed'}</p>
                 <button
                   onClick={() => { navigator.clipboard.writeText(groupOrder.code); alert('Code copied!'); }}
                   className="deco-btn deco-btn-sm deco-btn-gold rounded-lg mt-3"
                 >
-                  📋 Copy Code
+                  <ClipboardList className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Copy Code
                 </button>
               </div>
 
@@ -315,7 +315,7 @@ export default function GroupOrderPage() {
                         <div className="flex items-center gap-2">
                           <span className="coin-price text-sm">₱{item.price * item.quantity}</span>
                           {item.userId === user.email && groupOrder.status === 'open' && (
-                            <button onClick={() => handleRemoveItem(item._id)} className="text-[var(--crimson)] text-xs hover:text-[var(--gold)]">✖</button>
+                            <button onClick={() => handleRemoveItem(item._id)} className="text-[var(--crimson)] text-xs hover:text-[var(--gold)]"><CircleX color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></button>
                           )}
                         </div>
                       </div>
@@ -327,7 +327,7 @@ export default function GroupOrderPage() {
               {/* Split Bill */}
               {Object.keys(personTotals).length > 0 && (
                 <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-2xl p-5">
-                  <h2 className="text-[10px] text-[var(--gold)] uppercase mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>💰 Split Bill</h2>
+                  <h2 className="text-[10px] text-[var(--gold)] uppercase mb-4" style={{ fontFamily: 'var(--font-arcade)' }}><PiggyBank className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Split Bill</h2>
                   <div className="space-y-2">
                     {Object.values(personTotals).map(person => (
                       <div key={person.name} className="flex items-center justify-between p-3 bg-[var(--charcoal-light)] rounded-xl">
@@ -350,7 +350,7 @@ export default function GroupOrderPage() {
               <div className="flex gap-3">
                 {groupOrder.hostUserId === user.email && groupOrder.status === 'open' && (
                   <button onClick={handleClose} className="deco-btn deco-btn-sm deco-btn-crimson rounded-xl flex-1">
-                    🔒 Close Group Order
+                    <Lock className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Close Group Order
                   </button>
                 )}
                 <button onClick={() => { setGroupOrder(null); setGroupCode(''); setMode('home'); }} className="deco-btn deco-btn-sm deco-btn-dark rounded-xl flex-1">

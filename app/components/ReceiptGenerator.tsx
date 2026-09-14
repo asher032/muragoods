@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useCallback } from 'react';
+import { Inbox, Printer } from 'lucide-react';
 
 interface ReceiptItem {
   name: string;
@@ -48,7 +49,19 @@ export function ReceiptGenerator({ orderId, items, subtotal, deliveryFee, total,
     ctx.font = '48px serif';
     ctx.fillStyle = '#000000';
     ctx.textAlign = 'center';
-    ctx.fillText('🍄', canvas.width / 2, 80);
+    // Vector star (canvas has no color-emoji font guarantee across platforms)
+    ctx.font = '40px serif';
+    ctx.fillStyle = '#FFD700';
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 === 0 ? 22 : 9;
+      const a = (Math.PI / 5) * i - Math.PI / 2;
+      const px = canvas.width / 2 + r * Math.sin(a);
+      const py = 80 - r * Math.cos(a);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
 
     ctx.font = 'bold 36px "Courier New", monospace';
     ctx.fillText('MURAGOODS', canvas.width / 2, 130);
@@ -266,8 +279,8 @@ export function ReceiptGenerator({ orderId, items, subtotal, deliveryFee, total,
         }
       `}</style>
       <div className="receipt-actions">
-        <button className="receipt-btn receipt-btn-print" onClick={handlePrint}>🖨️ Print</button>
-        <button className="receipt-btn" onClick={handleDownload}>📥 Download Image</button>
+        <button className="receipt-btn receipt-btn-print" onClick={handlePrint}><Printer className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Print</button>
+        <button className="receipt-btn" onClick={handleDownload}><Inbox className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Download Image</button>
       </div>
     </>
   );

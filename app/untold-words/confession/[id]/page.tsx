@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-
+import { Bird, Cloud, Eye, Flower2, Handshake, Heart, HeartCrack } from 'lucide-react';
 interface ConfessionData {
   shortId: string;
   title: string;
@@ -15,14 +15,14 @@ interface ConfessionData {
   createdAt: string;
 }
 
-const catColors: Record<string, { emoji: string; color: string }> = {
-  Confession: { emoji: '💜', color: '#c896ff' },
-  Appreciation: { emoji: '💛', color: '#ffd60a' },
-  'Missing Someone': { emoji: '💔', color: '#ff6496' },
-  Friendship: { emoji: '🤝', color: '#64ff96' },
-  Crush: { emoji: '🩷', color: '#ffb4da' },
-  'Moving On': { emoji: '🦋', color: '#6496ff' },
-  'Random Thoughts': { emoji: '💭', color: '#ffb464' },
+const catColors: Record<string, { emoji: React.ReactNode; color: string }> = {
+  Confession: { emoji: <Heart color={'#c896ff'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color: '#c896ff' },
+  Appreciation: { emoji: <Heart color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color: '#ffd60a' },
+  'Missing Someone': { emoji: <HeartCrack color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'#ff6496' },
+  Friendship: { emoji: <Handshake className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color: '#64ff96' },
+  Crush: { emoji: <Flower2 color={'#ff4d8d'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color: '#ffb4da' },
+  'Moving On': { emoji: <Bird className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'#6496ff' },
+  'Random Thoughts': { emoji: <Cloud className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'#ffb464' },
 };
 
 export default function ViewConfession() {
@@ -84,7 +84,7 @@ export default function ViewConfession() {
 
   if (loading) return <main style={{ minHeight: '100vh', background: '#0a0a18', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: 'rgba(255,255,255,0.3)', animation: 'pulse 2s ease infinite' }}>Loading...</p><style jsx>{`@keyframes pulse { 0%,100%{opacity:0.3} 50%{opacity:1} }`}</style></main>;
 
-  if (error || !confession) return <main style={{ minHeight: '100vh', background: '#0a0a18', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}><div style={{ textAlign: 'center' }}><p style={{ fontSize: '48px', marginBottom: '16px' }}>📭</p><p style={{ fontFamily: 'var(--font-arcade)', fontSize: '12px', color: 'rgba(255,255,255,0.4)', marginBottom: '20px' }}>{error}</p><Link href="/untold-words" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#c896ff', textDecoration: 'none' }}>← Back to Untold Words</Link></div></main>;
+  if (error || !confession) return <main style={{ minHeight: '100vh', background: '#0a0a18', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}><div style={{ textAlign: 'center' }}><p style={{ fontSize: '48px', marginBottom: '16px'}}></p><p style={{ fontFamily:'var(--font-arcade)', fontSize: '12px', color: 'rgba(255,255,255,0.4)', marginBottom: '20px' }}>{error}</p><Link href="/untold-words" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#c896ff', textDecoration: 'none' }}>← Back to Untold Words</Link></div></main>;
 
   const cat = catColors[confession.category] || catColors['Confession'];
 
@@ -135,13 +135,13 @@ export default function ViewConfession() {
           <div style={{ padding: '16px 32px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${cat.color}10` }}>
             <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
               <button onClick={handleLike} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', color: liked ? '#ff6496' : 'rgba(255,255,255,0.3)', fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s', padding: '4px 0' }}>
-                <span style={{ fontSize: '18px' }}>{liked ? '❤️' : '🤍'}</span>
+                <span style={{ fontSize: '18px' }}>{liked ? <Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : <Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />}</span>
                 <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>{likes}</span>
               </button>
-              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)' }}>👁 {confession.views}</span>
+              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)' }}><Eye className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {confession.views}</span>
             </div>
             <button onClick={handleReport} disabled={reported} style={{ background: 'none', border: 'none', color: reported ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.2)', fontSize: '10px', cursor: reported ? 'default' : 'pointer', fontFamily: 'var(--font-arcade)' }}>
-              {reported ? '✓ Reported' : '⚠️ Report'}
+              {reported ? 'Reported' : 'Report'}
             </button>
           </div>
         </div>

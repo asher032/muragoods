@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-
+import { Calendar, Inbox, Mail, Music } from 'lucide-react';
 interface SongData {
   shortId: string;
   recipientName: string;
@@ -81,7 +81,7 @@ export default function ViewSongMessage() {
     return (
       <main style={{ minHeight: '100vh', background: '#0a0a18', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
         <div style={{ textAlign: 'center' }}>
-          <p style={{ fontSize: '48px', marginBottom: '16px' }}>📭</p>
+          <p style={{ fontSize: '48px', marginBottom: '16px' }}><Inbox className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
           <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '12px', color: 'rgba(255,255,255,0.4)', marginBottom: '20px' }}>{error || 'Message not found'}</p>
           <Link href="/untold-words" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#ffd60a', textDecoration: 'none' }}>← Back to Untold Words</Link>
         </div>
@@ -112,11 +112,11 @@ export default function ViewSongMessage() {
               {/* Flap */}
               <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '50%', background: 'linear-gradient(180deg, rgba(255,214,10,0.1), transparent)', clipPath: 'polygon(0 0, 50% 80%, 100% 0)' }} />
               {/* Heart seal */}
-              <div style={{ position: 'absolute', top: '35%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: '28px', filter: 'drop-shadow(0 0 10px rgba(255,100,150,0.4))' }}>💌</div>
+              <div style={{ position: 'absolute', top: '35%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: '28px', filter: 'drop-shadow(0 0 10px rgba(255,100,150,0.4))' }}><Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
             </div>
           </div>
 
-          <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '24px' }}>Open your letter 💌</p>
+          <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '24px' }}>Open your letter <Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
           <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', marginTop: '8px' }}>From: {song.isAnonymous ? 'Someone who cares' : song.senderName}</p>
         </div>
       </main>
@@ -139,7 +139,7 @@ export default function ViewSongMessage() {
               {song.artwork ? (
                 <img src={song.artwork} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                <span style={{ fontSize: '56px' }}>🎵</span>
+                <span style={{ fontSize: '56px' }}><Music color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
               )}
               {/* Animated music waves */}
               <div style={{ position: 'absolute', bottom: '-2px', left: 0, right: 0, height: '20px', display: 'flex', justifyContent: 'center', gap: '3px', alignItems: 'flex-end' }}>
@@ -170,7 +170,7 @@ export default function ViewSongMessage() {
         {/* Spotify Embed */}
         {song.spotifyUrl && song.spotifyUrl.includes('open.spotify.com') && (
           <div style={{ marginBottom: '24px' }}>
-            <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginBottom: '10px', letterSpacing: '0.1em' }}>🎵 THIS SONG WAS CHOSEN FOR YOU</p>
+            <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginBottom: '10px', letterSpacing: '0.1em' }}><Music color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> THIS SONG WAS CHOSEN FOR YOU</p>
             <div style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid rgba(30,215,96,0.2)' }}>
               <iframe
                 src={`https://open.spotify.com/embed/track/${song.spotifyUrl.match(/track\/([a-zA-Z0-9]+)/)?.[1] || ''}?utm_source=generator&theme=0`}
@@ -198,7 +198,7 @@ export default function ViewSongMessage() {
         {/* Memory date */}
         {song.memoryDate && (
           <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-            <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.12em' }}>📅 {song.memoryDate}</p>
+            <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.12em' }}><Calendar className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {song.memoryDate}</p>
           </div>
         )}
 

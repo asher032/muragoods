@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
 import { Icon } from '@/app/components/Icon';
-
+import { CircleCheck, CircleX, TriangleAlert, X } from 'lucide-react';
 export type NotificationType = 'info' | 'success' | 'warning' | 'error' | 'support' | 'order';
 
 export interface Notification {
@@ -112,9 +112,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 function Toast({ notification, onDismiss }: { notification: Notification; onDismiss: () => void }) {
   const colors: Record<NotificationType, { bg: string; border: string; icon: React.ReactNode; text: string }> = {
     info: { bg: 'rgba(72,149,239,0.12)', border: 'rgba(72,149,239,0.3)', icon: 'ℹ️', text: '#4895ef' },
-    success: { bg: 'rgba(6,214,160,0.12)', border: 'rgba(6,214,160,0.3)', icon: '✅', text: '#06d6a0' },
-    warning: { bg: 'rgba(255,214,10,0.12)', border: 'rgba(255,214,10,0.3)', icon: '⚠️', text: '#ffd60a' },
-    error: { bg: 'rgba(230,57,70,0.12)', border: 'rgba(230,57,70,0.3)', icon: '❌', text: '#e63946' },
+    success: { bg: 'rgba(6,214,160,0.12)', border: 'rgba(6,214,160,0.3)', icon: <CircleCheck color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, text:'#06d6a0' },
+    warning: { bg: 'rgba(255,214,10,0.12)', border: 'rgba(255,214,10,0.3)', icon: <TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, text:'#ffd60a' },
+    error: { bg: 'rgba(230,57,70,0.12)', border: 'rgba(230,57,70,0.3)', icon: <CircleX color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, text:'#e63946' },
     support: { bg: 'rgba(114,9,183,0.12)', border: 'rgba(114,9,183,0.3)', icon: <Icon name="chat" size={16} />, text: '#7209b7' },
     order: { bg: 'rgba(251,133,0,0.12)', border: 'rgba(251,133,0,0.3)', icon: <Icon name="box" size={16} />, text: '#fb8500' },
   };
@@ -143,7 +143,7 @@ function Toast({ notification, onDismiss }: { notification: Notification; onDism
         <p style={{ fontSize: '11px', fontWeight: 700, color: c.text, fontFamily: 'var(--font-arcade)', marginBottom: '2px' }}>{notification.title}</p>
         <p style={{ fontSize: '11px', color: 'var(--mario-text-muted)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>{notification.message}</p>
       </div>
-      <button onClick={(e) => { e.stopPropagation(); onDismiss(); }} style={{ background: 'none', border: 'none', color: 'var(--mario-text-muted)', cursor: 'pointer', fontSize: '12px', padding: '2px', flexShrink: 0 }}>✕</button>
+      <button onClick={(e) => { e.stopPropagation(); onDismiss(); }} style={{ background: 'none', border: 'none', color: 'var(--mario-text-muted)', cursor: 'pointer', fontSize: '12px', padding: '2px', flexShrink: 0 }}><X className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></button>
 
       <style jsx>{`
         @keyframes toastSlideIn {

@@ -34,7 +34,7 @@ export function MarioLogoLarge() {
       </div>
       <div className="text-center">
         <h1 className="text-3xl text-[var(--gold-bright)] uppercase tracking-widest drop-shadow-lg" style={{ fontFamily: 'var(--font-arcade)' }}>Muragoods</h1>
-        <p className="text-sm font-semibold uppercase tracking-widest text-[var(--cream)] drop-shadow-lg mt-2">Musubi · Churros · Coffee · Cookies</p>
+        <p className="text-sm font-semibold uppercase tracking-widest text-[var(--cream)] drop-shadow-lg mt-2">Musubi · Churros · Cheesy Bread</p>
       </div>
     </div>
   );

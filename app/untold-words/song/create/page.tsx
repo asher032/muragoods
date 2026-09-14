@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
+import { ClipboardList, LoaderCircle, Music, Pause, Play } from 'lucide-react';
 
 interface Track {
   id: string;
@@ -28,7 +29,7 @@ export default function CreateSongMessage() {
   const [searchResults, setSearchResults] = useState<Track[]>([]);
   const [searching, setSearching] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
-  const [playingPreview, setPlayingPreview] = useState(false);
+  const [playingId, setPlayingId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -58,15 +59,22 @@ export default function CreateSongMessage() {
     setSearchResults([]);
   };
 
+  // Track which preview is playing (by track id) so tapping play on another
+  // result switches immediately instead of needing two taps.
   const togglePreview = (track: Track) => {
     if (!track.previewUrl) return;
-    if (audioRef.current && playingPreview) { audioRef.current.pause(); setPlayingPreview(false); return; }
-    if (audioRef.current) audioRef.current.pause();
+    const isThisPlaying = playingId === track.id;
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    if (isThisPlaying) { setPlayingId(null); return; }
     const audio = new Audio(track.previewUrl);
-    audio.onended = () => setPlayingPreview(false);
+    audio.onended = () => setPlayingId(null);
+    audio.onerror = () => setPlayingId(null);
     audioRef.current = audio;
-    audio.play();
-    setPlayingPreview(true);
+    audio.play().catch(() => setPlayingId(null));
+    setPlayingId(track.id);
   };
 
   const link = created ? (typeof window !== 'undefined' ? window.location.origin : '') + '/untold-words/song/' + created : '';
@@ -102,12 +110,12 @@ export default function CreateSongMessage() {
         <NavBar pageLabel="Song Sent" />
         <div style={{ minHeight: '90vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 20px' }}>
           <div style={{ textAlign: 'center', maxWidth: '480px', width: '100%' }}>
-            <div style={{ fontSize: '64px', marginBottom: '20px', animation: 'float 3s ease-in-out infinite' }}>🎵</div>
+            <div style={{ fontSize: '64px', marginBottom: '20px', animation: 'float 3s ease-in-out infinite' }}><Music color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
             <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '22px', color: '#ffd60a', marginBottom: '8px' }}>Your song message is live!</h1>
             <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', marginBottom: '32px' }}>Send it to {recipientName} using the link below.</p>
             <div style={{ background: 'rgba(123,47,247,0.06)', border: '1px solid rgba(123,47,247,0.2)', borderRadius: '16px', padding: '24px', marginBottom: '16px', textAlign: 'center' }}>
               <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '10px 14px', marginBottom: '12px', wordBreak: 'break-all', fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>{link}</div>
-              <button onClick={() => navigator.clipboard.writeText(link)} style={{ padding: '10px 24px', borderRadius: '10px', border: '1px solid rgba(123,47,247,0.4)', background: 'rgba(123,47,247,0.12)', color: '#e8b4f8', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}>📋 Copy Link</button>
+              <button onClick={() => navigator.clipboard.writeText(link)} style={{ padding: '10px 24px', borderRadius: '10px', border: '1px solid rgba(123,47,247,0.4)', background: 'rgba(123,47,247,0.12)', color: '#e8b4f8', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}><ClipboardList className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Copy Link</button>
             </div>
             <Link href="/untold-words" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'rgba(255,255,255,0.4)', textDecoration: 'none' }}>← Back to Untold Words</Link>
           </div>
@@ -122,7 +130,7 @@ export default function CreateSongMessage() {
       <NavBar pageLabel="Say It Through a Song" />
       <div style={{ maxWidth: '700px', margin: '0 auto', padding: '80px 20px 100px' }}>
         <div style={{ textAlign: 'center', marginBottom: '36px', opacity: loaded ? 1 : 0, transform: loaded ? 'translateY(0)' : 'translateY(20px)', transition: 'all 0.6s ease' }}>
-          <span style={{ fontSize: '36px', display: 'block', marginBottom: '12px' }}>🎵</span>
+          <span style={{ fontSize: '36px', display: 'block', marginBottom: '12px' }}><Music color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
           <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '20px', color: '#e8b4f8', marginBottom: '8px' }}>Say it through a song.</h1>
           <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', maxWidth: '400px', margin: '0 auto', lineHeight: 1.6 }}>Search for any song, listen to the preview, and send it with your message.</p>
         </div>
@@ -136,7 +144,7 @@ export default function CreateSongMessage() {
 
           {/* Song Search */}
           <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '20px' }}>
-            <label style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: '#1ed760', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: '12px' }}>🎵 Search and select your song *</label>
+            <label style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: '#1ed760', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: '12px' }}><Music color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Search and select your song *</label>
 
             {selectedTrack ? (
               <div style={{ background: 'rgba(30,215,96,0.06)', border: '1px solid rgba(30,215,96,0.25)', borderRadius: '14px', padding: '16px', display: 'flex', gap: '14px', alignItems: 'center' }}>
@@ -146,8 +154,8 @@ export default function CreateSongMessage() {
                   <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginBottom: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedTrack.artist}</p>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     {selectedTrack.previewUrl && (
-                      <button onClick={() => togglePreview(selectedTrack)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '8px', border: '1px solid rgba(30,215,96,0.3)', background: playingPreview ? 'rgba(30,215,96,0.2)' : 'rgba(30,215,96,0.08)', color: '#1ed760', fontSize: '9px', fontFamily: 'var(--font-arcade)', cursor: 'pointer' }}>
-                        {playingPreview ? '⏸ Pause' : '▶ Preview'}
+                      <button onClick={() => togglePreview(selectedTrack)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '8px', border: '1px solid rgba(30,215,96,0.3)', background: playingId === selectedTrack.id ? 'rgba(30,215,96,0.2)' : 'rgba(30,215,96,0.08)', color: '#1ed760', fontSize: '9px', fontFamily: 'var(--font-arcade)', cursor: 'pointer' }}>
+                        {playingId === selectedTrack.id ? <Pause size={11} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : <Play size={11} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />} {playingId === selectedTrack.id ? 'Pause' : 'Preview'}
                       </button>
                     )}
                     <button onClick={() => setSelectedTrack(null)} style={{ padding: '4px 10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)', fontSize: '9px', fontFamily: 'var(--font-arcade)', cursor: 'pointer' }}>Change</button>
@@ -158,7 +166,7 @@ export default function CreateSongMessage() {
               <div>
                 <div style={{ position: 'relative' }}>
                   <input value={searchQuery} onChange={e => handleSearchChange(e.target.value)} placeholder="Search and select your song" style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(30,215,96,0.2)', borderRadius: '12px', padding: '14px 16px', color: '#fff', fontSize: '14px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
-                  {searching && <span style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', color: '#1ed760', animation: 'pulse 1s ease infinite' }}>⏳</span>}
+                  {searching && <span style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)' }}><LoaderCircle color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>}
                 </div>
                 {searchResults.length > 0 && (
                   <div style={{ marginTop: '12px', maxHeight: '360px', overflowY: 'auto', display: 'grid', gap: '6px' }}>
@@ -172,7 +180,7 @@ export default function CreateSongMessage() {
                           <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.artist} · {track.album}</p>
                         </div>
                         {track.previewUrl && (
-                          <button onClick={e => { e.stopPropagation(); togglePreview(track); }} style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid rgba(30,215,96,0.3)', background: playingPreview ? 'rgba(30,215,96,0.2)' : 'rgba(30,215,96,0.08)', color: '#1ed760', fontSize: '10px', cursor: 'pointer', flexShrink: 0 }}>▶</button>
+                          <button onClick={e => { e.stopPropagation(); togglePreview(track); }} aria-label={playingId === track.id ? 'Pause preview' : 'Play preview'} style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid rgba(30,215,96,0.3)', background: playingId === track.id ? 'rgba(30,215,96,0.2)' : 'rgba(30,215,96,0.08)', color: '#1ed760', fontSize: '10px', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center' }}>{playingId === track.id ? <Pause size={11} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : <Play size={11} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />}</button>
                         )}
                         <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', flexShrink: 0 }}>Select →</span>
                       </div>

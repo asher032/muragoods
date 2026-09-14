@@ -2,12 +2,15 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Users } from 'lucide-react';
 import MuraStreamCard from './components/MuraStreamCard';
 import MuraStreamLoader from './components/MuraStreamLoader';
 import { useMuraStreamStore } from './hooks/useMuraStreamStore';
 import type { MediaItem, ContinueWatchingItem } from './types';
 import { GENRE_MAP } from './types';
 import { DRAMA_SECTIONS } from './data/dramas';
+import { Star } from 'lucide-react';
 
 function FeaturedHero({ item }: { item: MediaItem | null }) {
   if (!item) return null;
@@ -83,7 +86,7 @@ function FeaturedHero({ item }: { item: MediaItem | null }) {
           {/* Rating */}
           {(item.voteAverage ?? 0) > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
-              <span style={{ color: '#E50914', fontSize: '16px' }}>★</span>
+              <span style={{ color: '#E50914', fontSize: '16px' }}><Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
               <span style={{
                 fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
                 fontSize: '14px', fontWeight: 600, color: 'var(--ms-text)'
@@ -132,8 +135,125 @@ function FeaturedHero({ item }: { item: MediaItem | null }) {
   );
 }
 
-function MediaRow({ title, items, loading, viewAllHref }: {
-  title: string; items: MediaItem[]; loading: boolean; viewAllHref?: string;
+// Watch Party banner card on the homepage. Restores an in-progress party
+// from localStorage (same key the watch page persists) so a live party is
+// resumable from home; otherwise offers code-entry and start.
+function WatchPartyCard({ partyCode, hero }: { partyCode: string | null; hero: MediaItem | null }) {
+  const [code, setCode] = useState('');
+  const [savedParty, setSavedParty] = useState<{ code: string; isHost: boolean } | null>(null);
+  const [live, setLive] = useState(false);
+  const router = useRouter();
+
+  // Restore + liveness: the watch page writes { code, isHost } to 'ms-party'.
+  // A party is "live" if the server still knows it (members list exists).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('ms-party');
+      if (!raw) return;
+      const p = JSON.parse(raw) as { code?: string; isHost?: boolean };
+      if (!p.code) return;
+      setSavedParty({ code: p.code, isHost: !!p.isHost });
+      let dead = false;
+      fetch(`/api/murastream/party?code=${p.code}`)
+        .then(r => { if (r.status === 404) dead = true; return r.json(); })
+        .then(d => {
+          if (!dead && d?.success && d?.data?.members?.length > 0) setLive(true);
+          else setSavedParty(null);
+        })
+        .catch(() => setSavedParty(null));
+    } catch { /* empty */ }
+  }, []);
+
+  const go = (suffix: string) => {
+    const base = hero
+      ? `/murastream/watch?type=${hero.mediaType === 'tv' ? 'tv' : 'movie'}&id=${hero.id}`
+      : '/murastream/watch?type=movie&id=27205';
+    // base already carries a query string — join with &, never a second '?'.
+    router.push(`${base}&${suffix.replace(/^\?/, '')}`);
+  };
+  return (
+    <div style={{
+      marginTop: 4, marginBottom: 32, padding: '20px 24px',
+      display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap',
+      background: 'linear-gradient(120deg, rgba(229,9,20,0.12) 0%, rgba(229,9,20,0.04) 55%, transparent 100%)',
+      border: '1px solid rgba(229,9,20,0.25)', borderRadius: 16,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: '1 1 260px' }}>
+        <div style={{
+          width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+          background: 'rgba(229,9,20,0.18)', border: '1px solid rgba(229,9,20,0.4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Users size={22} color="#E50914" />
+        </div>
+        <div>
+          <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: 'var(--ms-text-strong)', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', display: 'flex', alignItems: 'center', gap: 8 }}>
+            {(partyCode || (savedParty && live)) ? (
+              <>
+                Party {(partyCode || savedParty?.code)} is live
+                <span style={{
+                  width: 8, height: 8, borderRadius: '50%', background: '#22c55e', display: 'inline-block',
+                  boxShadow: '0 0 8px rgba(34,197,94,0.7)',
+                }} />
+              </>
+            ) : 'Watch Party'}
+          </p>
+          <p style={{ margin: '3px 0 0', fontSize: 12.5, color: 'var(--ms-text-dim)', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
+            {(partyCode || (savedParty && live))
+              ? 'Your party is still running — jump back in with playback and chat in sync.'
+              : 'Watch in sync with friends. Start a party, share the code, chat live.'}
+          </p>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input
+          value={code}
+          onChange={e => setCode(e.target.value.toUpperCase())}
+          onKeyDown={e => { if (e.key === 'Enter' && code.trim().length >= 4) go(`?party=${encodeURIComponent(code.trim())}&partyPanel=1`); }}
+          placeholder="PARTY CODE"
+          maxLength={6}
+          aria-label="Party code"
+          style={{
+            width: 150, padding: '10px 12px', borderRadius: 9,
+            border: '1px solid rgba(255,255,255,0.14)', background: 'rgba(255,255,255,0.05)',
+            color: 'var(--ms-text)', fontSize: 13, fontWeight: 700, letterSpacing: '0.12em',
+            fontFamily: 'var(--font-arcade)', textTransform: 'uppercase',
+          }}
+        />
+        <button
+          onClick={() => { if (code.trim().length >= 4) go(`?party=${encodeURIComponent(code.trim())}&partyPanel=1`); }}
+          disabled={code.trim().length < 4}
+          style={{
+            padding: '10px 18px', borderRadius: 9, cursor: code.trim().length >= 4 ? 'pointer' : 'default',
+            border: '1px solid rgba(229,9,20,0.5)', background: code.trim().length >= 4 ? '#E50914' : 'rgba(229,9,20,0.25)',
+            color: '#fff', fontSize: 13, fontWeight: 700,
+          }}
+        >Join</button>
+        {(savedParty && live) && (
+          <button
+            onClick={() => go(`?party=${savedParty.code}&partyPanel=1`)}
+            style={{
+              padding: '10px 18px', borderRadius: 9, cursor: 'pointer',
+              border: '1px solid #22c55e', background: 'rgba(34,197,94,0.15)',
+              color: '#22c55e', fontSize: 13, fontWeight: 700,
+            }}
+          >Resume party</button>
+        )}
+        <button
+          onClick={() => go('?partyPanel=1')}
+          style={{
+            padding: '10px 18px', borderRadius: 9, cursor: 'pointer',
+            border: '1px solid rgba(255,255,255,0.14)', background: 'rgba(255,255,255,0.06)',
+            color: 'var(--ms-text)', fontSize: 13, fontWeight: 600,
+          }}
+        >Start a party</button>
+      </div>
+    </div>
+  );
+}
+
+function MediaRow({ title, items, loading, viewAllHref, ranked }: {
+  title: string; items: MediaItem[]; loading: boolean; viewAllHref?: string; ranked?: boolean;
 }) {
   if (loading) {
     return (
@@ -144,7 +264,7 @@ function MediaRow({ title, items, loading, viewAllHref }: {
         <div className="ms-row-items">
           {[1, 2, 3, 4, 5, 6].map(i => (
             <div key={i} style={{
-              width: '200px', height: '300px', borderRadius: '12px',
+              width: '190px', height: '300px', borderRadius: '12px',
               background: 'linear-gradient(90deg, #141414 0%, var(--ms-border) 50%, #141414 100%)',
               backgroundSize: '200% 100%', animation: 'msShimmer 1.5s infinite',
               flexShrink: 0,
@@ -156,7 +276,7 @@ function MediaRow({ title, items, loading, viewAllHref }: {
   }
   if (items.length === 0) return null;
   return (
-    <div className="ms-row">
+    <div className={`ms-row${ranked ? ' ms-rank-row' : ''}`}>
       <div className="ms-row-header">
         <p className="ms-row-title">{title}</p>
         {viewAllHref && (
@@ -164,7 +284,14 @@ function MediaRow({ title, items, loading, viewAllHref }: {
         )}
       </div>
       <div className="ms-row-items">
-        {items.map(item => <MuraStreamCard key={item.id} item={item} />)}
+        {items.map((item, i) => ranked ? (
+          <div key={item.id} className="ms-rank-item">
+            <span className={`ms-rank${i === 9 ? ' ms-rank-wide' : ''}`} aria-hidden>{i + 1}</span>
+            <MuraStreamCard item={item} />
+          </div>
+        ) : (
+          <MuraStreamCard key={item.id} item={item} />
+        ))}
       </div>
     </div>
   );
@@ -206,6 +333,12 @@ export default function MuraStreamHome() {
   const [searchError, setSearchError] = useState(false);
   const { continueWatching } = useMuraStreamStore();
   const [activeTab, setActiveTab] = useState('trending');
+  // Party code from ?party= — read once on mount; the card is informational.
+  const [partyCode, setPartyCode] = useState<string | null>(null);
+  useEffect(() => {
+    const m = window.location.search.match(/party=([A-Za-z0-9]{4,8})/);
+    if (m) setPartyCode(m[1].toUpperCase());
+  }, []);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchAbortRef = useRef<AbortController | null>(null);
 
@@ -309,7 +442,7 @@ export default function MuraStreamHome() {
         }
       `}</style>
 
-      <div className="ms-page-enter" style={{ padding: '0 24px', maxWidth: '1200px', margin: '0 auto' }}>
+      <div className="ms-page-enter ms-page-pad" style={{ paddingTop: 0 }}>
 
         {/* ─── Search Bar ────────────────────────────── */}
         <div style={{ paddingTop: '24px', marginBottom: '24px' }}>
@@ -355,7 +488,11 @@ export default function MuraStreamHome() {
                 <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '13px' }}>No results found</p>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '18px' }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
+                gap: '36px 28px',
+              }}>
                 {searchResults.map(item => <MuraStreamCard key={item.id} item={item} />)}
               </div>
             )}
@@ -397,13 +534,16 @@ export default function MuraStreamHome() {
             {/* Featured Hero */}
             {heroItem && <FeaturedHero item={heroItem} />}
 
+            {/* Watch Party card — jump back into a party or start one */}
+            <WatchPartyCard partyCode={partyCode} hero={heroItem} />
+
             {/* Continue Watching */}
             {continueWatching.length > 0 && <ContinueWatchingRow items={continueWatching} />}
 
             {/* Content Rows by Tab */}
             {activeTab === 'trending' && (
               <>
-                <MediaRow title="Trending Movies" items={trendingMovies} loading={loading} viewAllHref="/murastream?tab=movies" />
+                <MediaRow title="Trending Now — Top 10" items={trendingMovies} loading={loading} viewAllHref="/murastream?tab=movies" ranked />
                 <MediaRow title="Trending TV Shows" items={trendingTV} loading={loading} viewAllHref="/murastream?tab=tv" />
                 <MediaRow title="Popular Movies" items={popularMovies} loading={loading} viewAllHref="/murastream?tab=movies" />
                 <MediaRow title="K-Dramas Everyone's Watching" items={dramaLists.kdrama || []} loading={loading} viewAllHref="/murastream/kdrama" />

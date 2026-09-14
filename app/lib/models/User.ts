@@ -21,6 +21,7 @@ const UserSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  avatar: { type: String, default: '' },
   userId: { type: String, unique: true, sparse: true },
   role: { type: String, default: 'user' },
   perks: { type: [PerkSchema], default: [] },

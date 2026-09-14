@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-
+import { Bird, Cloud, Eye, Flower2, Handshake, Heart, HeartCrack, Mail } from 'lucide-react';
 interface LetterData {
   shortId: string;
   title: string;
@@ -14,14 +14,14 @@ interface LetterData {
   createdAt: string;
 }
 
-const catColors: Record<string, { emoji: string; color: string }> = {
-  Confession: { emoji: '💜', color: '#c896ff' },
-  Appreciation: { emoji: '💛', color: '#ffd60a' },
-  'Missing Someone': { emoji: '💔', color: '#ff6496' },
-  Friendship: { emoji: '🤝', color: '#64ff96' },
-  Crush: { emoji: '🩷', color: '#ffb4da' },
-  'Moving On': { emoji: '🦋', color: '#6496ff' },
-  'Random Thoughts': { emoji: '💭', color: '#ffb464' },
+const catColors: Record<string, { emoji: React.ReactNode; color: string }> = {
+  Confession: { emoji: <Heart color={'#c896ff'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color: '#c896ff' },
+  Appreciation: { emoji: <Heart color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color: '#ffd60a' },
+  'Missing Someone': { emoji: <HeartCrack color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'#ff6496' },
+  Friendship: { emoji: <Handshake className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color: '#64ff96' },
+  Crush: { emoji: <Flower2 color={'#ff4d8d'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color: '#ffb4da' },
+  'Moving On': { emoji: <Bird className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'#6496ff' },
+  'Random Thoughts': { emoji: <Cloud className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'#ffb464' },
 };
 
 export default function ViewAnonymousLetter() {
@@ -84,7 +84,7 @@ export default function ViewAnonymousLetter() {
 
   if (loading) return <main style={{ minHeight: '100vh', background: '#0a0a18', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: 'rgba(255,255,255,0.3)', animation: 'pulse 2s ease infinite' }}>Loading...</p><style jsx>{`@keyframes pulse { 0%,100%{opacity:0.3} 50%{opacity:1} }`}</style></main>;
 
-  if (error || !letter) return <main style={{ minHeight: '100vh', background: '#0a0a18', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}><div style={{ textAlign: 'center' }}><p style={{ fontSize: '48px', marginBottom: '16px' }}>📭</p><p style={{ fontFamily: 'var(--font-arcade)', fontSize: '12px', color: 'rgba(255,255,255,0.4)', marginBottom: '20px' }}>{error}</p><Link href="/untold-words/anonymous/archive" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#c896ff', textDecoration: 'none' }}>← Back to Archive</Link></div></main>;
+  if (error || !letter) return <main style={{ minHeight: '100vh', background: '#0a0a18', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}><div style={{ textAlign: 'center' }}><p style={{ fontSize: '48px', marginBottom: '16px'}}></p><p style={{ fontFamily:'var(--font-arcade)', fontSize: '12px', color: 'rgba(255,255,255,0.4)', marginBottom: '20px' }}>{error}</p><Link href="/untold-words/anonymous/archive" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#c896ff', textDecoration: 'none' }}>← Back to Archive</Link></div></main>;
 
   const cat = catColors[letter.category] || catColors['Random Thoughts'];
 
@@ -102,10 +102,10 @@ export default function ViewAnonymousLetter() {
           >
             <div style={{ width: '100%', height: '100%', background: '#141428', border: `2px solid ${cat.color}40`, borderRadius: '12px', position: 'relative', overflow: 'hidden' }}>
               <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '50%', background: `linear-gradient(180deg, ${cat.color}15, transparent)`, clipPath: 'polygon(0 0, 50% 80%, 100% 0)' }} />
-              <div style={{ position: 'absolute', top: '38%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: '28px', filter: `drop-shadow(0 0 12px ${cat.color}60)` }}>💌</div>
+              <div style={{ position: 'absolute', top: '38%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: '28px', filter: `drop-shadow(0 0 12px ${cat.color}60)` }}><Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
             </div>
           </div>
-          <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: 'rgba(255,255,255,0.35)', marginTop: '28px' }}>Open this letter 💌</p>
+          <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: 'rgba(255,255,255,0.35)', marginTop: '28px' }}>Open this letter <Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
         </div>
       </main>
     );
@@ -139,13 +139,13 @@ export default function ViewAnonymousLetter() {
           <div style={{ padding: '16px 32px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${cat.color}10` }}>
             <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
               <button onClick={handleLike} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', color: liked ? '#ff6496' : 'rgba(255,255,255,0.3)', fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s', padding: '4px 0' }}>
-                <span style={{ fontSize: '18px' }}>{liked ? '❤️' : '🤍'}</span>
+                <span style={{ fontSize: '18px' }}>{liked ? <Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : <Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />}</span>
                 <span style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>{likes}</span>
               </button>
-              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)' }}>👁 {letter.views}</span>
+              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)' }}><Eye className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {letter.views}</span>
             </div>
             <button onClick={handleReport} disabled={reported} style={{ background: 'none', border: 'none', color: reported ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.2)', fontSize: '10px', cursor: reported ? 'default' : 'pointer', fontFamily: 'var(--font-arcade)' }}>
-              {reported ? '✓ Reported' : '⚠️ Report'}
+              {reported ? 'Reported' : 'Report'}
             </button>
           </div>
         </div>

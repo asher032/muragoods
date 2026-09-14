@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
-
+import { Check, Lock, Mail, TriangleAlert } from 'lucide-react';
 const categories = ['Love', 'Friendship', 'Appreciation', 'Regret', 'Memories', 'Moving On', 'Other'];
 
 export default function SubmitLetter() {
@@ -70,7 +70,7 @@ export default function SubmitLetter() {
         <section className="px-4 py-16 sm:px-8">
           <div className="deco-container" style={{ maxWidth: '40rem' }}>
             <div className="text-center space-y-6">
-              <div className="text-6xl">✉️</div>
+              <div className="text-6xl"><Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
               <h1 className="text-2xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}>
                 Letter Submitted
               </h1>
@@ -96,7 +96,7 @@ export default function SubmitLetter() {
         <div className="deco-container" style={{ maxWidth: '40rem' }}>
           <div className="text-center mb-8">
             <h1 className="text-2xl sm:text-3xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}>
-              ✉️ Submit an Unsent Letter
+              <Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Submit an Unsent Letter
             </h1>
             <p className="mt-3 text-sm text-[var(--pewter)]">Write something you&apos;ve been holding onto.</p>
           </div>
@@ -104,7 +104,7 @@ export default function SubmitLetter() {
           {/* Privacy Notice */}
           <div className="border border-[var(--gold)] bg-[rgba(212,175,55,0.05)] rounded-2xl p-5 mb-8">
             <div className="flex items-start gap-3">
-              <span className="text-lg">🔒</span>
+              <span className="text-lg"><Lock className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
               <p className="text-sm text-[var(--cream-muted)]">
                 Your submission is <strong className="text-[var(--cream)]">anonymous to the public</strong>. Only you can see that you wrote it.
               </p>
@@ -161,7 +161,7 @@ export default function SubmitLetter() {
               />
               <div className="flex justify-between mt-1">
                 <p className="text-[8px] text-[var(--pewter)]" style={{ fontFamily: 'var(--font-arcade)' }}>
-                  {content.length > 0 ? '🔒 This will be anonymous' : ''}
+                  {content.length > 0 ? 'This will be anonymous' : ''}
                 </p>
                 <p className="text-[8px] text-[var(--pewter)]" style={{ fontFamily: 'var(--font-arcade)' }}>
                   {content.length}/2000
@@ -175,14 +175,14 @@ export default function SubmitLetter() {
                 <p className="text-[9px] text-[var(--pewter)] uppercase mb-3" style={{ fontFamily: 'var(--font-arcade)' }}>Preview</p>
                 <p className="text-[9px] text-[var(--gold)] mb-1" style={{ fontFamily: 'var(--font-arcade)' }}>To: {recipientName} · {category}</p>
                 <p className="text-sm text-[var(--cream-muted)] leading-relaxed whitespace-pre-wrap mt-2">{content}</p>
-                <p className="text-[8px] text-[var(--emerald-bright)] mt-3" style={{ fontFamily: 'var(--font-arcade)' }}>✓ Your name will not be shown publicly</p>
+                <p className="text-[8px] text-[var(--emerald-bright)] mt-3" style={{ fontFamily: 'var(--font-arcade)' }}><Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Your name will not be shown publicly</p>
               </div>
             )}
 
             {/* Error */}
             {error && (
               <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-4 text-sm text-[var(--crimson)] rounded-xl" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>
-                ⚠ {error}
+                <TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {error}
               </div>
             )}
 
@@ -193,7 +193,7 @@ export default function SubmitLetter() {
                 disabled={sending || !recipientName.trim() || !content.trim()}
                 className="deco-btn deco-btn-gold deco-btn-lg flex-1 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {sending ? 'Submitting...' : '📮 Submit to the Archive'}
+                {sending ? 'Submitting...' : 'Submit to the Archive'}
               </button>
               <Link href="/unsent/mine" className="deco-btn deco-btn-lg rounded-xl">
                 My Submissions

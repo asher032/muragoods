@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useCoins } from '@/app/hooks/useCoins';
 import { Icon } from '@/app/components/Icon';
-
+import { Brain, Check, CircleX, Coins, Flame, Gamepad2, Heart, PartyPopper, RefreshCw, Skull, Star, Trophy } from 'lucide-react';
 // ─── Question Bank ──────────────────────────────────────────
 interface Question {
   id: number;
@@ -20,39 +20,39 @@ interface Question {
 
 const allQuestions: Question[] = [
   // ── Campus Knowledge ──
-  { id: 1, category: '🏫 Campus', question: 'What does DWCL stand for?', options: ['Divine Word College of Legazpi', 'Department of Worship and Campus Life', 'Development Works in Community Learning', 'Dynamic World of Creative Learning'], correct: 0, difficulty: 'easy', coinReward: 3 },
-  { id: 2, category: '🏫 Campus', question: 'What type of institution is DWCL?', options: ['A public university', 'A Catholic college run by the Divine Word missionaries', 'A private tech school', 'A government training center'], correct: 1, difficulty: 'easy', coinReward: 3 },
-  { id: 3, category: '🏫 Campus', question: 'In which city is DWCL located?', options: ['Naga City', 'Tabaco City', 'Legazpi City', 'Sorsogon City'], correct: 2, difficulty: 'easy', coinReward: 3 },
-  { id: 4, category: '🏫 Campus', question: 'DWCL is part of which larger university system?', options: ['Ateneo de Naga University System', 'University of Santo Tomas', 'Divine Word University System', 'Bicol University System'], correct: 2, difficulty: 'medium', coinReward: 5 },
-  { id: 5, category: '🏫 Campus', question: 'Which famous volcano is visible from Legazpi City?', options: ['Mount Mayon', 'Mount Apo', 'Mount Pinatubo', 'Mount Taal'], correct: 0, difficulty: 'easy', coinReward: 3 },
+  { id: 1, category: 'Campus', question: 'What does DWCL stand for?', options: ['Divine Word College of Legazpi', 'Department of Worship and Campus Life', 'Development Works in Community Learning', 'Dynamic World of Creative Learning'], correct: 0, difficulty: 'easy', coinReward: 3 },
+  { id: 2, category: 'Campus', question: 'What type of institution is DWCL?', options: ['A public university', 'A Catholic college run by the Divine Word missionaries', 'A private tech school', 'A government training center'], correct: 1, difficulty: 'easy', coinReward: 3 },
+  { id: 3, category: 'Campus', question: 'In which city is DWCL located?', options: ['Naga City', 'Tabaco City', 'Legazpi City', 'Sorsogon City'], correct: 2, difficulty: 'easy', coinReward: 3 },
+  { id: 4, category: 'Campus', question: 'DWCL is part of which larger university system?', options: ['Ateneo de Naga University System', 'University of Santo Tomas', 'Divine Word University System', 'Bicol University System'], correct: 2, difficulty: 'medium', coinReward: 5 },
+  { id: 5, category: 'Campus', question: 'Which famous volcano is visible from Legazpi City?', options: ['Mount Mayon', 'Mount Apo', 'Mount Pinatubo', 'Mount Taal'], correct: 0, difficulty: 'easy', coinReward: 3 },
 
   // ── Bicol Culture ──
-  { id: 6, category: '🌶️ Bicol', question: 'What is Bicol known as the "spice capital" of the Philippines for?', options: ['Its abundance of black pepper', 'Its love for chili peppers (siling labuyo)', 'Its cinnamon production', 'Its ginger farms'], correct: 1, difficulty: 'easy', coinReward: 3 },
-  { id: 7, category: '🌶️ Bicol', question: 'What is the traditional Bicolano dish made with coconut milk and chili?', options: ['Adobo', 'Bicol Express', 'Sinigang', 'Kare-Kare'], correct: 1, difficulty: 'easy', coinReward: 3 },
-  { id: 8, category: '🌶️ Bicol', question: 'What is "laing" made from?', options: ['Taro leaves cooked in coconut milk', 'Dried fish and tomatoes', 'Rice wrapped in banana leaves', 'Grilled pork belly'], correct: 0, difficulty: 'medium', coinReward: 5 },
-  { id: 9, category: '🌶️ Bicol', question: 'What is the Bicolano word for "thank you" in the local dialect?', options: ['Salamat', 'Dios mabalos', 'Maraming salamat', 'Salamat po'], correct: 1, difficulty: 'hard', coinReward: 8 },
-  { id: 10, category: '🌶️ Bicol', question: 'Which province in Bicol is known for its whale shark (butanding) interaction?', options: ['Albay', 'Camarines Sur', 'Sorsogon', 'Camarines Norte'], correct: 2, difficulty: 'medium', coinReward: 5 },
+  { id: 6, category: 'Bicol', question: 'What is Bicol known as the "spice capital" of the Philippines for?', options: ['Its abundance of black pepper', 'Its love for chili peppers (siling labuyo)', 'Its cinnamon production', 'Its ginger farms'], correct: 1, difficulty: 'easy', coinReward: 3 },
+  { id: 7, category: 'Bicol', question: 'What is the traditional Bicolano dish made with coconut milk and chili?', options: ['Adobo', 'Bicol Express', 'Sinigang', 'Kare-Kare'], correct: 1, difficulty: 'easy', coinReward: 3 },
+  { id: 8, category: 'Bicol', question: 'What is "laing" made from?', options: ['Taro leaves cooked in coconut milk', 'Dried fish and tomatoes', 'Rice wrapped in banana leaves', 'Grilled pork belly'], correct: 0, difficulty: 'medium', coinReward: 5 },
+  { id: 9, category: 'Bicol', question: 'What is the Bicolano word for "thank you" in the local dialect?', options: ['Salamat', 'Dios mabalos', 'Maraming salamat', 'Salamat po'], correct: 1, difficulty: 'hard', coinReward: 8 },
+  { id: 10, category: 'Bicol', question: 'Which province in Bicol is known for its whale shark (butanding) interaction?', options: ['Albay', 'Camarines Sur', 'Sorsogon', 'Camarines Norte'], correct: 2, difficulty: 'medium', coinReward: 5 },
 
   // ── Food & Snacks ──
-  { id: 11, category: '🍕 Food', question: 'What is musubi primarily made of?', options: ['Bread and butter', 'Rice, meat, and nori seaweed', 'Pasta and cheese', 'Tortilla and beans'], correct: 1, difficulty: 'easy', coinReward: 3 },
-  { id: 12, category: '🍕 Food', question: 'What gives churros their classic ridged shape?', options: ['Being rolled by hand', 'Being piped through a star-shaped nozzle', 'Being cut with special scissors', 'Being pressed in a mold'], correct: 1, difficulty: 'medium', coinReward: 5 },
-  { id: 13, category: '🍕 Food', question: 'What is coffee jelly primarily made of?', options: ['Coffee-flavored gelatin with cream', 'Frozen coffee ice cream', 'Coffee beans and sugar', 'Espresso and milk foam'], correct: 0, difficulty: 'easy', coinReward: 3 },
-  { id: 14, category: '🍕 Food', question: 'What is the main ingredient in a classic Filipino ensaymada?', options: ['Rice flour', 'Enriched bread dough with butter and cheese', 'Corn meal', 'Cassava'], correct: 1, difficulty: 'medium', coinReward: 5 },
-  { id: 15, category: '🍕 Food', question: 'What does "bento" mean in Japanese?', options: ['Delicious meal', 'Packed lunch box', 'Rice ball', 'Street food'], correct: 1, difficulty: 'easy', coinReward: 3 },
+  { id: 11, category: 'Food', question: 'What is musubi primarily made of?', options: ['Bread and butter', 'Rice, meat, and nori seaweed', 'Pasta and cheese', 'Tortilla and beans'], correct: 1, difficulty: 'easy', coinReward: 3 },
+  { id: 12, category: 'Food', question: 'What gives churros their classic ridged shape?', options: ['Being rolled by hand', 'Being piped through a star-shaped nozzle', 'Being cut with special scissors', 'Being pressed in a mold'], correct: 1, difficulty: 'medium', coinReward: 5 },
+  { id: 13, category: 'Food', question: 'What is coffee jelly primarily made of?', options: ['Coffee-flavored gelatin with cream', 'Frozen coffee ice cream', 'Coffee beans and sugar', 'Espresso and milk foam'], correct: 0, difficulty: 'easy', coinReward: 3 },
+  { id: 14, category: 'Food', question: 'What is the main ingredient in a classic Filipino ensaymada?', options: ['Rice flour', 'Enriched bread dough with butter and cheese', 'Corn meal', 'Cassava'], correct: 1, difficulty: 'medium', coinReward: 5 },
+  { id: 15, category: 'Food', question: 'What does "bento" mean in Japanese?', options: ['Delicious meal', 'Packed lunch box', 'Rice ball', 'Street food'], correct: 1, difficulty: 'easy', coinReward: 3 },
 
   // ── Mario & Gaming ──
-  { id: 16, category: '🍄 Mario', question: 'What is the name of Mario\'s brother?', options: ['Wario', 'Luigi', 'Toad', 'Yoshi'], correct: 1, difficulty: 'easy', coinReward: 3 },
-  { id: 17, category: '🍄 Mario', question: 'What does a Super Star do in Mario games?', options: ['Makes Mario invincible temporarily', 'Gives extra lives', 'Opens secret doors', 'Transforms Mario'], correct: 0, difficulty: 'easy', coinReward: 3 },
-  { id: 18, category: '🍄 Mario', question: 'What is the name of the princess Mario always rescues?', options: ['Princess Daisy', 'Princess Peach', 'Princess Rosalina', 'Princess Zelda'], correct: 1, difficulty: 'easy', coinReward: 3 },
-  { id: 19, category: '🍄 Mario', question: 'What power-up makes Mario grow bigger?', options: ['Super Star', 'Fire Flower', 'Super Mushroom', '1-Up Mushroom'], correct: 2, difficulty: 'easy', coinReward: 3 },
-  { id: 20, category: '🍄 Mario', question: 'In which year was the original Super Mario Bros. released?', options: ['1983', '1985', '1987', '1990'], correct: 1, difficulty: 'hard', coinReward: 8 },
+  { id: 16, category: 'Mario', question: 'What is the name of Mario\'s brother?', options: ['Wario', 'Luigi', 'Toad', 'Yoshi'], correct: 1, difficulty: 'easy', coinReward: 3 },
+  { id: 17, category: 'Mario', question: 'What does a Super Star do in Mario games?', options: ['Makes Mario invincible temporarily', 'Gives extra lives', 'Opens secret doors', 'Transforms Mario'], correct: 0, difficulty: 'easy', coinReward: 3 },
+  { id: 18, category: 'Mario', question: 'What is the name of the princess Mario always rescues?', options: ['Princess Daisy', 'Princess Peach', 'Princess Rosalina', 'Princess Zelda'], correct: 1, difficulty: 'easy', coinReward: 3 },
+  { id: 19, category: 'Mario', question: 'What power-up makes Mario grow bigger?', options: ['Super Star', 'Fire Flower', 'Super Mushroom', '1-Up Mushroom'], correct: 2, difficulty: 'easy', coinReward: 3 },
+  { id: 20, category: 'Mario', question: 'In which year was the original Super Mario Bros. released?', options: ['1983', '1985', '1987', '1990'], correct: 1, difficulty: 'hard', coinReward: 8 },
 
   // ── General Knowledge ──
-  { id: 21, category: '🧠 General', question: 'What is the currency of the Philippines?', options: ['Dollar', 'Peso', 'Yuan', 'Euro'], correct: 1, difficulty: 'easy', coinReward: 3 },
-  { id: 22, category: '🧠 General', question: 'How many provinces are in the Bicol Region?', options: ['4', '5', '6', '7'], correct: 2, difficulty: 'medium', coinReward: 5 },
-  { id: 23, category: '🧠 General', question: 'What is the largest island in the Philippines?', options: ['Mindanao', 'Visayas', 'Luzon', 'Palawan'], correct: 2, difficulty: 'easy', coinReward: 3 },
-  { id: 24, category: '🧠 General', question: 'What year did the Philippines gain independence?', options: ['1896', '1898', '1946', '1986'], correct: 2, difficulty: 'medium', coinReward: 5 },
-  { id: 25, category: '🧠 General', question: 'What is the national bird of the Philippines?', options: ['Eagle', 'Maya bird', 'Parrot', 'Dove'], correct: 0, difficulty: 'medium', coinReward: 5 },
+  { id: 21, category: 'General', question: 'What is the currency of the Philippines?', options: ['Dollar', 'Peso', 'Yuan', 'Euro'], correct: 1, difficulty: 'easy', coinReward: 3 },
+  { id: 22, category: 'General', question: 'How many provinces are in the Bicol Region?', options: ['4', '5', '6', '7'], correct: 2, difficulty: 'medium', coinReward: 5 },
+  { id: 23, category: 'General', question: 'What is the largest island in the Philippines?', options: ['Mindanao', 'Visayas', 'Luzon', 'Palawan'], correct: 2, difficulty: 'easy', coinReward: 3 },
+  { id: 24, category: 'General', question: 'What year did the Philippines gain independence?', options: ['1896', '1898', '1946', '1986'], correct: 2, difficulty: 'medium', coinReward: 5 },
+  { id: 25, category: 'General', question: 'What is the national bird of the Philippines?', options: ['Eagle', 'Maya bird', 'Parrot', 'Dove'], correct: 0, difficulty: 'medium', coinReward: 5 },
 ];
 
 // ─── Game Types ──────────────────────────────────────────────
@@ -264,7 +264,7 @@ export default function TriviaPage() {
           <div className="deco-container" style={{ maxWidth: '48rem' }}>
             <div className="text-center mb-8">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}>
-                🧠 Trivia Challenge
+                <Brain color={'#ff4d8d'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Trivia Challenge
               </h1>
               <p className="mt-3 text-base text-[var(--gold)]">Test your knowledge and earn coins!</p>
             </div>
@@ -274,13 +274,13 @@ export default function TriviaPage() {
               {highScore > 0 && (
                 <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.1)] p-4 rounded-2xl text-center">
                   <p className="text-[8px] text-[var(--gold)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Normal High Score</p>
-                  <p className="coin-price text-lg mt-1">{highScore} 🪙</p>
+                  <p className="coin-price text-lg mt-1">{highScore} <Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
                 </div>
               )}
               {legendaryHighScore > 0 && (
                 <div className="border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-4 rounded-2xl text-center">
-                  <p className="text-[8px] text-[var(--crimson)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>🏆 Legendary High Score</p>
-                  <p className="text-lg mt-1" style={{ fontFamily: 'var(--font-arcade)', color: 'var(--crimson)' }}>{legendaryHighScore} 🪙</p>
+                  <p className="text-[8px] text-[var(--crimson)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}><Trophy color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Legendary High Score</p>
+                  <p className="text-lg mt-1" style={{ fontFamily: 'var(--font-arcade)', color: 'var(--crimson)' }}>{legendaryHighScore} <Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
                 </div>
               )}
             </div>
@@ -290,11 +290,11 @@ export default function TriviaPage() {
               <h2 className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] mb-4 text-center" style={{ fontFamily: 'var(--font-arcade)' }}>How It Works</h2>
               <div className="space-y-3">
                 {[
-                  { icon: '❤️', text: `Normal: ${MAX_LIVES} lives · Legendary: ${MAX_LIVES_LEGENDARY} life` },
+                  { icon: <Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, text: `Normal: ${MAX_LIVES} lives · Legendary: ${MAX_LIVES_LEGENDARY} life` },
                   { icon: '⏱️', text: `Normal: ${QUESTION_TIME}s per question · Legendary: ${QUESTION_TIME_LEGENDARY}s` },
-                  { icon: '🔥', text: 'Build streaks for bonus coins (2+ correct in a row)' },
+                  { icon: <Flame color={'#fb8500'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, text: 'Build streaks for bonus coins (2+ correct in a row)' },
                   { icon: <Icon name="coin" size={20} />, text: 'Normal: 3-8 coins/question · Legendary: 3x multiplier!' },
-                  { icon: '💀', text: 'Legendary mode: only hard questions, 1 life, 8s timer' },
+                  { icon: <Skull className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, text: 'Legendary mode: only hard questions, 1 life, 8s timer' },
                 ].map(item => (
                   <div key={item.text} className="flex items-center gap-3">
                     <span className="text-lg">{item.icon}</span>
@@ -315,7 +315,7 @@ export default function TriviaPage() {
                     className={`px-4 py-2 border-2 rounded-xl text-[9px] uppercase transition-all ${selectedCategory === cat ? 'border-[var(--gold)] bg-[var(--gold)] text-[var(--obsidian)]' : 'border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] text-[var(--cream-muted)] hover:border-[var(--gold)]'}`}
                     style={{ fontFamily: 'var(--font-arcade)' }}
                   >
-                    {cat === 'all' ? '🎯 All' : cat}
+                    {cat === 'all' ? 'All' : cat}
                   </button>
                 ))}
               </div>
@@ -327,7 +327,7 @@ export default function TriviaPage() {
               <div className="flex justify-center gap-2 mt-2">
                 {Array.from({ length: MAX_PLAYS_PER_DAY }).map((_, i) => (
                   <span key={i} className="text-xl" style={{ opacity: i < playsLeft ? 1 : 0.3 }}>
-                    {i < playsLeft ? '🎮' : '🚫'}
+                    {i < playsLeft ? <Gamepad2 color={'#c896ff'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : <CircleX color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />}
                   </span>
                 ))}
               </div>
@@ -345,7 +345,7 @@ export default function TriviaPage() {
                   className="deco-btn deco-btn-gold deco-btn-lg rounded-2xl pulse-glow disabled:opacity-40 disabled:cursor-not-allowed w-full"
                   style={{ fontFamily: 'var(--font-arcade)', maxWidth: '320px' }}
                 >
-                  🎮 {playsLeft > 0 ? 'START NORMAL GAME' : 'NO PLAYS LEFT'}
+                  <Gamepad2 color={'#c896ff'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {playsLeft > 0 ? 'START NORMAL GAME' : 'NO PLAYS LEFT'}
                 </button>
                 <p className="text-[9px] text-[var(--pewter)] mt-2">{MAX_LIVES} lives · {QUESTION_TIME}s timer · 1x coins</p>
               </div>
@@ -356,7 +356,7 @@ export default function TriviaPage() {
                   className="deco-btn deco-btn-crimson deco-btn-lg rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed w-full"
                   style={{ fontFamily: 'var(--font-arcade)', maxWidth: '320px', boxShadow: '0 0 20px rgba(229,37,33,0.3)' }}
                 >
-                  💀 {playsLeft > 0 ? 'LEGENDARY MODE' : 'NO PLAYS LEFT'}
+                  <Skull className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {playsLeft > 0 ? 'LEGENDARY MODE' : 'NO PLAYS LEFT'}
                 </button>
                 <p className="text-[9px] text-[var(--crimson)] mt-2">{MAX_LIVES_LEGENDARY} life · {QUESTION_TIME_LEGENDARY}s timer · 3x coins · HARD ONLY</p>
               </div>
@@ -376,10 +376,10 @@ export default function TriviaPage() {
           <div className="deco-container" style={{ maxWidth: '40rem' }}>
             <div className="deco-modal bounce-in rounded-2xl max-w-md mx-auto" style={{ background: 'var(--charcoal)' }}>
               <div className="deco-modal-header text-center rounded-t-2xl" style={{ background: 'linear-gradient(135deg, var(--crimson-dark), var(--crimson))' }}>
-                <h2 className="text-sm text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>💀 GAME OVER</h2>
+                <h2 className="text-sm text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}><Skull className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> GAME OVER</h2>
               </div>
               <div className="deco-modal-body text-center space-y-4">
-                <div className="text-5xl">😵</div>
+                <div className="text-5xl"><CircleX color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
                 <p className="text-[10px] text-[var(--pewter)]" style={{ fontFamily: 'var(--font-arcade)' }}>OUT OF LIVES!</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="border border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-3 rounded-xl">
@@ -396,12 +396,12 @@ export default function TriviaPage() {
                   </div>
                   <div className="border border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-3 rounded-xl">
                     <p className="text-[8px] text-[var(--gold)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Best Streak</p>
-                    <p className="text-sm text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)' }}>{bestStreak}🔥</p>
+                    <p className="text-sm text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)' }}>{bestStreak}<Flame color={'#fb8500'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
                   </div>
                 </div>
                 <div className="flex gap-3">
                   <button onClick={() => startGame(isLegendaryMode)} className="deco-btn deco-btn-gold flex-1 rounded-xl" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
-                    🔄 TRY AGAIN
+                    <RefreshCw className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> TRY AGAIN
                   </button>
                   <Link href="/" className="deco-btn flex-1 rounded-xl" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
                     ← MENU
@@ -424,10 +424,10 @@ export default function TriviaPage() {
           <div className="deco-container" style={{ maxWidth: '40rem' }}>
             <div className="deco-modal bounce-in rounded-2xl max-w-md mx-auto" style={{ background: 'var(--charcoal)' }}>
               <div className="deco-modal-header text-center rounded-t-2xl" style={{ background: 'linear-gradient(135deg, var(--emerald-dark), var(--emerald-bright))' }}>
-                <h2 className="text-sm text-[var(--gold-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>🎉 QUEST COMPLETE!</h2>
+                <h2 className="text-sm text-[var(--gold-bright)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}><PartyPopper color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> QUEST COMPLETE!</h2>
               </div>
               <div className="deco-modal-body text-center space-y-4">
-                <div className="text-5xl">🏆</div>
+                <div className="text-5xl"><Trophy color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
                 <p className="text-sm text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)' }}>ALL QUESTIONS ANSWERED!</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="border border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-3 rounded-xl">
@@ -436,7 +436,7 @@ export default function TriviaPage() {
                   </div>
                   <div className="border border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-3 rounded-xl">
                     <p className="text-[8px] text-[var(--gold)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Coins Earned</p>
-                    <p className="text-lg text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>🪙 +{coinsEarned}</p>
+                    <p className="text-lg text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> +{coinsEarned}</p>
                   </div>
                   <div className="border border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-3 rounded-xl">
                     <p className="text-[8px] text-[var(--gold)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Accuracy</p>
@@ -444,15 +444,15 @@ export default function TriviaPage() {
                   </div>
                   <div className="border border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-3 rounded-xl">
                     <p className="text-[8px] text-[var(--gold)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Best Streak</p>
-                    <p className="text-lg text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)' }}>{bestStreak}🔥</p>
+                    <p className="text-lg text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)' }}>{bestStreak}<Flame color={'#fb8500'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
                   </div>
                 </div>
                 {score >= highScore && score > 0 && (
-                  <p className="text-[10px] text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>⭐ NEW HIGH SCORE! ⭐</p>
+                  <p className="text-[10px] text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}><Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> NEW HIGH SCORE! <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
                 )}
                 <div className="flex gap-3">
                   <button onClick={() => startGame(isLegendaryMode)} className="deco-btn deco-btn-gold flex-1 rounded-xl" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
-                    🔄 PLAY AGAIN
+                    <RefreshCw className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> PLAY AGAIN
                   </button>
                   <Link href="/" className="deco-btn flex-1 rounded-xl" style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px' }}>
                     ← MENU
@@ -485,7 +485,7 @@ export default function TriviaPage() {
             <div className="flex items-center gap-1">
               {Array.from({ length: MAX_LIVES }).map((_, i) => (
                 <span key={i} className={`text-lg transition-all ${i < lives ? 'opacity-100' : 'opacity-20 grayscale'}`}>
-                  {i < lives ? '❤️' : '🖤'}
+                  {i < lives ? <Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : <Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />}
                 </span>
               ))}
             </div>
@@ -499,14 +499,14 @@ export default function TriviaPage() {
             {/* Streak */}
             {streak >= 2 && (
               <div className="flex items-center gap-1 border border-[var(--crimson)] bg-[rgba(229,37,33,0.15)] px-3 py-1 rounded-xl">
-                <span className="text-sm">🔥</span>
+                <span className="text-sm"><Flame color={'#fb8500'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
                 <span className="text-[9px] text-[var(--crimson)]" style={{ fontFamily: 'var(--font-arcade)' }}>x{streak}</span>
               </div>
             )}
 
             {/* Coins earned */}
             <div className="flex items-center gap-1">
-              <span className="text-sm">🪙</span>
+              <span className="text-sm"><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
               <span className="text-[9px] text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>+{coinsEarned}</span>
             </div>
           </div>
@@ -571,7 +571,7 @@ export default function TriviaPage() {
                 >
                   <div className="flex items-center gap-3">
                     <span className="w-7 h-7 flex items-center justify-center border border-[rgba(242,240,228,0.15)] rounded-lg text-[9px] shrink-0" style={{ fontFamily: 'var(--font-arcade)' }}>
-                      {isFeedback && isCorrectOption ? '✓' : isFeedback && isSelected && !isCorrect ? '✖' : String.fromCharCode(65 + i)}
+                      {isFeedback && isCorrectOption ? <Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : isFeedback && isSelected && !isCorrect ? <CircleX color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : String.fromCharCode(65 + i)}
                     </span>
                     <span className="text-sm text-[var(--cream-muted)]">{option}</span>
                   </div>
@@ -584,7 +584,7 @@ export default function TriviaPage() {
           {isFeedback && (
             <div className={`border-2 rounded-2xl p-4 text-center mb-4 ${isCorrect ? 'border-[var(--emerald-bright)] bg-[rgba(30,61,47,0.2)]' : 'border-[var(--crimson)] bg-[rgba(229,37,33,0.1)]'}`}>
               <p className="text-sm" style={{ fontFamily: 'var(--font-arcade)', color: isCorrect ? 'var(--emerald-bright)' : 'var(--crimson)' }}>
-                {isCorrect ? '✅ CORRECT!' : selectedAnswer === -1 ? '⏱️ TIME\'S UP!' : '❌ WRONG!'}
+                {isCorrect ? 'CORRECT!' : selectedAnswer === -1 ? '⏱️ TIME\'S UP!' : 'WRONG!'}
               </p>
               {isCorrect && timer > 5 && (
                 <p className="text-[9px] text-[var(--gold)] mt-1" style={{ fontFamily: 'var(--font-arcade)' }}>

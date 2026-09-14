@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useCoins } from '@/app/hooks/useCoins';
+import { Bird, Lightbulb, Skull } from 'lucide-react';
 
 const GAME_WIDTH = 320;
 const GAME_HEIGHT = 480;
@@ -240,7 +241,7 @@ export default function FlappyBird() {
       <NavBar pageLabel="Flappy Bird" />
       <div style={{ maxWidth: '400px', margin: '0 auto', padding: '80px 20px 100px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <div style={{ textAlign: 'center', marginBottom: '20px', opacity: loaded ? 1 : 0, transition: 'all 0.6s ease' }}>
-          <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: '#ffd60a', marginBottom: '4px' }}>🐦 Flappy Bird</h1>
+          <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: '#ffd60a', marginBottom: '4px' }}><Bird className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Flappy Bird</h1>
           <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>Tap or press Space to fly!</p>
         </div>
 
@@ -250,7 +251,7 @@ export default function FlappyBird() {
           {/* Menu Overlay */}
           {gameState === 'menu' && (
             <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', pointerEvents: 'none' }}>
-              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🐦</div>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}><Bird className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
               <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '14px', color: '#ffd60a', marginBottom: '8px' }}>FLAPPY BIRD</p>
               <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginBottom: '20px' }}>Tap to start flying!</p>
               {bestScore > 0 && <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}>Best: {bestScore}</p>}
@@ -260,7 +261,7 @@ export default function FlappyBird() {
           {/* Game Over Overlay */}
           {gameState === 'over' && (
             <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)' }}>
-              <div style={{ fontSize: '40px', marginBottom: '12px' }}>💀</div>
+              <div style={{ fontSize: '40px', marginBottom: '12px' }}><Skull className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
               <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '16px', color: '#e63946', marginBottom: '8px' }}>GAME OVER</p>
               <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '24px', color: '#ffd60a', marginBottom: '4px' }}>{score}</p>
               <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginBottom: '4px' }}>pipes passed</p>
@@ -276,7 +277,7 @@ export default function FlappyBird() {
 
         {/* Tips */}
         <div style={{ marginTop: '20px', padding: '12px 16px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px', textAlign: 'center' }}>
-          <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}>💡 Earn coins for every pipe you pass. Tap gently — gravity is your friend!</p>
+          <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}><Lightbulb color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Earn coins for every pipe you pass. Tap gently — gravity is your friend!</p>
         </div>
       </div>
     </main>

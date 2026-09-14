@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { type Order } from '@/app/lib/muragoods-data';
 import { NavBar } from '@/app/components/NavBar';
-import { Icon } from '@/app/components/Icon';;
+import { Icon } from '@/app/components/Icon';
 import { CoinBalance } from '@/app/components/CoinBalance';
 import { useCoins } from '@/app/hooks/useCoins';
 import { AnimatedProgressBar } from '@/app/components/AnimatedProgressBar';
-
+import { Camera, CircleCheck, CircleX, Cloudy, Coins, Crown, Hourglass, IdCard, Package, Pencil, Sparkles, Star, Tag, Wallet, X } from 'lucide-react';
 interface UserData {
   name?: string;
   email?: string;
@@ -37,6 +37,10 @@ export default function AccountProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [userId, setUserId] = useState('');
   const [perks, setPerks] = useState<Perk[]>([]);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameError, setNameError] = useState('');
   const { coins: localCoins } = useCoins();
   const [serverCoins, setServerCoins] = useState<number | null>(null);
   const displayIdRef = useRef('');
@@ -50,6 +54,31 @@ export default function AccountProfilePage() {
       const savedAvatar = localStorage.getItem('muragoods_avatar');
       if (savedAvatar) setAvatar(savedAvatar);
       if (userData.userId) setUserId(userData.userId);
+
+      // Fetch profile from the account API — server avatar wins over the
+      // localStorage cache so a saved avatar follows the user across devices.
+      async function fetchAccount() {
+        try {
+          const res = await fetch(`/api/account/profile?email=${encodeURIComponent(userData.email)}`);
+          if (!res.ok) return;
+          const result = await res.json();
+          if (result.success && result.data) {
+            if (result.data.avatar) {
+              setAvatar(result.data.avatar);
+              localStorage.setItem('muragoods_avatar', result.data.avatar);
+            }
+            if (result.data.userId) {
+              setUserId(prev => prev || result.data.userId);
+              const stored = JSON.parse(localStorage.getItem('user') || '{}');
+              if (!stored.userId) {
+                stored.userId = result.data.userId;
+                localStorage.setItem('user', JSON.stringify(stored));
+              }
+            }
+          }
+        } catch { /* empty */ }
+      }
+      void fetchAccount();
 
       // Fetch user profile from server to get createdAt
       async function fetchProfile() {
@@ -132,9 +161,45 @@ export default function AccountProfilePage() {
       const dataUrl = ev.target?.result as string;
       setAvatar(dataUrl);
       localStorage.setItem('muragoods_avatar', dataUrl);
+      // Persist to the server so the avatar follows the account (best effort).
+      fetch('/api/account/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user?.email, avatar: dataUrl }),
+      }).catch(() => { /* offline — stays local */ });
       setUploadingAvatar(false);
     };
     reader.readAsDataURL(file);
+  };
+
+  const saveName = async () => {
+    const name = nameDraft.trim().replace(/\s+/g, ' ');
+    if (name.length < 2 || name.length > 40) {
+      setNameError('Name must be 2–40 characters');
+      return;
+    }
+    setNameSaving(true); setNameError('');
+    try {
+      const res = await fetch('/api/account/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user?.email, name }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        setUser(prev => (prev ? { ...prev, name } : prev));
+        const stored = JSON.parse(localStorage.getItem('user') || '{}');
+        stored.name = name;
+        localStorage.setItem('user', JSON.stringify(stored));
+        setEditingName(false);
+      } else {
+        setNameError(result.error || 'Could not save name');
+      }
+    } catch {
+      setNameError('Could not save name — check your connection');
+    } finally {
+      setNameSaving(false);
+    }
   };
 
   const memberSince = useMemo(() => {
@@ -211,10 +276,10 @@ export default function AccountProfilePage() {
           textAlign: 'center',
         }}>
           {/* Floating decorative elements */}
-          <div style={{ position: 'absolute', top: '12px', left: '16px', fontSize: '20px', opacity: 0.3, animation: 'float 3s ease-in-out infinite' }}>⭐</div>
-          <div style={{ position: 'absolute', top: '20px', right: '20px', fontSize: '16px', opacity: 0.25, animation: 'float 3s ease-in-out infinite 0.5s' }}>🪙</div>
-          <div style={{ position: 'absolute', bottom: '16px', left: '30px', fontSize: '14px', opacity: 0.2, animation: 'float 3s ease-in-out infinite 1s' }}>🍄</div>
-          <div style={{ position: 'absolute', bottom: '20px', right: '40px', fontSize: '12px', opacity: 0.2, animation: 'float 3s ease-in-out infinite 1.5s' }}>✨</div>
+          <div style={{ position: 'absolute', top: '12px', left: '16px', fontSize: '20px', opacity: 0.3, animation: 'float 3s ease-in-out infinite' }}><Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
+          <div style={{ position: 'absolute', top: '20px', right: '20px', fontSize: '16px', opacity: 0.25, animation: 'float 3s ease-in-out infinite 0.5s' }}><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
+          <div style={{ position: 'absolute', bottom: '16px', left: '30px', fontSize: '14px', opacity: 0.2, animation: 'float 3s ease-in-out infinite 1s' }}><Cloudy className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
+          <div style={{ position: 'absolute', bottom: '20px', right: '40px', fontSize: '12px', opacity: 0.2, animation: 'float 3s ease-in-out infinite 1.5s' }}><Sparkles color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
 
           {/* Glow */}
           <div style={{ position: 'absolute', top: '30%', left: '50%', width: '200px', height: '200px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,214,10,0.08), transparent 70%)', transform: 'translate(-50%, -50%)', pointerEvents: 'none' }} />
@@ -274,22 +339,66 @@ export default function AccountProfilePage() {
                 justifyContent: 'center',
                 fontSize: '12px',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-              }}>📷</div>
+              }}><Camera className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
             </div>
 
             {/* Name & Info */}
             <div style={{ textAlign: 'center' }}>
-              <h1 style={{
-                fontFamily: 'var(--font-arcade)',
-                fontSize: '16px',
-                color: 'var(--mario-yellow)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                textShadow: '2px 2px 0 rgba(0,0,0,0.5)',
-              }}>
-                {user.name || 'Player'}
-              </h1>
+              {editingName ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                  <input
+                    value={nameDraft}
+                    onChange={e => setNameDraft(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') void saveName(); if (e.key === 'Escape') setEditingName(false); }}
+                    autoFocus
+                    maxLength={40}
+                    aria-label="Display name"
+                    style={{
+                      background: 'var(--mario-bg-input)', border: '1px solid rgba(255,214,10,0.4)',
+                      borderRadius: 8, color: 'var(--mario-text)', padding: '8px 12px',
+                      fontFamily: 'var(--font-arcade)', fontSize: 12, textAlign: 'center',
+                      width: 240, outline: 'none',
+                    }}
+                  />
+                  {nameError && <p style={{ fontSize: 11, color: 'var(--mario-red)', margin: 0 }}>{nameError}</p>}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => void saveName()} disabled={nameSaving} style={{
+                      background: 'var(--mario-yellow)', color: 'var(--mario-bg)', border: 'none',
+                      borderRadius: 6, padding: '6px 14px', cursor: nameSaving ? 'wait' : 'pointer',
+                      fontFamily: 'var(--font-arcade)', fontSize: 9,
+                    }}>{nameSaving ? 'SAVING…' : 'SAVE'}</button>
+                    <button onClick={() => setEditingName(false)} style={{
+                      background: 'transparent', color: 'var(--mario-text-muted)',
+                      border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6,
+                      padding: '6px 14px', cursor: 'pointer', fontFamily: 'var(--font-arcade)', fontSize: 9,
+                    }}>CANCEL</button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setNameDraft(user.name || ''); setNameError(''); setEditingName(true); }}
+                  title="Click to edit your display name"
+                  aria-label="Edit display name"
+                  style={{
+                    background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  <h1 style={{
+                    fontFamily: 'var(--font-arcade)',
+                    fontSize: '16px',
+                    color: 'var(--mario-yellow)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    textShadow: '2px 2px 0 rgba(0,0,0,0.5)',
+                    margin: 0,
+                  }}>
+                    {user.name || 'Player'}
+                  </h1>
+                  <span style={{ display: 'inline-flex', opacity: 0.55 }}><Pencil size={12} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
+                </button>
+              )}
               <p style={{ color: 'var(--mario-text-muted)', fontSize: '13px', marginTop: '4px' }}>
                 {user.email}
               </p>
@@ -303,7 +412,7 @@ export default function AccountProfilePage() {
                 border: '1px solid rgba(255,214,10,0.2)',
                 borderRadius: '8px',
               }}>
-                <span style={{ fontSize: '12px' }}>🪪</span>
+                <span style={{ fontSize: '12px' }}><IdCard className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
                 <span style={{
                   fontFamily: 'var(--font-arcade)',
                   fontSize: '9px',
@@ -343,9 +452,9 @@ export default function AccountProfilePage() {
                         : 'border-mario-yellow/30 bg-mario-yellow/10 text-mario-yellow hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400 cursor-pointer'
                     }`}
                     title={perk.redeemed ? 'Already used' : 'Click to remove'}>
-                      {perk.perkId === 'gold_member' ? '👑' : '🏷️'}
+                      {perk.perkId === 'gold_member' ? <Crown color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : <Tag className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />}
                       <span>{perk.perkName}</span>
-                      {perk.redeemed ? <span className="text-[7px] opacity-60">(Used)</span> : <span className="text-[8px] opacity-0 group-hover:opacity-100 transition-opacity">✕</span>}
+                      {perk.redeemed ? <span className="text-[7px] opacity-60">(Used)</span> : <span className="text-[8px] opacity-0 group-hover:opacity-100 transition-opacity"><X className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>}
                     </button>
                   ))}
                 </div>
@@ -365,9 +474,9 @@ export default function AccountProfilePage() {
         }}>
           {[
             { label: 'Orders', value: String(activeOrders.length), icon: <Icon name="box" size={16} />, color: 'var(--mario-text)' },
-            { label: 'Delivered', value: String(deliveredCount), icon: '✅', color: 'var(--mario-green)' },
-            { label: 'Active', value: String(activeCount), icon: '⏳', color: 'var(--mario-yellow)' },
-            { label: 'Spent', value: `₱${totalSpent.toLocaleString()}`, icon: '💰', color: 'var(--mario-yellow)' },
+            { label: 'Delivered', value: String(deliveredCount), icon: <CircleCheck color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'var(--mario-green)' },
+            { label: 'Active', value: String(activeCount), icon: <Hourglass color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color: 'var(--mario-yellow)' },
+            { label: 'Spent', value: `₱${totalSpent.toLocaleString()}`, icon: <Wallet color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, color:'var(--mario-yellow)' },
           ].map(stat => (
             <div key={stat.label} style={{
               background: 'var(--mario-bg-card)',
@@ -467,7 +576,7 @@ export default function AccountProfilePage() {
                       justifyContent: 'center',
                     }}>
                       <span style={{ fontSize: '14px' }}>
-                        {order.status === 'Delivered' ? '✅' : order.status === 'Cancelled' ? '✖' : '📦'}
+                        {order.status === 'Delivered' ? <CircleCheck color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : order.status ==='Cancelled' ? <CircleX color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : <Package className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />}
                       </span>
                     </div>
                     <div>
@@ -506,7 +615,7 @@ export default function AccountProfilePage() {
               padding: '40px 20px',
               textAlign: 'center',
             }}>
-              <span style={{ fontSize: '32px' }}>📦</span>
+              <span style={{ fontSize: '32px' }}><Package className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
               <p style={{
                 fontFamily: 'var(--font-arcade)',
                 fontSize: '10px',

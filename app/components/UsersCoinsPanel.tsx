@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-
+import { Coins, Trash2, TriangleAlert, Users } from 'lucide-react';
 interface UserData {
   name: string;
   email: string;
@@ -94,7 +94,7 @@ export function UsersCoinsPanel({ userName }: UsersCoinsPanelProps) {
   };
 
   const handleDeleteUser = async (email: string, name: string) => {
-    if (!confirm(`⚠️ Are you sure you want to DELETE ${name}'s account (${email})? This cannot be undone.`)) return;
+    if (!confirm(`<TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Are you sure you want to DELETE ${name}'s account (${email})? This cannot be undone.`)) return;
     if (!confirm('This will permanently remove their account, orders, and data. Are you absolutely sure?')) return;
 
     try {
@@ -135,7 +135,7 @@ export function UsersCoinsPanel({ userName }: UsersCoinsPanelProps) {
           textTransform: 'uppercase',
           letterSpacing: '0.05em',
           marginBottom: '16px',
-        }}>👥 Users & Coins</p>
+        }}><Users className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Users & Coins</p>
 
         <input
           type="text"
@@ -185,7 +185,7 @@ export function UsersCoinsPanel({ userName }: UsersCoinsPanelProps) {
                       fontFamily: 'var(--font-arcade)',
                       fontSize: '10px',
                       color: 'var(--mario-yellow)',
-                    }}>🪙 {user.coinBalance || 0}</span>
+                    }}><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {user.coinBalance || 0}</span>
                   </td>
                   <td style={{ padding: '10px 12px', color: 'var(--mario-text-muted)' }}>{user.orderCount}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--mario-yellow)' }}>₱{user.totalSpent}</td>
@@ -242,7 +242,7 @@ export function UsersCoinsPanel({ userName }: UsersCoinsPanelProps) {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '16px' }}>
                 {[
                   { label: 'ID', value: user.userId || 'N/A', color: 'var(--mario-yellow)' },
-                  { label: 'Coins', value: `🪙 ${user.coinBalance || 0}`, color: 'var(--mario-yellow)' },
+                  { label: 'Coins', value: `${user.coinBalance || 0}`, color: 'var(--mario-yellow)' },
                   { label: 'Orders', value: String(user.orderCount), color: 'var(--mario-text)' },
                   { label: 'Spent', value: `₱${user.totalSpent}`, color: 'var(--mario-yellow)' },
                 ].map(stat => (
@@ -286,7 +286,7 @@ export function UsersCoinsPanel({ userName }: UsersCoinsPanelProps) {
                   className="mario-btn mario-btn-sm mario-btn-red"
                   style={{ fontSize: '8px' }}
                 >
-                  🗑️ Delete Account
+                  <Trash2 className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Delete Account
                 </button>
               </div>
             </div>

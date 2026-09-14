@@ -1,6 +1,7 @@
 // MuraStream — TMDB Proxy API Route
 // Server-side proxy to keep the TMDB API key secure
 import { NextRequest, NextResponse } from 'next/server';
+import { SAMPLE_MEDIA } from '@/app/murastream/data/sample-media';
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const IMG_BASE = 'https://image.tmdb.org/t/p';
@@ -91,7 +92,10 @@ export async function GET(request: NextRequest) {
 
   const token = process.env.TMDB_ACCESS_TOKEN || process.env.TMDB_API_KEY;
   if (!token) {
-    return NextResponse.json({ error: 'TMDB API token not configured' }, { status: 500 });
+    // No credentials (local dev — the Vercel CLI redacts secrets it pulls).
+    // Serve a small sample catalog so the app is fully browsable instead of
+    // erroring. Production always has real keys and never reaches this.
+    return sampleResponse(searchParams);
   }
 
   const headers = { Authorization: `Bearer ${token}` };
@@ -139,7 +143,7 @@ export async function GET(request: NextRequest) {
           ...(searchParams.get('with_networks') ? { with_networks: searchParams.get('with_networks')! } : {}),
           ...(searchParams.get('primary_release_year') ? { primary_release_year: searchParams.get('primary_release_year')! } : {}),
           ...(searchParams.get('first_air_date_year') ? { first_air_date_year: searchParams.get('first_air_date_year')! } : {}),
-          'vote_count.gte': searchParams.get('vote_count_gte') || '0',
+          'vote_count.gte': searchParams.get('vote_count.gte') || searchParams.get('vote_count_gte') || '0',
         });
         url = `/discover/${searchParams.get('type') || 'tv'}?${dsp}`;
         break;
@@ -156,7 +160,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
 
-    const res = await fetch(`${TMDB_BASE}${url}`, { headers });
+    const res = await tmdbFetch(`${TMDB_BASE}${url}`, headers, action);
     if (!res.ok) {
       return NextResponse.json({ error: `TMDB error: ${res.status}` }, { status: res.status });
     }
@@ -214,9 +218,175 @@ export async function GET(request: NextRequest) {
       }));
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json(data, { headers: { 'Cache-Control': cacheControlFor(action) } });
   } catch (error) {
     console.error('TMDB API error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
+}
+
+// ─── Caching + resilience ────────────────────────────────────────
+// TMDB data is slow-moving; caching it in-process makes repeat visits
+// near-instant and keeps us far under TMDB's rate limits. Stale entries
+// are still served for up to 12h if TMDB is down or slow (SWR behavior).
+
+type CacheEntry = { data: unknown; storedAt: number; freshMs: number };
+const tmdbCache = new Map<string, CacheEntry>();
+const CACHE_MAX = 300; // entries
+
+function freshWindowFor(action: string | null): number {
+  switch (action) {
+    case 'trending': return 10 * 60 * 1000;      // 10 min
+    case 'search': return 5 * 60 * 1000;         // 5 min
+    case 'discover': return 30 * 60 * 1000;      // 30 min
+    case 'genres': return 24 * 60 * 60 * 1000;   // 1 day
+    case 'popular':
+    case 'top_rated':
+    case 'upcoming': return 60 * 60 * 1000;      // 1 hour
+    case 'movie_details':
+    case 'tv_details':
+    case 'tv_season': return 6 * 60 * 60 * 1000; // 6 hours
+    default: return 30 * 60 * 1000;
+  }
+}
+
+function cacheControlFor(action: string | null): string {
+  switch (action) {
+    case 'trending':
+    case 'search': return 'public, max-age=300, stale-while-revalidate=600';
+    case 'genres': return 'public, max-age=86400, stale-while-revalidate=86400';
+    case 'movie_details':
+    case 'tv_details':
+    case 'tv_season': return 'public, max-age=3600, stale-while-revalidate=21600';
+    default: return 'public, max-age=600, stale-while-revalidate=3600';
+  }
+}
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+async function tmdbFetch(url: string, headers: Record<string, string>, action: string | null): Promise<Response> {
+  const now = Date.now();
+  const freshMs = freshWindowFor(action);
+
+  const hit = tmdbCache.get(url);
+  if (hit) {
+    if (now - hit.storedAt < freshMs) {
+      // LRU touch: re-insert so hot keys sink to the eviction end
+      tmdbCache.delete(url);
+      tmdbCache.set(url, hit);
+      return new Response(JSON.stringify(hit.data), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    // Stale entry: serve it immediately and refresh in the background
+    // (stale-while-revalidate) so pages never wait on a cold TMDB round-trip.
+    void (async () => {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10_000);
+        const fresh = await fetch(url, { ...headers, signal: controller.signal });
+        clearTimeout(timeout);
+        if (fresh.ok) {
+          tmdbCache.set(url, { data: await fresh.json(), storedAt: Date.now(), freshMs });
+        }
+      } catch { /* keep stale entry */ }
+    })();
+    return new Response(JSON.stringify(hit.data), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Cold fetch with retry (TMDB occasionally hiccups with 429/5xx)
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10_000);
+      const res = await fetch(url, { headers, signal: controller.signal });
+      clearTimeout(timeout);
+      if (res.ok) {
+        const data = await res.json();
+        if (tmdbCache.size >= CACHE_MAX) {
+          const oldest = tmdbCache.keys().next().value;
+          if (oldest) tmdbCache.delete(oldest);
+        }
+        tmdbCache.set(url, { data, storedAt: Date.now(), freshMs });
+        return new Response(JSON.stringify(data), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (res.status === 429 || res.status >= 500) {
+        lastErr = new Error(`TMDB ${res.status}`);
+        await sleep(500 * (attempt + 1));
+        continue;
+      }
+      return res; // genuine client error (bad id etc.) — pass through
+    } catch (err) {
+      lastErr = err; // timeout/abort — retry once
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('TMDB request failed');
+}
+
+// ─── Sample fallback (no TMDB credentials configured) ────────────
+// Serves the sample catalog for list actions and synthesizes detail
+// responses so /murastream pages work end-to-end in local dev.
+function sampleResponse(searchParams: URLSearchParams): NextResponse {
+  const action = searchParams.get('action');
+  const type = searchParams.get('type') === 'tv' ? 'tv' : 'movie';
+  const page = Number(searchParams.get('page') || '1');
+
+  const filterByType = (items: typeof SAMPLE_MEDIA) => items.filter(i => i.mediaType === type);
+
+  if (action === 'movie_details' || action === 'tv_details') {
+    const id = Number(searchParams.get('id'));
+    const item = SAMPLE_MEDIA.find(i => i.id === id) || SAMPLE_MEDIA[0];
+    return NextResponse.json({
+      ...item,
+      credits: { cast: [], crew: [] },
+      videos: [],
+      similar: { results: SAMPLE_MEDIA.filter(i => i.id !== item.id).slice(0, 6) },
+      recommendations: { results: SAMPLE_MEDIA.filter(i => i.id !== item.id).slice(0, 6) },
+      seasons: [],
+      runtime: 120,
+    });
+  }
+  if (action === 'tv_season') {
+    // Synthetic season: 8 episodes so the episode picker works in dev.
+    const id = Number(searchParams.get('id'));
+    const item = SAMPLE_MEDIA.find(i => i.id === id);
+    const count = item?.mediaType === 'tv' ? 8 : 0;
+    return NextResponse.json({ episodes: Array.from({ length: count }, (_, n) => ({
+      id: (id || 0) * 100 + n + 1,
+      episodeNumber: n + 1,
+      name: `Episode ${n + 1}`,
+      overview: '',
+      stillPath: item?.backdropPath || null,
+      airDate: null,
+      runtime: 45,
+      voteAverage: null,
+    })) });
+  }
+  if (action === 'genres') {
+    return NextResponse.json({ genres: [
+      { id: 28, name: 'Action' }, { id: 12, name: 'Adventure' }, { id: 16, name: 'Animation' },
+      { id: 35, name: 'Comedy' }, { id: 80, name: 'Crime' }, { id: 18, name: 'Drama' },
+      { id: 14, name: 'Fantasy' }, { id: 27, name: 'Horror' }, { id: 10749, name: 'Romance' },
+      { id: 878, name: 'Science Fiction' }, { id: 53, name: 'Thriller' },
+    ] });
+  }
+  if (action === 'search') {
+    const q = (searchParams.get('q') || '').toLowerCase();
+    return NextResponse.json({ results: SAMPLE_MEDIA.filter(i => i.title.toLowerCase().includes(q)) });
+  }
+
+  // List actions (trending / popular / top_rated / upcoming / discover):
+  // paginate the sample pool. Page 2+ is empty, which ends infinite scroll.
+  const pool = filterByType(SAMPLE_MEDIA);
+  return NextResponse.json({
+    page,
+    results: page <= 1 ? pool : [],
+    total_pages: 1,
+    total_results: pool.length,
+  });
 }

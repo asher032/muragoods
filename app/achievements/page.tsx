@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useCoins } from '@/app/hooks/useCoins';
 import { Icon } from '@/app/components/Icon';
-
+import { Banknote, Brain, Crown, Fish, Flame, Gem, Lock, MoonStar, Package, PiggyBank, Sparkles, Star, Sunrise, Trophy, Users, Wallet, Zap } from 'lucide-react';
 interface Badge {
   id: string;
   name: string;
@@ -22,41 +22,41 @@ interface Badge {
 const ALL_BADGES: Omit<Badge, 'unlocked' | 'progress'>[] = [
   // Orders
   { id: 'first_order', name: 'First Blood', description: 'Place your first order', icon: <Icon name="game" size={20} />, requirement: '1 order', category: 'orders', maxProgress: 1 },
-  { id: 'orders_5', name: 'Regular Player', description: 'Place 5 orders', icon: '🎯', requirement: '5 orders', category: 'orders', maxProgress: 5 },
-  { id: 'orders_10', name: 'Power User', description: 'Place 10 orders', icon: '⚡', requirement: '10 orders', category: 'orders', maxProgress: 10 },
+  { id: 'orders_5', name: 'Regular Player', description: 'Place 5 orders', icon: <Package className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, requirement:'5 orders', category: 'orders', maxProgress: 5 },
+  { id: 'orders_10', name: 'Power User', description: 'Place 10 orders', icon: <Zap color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, requirement:'10 orders', category: 'orders', maxProgress: 10 },
   { id: 'orders_25', name: 'Elite Warrior', description: 'Place 25 orders', icon: <Icon name="trophy" size={20} />, requirement: '25 orders', category: 'orders', maxProgress: 25 },
-  { id: 'orders_50', name: 'Legend', description: 'Place 50 orders', icon: '👑', requirement: '50 orders', category: 'orders', maxProgress: 50 },
+  { id: 'orders_50', name: 'Legend', description: 'Place 50 orders', icon: <Crown color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, requirement:'50 orders', category: 'orders', maxProgress: 50 },
 
   // Spending
-  { id: 'spent_100', name: 'Big Spender', description: 'Spend ₱100 total', icon: '💰', requirement: '₱100 spent', category: 'spending', maxProgress: 100 },
-  { id: 'spent_500', name: 'High Roller', description: 'Spend ₱500 total', icon: '💎', requirement: '₱500 spent', category: 'spending', maxProgress: 500 },
-  { id: 'spent_1000', name: 'VIP Member', description: 'Spend ₱1,000 total', icon: '🎰', requirement: '₱1,000 spent', category: 'spending', maxProgress: 1000 },
-  { id: 'spent_5000', name: 'Whale', description: 'Spend ₱5,000 total', icon: '🐋', requirement: '₱5,000 spent', category: 'spending', maxProgress: 5000 },
+  { id: 'spent_100', name: 'Big Spender', description: 'Spend ₱100 total', icon: <Wallet className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, requirement:'₱100 spent', category: 'spending', maxProgress: 100 },
+  { id: 'spent_500', name: 'High Roller', description: 'Spend ₱500 total', icon: <Banknote className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, requirement:'₱500 spent', category: 'spending', maxProgress: 500 },
+  { id: 'spent_1000', name: 'VIP Member', description: 'Spend ₱1,000 total', icon: <Gem color={'#4895ef'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, requirement:'₱1,000 spent', category: 'spending', maxProgress: 1000 },
+  { id: 'spent_5000', name: 'Whale', description: 'Spend ₱5,000 total', icon: <Fish color={'#4895ef'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, requirement:'₱5,000 spent', category: 'spending', maxProgress: 5000 },
 
   // Streak
   { id: 'streak_3', name: 'Hat Trick', description: 'Order 3 days in a row', icon: <Icon name="fire" size={20} />, requirement: '3-day streak', category: 'streak', maxProgress: 3 },
-  { id: 'streak_7', name: 'On Fire', description: 'Order 7 days in a row', icon: '🌟', requirement: '7-day streak', category: 'streak', maxProgress: 7 },
+  { id: 'streak_7', name: 'On Fire', description: 'Order 7 days in a row', icon: <Flame color={'#fb8500'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, requirement:'7-day streak', category: 'streak', maxProgress: 7 },
   { id: 'checkin_7', name: 'Dedicated', description: 'Check in 7 days in a row', icon: <Icon name="calendar" size={20} />, requirement: '7-day check-in', category: 'streak', maxProgress: 7 },
 
   // Social
   { id: 'first_review', name: 'Critic', description: 'Leave your first review', icon: <Icon name="star" size={20} />, requirement: '1 review', category: 'social', maxProgress: 1 },
-  { id: 'reviews_5', name: 'Food Critic', description: 'Leave 5 reviews', icon: '📝', requirement: '5 reviews', category: 'social', maxProgress: 5 },
-  { id: 'referral_1', name: 'Recruiter', description: 'Refer 1 friend', icon: '🤝', requirement: '1 referral', category: 'social', maxProgress: 1 },
+  { id: 'reviews_5', name: 'Food Critic', description: 'Leave 5 reviews', icon: <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, requirement:'5 reviews', category: 'social', maxProgress: 5 },
+  { id: 'referral_1', name: 'Recruiter', description: 'Refer 1 friend', icon: <Users className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, requirement:'1 referral', category: 'social', maxProgress: 1 },
   { id: 'unsent_1', name: 'Poet', description: 'Write your first unsent letter', icon: <Icon name="envelope" size={20} />, requirement: '1 letter', category: 'social', maxProgress: 1 },
 
   // Special
-  { id: 'trivia_master', name: 'Trivia Master', description: 'Get 100% on trivia', icon: '🧠', requirement: 'Perfect trivia score', category: 'special', maxProgress: 1 },
-  { id: 'mystery_lucky', name: 'Lucky Star', description: 'Win a Legendary mystery box', icon: '🌟', requirement: 'Legendary win', category: 'special', maxProgress: 1 },
-  { id: 'early_bird', name: 'Early Bird', description: 'Order before 9 AM', icon: '🐦', requirement: 'Morning order', category: 'special', maxProgress: 1 },
-  { id: 'night_owl', name: 'Night Owl', description: 'Order after 8 PM', icon: '🦉', requirement: 'Evening order', category: 'special', maxProgress: 1 },
+  { id: 'trivia_master', name: 'Trivia Master', description: 'Get 100% on trivia', icon: <Brain color={'#ff4d8d'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, requirement:'Perfect trivia score', category: 'special', maxProgress: 1 },
+  { id: 'mystery_lucky', name: 'Lucky Star', description: 'Win a Legendary mystery box', icon: <Sparkles color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, requirement:'Legendary win', category: 'special', maxProgress: 1 },
+  { id: 'early_bird', name: 'Early Bird', description: 'Order before 9 AM', icon: <Sunrise color={'#fb8500'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, requirement:'Morning order', category: 'special', maxProgress: 1 },
+  { id: 'night_owl', name: 'Night Owl', description: 'Order after 8 PM', icon: <MoonStar color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, requirement:'Evening order', category: 'special', maxProgress: 1 },
 ];
 
 const categoryLabels: Record<string, { label: string; icon: React.ReactNode }> = {
   orders: { label: 'Orders', icon: <Icon name="box" size={20} /> },
-  spending: { label: 'Spending', icon: '💰' },
+  spending: { label: 'Spending', icon: <PiggyBank className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> },
   streak: { label: 'Streaks', icon: <Icon name="fire" size={20} /> },
   social: { label: 'Social', icon: <Icon name="chat" size={20} /> },
-  special: { label: 'Special', icon: '✨' },
+  special: { label: 'Special', icon: <Sparkles color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> },
 };
 
 export default function AchievementsPage() {
@@ -140,7 +140,7 @@ export default function AchievementsPage() {
           {/* Header */}
           <div className="mb-8 text-center">
             <h1 className="text-2xl sm:text-3xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}>
-              🏆 Achievements
+              <Trophy color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Achievements
             </h1>
             <p className="mt-2 text-sm text-[var(--gold)]">Unlock badges by using Muragoods</p>
             <div className="mt-4 inline-flex items-center gap-3 border-2 border-[var(--gold)] bg-[var(--charcoal)] px-6 py-3 rounded-xl">
@@ -180,7 +180,7 @@ export default function AchievementsPage() {
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${
                     badge.unlocked ? 'bg-gradient-to-br from-[var(--gold)] to-[var(--gold-dark)]' : 'bg-[var(--charcoal-light)]'
                   }`}>
-                    {badge.unlocked ? badge.icon : '🔒'}
+                    {badge.unlocked ? badge.icon : <Lock className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />}
                   </div>
                   <div className="flex-1">
                     <p className={`text-[10px] uppercase ${badge.unlocked ? 'text-[var(--gold-bright)]' : 'text-[var(--pewter)]'}`} style={{ fontFamily: 'var(--font-arcade)' }}>

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-
+import { Check, CircleX, MapPin } from 'lucide-react';
 interface LocationPickerProps {
   onLocationSelect?: (lat: number, lng: number, address: string) => void;
   initialLat?: number;
@@ -148,7 +148,7 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <p className="text-[10px] text-[var(--emerald-bright)] uppercase tracking-[0.15em] mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>
-              ✓ Location Confirmed
+              <Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Location Confirmed
             </p>
             <p className="text-sm text-[var(--cream)] leading-relaxed">{confirmed.placeName || confirmed.address}</p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -181,7 +181,7 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
       {pending && (
         <div className="mt-3 border-2 border-[var(--gold-bright)] bg-[rgba(212,175,55,0.08)] p-4 rounded-xl">
           <p className="text-[10px] text-[var(--gold)] uppercase mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>
-            📍 Confirm Your Address
+            <MapPin color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Confirm Your Address
           </p>
           {loading ? (
             <p className="text-sm text-[var(--cream)] animate-pulse">Finding address...</p>
@@ -190,10 +190,10 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
               <p className="text-sm text-[var(--cream)] leading-relaxed">{pending.placeName || pending.address}</p>
               <div className="mt-3 flex gap-3">
                 <button type="button" onClick={handleConfirmAddress} className="deco-btn deco-btn-sm deco-btn-gold rounded-xl flex-1">
-                  ✓ Confirm Address
+                  <Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Confirm Address
                 </button>
                 <button type="button" onClick={() => setPending(null)} className="deco-btn deco-btn-sm deco-btn-dark rounded-xl flex-1">
-                  ✖ Cancel
+                  <CircleX color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Cancel
                 </button>
               </div>
             </>
@@ -204,7 +204,7 @@ export default function LocationPicker({ onLocationSelect, initialLat = 13.1550,
       {/* Action Buttons */}
       <div className="mt-3 flex flex-col gap-2">
         <button type="button" onClick={handleUseMyLocation} disabled={geoLoading} className="deco-btn w-full rounded-xl disabled:opacity-50">
-          {geoLoading ? '⏳ Getting location...' : '📍 Use my current location'}
+          {geoLoading ? '⏳ Getting location...' : 'Use my current location'}
         </button>
         {geoError && <p className="text-xs text-[var(--crimson)] border border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-2 rounded-lg">{geoError}</p>}
         <p className="text-xs text-[var(--pewter)] text-center">Tap the map or drag the pin to set your delivery location, then confirm the address.</p>

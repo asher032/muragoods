@@ -5,12 +5,16 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useCoins } from '@/app/hooks/useCoins';
-
-const EMOJIS = ['🍕', '🍩', '☕', '🍪', '🍣', '🎮', '⭐', '🪙', '💌', '🎵', '🍄', '🎁'];
+import { Brain, Cake, CircleHelp, Coffee, Coins, Cookie, Gift, Heart, Milk, Music, Package, PartyPopper, Pizza, Star, Wheat } from 'lucide-react';
+const EMOJIS = [
+  <Pizza className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, <Cookie className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, <Coffee className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, <Milk className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
+  <Wheat className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, <Gift color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, <Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, <Music color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
+  <Package className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, <Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, <Cake className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
+];
 
 interface Card {
   id: number;
-  emoji: string;
+  emoji: React.ReactNode;
   flipped: boolean;
   matched: boolean;
 }
@@ -154,7 +158,7 @@ export default function MemoryGame() {
       <NavBar pageLabel="Memory Match" />
       <div style={{ maxWidth: '600px', margin: '0 auto', padding: '80px 20px 100px' }}>
         <div style={{ textAlign: 'center', marginBottom: '24px', opacity: loaded ? 1 : 0, transition: 'all 0.6s ease' }}>
-          <span style={{ fontSize: '40px', display: 'block', marginBottom: '12px' }}>🧠</span>
+          <span style={{ fontSize: '40px', display: 'block', marginBottom: '12px' }}><Brain color={'#ff4d8d'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
           <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '20px', color: '#ffd60a', marginBottom: '8px' }}>Memory Match</h1>
           <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>Match all pairs to win coins!</p>
         </div>
@@ -164,7 +168,7 @@ export default function MemoryGame() {
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '24px', flexWrap: 'wrap' }}>
             {(['easy', 'medium', 'hard'] as const).map(d => (
               <button key={d} onClick={() => setDifficulty(d)} style={{ padding: '8px 16px', borderRadius: '10px', border: `1px solid ${difficulty === d ? 'rgba(255,214,10,0.4)' : 'rgba(255,255,255,0.1)'}`, background: difficulty === d ? 'rgba(255,214,10,0.1)' : 'rgba(255,255,255,0.03)', color: difficulty === d ? '#ffd60a' : 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-arcade)', fontSize: '8px', cursor: 'pointer', textTransform: 'uppercase' }}>
-                {d === 'easy' ? '🟢 Easy (4×4)' : d === 'medium' ? '🟡 Medium (6×6)' : '🔴 Hard (8×8)'}
+                {d === 'easy' ? 'Easy (4×4)' : d === 'medium' ? 'Medium (6×6)' : 'Hard (8×8)'}
               </button>
             ))}
           </div>
@@ -196,7 +200,7 @@ export default function MemoryGame() {
                 <div style={{ width: '100%', height: '100%', position: 'relative', transformStyle: 'preserve-3d', transition: 'transform 0.4s', transform: card.flipped || card.matched ? 'rotateY(180deg)' : 'rotateY(0)' }}>
                   {/* Back */}
                   <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', borderRadius: '10px', background: 'linear-gradient(135deg, #1e1e32, #252540)', border: '1px solid rgba(255,214,10,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ fontSize: '20px', opacity: 0.3 }}>❓</span>
+                    <span style={{ fontSize: '20px', opacity: 0.3 }}><CircleHelp className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
                   </div>
                   {/* Front */}
                   <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', borderRadius: '10px', background: card.matched ? 'rgba(6,214,160,0.15)' : 'rgba(255,214,10,0.1)', border: `1px solid ${card.matched ? 'rgba(6,214,160,0.3)' : 'rgba(255,214,10,0.3)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transform: 'rotateY(180deg)' }}>
@@ -211,7 +215,7 @@ export default function MemoryGame() {
         {/* Game Over */}
         {gameOver && (
           <div style={{ textAlign: 'center', padding: '32px', background: 'rgba(255,214,10,0.05)', border: '1px solid rgba(255,214,10,0.2)', borderRadius: '20px' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎉</div>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}><PartyPopper color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
             <h2 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: '#ffd60a', marginBottom: '8px' }}>You Win!</h2>
             <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', marginBottom: '8px' }}>{moves} moves in {Math.floor(timer / 60)}:{String(timer % 60).padStart(2, '0')}</p>
             {coinsEarned > 0 && <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '12px', color: '#06d6a0', marginBottom: '20px' }}>+{coinsEarned} coins earned!</p>}
@@ -226,7 +230,7 @@ export default function MemoryGame() {
         {/* Start Button */}
         {!playing && !gameOver && (
           <div style={{ textAlign: 'center' }}>
-            <button onClick={startGame} style={{ padding: '14px 40px', borderRadius: '14px', border: '2px solid rgba(255,214,10,0.4)', background: 'rgba(255,214,10,0.12)', color: '#ffd60a', fontFamily: 'var(--font-arcade)', fontSize: '12px', cursor: 'pointer', boxShadow: '0 4px 0 rgba(0,0,0,0.3)' }}>🧠 START GAME</button>
+            <button onClick={startGame} style={{ padding: '14px 40px', borderRadius: '14px', border: '2px solid rgba(255,214,10,0.4)', background: 'rgba(255,214,10,0.12)', color: '#ffd60a', fontFamily: 'var(--font-arcade)', fontSize: '12px', cursor: 'pointer', boxShadow: '0 4px 0 rgba(0,0,0,0.3)' }}><Brain color={'#ff4d8d'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> START GAME</button>
           </div>
         )}
       </div>

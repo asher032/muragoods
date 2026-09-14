@@ -32,7 +32,7 @@ export default function MuraStreamHistoryPage() {
   };
 
   return (
-    <div style={{ padding: '24px 28px' }}>
+    <div className="ms-page-pad">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: 'var(--ms-text)', margin: 0 }}>
           <span style={{ color: '#E50914', display: 'inline-flex', verticalAlign: 'middle', marginRight: 6 }}><ClockIcon size={15} /></span> WATCH HISTORY

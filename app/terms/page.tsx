@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
+import { ScrollText } from 'lucide-react';
 
 export default function TermsOfServicePage() {
   return (
@@ -18,7 +19,7 @@ export default function TermsOfServicePage() {
           textAlign: 'center',
           marginBottom: '20px',
         }}>
-          <span style={{ fontSize: '36px' }}>📜</span>
+          <span style={{ fontSize: '36px' }}><ScrollText className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
           <h1 style={{
             fontFamily: 'var(--font-arcade)',
             fontSize: '14px',

@@ -8,7 +8,7 @@ import { PixelDivider } from '@/app/components/PixelDivider';
 import { useCoins } from '@/app/hooks/useCoins';
 import { Icon } from '@/app/components/Icon';
 import FlappyBirdIcon from '@/app/components/icons/FlappyBirdIcon';
-
+import { Brain, Coins, Gamepad2, ShoppingCart, Users } from 'lucide-react';
 const features = [
   {
     icon: <Icon name="calendar" size={24} />,
@@ -19,7 +19,7 @@ const features = [
     tagColor: 'var(--emerald-bright)',
   },
   {
-    icon: '🧠',
+    icon: <Brain color={'#ff4d8d'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
     title: 'Memory Match',
     desc: 'Match pairs of cards to win coins! Easy, Medium, or Hard mode. Fewer moves = more coins!',
     link: '/play/memory',
@@ -35,7 +35,7 @@ const features = [
     tagColor: 'var(--emerald-bright)',
   },
   {
-    icon: '🧠',
+    icon: <Brain color={'#ff4d8d'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
     title: 'Trivia Challenge',
     desc: 'Test your knowledge with 25 campus, Bicol, food, and Mario trivia questions. Earn coins for every correct answer!',
     link: '/play/trivia',
@@ -47,11 +47,11 @@ const features = [
     title: 'Mystery Box',
     desc: 'Spend 10 coins to open a mystery box. Win bonus coins, discount codes, or even a free musubi!',
     link: '/play/mysterybox',
-    tag: '10 🪙',
+    tag: '10',
     tagColor: 'var(--gold-bright)',
   },
   {
-    icon: '👥',
+    icon: <Users className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
     title: 'Refer a Friend',
     desc: 'Share your referral code with friends. You both earn 50 coins when they place their first order!',
     link: '/play/refer',
@@ -116,11 +116,11 @@ export default function EntertainmentPage() {
           {/* Header */}
           <div className="text-center mb-10">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}>
-              🎮 Entertainment
+              <Gamepad2 color={'#c896ff'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Entertainment
             </h1>
             <p className="mt-3 text-base text-[var(--gold)]">Play, earn coins, and have fun!</p>
             <div className="mt-4 inline-flex items-center gap-2 border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.1)] px-5 py-2 rounded-xl">
-              <span className="coin-float">🪙</span>
+              <span className="coin-float"><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
               <span className="text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '12px' }}>{coins}</span>
               <span className="text-[var(--pewter)] text-sm">coins</span>
             </div>
@@ -180,8 +180,8 @@ export default function EntertainmentPage() {
               Earn coins to spend on rewards — or climb the leaderboard!
             </p>
             <div className="flex flex-wrap gap-3 justify-center">
-              <Link href="/menu" className="deco-btn deco-btn-gold rounded-xl">🛒 Order Food</Link>
-              <Link href="/points" className="deco-btn deco-btn-crimson rounded-xl">🪙 My Points</Link>
+              <Link href="/menu" className="deco-btn deco-btn-gold rounded-xl"><ShoppingCart className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Order Food</Link>
+              <Link href="/points" className="deco-btn deco-btn-crimson rounded-xl"><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> My Points</Link>
             </div>
           </div>
         </div>

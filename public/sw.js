@@ -17,8 +17,7 @@ const PRECACHE_URLS = [
   '/images/muragoods-logo.png',
   '/images/product-musubi.png',
   '/images/product-churros.png',
-  '/images/product-coffee-jelly.png',
-  '/images/product-cookies.png',
+  '/images/product-cheesy-bread.svg',
 ];
 
 // API routes to cache for offline browsing
@@ -85,9 +84,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets (images, CSS, JS): Cache first
+  // Static assets (images, CSS, JS): Cache first — but never cache JS chunks
+  // on localhost: dev chunk filenames are stable while their content changes,
+  // so cache-first would serve stale code after every edit.
+  const isLocalhost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+  const isJsChunk = url.pathname.startsWith('/_next/static/') && /\.js(\?|$)/.test(url.pathname);
   if (url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/images/') || url.pathname.startsWith('/icons/')) {
-    event.respondWith(cacheFirst(request, CACHE_NAME_STATIC));
+    if (!(isLocalhost && isJsChunk)) {
+      event.respondWith(cacheFirst(request, CACHE_NAME_STATIC));
+      return;
+    }
+    // Dev JS chunks: straight through to the network.
     return;
   }
 
@@ -208,7 +215,9 @@ async function networkFirstWithOfflineFallback(request) {
       </head>
       <body>
         <div class="container">
-          <div class="icon">📡</div>
+          <div class="icon" style="display:flex;justify-content:center">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ffd60a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="#ffd60a"/></svg>
+        </div>
           <h1>You're Offline</h1>
           <p>No internet connection detected. Your previously viewed menu items are still available!</p>
           <button onclick="location.reload()">Try Again</button>

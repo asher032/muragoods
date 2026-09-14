@@ -8,7 +8,7 @@ import { PixelDivider } from '@/app/components/PixelDivider';
 import { CoinBalance } from '@/app/components/CoinBalance';
 import { useCoins } from '@/app/hooks/useCoins';
 import { Icon } from '@/app/components/Icon';
-
+import { Brain, Coins, Gift, PiggyBank, ScrollText, Store, Users } from 'lucide-react';
 interface Transaction {
   type: 'earn' | 'spend';
   amount: number;
@@ -19,13 +19,13 @@ interface Transaction {
 const earnMethods = [
   { icon: <Icon name="cart" size={20} />, title: 'Place an Order', desc: 'Earn 0.5 coins per peso spent on every order', link: '/menu', coins: '0.5x', color: 'var(--gold)' },
   { icon: <Icon name="calendar" size={20} />, title: 'Daily Check-In', desc: 'Log in daily for 5-50 coins over 7 days', link: '/play/checkin', coins: '5-50', color: 'var(--emerald-bright)' },
-  { icon: '🧠', title: 'Trivia Challenge', desc: 'Answer campus questions for 5-15 coins each', link: '/play/trivia', coins: '5-15', color: 'var(--crimson)' },
-  { icon: '👥', title: 'Refer a Friend', desc: 'Invite friends and earn 50 coins per referral', link: '/play/refer', coins: '50', color: 'var(--gold-bright)' },
+  { icon: <Brain color={'#ff4d8d'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, title: 'Trivia Challenge', desc: 'Answer campus questions for 5-15 coins each', link: '/play/trivia', coins: '5-15', color: 'var(--crimson)' },
+  { icon: <Users className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, title: 'Refer a Friend', desc: 'Invite friends and earn 50 coins per referral', link: '/play/refer', coins: '50', color: 'var(--gold-bright)' },
 ];
 
 const spendMethods = [
   { icon: <Icon name="gift" size={20} />, title: 'Mystery Box', desc: 'Spend 10 coins for a chance to win coins, discounts, or a free musubi', link: '/play/mysterybox', coins: '-10', color: 'var(--crimson)' },
-  { icon: '🏪', title: 'Rewards Shop', desc: 'Redeem coins for free food, vouchers, and special perks (100 - 2,000 coins)', link: '/rewards', coins: '100-2K', color: 'var(--gold-bright)' },
+  { icon: <Store className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, title: 'Rewards Shop', desc: 'Redeem coins for free food, vouchers, and special perks (100 - 2,000 coins)', link: '/rewards', coins: '100-2K', color: 'var(--gold-bright)' },
 ];
 
 export default function PointsPage() {
@@ -61,7 +61,7 @@ export default function PointsPage() {
           {/* Header */}
           <div className="text-center mb-8">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}>
-              🪙 My Points
+              <Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> My Points
             </h1>
             <p className="mt-3 text-base text-[var(--gold)]">Your coin balance and how to use them</p>
           </div>
@@ -70,7 +70,7 @@ export default function PointsPage() {
           <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-2xl p-8 text-center mb-8" style={{ background: 'linear-gradient(135deg, var(--charcoal), var(--charcoal-light))' }}>
             <p className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] mb-3" style={{ fontFamily: 'var(--font-arcade)' }}>Current Balance</p>
             <div className="flex items-center justify-center gap-3 mb-4">
-              <span className="coin-float text-4xl">🪙</span>
+              <span className="coin-float text-4xl"><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
               <span className="text-4xl sm:text-5xl text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)', textShadow: '0 0 20px rgba(242,201,76,0.4)' }}>
                 {coins}
               </span>
@@ -93,7 +93,7 @@ export default function PointsPage() {
           {/* ─── Ways to Earn ─────────────────────────────── */}
           <div className="mb-8">
             <h2 className="text-[11px] text-[var(--gold)] uppercase tracking-[0.15em] mb-4 text-center" style={{ fontFamily: 'var(--font-arcade)' }}>
-              💰 Ways to Earn Coins
+              <PiggyBank className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Ways to Earn Coins
             </h2>
             <div className="grid gap-4 sm:grid-cols-2">
               {earnMethods.map(method => (
@@ -118,7 +118,7 @@ export default function PointsPage() {
           {/* ─── Ways to Spend ────────────────────────────── */}
           <div className="mb-8">
             <h2 className="text-[11px] text-[var(--gold)] uppercase tracking-[0.15em] mb-4 text-center" style={{ fontFamily: 'var(--font-arcade)' }}>
-              🎁 Ways to Spend Coins
+              <Gift color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Ways to Spend Coins
             </h2>
             <div className="grid gap-4 sm:grid-cols-2">
               {spendMethods.map(method => (
@@ -130,7 +130,7 @@ export default function PointsPage() {
                     <div className="flex items-center justify-between gap-2">
                       <h3 className="text-[10px] text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>{method.title}</h3>
                       <span className="text-[9px] px-2 py-1 rounded-lg shrink-0" style={{ fontFamily: 'var(--font-arcade)', color: method.color, background: `${method.color}15`, border: `1px solid ${method.color}40` }}>
-                        {method.coins} 🪙
+                        {method.coins} <Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />
                       </span>
                     </div>
                     <p className="text-xs text-[var(--pewter)] mt-1 leading-relaxed">{method.desc}</p>
@@ -145,7 +145,7 @@ export default function PointsPage() {
           {/* ─── Transaction History ──────────────────────── */}
           <div className="mt-8">
             <h2 className="text-[11px] text-[var(--gold)] uppercase tracking-[0.15em] mb-4 text-center" style={{ fontFamily: 'var(--font-arcade)' }}>
-              📜 Points History
+              <ScrollText className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Points History
             </h2>
 
             {history.length === 0 ? (
@@ -194,7 +194,7 @@ export default function PointsPage() {
                 { href: '/play/trivia', icon: <Icon name="question" size={22} />, label: 'Trivia', color: '#e63946' },
                 { href: '/play/mysterybox', icon: <Icon name="gift" size={22} />, label: 'Mystery Box', color: '#c896ff' },
                 { href: '/rewards', icon: <Icon name="star" size={22} />, label: 'Rewards', color: '#4895ef' },
-                { href: '/play/refer', icon: '👥', label: 'Refer Friend', color: '#06d6a0' },
+                { href: '/play/refer', icon: <Users className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, label:'Refer Friend', color: '#06d6a0' },
               ].map(action => (
                 <Link key={action.href} href={action.href} className="group block text-center p-4 rounded-xl border border-white/8 bg-mario-bg-card hover:border-white/20 hover:bg-white/5 transition-all duration-200">
                   <div className="flex justify-center mb-2 group-hover:scale-110 transition-transform">

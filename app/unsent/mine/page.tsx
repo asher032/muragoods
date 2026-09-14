@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
-
+import { Bird, BookOpen, Bookmark, Camera, Check, CloudRain, Handshake, Heart, Inbox, Mail, PenLine, Trash2 } from 'lucide-react';
 interface Letter {
   _id: string;
   authorEmail: string;
@@ -18,9 +18,9 @@ interface Letter {
   createdAt: string;
 }
 
-const categoryEmojis: Record<string, string> = {
-  Love: '❤️', Friendship: '🤝', Appreciation: '💛', Regret: '😔',
-  Memories: '📷', 'Moving On': '🦋', Other: '📝',
+const categoryEmojis: Record<string, React.ReactNode> = {
+  Love: <Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, Friendship: <Handshake className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, Appreciation: <Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, Regret: <CloudRain className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
+  Memories: <Camera className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, 'Moving On': <Bird className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, Other: <PenLine className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
 };
 
 export default function MySubmissions() {
@@ -68,11 +68,11 @@ export default function MySubmissions() {
           <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-2xl sm:text-3xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}>
-                📬 My Submissions
+                <Inbox className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> My Submissions
               </h1>
               <p className="mt-2 text-sm text-[var(--pewter)]">Letters you&apos;ve written — only you can see this</p>
             </div>
-            <Link href="/unsent/submit" className="deco-btn deco-btn-gold rounded-xl">✉️ Write New Letter</Link>
+            <Link href="/unsent/submit" className="deco-btn deco-btn-gold rounded-xl"><Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Write New Letter</Link>
           </div>
 
           {/* Loading */}
@@ -85,7 +85,7 @@ export default function MySubmissions() {
           {/* Empty */}
           {!loading && letters.length === 0 && (
             <div className="text-center py-16 border border-[rgba(242,240,228,0.12)] bg-[var(--charcoal)] rounded-2xl">
-              <p className="text-4xl mb-4">✉️</p>
+              <p className="text-4xl mb-4"><Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
               <p className="text-sm text-[var(--pewter)] mb-4" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>NO SUBMISSIONS YET</p>
               <Link href="/unsent/submit" className="deco-btn deco-btn-gold rounded-xl">Write Your First Letter</Link>
             </div>
@@ -104,14 +104,14 @@ export default function MySubmissions() {
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-sm">{categoryEmojis[letter.category] || '📝'}</span>
+                        <span className="text-sm">{categoryEmojis[letter.category] || <PenLine className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />}</span>
                         <span className="text-[9px] text-[var(--gold)]" style={{ fontFamily: 'var(--font-arcade)' }}>{letter.category}</span>
                         <span className={`text-[7px] px-2 py-0.5 rounded-lg border ${letter.approved ? 'border-[var(--emerald-bright)] text-[var(--emerald-bright)]' : 'border-[var(--gold)] text-[var(--gold)]'}`} style={{ fontFamily: 'var(--font-arcade)' }}>
                           {letter.approved ? 'PUBLISHED' : 'PENDING'}
                         </span>
                       </div>
                       <p className="text-sm text-[var(--cream)]">To: <strong>{letter.recipientName}</strong></p>
-                      <p className="text-[8px] text-[var(--pewter)] mt-1">{new Date(letter.createdAt).toLocaleDateString()} · ❤️ {letter.likes} · 🔖 {letter.bookmarks}</p>
+                      <p className="text-[8px] text-[var(--pewter)] mt-1">{new Date(letter.createdAt).toLocaleDateString()} · {letter.likes} · <Bookmark className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {letter.bookmarks}</p>
                     </div>
                     <span className="text-[var(--gold)] text-lg shrink-0 transition-transform" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0)' }}>▾</span>
                   </button>
@@ -123,7 +123,7 @@ export default function MySubmissions() {
                       <div className="border border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] rounded-xl p-4">
                         <p className="text-[8px] text-[var(--pewter)] uppercase mb-1" style={{ fontFamily: 'var(--font-arcade)' }}>You submitted as</p>
                         <p className="text-xs text-[var(--gold-bright)]">{letter.authorName} ({letter.authorEmail})</p>
-                        <p className="text-[8px] text-[var(--emerald-bright)] mt-1" style={{ fontFamily: 'var(--font-arcade)' }}>✓ Not visible to the public</p>
+                        <p className="text-[8px] text-[var(--emerald-bright)] mt-1" style={{ fontFamily: 'var(--font-arcade)' }}><Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Not visible to the public</p>
                       </div>
 
                       {/* Letter content */}
@@ -134,7 +134,7 @@ export default function MySubmissions() {
                       {/* Delete */}
                       <div className="flex justify-end">
                         <button onClick={() => handleDelete(letter._id)} className="deco-btn deco-btn-sm deco-btn-crimson rounded-lg" style={{ minHeight: '32px', padding: '6px 12px', fontSize: '8px' }}>
-                          🗑️ Delete
+                          <Trash2 className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Delete
                         </button>
                       </div>
                     </div>
@@ -146,8 +146,8 @@ export default function MySubmissions() {
 
           {/* Footer */}
           <div className="mt-8 text-center flex gap-3 justify-center">
-            <Link href="/unsent/submit" className="deco-btn deco-btn-gold rounded-xl">✉️ Submit New</Link>
-            <Link href="/unsent/archive" className="deco-btn rounded-xl">📚 Browse Archive</Link>
+            <Link href="/unsent/submit" className="deco-btn deco-btn-gold rounded-xl"><Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Submit New</Link>
+            <Link href="/unsent/archive" className="deco-btn rounded-xl"><BookOpen className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Browse Archive</Link>
           </div>
         </div>
       </section>

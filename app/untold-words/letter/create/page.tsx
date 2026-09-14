@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
-
+import { ClipboardList, Globe, Heart, Link2, Lock, Mail, Music } from 'lucide-react';
 interface Track {
   id: string;
   title: string;
@@ -97,7 +97,7 @@ export default function CreateAnonymousLetter() {
         <NavBar pageLabel="Letter Published" />
         <div style={{ minHeight: '90vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 20px' }}>
           <div style={{ textAlign: 'center', maxWidth: '480px', width: '100%' }}>
-            <div style={{ fontSize: '64px', marginBottom: '20px', animation: 'float 3s ease-in-out infinite' }}>💌</div>
+            <div style={{ fontSize: '64px', marginBottom: '20px', animation: 'float 3s ease-in-out infinite' }}><Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
             <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '20px', color: '#ffd60a', marginBottom: '8px' }}>Your letter is live!</h1>
             <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', marginBottom: '32px' }}>
               {visibility === 'public' ? 'It\'s now part of the Untold Words gallery.' : 'Only people with the link can see it.'}
@@ -106,7 +106,7 @@ export default function CreateAnonymousLetter() {
               <>
                 {/* Send via Gmail */}
                 <div style={{ background: 'rgba(255,100,150,0.06)', border: '1px solid rgba(255,100,150,0.2)', borderRadius: '16px', padding: '20px', marginBottom: '16px', textAlign: 'left' }}>
-                  <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: '#ffb4a2', marginBottom: '4px' }}>💌 Send this letter</p>
+                  <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '11px', color: '#ffb4a2', marginBottom: '4px' }}><Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Send this letter</p>
                   <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', marginBottom: '12px' }}>Send from muragoods0@gmail.com — they get a link to read your letter.</p>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <input value={recipientEmail} onChange={e => { setRecipientEmail(e.target.value); setSendError(''); }} placeholder="recipient@gmail.com" style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', padding: '10px 12px', color: '#fff', fontSize: '12px', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
@@ -131,22 +131,22 @@ export default function CreateAnonymousLetter() {
                 </div>
                 {/* Copy Link */}
                 <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '14px', marginBottom: '12px' }}>
-                  <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: 'rgba(255,255,255,0.4)', marginBottom: '8px' }}>🔗 Or copy the link</p>
+                  <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: 'rgba(255,255,255,0.4)', marginBottom: '8px' }}><Link2 className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Or copy the link</p>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => navigator.clipboard.writeText((typeof window !== 'undefined' ? window.location.origin : '') + '/untold-words/letter/' + created)} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,100,150,0.3)', background: 'rgba(255,100,150,0.08)', color: '#ffb4a2', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}>📋 Copy Link</button>
+                    <button onClick={() => navigator.clipboard.writeText((typeof window !== 'undefined' ? window.location.origin : '') + '/untold-words/letter/' + created)} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,100,150,0.3)', background: 'rgba(255,100,150,0.08)', color: '#ffb4a2', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}><ClipboardList className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Copy Link</button>
                     <button onClick={() => {
-                      const subject = encodeURIComponent('You received an anonymous letter 💌');
+                      const subject = encodeURIComponent('You received an anonymous letter');
                       const body = encodeURIComponent('Someone sent you a letter through Muragoods Untold Words.\n\nOpen it here: ' + (typeof window !== 'undefined' ? window.location.origin : '') + '/untold-words/letter/' + created + '\n\n— Sent via Muragoods');
                       window.open('https://mail.google.com/mail/?view=cm&to=&subject=' + subject + '&body=' + body, '_blank');
-                    }} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,180,100,0.3)', background: 'rgba(255,180,100,0.08)', color: '#ffb464', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}>✉️ Gmail</button>
+                    }} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,180,100,0.3)', background: 'rgba(255,180,100,0.08)', color: '#ffb464', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}><Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Gmail</button>
                   </div>
                 </div>
                 <Link href="/untold-words" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'rgba(255,255,255,0.4)', textDecoration: 'none' }}>← Back to Untold Words</Link>
               </>
             ) : (
               <>
-                <div style={{ fontSize: '48px', marginBottom: '16px' }}>💗</div>
-                <h2 style={{ fontFamily: 'var(--font-arcade)', fontSize: '16px', color: '#ffd60a', marginBottom: '8px' }}>Letter sent! 💗</h2>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}><Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
+                <h2 style={{ fontFamily: 'var(--font-arcade)', fontSize: '16px', color: '#ffd60a', marginBottom: '8px' }}>Letter sent! <Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></h2>
                 <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginBottom: '20px' }}>Sent to: <span style={{ color: '#ffb4a2' }}>{recipientEmail}</span></p>
                 <Link href="/untold-words" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#ffd60a', textDecoration: 'none' }}>← Back to Untold Words</Link>
               </>
@@ -163,7 +163,7 @@ export default function CreateAnonymousLetter() {
       <NavBar pageLabel="Anonymous Letter" />
       <div style={{ maxWidth: '600px', margin: '0 auto', padding: '80px 20px 100px' }}>
         <div style={{ textAlign: 'center', marginBottom: '32px', opacity: loaded ? 1 : 0, transform: loaded ? 'translateY(0)' : 'translateY(20px)', transition: 'all 0.6s ease' }}>
-          <span style={{ fontSize: '36px', display: 'block', marginBottom: '12px' }}>💌</span>
+          <span style={{ fontSize: '36px', display: 'block', marginBottom: '12px' }}><Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
           <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: '#c896ff', marginBottom: '8px' }}>Write an Anonymous Letter</h1>
           <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, maxWidth: '400px', margin: '0 auto' }}>Some words are meant to be shared, even when you don&apos;t want your name attached.</p>
         </div>
@@ -185,7 +185,7 @@ export default function CreateAnonymousLetter() {
 
           {/* Optional Song */}
           <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '20px' }}>
-            <label style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: '#1ed760', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: '12px' }}>🎵 Add a song (optional)</label>
+            <label style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: '#1ed760', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: '12px' }}><Music color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Add a song (optional)</label>
             {selectedTrack ? (
               <div style={{ background: 'rgba(30,215,96,0.06)', border: '1px solid rgba(30,215,96,0.25)', borderRadius: '12px', padding: '12px', display: 'flex', gap: '12px', alignItems: 'center' }}>
                 {selectedTrack.artwork && <img src={selectedTrack.artwork} alt="" style={{ width: '56px', height: '56px', borderRadius: '8px', objectFit: 'cover' }} />}
@@ -228,12 +228,12 @@ export default function CreateAnonymousLetter() {
             <label style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: '12px' }}>Who can see this?</label>
             <div style={{ display: 'flex', gap: '10px' }}>
               <button onClick={() => setVisibility('public')} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: `1px solid ${visibility === 'public' ? 'rgba(255,214,10,0.4)' : 'rgba(255,255,255,0.08)'}`, background: visibility === 'public' ? 'rgba(255,214,10,0.1)' : 'rgba(255,255,255,0.03)', color: visibility === 'public' ? '#ffd60a' : 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer', transition: 'all 0.2s', textAlign: 'center' }}>
-                <span style={{ fontSize: '16px', display: 'block', marginBottom: '4px' }}>🌎</span>
+                <span style={{ fontSize: '16px', display: 'block', marginBottom: '4px' }}><Globe className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
                 Public
                 <span style={{ display: 'block', fontSize: '8px', marginTop: '4px', opacity: 0.6 }}>Visible in the gallery</span>
               </button>
               <button onClick={() => setVisibility('private')} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: `1px solid ${visibility === 'private' ? 'rgba(123,47,247,0.4)' : 'rgba(255,255,255,0.08)'}`, background: visibility === 'private' ? 'rgba(123,47,247,0.1)' : 'rgba(255,255,255,0.03)', color: visibility === 'private' ? '#e8b4f8' : 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer', transition: 'all 0.2s', textAlign: 'center' }}>
-                <span style={{ fontSize: '16px', display: 'block', marginBottom: '4px' }}>🔒</span>
+                <span style={{ fontSize: '16px', display: 'block', marginBottom: '4px' }}><Lock className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
                 Private
                 <span style={{ display: 'block', fontSize: '8px', marginTop: '4px', opacity: 0.6 }}>Only with the link</span>
               </button>
@@ -242,7 +242,7 @@ export default function CreateAnonymousLetter() {
 
           {/* Submit */}
           <button onClick={handleCreate} disabled={creating || !title.trim() || !content.trim()} style={{ padding: '16px', borderRadius: '14px', border: '2px solid rgba(200,150,255,0.4)', background: creating ? 'rgba(200,150,255,0.05)' : 'rgba(200,150,255,0.18)', color: '#c896ff', fontFamily: 'var(--font-arcade)', fontSize: '12px', cursor: creating || !title.trim() || !content.trim() ? 'not-allowed' : 'pointer', opacity: !title.trim() || !content.trim() ? 0.4 : 1, transition: 'all 0.2s' }}>
-            {creating ? 'PUBLISHING...' : visibility === 'public' ? '💌 PUBLISH ANONYMOUSLY' : '🔒 PUBLISH PRIVATELY'}
+            {creating ? 'PUBLISHING...' : visibility === 'public' ? 'PUBLISH ANONYMOUSLY' : 'PUBLISH PRIVATELY'}
           </button>
         </div>
 
@@ -250,7 +250,7 @@ export default function CreateAnonymousLetter() {
         {showConfirm && (
           <div onClick={() => setShowConfirm(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '20px', backdropFilter: 'blur(8px)' }}>
             <div onClick={e => e.stopPropagation()} style={{ background: '#141428', border: '1px solid rgba(255,214,10,0.3)', borderRadius: '20px', padding: '32px', maxWidth: '400px', width: '100%', textAlign: 'center' }}>
-              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🌎</div>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}><Globe className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
               <h2 style={{ fontFamily: 'var(--font-arcade)', fontSize: '16px', color: '#ffd60a', marginBottom: '12px' }}>Make this letter public?</h2>
               <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', lineHeight: 1.6, marginBottom: '24px' }}>Anyone may be able to read this letter in the Untold Words gallery. Your identity will remain anonymous.</p>
               <div style={{ display: 'flex', gap: '10px' }}>

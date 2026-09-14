@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-
+import { Cloudy, Gamepad2, Link, Package, PiggyBank, Send } from 'lucide-react';
 interface ShareOrderProps {
   orderId: string;
   customerName: string;
@@ -14,7 +14,7 @@ export default function ShareOrder({ orderId, customerName, total, items }: Shar
   const [showModal, setShowModal] = useState(false);
 
   const shortId = orderId.slice(-8).toUpperCase();
-  const shareText = `🎮 MURAGOODS ORDER\n━━━━━━━━━━━━━━━━\n📦 Order #${shortId}\n👤 ${customerName}\n💰 Total: ₱${total}\n\nItems:\n${items.map(i => `  • ${i}`).join('\n')}\n\n🔗 Track: https://muragoods.vercel.app/order/${orderId}\n\nPower up your day! 🍄`;
+  const shareText = `<Gamepad2 color={'#c896ff'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> MURAGOODS ORDER\n━━━━━━━━━━━━━━━━\n<Package className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Order #${shortId}\n ${customerName}\n<PiggyBank className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Total: ₱${total}\n\nItems:\n${items.map(i => `  • ${i}`).join('\n')}\n\n<Link className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Track: https://muragoods.vercel.app/order/${orderId}\n\nPower up your day! <Cloudy className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />`;
 
   const handleCopy = async () => {
     try {
@@ -52,10 +52,10 @@ export default function ShareOrder({ orderId, customerName, total, items }: Shar
     <>
       <div className="share-buttons">
         <button onClick={handleNativeShare} className="share-btn share-btn-primary">
-          📤 Share Order
+          <Send className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Share Order
         </button>
         <button onClick={handleCopy} className="share-btn share-btn-secondary">
-          {copied ? '✅ Copied!' : '📋 Copy'}
+          {copied ? 'Copied!' : 'Copy'}
         </button>
       </div>
 
@@ -78,7 +78,7 @@ export default function ShareOrder({ orderId, customerName, total, items }: Shar
               />
               <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                 <button onClick={handleCopy} style={{ flex: 1, padding: '10px', background: 'rgba(255,214,10,0.15)', border: '1px solid rgba(255,214,10,0.3)', borderRadius: '6px', color: 'var(--mario-yellow)', fontSize: '11px', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-arcade)' }}>
-                  {copied ? '✅ Copied!' : '📋 Copy Text'}
+                  {copied ? 'Copied!' : 'Copy Text'}
                 </button>
                 <button onClick={() => setShowModal(false)} style={{ flex: 1, padding: '10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: 'var(--mario-text-muted)', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
                   Close

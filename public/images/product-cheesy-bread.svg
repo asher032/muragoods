@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <linearGradient id="bread" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f7c948"/>
+      <stop offset="100%" stop-color="#e09f3e"/>
+    </linearGradient>
+    <linearGradient id="cheese" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fff3c4"/>
+      <stop offset="100%" stop-color="#ffd60a"/>
+    </linearGradient>
+    <linearGradient id="milk" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#fdf0d5"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" fill="none"/>
+  <!-- bread loaf -->
+  <path d="M60 210 Q60 130 200 122 Q340 130 340 210 L340 300 Q340 320 316 320 L84 320 Q60 320 60 300 Z" fill="url(#bread)" stroke="#a5651c" stroke-width="6"/>
+  <!-- milky glaze -->
+  <path d="M72 176 Q200 128 328 176 Q336 182 330 194 Q322 208 300 200 Q316 226 292 232 Q268 238 258 218 Q252 244 230 240 Q210 236 212 212 Q198 238 178 230 Q160 224 166 202 Q146 224 126 214 Q108 206 118 188 Q96 198 84 190 Q70 182 72 176 Z" fill="url(#milk)" stroke="#e8c98f" stroke-width="3"/>
+  <!-- cheese drips -->
+  <path d="M100 200 Q104 250 112 252 Q120 254 122 206 Z" fill="url(#cheese)" stroke="#d9a404" stroke-width="3"/>
+  <path d="M170 208 Q174 266 184 268 Q194 270 196 210 Z" fill="url(#cheese)" stroke="#d9a404" stroke-width="3"/>
+  <path d="M244 206 Q248 258 258 260 Q268 262 270 208 Z" fill="url(#cheese)" stroke="#d9a404" stroke-width="3"/>
+  <path d="M300 198 Q304 240 312 242 Q320 244 322 200 Z" fill="url(#cheese)" stroke="#d9a404" stroke-width="3"/>
+  <!-- sparkle -->
+  <g stroke="#fff" stroke-width="5" stroke-linecap="round">
+    <line x1="330" y1="90" x2="330" y2="110"/>
+    <line x1="320" y1="100" x2="340" y2="100"/>
+  </g>
+  <g stroke="#ffd60a" stroke-width="5" stroke-linecap="round">
+    <line x1="70" y1="96" x2="70" y2="112"/>
+    <line x1="62" y1="104" x2="78" y2="104"/>
+  </g>
+</svg>

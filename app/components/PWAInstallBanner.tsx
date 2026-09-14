@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Smartphone } from 'lucide-react';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -112,7 +113,7 @@ export function PWAInstallBanner() {
               flexShrink: 0,
             }}
           >
-            📲
+            <Smartphone className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />
           </div>
           <div style={{ flex: 1 }}>
             <p

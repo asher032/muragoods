@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useCoins } from '@/app/hooks/useCoins';
 import { Icon } from '@/app/components/Icon';
-
+import { Calendar, Check, PartyPopper, Star } from 'lucide-react';
 const dayRewards = [
   { day: 1, coins: 5, label: 'Day 1', icon: <Icon name="coin" size={20} /> },
   { day: 2, coins: 8, label: 'Day 2', icon: <Icon name="coin" size={20} /> },
@@ -14,7 +14,7 @@ const dayRewards = [
   { day: 4, coins: 12, label: 'Day 4', icon: <Icon name="coin" size={20} /> },
   { day: 5, coins: 15, label: 'Day 5', icon: <Icon name="coin" size={20} /> },
   { day: 6, coins: 20, label: 'Day 6', icon: <Icon name="coin" size={20} /> },
-  { day: 7, coins: 50, label: 'MEGA DAY', icon: '⭐' },
+  { day: 7, coins: 50, label: 'MEGA DAY', icon: <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> },
 ];
 
 export default function CheckInPage() {
@@ -95,7 +95,7 @@ export default function CheckInPage() {
         <div className="deco-container" style={{ maxWidth: '48rem' }}>
           <div className="text-center mb-8">
             <h1 className="text-2xl sm:text-3xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}>
-              📅 Daily Check-In
+              <Calendar className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Daily Check-In
             </h1>
             <p className="mt-3 text-base text-[var(--gold)]">Log in daily to earn bonus coins!</p>
             <p className="mt-1 text-sm text-[var(--pewter)]">
@@ -122,7 +122,7 @@ export default function CheckInPage() {
                   <div className="text-xl mb-1">{day.icon}</div>
                   <p className="text-[8px] text-[var(--gold)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>{day.label}</p>
                   <p className="text-[10px] text-[var(--cream)] mt-1" style={{ fontFamily: 'var(--font-arcade)' }}>+{day.coins}</p>
-                  {isActive && <div className="text-[var(--gold-bright)] text-xs mt-1">✓</div>}
+                  {isActive && <div className="text-[var(--gold-bright)] text-xs mt-1"><Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>}
                 </div>
               );
             })}
@@ -136,7 +136,7 @@ export default function CheckInPage() {
               className={`deco-btn deco-btn-lg rounded-2xl ${checkedInToday ? 'opacity-50 cursor-not-allowed' : 'deco-btn-gold pulse-glow'}`}
               style={{ fontFamily: 'var(--font-arcade)', minWidth: '200px' }}
             >
-              {checkedInToday ? '✅ CHECKED IN TODAY!' : '🪙 CHECK IN NOW!'}
+              {checkedInToday ? 'CHECKED IN TODAY!' : 'CHECK IN NOW!'}
             </button>
           </div>
 
@@ -144,7 +144,7 @@ export default function CheckInPage() {
           {justCheckedIn && (
             <div className="deco-modal bounce-in rounded-2xl max-w-sm mx-auto">
               <div className="deco-modal-body text-center space-y-3">
-                <div className="text-4xl">🎉</div>
+                <div className="text-4xl"><PartyPopper color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
                 <p className="text-sm text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>
                   +{dayRewards[((currentStreak - 1) % 7)].coins} COINS!
                 </p>

@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { VAULT_ITEMS } from '../../data/vault';
 import { PopcornIcon } from '../../components/MuraStreamIcons';
-
+import { ArrowDown, Star } from 'lucide-react';
 export default function VaultDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -102,7 +102,7 @@ export default function VaultDetailPage() {
               {item.title}
             </h1>
             <div style={{ fontSize: 14, color: '#A0A0A0', marginBottom: 16 }}>
-              {item.year} · {item.runtime} · ★ {item.rating.toFixed(1)} · {item.studio}
+              {item.year} · {item.runtime} · <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {item.rating.toFixed(1)} · {item.studio}
             </div>
             <div style={{ fontSize: 12, color: '#E50914', marginBottom: 16 }}>
               {item.genres.join(' • ')}
@@ -133,7 +133,7 @@ export default function VaultDetailPage() {
                     textDecoration: 'none', display: 'inline-block',
                   }}
                 >
-                  ⬇ Download ({item.downloadSize})
+                  <ArrowDown className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Download ({item.downloadSize})
                 </a>
               )}
             </div>

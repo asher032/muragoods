@@ -70,35 +70,20 @@ export const adminCredentials = {
 
 export const products: Product[] = [
   {
-    id: "cookies",
-    name: "Cookies",
-    description: "Freshly baked cookies for a warm, sweet bite.",
-    category: "Coffee Jelly & Cookies",
+    id: "milky-cheesy-bread",
+    name: "Milky Cheesy Bread",
+    description: "Soft, pillowy bread glazed with creamy milky cheese — a sweet-salty favorite.",
+    category: "Bakery",
     badge: "Order Now",
-    color: "from-pink-200 via-red-100 to-yellow-100",
-    availability: ["DWCL"],
+    color: "from-amber-200 via-yellow-100 to-orange-100",
+    availability: ["DWCL", "Daraga", "Custom"],
     inventory: "In Stock",
-    icon: "COOKIES",
-    image: "/images/product-cookies.png",
+    icon: "BREAD",
+    image: "/images/product-cheesy-bread.svg",
     variants: [
-      { id: "regular", name: "Regular Cookie", price: 25 },
-      { id: "cream", name: "Cookies and Cream", price: 30 },
-    ],
-  },
-  {
-    id: "coffee-jelly",
-    name: "Coffee Jelly",
-    description: "Creamy coffee treat with a smooth, chilled finish.",
-    category: "Coffee Jelly & Cookies",
-    badge: "Order Now",
-    color: "from-rose-200 via-violet-100 to-fuchsia-200",
-    availability: ["DWCL"],
-    inventory: "In Stock",
-    icon: "COFFEE",
-    image: "/images/product-coffee-jelly.png",
-    variants: [
-      { id: "option1", name: "Option 1", price: 15 },
-      { id: "option2", name: "Option 2", price: 20 },
+      { id: "regular", name: "Regular", price: 35 },
+      { id: "large", name: "Large", price: 55 },
+      { id: "box", name: "Box of 4", price: 120 },
     ],
   },
   {
@@ -140,7 +125,7 @@ export const products: Product[] = [
     label: "DWCL Campus Pickup",
     fee: 0,
     note: "All menu items available. Free pickup.",
-    eligible: ["cookies", "coffee-jelly", "musubi", "churros"],
+    eligible: ["milky-cheesy-bread", "musubi", "churros"],
   },
   {
     code: "Daraga",
@@ -160,7 +145,7 @@ export const products: Product[] = [
 
 export const mockOrders: Order[] = [];
 
-export const dwclOnlyProducts: string[] = ['cookies', 'coffee-jelly'];
+export const dwclOnlyProducts: string[] = [];
 
 /** Points earned per peso spent */
 export const POINTS_PER_PESO = 0.5;

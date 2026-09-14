@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Cookie } from 'lucide-react';
 
 export function CookieNotice() {
   const [visible, setVisible] = useState(false);
@@ -102,7 +103,7 @@ export function CookieNotice() {
       `}</style>
       <div className="cookie-overlay">
         <div className="cookie-card">
-          <p className="title">🍪 We use cookies</p>
+          <p className="title"><Cookie className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> We use cookies</p>
           <p className="description">
             We use cookies to improve your experience, remember your cart, and keep you logged in.
             By continuing, you agree to our use of cookies.

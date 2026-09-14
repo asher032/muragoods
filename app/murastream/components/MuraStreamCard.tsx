@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useMuraStreamStore } from '../hooks/useMuraStreamStore';
 import type { MediaItem } from '../types';
-
+import { Check, Star } from 'lucide-react';
 // Country-of-origin labels for Asian drama recognition
 const COUNTRY_LABELS: Record<string, string> = {
   ko: 'K-DRAMA',
@@ -51,7 +51,7 @@ export default function MuraStreamCard({
         {/* Rating badge */}
         {(item.voteAverage ?? 0) > 0 && (
           <div className="ms-card-rating">
-            <span>★</span> {(item.voteAverage ?? 0).toFixed(1)}
+            <span><Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span> {(item.voteAverage ?? 0).toFixed(1)}
           </div>
         )}
 
@@ -89,7 +89,7 @@ export default function MuraStreamCard({
                 toggleMyList(item);
               }}
             >
-              {inList ? '✓' : '+'}
+              {inList ? <Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> : '+'}
             </button>
           </div>
         </div>

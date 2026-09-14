@@ -27,14 +27,14 @@ class DailyCounter {
     if (today !== this.date) {
       this.count = 0;
       this.date = today;
-      console.log(`[Counter] 📅 New day — reset email count to 0`);
+      console.log(`[Counter] New day — reset email count to 0`);
     }
   }
 
   increment(provider: string) {
     this.resetIfNeeded();
     this.count++;
-    console.log(`[Counter] 📧 ${provider} sent #${this.count}/${this.maxDaily} today`);
+    console.log(`[Counter] ${provider} sent #${this.count}/${this.maxDaily} today`);
   }
 
   hasCapacity(): boolean {
@@ -69,7 +69,7 @@ class ResendProvider implements EmailProvider {
     if (!this.apiKey) return false;
     // If too many consecutive failures, disable temporarily
     if (this.consecutiveFailures >= 3) {
-      console.log(`[Resend] ⚠️ ${this.consecutiveFailures} consecutive failures — using Gmail instead`);
+      console.log(`[Resend] ${this.consecutiveFailures} consecutive failures — using Gmail instead`);
       return false;
     }
     return true;
@@ -80,7 +80,7 @@ class ResendProvider implements EmailProvider {
 
     // Check daily limit before even trying
     if (!dailyCounter.hasCapacity()) {
-      console.log(`[Resend] 📊 Daily limit reached (${dailyCounter.getCount()}/90) — skipping`);
+      console.log(`[Resend] Daily limit reached (${dailyCounter.getCount()}/90) — skipping`);
       return false;
     }
 
@@ -102,7 +102,7 @@ class ResendProvider implements EmailProvider {
 
       // Rate limited (429) or server error (5xx)
       if (res.status === 429 || res.status >= 500) {
-        console.error(`[Resend] ❌ Rate limited or server error (${res.status})`);
+        console.error(`[Resend] Rate limited or server error (${res.status})`);
         this.consecutiveFailures++;
         return false;
       }
@@ -110,7 +110,7 @@ class ResendProvider implements EmailProvider {
       // Other errors
       if (!res.ok) {
         const err = await res.text();
-        console.error(`[Resend] ❌ Failed (${res.status}): ${err}`);
+        console.error(`[Resend] Failed (${res.status}): ${err}`);
         this.consecutiveFailures++;
         return false;
       }
@@ -118,10 +118,10 @@ class ResendProvider implements EmailProvider {
       // Success!
       this.consecutiveFailures = 0;
       dailyCounter.increment('Resend');
-      console.log(`[Resend] ✅ Email sent to ${options.to} (${dailyCounter.getRemaining()} remaining today)`);
+      console.log(`[Resend] Email sent to ${options.to} (${dailyCounter.getRemaining()} remaining today)`);
       return true;
     } catch (error) {
-      console.error('[Resend] ❌ Network error:', error);
+      console.error('[Resend] Network error:', error);
       this.consecutiveFailures++;
       return false;
     }
@@ -136,7 +136,7 @@ class GmailProvider implements EmailProvider {
 
   isAvailable(): boolean {
     if (this.consecutiveFailures >= 5) {
-      console.log(`[Gmail] ⚠️ ${this.consecutiveFailures} consecutive failures — temporarily disabled`);
+      console.log(`[Gmail] ${this.consecutiveFailures} consecutive failures — temporarily disabled`);
       return false;
     }
     return !!(process.env.EMAIL_USER || process.env.EMAIL_PASSWORD);
@@ -166,10 +166,10 @@ class GmailProvider implements EmailProvider {
 
       this.consecutiveFailures = 0;
       dailyCounter.increment('Gmail');
-      console.log(`[Gmail] ✅ Email sent to ${options.to}`);
+      console.log(`[Gmail] Email sent to ${options.to}`);
       return true;
     } catch (error) {
-      console.error('[Gmail] ❌ Error:', error);
+      console.error('[Gmail] Error:', error);
       this.consecutiveFailures++;
       return false;
     }
@@ -194,16 +194,16 @@ export async function sendEmail(options: EmailOptions): Promise<{ success: boole
       continue;
     }
 
-    console.log(`[Email] 📧 Trying ${provider.name}... (${dailyCounter.getRemaining()} emails remaining today)`);
+    console.log(`[Email] Trying ${provider.name}... (${dailyCounter.getRemaining()} emails remaining today)`);
     const sent = await provider.send(options);
 
     if (sent) {
       return { success: true, provider: provider.name };
     }
-    console.log(`[Email] ❌ ${provider.name} failed, falling back to next provider...`);
+    console.log(`[Email] ${provider.name} failed, falling back to next provider...`);
   }
 
-  console.error('[Email] ❌ All email providers failed');
+  console.error('[Email] All email providers failed');
   return { success: false, provider: 'none' };
 }
 

@@ -1,7 +1,7 @@
 {
   "name": "Muragoods — Campus Power-Up Food",
   "short_name": "Muragoods",
-  "description": "Order legendary musubi, churros, coffee jelly & cookies from your campus food stall. Play games, earn coins, and discover unsent letters.",
+  "description": "Order legendary musubi, churros & milky cheesy bread from your campus food stall. Play games, earn coins, and discover unsent letters.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

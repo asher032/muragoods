@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
+import { Gift, TriangleAlert } from 'lucide-react';
 
 interface PromoCodeData {
   _id: string;
@@ -104,7 +105,7 @@ export default function AdminPromoCodesPage() {
           <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-2xl sm:text-3xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)', textShadow: '3px 3px 0px var(--gold-dark)' }}>
-                🎁 Promo Codes
+                <Gift color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Promo Codes
               </h1>
               <p className="mt-2 text-sm text-[var(--pewter)]">Create and manage discount codes for customers</p>
             </div>
@@ -120,7 +121,7 @@ export default function AdminPromoCodesPage() {
           {showCreate && (
             <div className="mb-6 border-2 border-[var(--gold)] bg-[var(--charcoal)] rounded-2xl p-6">
               <h2 className="text-[10px] text-[var(--gold)] uppercase mb-4" style={{ fontFamily: 'var(--font-arcade)' }}>Create New Promo Code</h2>
-              {error && <p className="text-[9px] text-[var(--crimson)] mb-3" style={{ fontFamily: 'var(--font-arcade)' }}>⚠ {error}</p>}
+              {error && <p className="text-[9px] text-[var(--crimson)] mb-3" style={{ fontFamily: 'var(--font-arcade)' }}><TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {error}</p>}
               <form onSubmit={handleCreate} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <label className="block">
                   <span className="text-[9px] text-[var(--gold)] uppercase block mb-1" style={{ fontFamily: 'var(--font-arcade)' }}>Code *</span>
@@ -155,7 +156,7 @@ export default function AdminPromoCodesPage() {
                 </label>
                 <div className="sm:col-span-2 lg:col-span-3 flex gap-3">
                   <button type="submit" disabled={creating} className="deco-btn deco-btn-gold rounded-xl disabled:opacity-50">
-                    {creating ? 'Creating...' : '🎁 Create Promo Code'}
+                    {creating ? 'Creating...' : 'Create Promo Code'}
                   </button>
                   <button type="button" onClick={() => setShowCreate(false)} className="deco-btn deco-btn-dark rounded-xl">Cancel</button>
                 </div>
@@ -166,7 +167,7 @@ export default function AdminPromoCodesPage() {
           {/* Codes List */}
           {codes.length === 0 ? (
             <div className="border-2 border-[rgba(242,240,228,0.12)] bg-[var(--charcoal)] rounded-2xl p-12 text-center">
-              <p className="text-2xl mb-3">🎁</p>
+              <p className="text-2xl mb-3"><Gift color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
               <p className="text-sm text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>NO PROMO CODES YET</p>
               <p className="text-xs text-[var(--pewter)] mt-1">Create your first promo code to get started</p>
             </div>

@@ -75,27 +75,29 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           --ms-line: rgba(255,255,255,0.06);
         }
         html.ms-light .ms-root {
-          --ms-bg: #F4F4F6;
-          --ms-surface: #FFFFFF;
-          --ms-surface-2: #FAFAFC;
-          --ms-border: #E2E2E8;
-          --ms-border-2: #D0D0D8;
-          --ms-text: #1A1A22;
-          --ms-text-strong: #0A0A0F;
-          --ms-text-muted: #55555F;
-          --ms-text-dim: #6E6E78;
-          --ms-text-faint: #8A8A94;
-          --ms-text-ghost: #A0A0AA;
-          --ms-overlay: rgba(255,255,255,0.98);
-          --ms-line: rgba(0,0,0,0.08);
+          --ms-bg: #E9E9EF;
+          --ms-surface: #F7F7FB;
+          --ms-surface-2: #FDFDFE;
+          --ms-border: #D8D8E2;
+          --ms-border-2: #C6C6D4;
+          --ms-text: #2A2A33;
+          --ms-text-strong: #17171E;
+          --ms-text-muted: #5A5A66;
+          --ms-text-dim: #6E6E7A;
+          --ms-text-faint: #8A8A96;
+          --ms-text-ghost: #A2A2AE;
+          --ms-overlay: rgba(247,247,251,0.98);
+          --ms-line: rgba(20,20,40,0.1);
         }
         /* ─── Card System ────────────────────────────────── */
         .ms-card {
           display: flex;
           flex-direction: column;
-          width: 200px;
+          width: 100%;
+          max-width: 190px;
+          justify-self: center;
           background-color: transparent;
-          border-radius: 12px;
+          border-radius: 14px;
           overflow: visible;
           transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 0.3s;
           cursor: pointer;
@@ -280,7 +282,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
         .ms-scroll::-webkit-scrollbar-track { background: transparent; }
         .ms-scroll::-webkit-scrollbar-thumb { background: #2A2A2A; border-radius: 2px; }
         .ms-scroll::-webkit-scrollbar-thumb:hover { background: #3A3A3A; }
-        .ms-row { margin-bottom: 40px; }
+        .ms-row { margin-bottom: 56px; }
         .ms-row-header {
           display: flex;
           align-items: center;
@@ -308,13 +310,33 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
         .ms-row-more:hover { opacity: 1; }
         .ms-row-items {
           display: flex;
-          gap: 18px;
+          gap: 28px;
           overflow-x: auto;
-          padding: 8px 4px 16px;
+          padding: 8px 4px 22px;
           scroll-behavior: smooth;
           scroll-snap-type: x proximity;
         }
-        .ms-row-items > * { scroll-snap-align: start; }
+        .ms-row-items > * { width: 190px; scroll-snap-align: start; }
+        /* ─── Keyboard focus (accessibility) ─────────────── */
+        .ms-card:focus-visible {
+          outline: 2px solid #E50914;
+          outline-offset: 4px;
+          border-radius: 12px;
+        }
+        .ms-card:focus-visible .ms-card-overlay,
+        .ms-card:focus-visible .ms-card-actions-row {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        .ms-root a:focus-visible,
+        .ms-root button:focus-visible,
+        .ms-root input:focus-visible,
+        .ms-root select:focus-visible,
+        .ms-root [tabindex]:focus-visible {
+          outline: 2px solid #E50914;
+          outline-offset: 2px;
+          border-radius: 8px;
+        }
         /* ─── Section Labels ───────────────────────────── */
         .ms-section-label {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -334,14 +356,74 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           from { opacity: 1; transform: translateY(0); }
           to { opacity: 0; transform: translateY(-8px); }
         }
+        /* No forwards fill: a retained transform would create a permanent
+           stacking context and trap absolutely-positioned popovers (watch
+           party menu) beneath the player. */
         .ms-page-transition-enter {
-          animation: msPageEnter 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+          animation: msPageEnter 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         }
         .ms-page-transition-exit {
           animation: msPageExit 0.15s ease-in forwards;
         }        /* ─── Root / settings-driven appearance ─────────── */
         .ms-root { background: var(--ms-bg); min-height: 100vh; }
-        html.ms-compact .ms-card { width: 150px; }
+        html.ms-compact .ms-card { max-width: 150px; }
+        html.ms-compact .ms-row-items > * { width: 150px; }
+        /* ─── Shared page container: full-bleed, centered ── */
+        .ms-page-pad {
+          width: 100%;
+          max-width: 1500px;
+          margin: 0 auto;
+          padding: 28px clamp(20px, 4vw, 44px);
+          box-sizing: border-box;
+        }
+        /* ─── Player source probe spinner (watch page) ───── */
+        .custom-loader {
+          width: 42px;
+          height: 42px;
+          border-radius: 50%;
+          border: 4px solid rgba(229, 9, 20, 0.15);
+          border-top-color: #E50914;
+          animation: customLoaderSpin 0.9s linear infinite;
+        }
+        @keyframes customLoaderSpin {
+          to { transform: rotate(360deg); }
+        }
+        /* ─── Top-10 ranked row (home trending) ────────────
+            Cards are pinned to 190px so the poster height is deterministic
+            (285px), and numerals are anchored from the wrapper TOP to the
+            poster's bottom edge — title wrapping can never shift them. */
+        .ms-rank-item {
+          position: relative;
+          flex-shrink: 0;
+          width: fit-content;
+        }
+        .ms-rank-item .ms-card {
+          width: 190px;
+          max-width: 190px;
+        }
+        .ms-rank-row .ms-row-items {
+          padding-left: 44px;
+        }
+        .ms-rank {
+          position: absolute;
+          left: -18px;
+          top: 193px; /* numeral box bottom lands on the poster's bottom edge */
+          z-index: 2;
+          font-family: 'Arial Black', -apple-system, 'Segoe UI', sans-serif;
+          font-weight: 900;
+          font-size: 118px;
+          line-height: 0.78;
+          color: #0d0d12;
+          -webkit-text-stroke: 3px #E50914;
+          paint-order: stroke fill;
+          pointer-events: none;
+          user-select: none;
+        }
+        .ms-rank.ms-rank-wide {
+          font-size: 96px;
+          left: -12px;
+          top: 210px; /* same bottom edge as the regular numerals */
+        }
       `}</style>
       {/* What's New toast (one-time per changelog entry) */}
       {toast && (

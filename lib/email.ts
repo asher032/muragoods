@@ -29,7 +29,7 @@ export async function sendVerificationEmail(to: string, code: string, userName: 
             <p style="font-size: 12px; color: #9090a8; margin-top: 4px; letter-spacing: 2px;">EMAIL VERIFICATION</p>
           </div>
           <div class="body">
-            <p style="font-size: 16px; color: #e8e8f0; margin-bottom: 4px;">Hey ${userName}! 👋</p>
+            <p style="font-size: 16px; color: #e8e8f0; margin-bottom: 4px;">Hey ${userName}!</p>
             <p style="font-size: 14px; color: #9090a8; margin-bottom: 0;">Here's your verification code:</p>
             <div class="code-box">
               <div class="code">${code}</div>
@@ -57,7 +57,7 @@ export async function sendVerificationEmail(to: string, code: string, userName: 
   try {
     const result = await sendEmail({
       to,
-      subject: `🎮 Your Muragoods Verification Code: ${code}`,
+      subject: `Your Muragoods Verification Code: ${code}`,
       html,
       text: `Hey ${userName}!\n\nYour Muragoods verification code is: ${code}\n\nThis code expires in 30 minutes.\nEnter it at muragoods.vercel.app/verify-email\n\nIf you didn't create this account, ignore this email.`,
     });
@@ -92,16 +92,16 @@ export async function sendLetterEmail(to: string, letterUrl: string, senderName:
       <div class="container">
         <div class="card">
           <div class="header">
-            <div style="font-size: 36px; margin-bottom: 12px;">💌</div>
+            <div style="font-size: 36px; margin-bottom: 12px;">&#10084;&#65039;</div>
             <div class="logo">MURAGOODS</div>
             <p style="font-size: 11px; color: #9090a8; margin-top: 6px; letter-spacing: 2px;">UNTOLD LETTERS</p>
           </div>
           <div class="body">
-            <p style="font-size: 18px; color: #ff6496; margin-bottom: 8px;">You received a digital letter 💌</p>
+            <p style="font-size: 18px; color: #ff6496; margin-bottom: 8px;">You received a digital letter</p>
             <p style="font-size: 14px; color: #9090a8; margin-bottom: 4px;">${senderName !== 'Anonymous' ? senderName : 'Someone'} has sent you a ${letterUrl.includes('/letter/') ? 'digital letter' : 'song message'} through Muragoods.</p>
             <p style="font-size: 13px; color: #707090;">For: ${recipientName}</p>
             <div class="divider" />
-            <a href="${letterUrl}" class="btn">Open Your Letter 💌</a>
+            <a href="${letterUrl}" class="btn">Open Your Letter</a>
             <p class="note">
               If the button doesn't work, copy and paste this link into your browser:<br>
               <a href="${letterUrl}" style="color: #ff6496; word-break: break-all;">${letterUrl}</a>
@@ -121,7 +121,7 @@ export async function sendLetterEmail(to: string, letterUrl: string, senderName:
   try {
     const result = await sendEmail({
       to,
-      subject: 'You received a digital letter 💌',
+      subject: 'You received a digital letter',
       html,
       text: `You received a digital letter!\n\n${senderName !== 'Anonymous' ? senderName : 'Someone'} sent you a letter through Muragoods.\n\nOpen it here: ${letterUrl}\n\n— Muragoods Untold Letters`,
     });
@@ -190,7 +190,7 @@ export async function sendPasswordResetEmail(to: string, code: string, userName:
   try {
     const result = await sendEmail({
       to,
-      subject: `🔑 Your Muragoods Password Reset Code: ${code}`,
+      subject: `Your Muragoods Password Reset Code: ${code}`,
       html,
       text: `Hey ${userName}!\n\nYour password reset code is: ${code}\n\nThis code expires in 15 minutes.\nEnter it at muragoods.vercel.app/forgot-password\n\nIf you didn't request this, ignore this email.`,
     });

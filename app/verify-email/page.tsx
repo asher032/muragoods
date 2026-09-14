@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-
+import { Check, Mail, TriangleAlert } from 'lucide-react';
 const DIGIT_COUNT = 6;
 
 export default function VerifyEmailPage() {
@@ -273,7 +273,7 @@ export default function VerifyEmailPage() {
 
       <div className="verify-container">
         <div className="verify-card">
-          <div className="logo-icon">✉️</div>
+          <div className="logo-icon"><Mail className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
           <p className="title">VERIFY YOUR EMAIL</p>
           <p className="subtitle">
             We sent a 6-digit code to your email.<br />
@@ -322,15 +322,15 @@ export default function VerifyEmailPage() {
               </div>
             </div>
 
-            {error && <div className="msg-error">⚠ {error}</div>}
-            {success && <div className="msg-success">✓ {success}</div>}
+            {error && <div className="msg-error"><TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {error}</div>}
+            {success && <div className="msg-success"><Check className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {success}</div>}
 
             <button
               type="submit"
               disabled={loading || code.length !== DIGIT_COUNT}
               className="verify-btn"
             >
-              {loading ? '⏳ VERIFYING...' : '✓ VERIFY EMAIL'}
+              {loading ? '⏳ VERIFYING...' : 'VERIFY EMAIL'}
             </button>
           </form>
 
@@ -340,7 +340,7 @@ export default function VerifyEmailPage() {
               disabled={resending || !email}
               className="resend-btn"
             >
-              {resending ? '⏳ Sending...' : '🔄 Resend Code'}
+              {resending ? '⏳ Sending...' : 'Resend Code'}
             </button>
           </div>
 

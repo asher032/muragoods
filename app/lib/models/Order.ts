@@ -23,6 +23,8 @@ const OrderSchema = new mongoose.Schema({
   deliveryDate: { type: String, required: true },
   deliveryTimeSlot: { type: String, default: '' },
   status: { type: String, default: 'Pending Payment' },
+  // Set once delivery coins have been awarded (idempotency flag)
+  coinsAwarded: { type: Boolean, default: false },
   total: { type: Number, required: true },
   items: [String],
   deliveryType: { type: String, required: true },

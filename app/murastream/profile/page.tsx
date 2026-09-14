@@ -125,7 +125,7 @@ export default function MuraStreamProfilePage() {
 
   if (loading) {
     return (
-      <div style={{ padding: '24px 28px', maxWidth: '600px' }}>
+      <div className="ms-page-pad">
         <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: 'var(--ms-text-faint)' }}>Loading profile…</p>
       </div>
     );
@@ -137,7 +137,7 @@ export default function MuraStreamProfilePage() {
   const initials = (user?.name || 'U').trim().charAt(0).toUpperCase();
 
   return (
-    <div style={{ padding: '24px 28px', maxWidth: '600px' }}>
+    <div className="ms-page-pad">
       {/* Header */}
       <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: 'var(--ms-text)', margin: '0 0 24px', display: 'flex', alignItems: 'center', gap: 10 }}>
         <UserIcon size={18} color="#E50914" /> PROFILE
@@ -150,9 +150,11 @@ export default function MuraStreamProfilePage() {
       }}>
         <div style={{
           width: '60px', height: '60px', borderRadius: '50%',
-          background: 'linear-gradient(135deg, #E50914, #B20710)',
+          background: 'linear-gradient(135deg, #23232e, #14141b)',
+          border: '2px solid rgba(229,9,20,0.55)',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: 'var(--font-arcade)', fontSize: '24px', color: '#FFF', flexShrink: 0,
+          fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: '22px', fontWeight: 700, color: '#FFF', flexShrink: 0,
         }}>
           {initials}
         </div>
