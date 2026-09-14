@@ -16,6 +16,10 @@ export type PartyPlaybackState = {
   season: number;
   episode: number;
   source: string;
+  // Host-side wall-clock (ms) at which the host (re)started this title.
+  // Guests use it to compute a shared playback offset so everyone lines up
+  // on the same timeline instead of merely watching the same title.
+  startAt?: number;
 };
 
 export type PartyMember = { name: string; email: string; lastSeen?: string };
@@ -57,6 +61,11 @@ export function useWatchParty(opts: {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [followSource, setFollowSource] = useState<string | null>(null); // guest: provider switch commanded
+  // Guest: host's last startAt we're materially behind on (banner + re-sync).
+  const [syncAt, setSyncAt] = useState<number | null>(null);
+  // Last host startAt already surfaced (auto-followed or manually synced) —
+  // lives in a ref so the SSE handler and markSynced agree across re-renders.
+  const handledStartAtRef = useRef(0);
   const partyRef = useRef<Party | null>(null);
   partyRef.current = party;
 
@@ -108,14 +117,20 @@ export function useWatchParty(opts: {
     } catch { /* empty */ }
   }, [party]);
 
-  // HOST: push playback state whenever it changes (debounced 800ms)
+  // HOST: push playback state whenever it changes (debounced 800ms). The
+  // state carries startAt = now, stamped once per title/episode so guests can
+  // align to the same timeline position (playing state is always true — the
+  // host opens the player to watch).
   useEffect(() => {
     if (!party?.isHost || !id) return;
     const t = setTimeout(() => {
       fetch(`/api/murastream/party?code=${party.code}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state: { type, id, season, episode, source: activeSourceId }, email: meRef.current.email }),
+        body: JSON.stringify({
+          state: { type, id, season, episode, source: activeSourceId, startAt: Date.now() },
+          email: meRef.current.email,
+        }),
       }).catch(() => { /* best effort */ });
     }, 800);
     return () => clearTimeout(t);
@@ -172,6 +187,17 @@ export function useWatchParty(opts: {
     // Set once a real snapshot arrives, so a dead party reads differently
     // from a code that never existed.
     const sawSnapshot = { current: false };
+    // Don't auto-navigate more than once per second (title-signature dedupe).
+    let lastNavSig = '';
+    // The last host startAt we've already surfaced (via auto-follow or the
+    // manual Sync up banner) — a repeated frame for the SAME start must not
+    // re-raise the banner; only a genuinely newer restart may.
+    const offerSync = (startAt: number) => {
+      if (startAt && startAt !== handledStartAtRef.current) {
+        handledStartAtRef.current = startAt;
+        setSyncAt(startAt);
+      }
+    };
 
     const applyFrame = (d: StreamFrame) => {
       if (stopped) return;
@@ -198,17 +224,39 @@ export function useWatchParty(opts: {
       if (d.hostEmail && partyRef.current && !partyRef.current.hostEmail) {
         setParty(p => (p ? { ...p, hostEmail: d.hostEmail } : p));
       }
-      // Guest: follow the host's title/episode (navigation) or provider.
+      // Guest: follow the host's title/episode (navigation) or provider, and
+      // keep a wall-clock "sync point" so the page can line up playback.
       if (!partyRef.current?.isHost && d.state) {
         const s = d.state;
-        const sig = `${s.type}|${s.id}|${s.season}|${s.episode}|${s.source}`;
-        if (sig !== lastApplied) {
-          lastApplied = sig;
-          if (s.type !== type || Number(s.id) !== id || Number(s.season) !== season || Number(s.episode) !== episode) {
-            router.push(`/murastream/watch?type=${s.type}&id=${s.id}&season=${s.season || 1}&episode=${s.episode || 1}&party=${code}`);
+        const sig = `${s.type}|${s.id}|${s.season}|${s.episode}`;
+        const fullSig = `${sig}|${s.source}`;
+        if (fullSig !== lastApplied) {
+          lastApplied = fullSig;
+          if (sig !== lastNavSig) {
+            lastNavSig = sig;
+            const startAt = typeof s.startAt === 'number' ? s.startAt : Date.now();
+            const offsetMs = Math.max(0, Date.now() - startAt);
+            const fresh = offsetMs < 120_000; // < 2 min behind → follow automatically
+            if (fresh) {
+              handledStartAtRef.current = startAt; // auto-follow counts as handled
+              setSyncAt(null);
+            }
+            const tParam = fresh ? `&t=${Math.round(offsetMs / 1000)}` : '';
+            if (s.type !== type || Number(s.id) !== id || Number(s.season) !== season || Number(s.episode) !== episode) {
+              router.push(`/murastream/watch?type=${s.type}&id=${s.id}&season=${s.season || 1}&episode=${s.episode || 1}&party=${code}${tParam}`);
+            }
+            if (!fresh) offerSync(startAt); // stale join → offer a manual re-sync
           } else if (s.source && s.source !== activeSourceId) {
             setFollowSource(s.source); // page resolves this against its source list
+          } else {
+            // Same title: only a moved startAt (host restart) re-raises the banner.
+            const startAt = typeof s.startAt === 'number' ? s.startAt : 0;
+            if (startAt && Date.now() - startAt > 8_000) offerSync(startAt);
           }
+        } else {
+          // Repeated frames: re-arm only if the host restarted since we last synced.
+          const startAt = typeof s.startAt === 'number' ? s.startAt : 0;
+          if (startAt && startAt !== handledStartAtRef.current && Date.now() - startAt > 8_000) offerSync(startAt);
         }
       }
     };
@@ -303,8 +351,15 @@ export function useWatchParty(opts: {
     ? `${typeof location !== 'undefined' ? location.origin : ''}/murastream/watch?type=${type}&id=${id}&season=${season}&episode=${episode}&party=${party.code}`
     : '';
 
+  // Guest clicked "Sync up now": mark this host start as handled so the
+  // banner stays down until the host restarts again.
+  const markSynced = useCallback((startAt: number) => {
+    handledStartAtRef.current = startAt;
+    setSyncAt(null);
+  }, []);
+
   return {
-    party, members, messages, typing, error, busy, inviteLink, followSource,
+    party, members, messages, typing, error, busy, inviteLink, followSource, syncAt, markSynced,
     panelOpen, setPanelOpen, unreadCount,
     create, join, leave, sendMessage, notifyTyping, clearError: () => setError(''),
   };

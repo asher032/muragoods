@@ -81,6 +81,9 @@ function WatchContent() {
   const id = Number(searchParams.get('id'));
   const season = Number(searchParams.get('season')) || 1;
   const episode = Number(searchParams.get('episode')) || 1;
+  // Watch-party offset (seconds into the title) — attached by the guest sync
+  // follower when navigating to the host's title, so both timelines align.
+  const partyOffsetSec = Number(searchParams.get('t')) || 0;
 
   const [title, setTitle] = useState('');
   const [activeSource, setActiveSource] = useState<Source>(SOURCES[0]);
@@ -417,7 +420,16 @@ function WatchContent() {
     );
   }
 
-  const embedUrl = activeSource.getUrl(type, id, season, episode);
+  // Player URL. For the VidLink provider we can pass the party offset as a
+  // start time (?t= seconds) so a guest joining mid-movie lines up with the
+  // host instead of starting from zero (the "one too early, one too late"
+  // problem). Other providers ignore the param harmlessly.
+  const embedUrl = useMemo(() => {
+    const base = activeSource.getUrl(type, id, season, episode);
+    if (!partyOffsetSec || partyOffsetSec < 3 || partyOffsetSec > 21_600) return base;
+    if (activeSource.id !== 'vidlink') return base;
+    return `${base}?t=${partyOffsetSec}`;
+  }, [activeSource, type, id, season, episode, partyOffsetSec]);
 
   // Fallback order comes from the orderedSources memo above.
 
@@ -761,6 +773,43 @@ function WatchContent() {
         </div>
       )}
 
+      {/* Guest fell behind the host's timeline → offer a one-tap re-sync */}
+      {party && !party.isHost && watchParty.syncAt !== null && (
+        <div style={{
+          background: 'rgba(229,9,20,0.14)', borderBottom: '1px solid rgba(229,9,20,0.4)',
+          color: '#fff', fontSize: 12.5, padding: '8px 20px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          <span>You're behind the host — they restarted or you joined late.</span>
+          <button
+            onClick={() => {
+              // Reload this page with the fresh offset. VidLink picks up ?t= as
+              // a start time; other providers at least restart from zero.
+              const offsetSec = Math.max(3, Math.round((Date.now() - (watchParty.syncAt as number)) / 1000));
+              watchParty.markSynced(watchParty.syncAt as number);
+              router.push(`/murastream/watch?type=${type}&id=${id}&season=${season}&episode=${episode}&party=${party.code}&t=${offsetSec}`);
+            }}
+            style={{
+              padding: '6px 14px', borderRadius: 7, cursor: 'pointer', flexShrink: 0,
+              border: '1px solid #E50914', background: '#E50914', color: '#fff',
+              fontSize: 12, fontWeight: 700,
+            }}
+          >Sync up now</button>
+        </div>
+      )}
+
+      {/* Party sync status chip: confirms a fresh join was aligned */}
+      {party && !party.isHost && partyOffsetSec >= 3 && (
+        <div style={{
+          position: 'fixed', top: 56, right: 16, zIndex: 150,
+          background: 'rgba(10,10,14,0.85)', border: '1px solid rgba(34,197,94,0.4)',
+          color: '#22c55e', fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
+          padding: '5px 10px', borderRadius: 8, pointerEvents: 'none',
+        }}>
+          ● SYNCED · {Math.floor(partyOffsetSec / 60)}:{String(partyOffsetSec % 60).padStart(2, '0')} IN
+        </div>
+      )}
+
       {/* Player */}
       <div ref={playerRef} style={{ flex: 1, position: 'relative', minHeight: '60vh' }}>
         {loading ? (
@@ -789,7 +838,7 @@ function WatchContent() {
           </div>
         ) : (
           <iframe
-            key={`${activeSource.id}-${id}-${type}-${season}-${episode}`}
+            key={`${activeSource.id}-${id}-${type}-${season}-${episode}-${embedUrl}`}
             src={embedUrl}
             style={{ width: '100%', height: '100%', border: 'none', position: 'absolute', inset: 0 }}
             allow="autoplay; fullscreen; picture-in-picture; encrypted-media"

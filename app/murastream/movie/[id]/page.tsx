@@ -8,6 +8,7 @@ import MuraStreamLoader from '../../components/MuraStreamLoader';
 import { useShareLink } from '../../hooks/useShareLink';
 import { ShareIcon, CheckIcon } from '../../components/MuraStreamIcons';
 import { useMuraStreamStore } from '../../hooks/useMuraStreamStore';
+import MuraStreamComments from '../../components/MuraStreamComments';
 import { Star } from 'lucide-react';
 type DetailData = {
   id: number;
@@ -269,7 +270,7 @@ export default function MovieDetailPage() {
 
         {/* Recommended */}
         {(movie.recommendations?.results?.length > 0 || movie.similar?.results?.length > 0) && (
-          <div style={{ marginTop: '48px', marginBottom: '60px' }}>
+          <div style={{ marginTop: '48px' }}>
             <h3 style={{
               fontFamily: '-apple-system, sans-serif', fontSize: '18px', fontWeight: 700,
               color: 'var(--ms-text-strong)', margin: '0 0 18px',
@@ -283,6 +284,9 @@ export default function MovieDetailPage() {
             </div>
           </div>
         )}
+
+        {/* Comments — The Screening Room */}
+        <MuraStreamComments mediaType="movie" tmdbId={Number(movieId)} title={movie.title || 'this movie'} />
 
         {/* Trailer Modal */}
         {showTrailer && trailer && (
