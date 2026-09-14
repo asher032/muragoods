@@ -6,6 +6,10 @@ on:
       - main
   workflow_dispatch:
 
+# NOTE: Vercel's native Git integration already deploys every push to main
+# automatically, so this workflow is a fallback for explicit CLI deploys.
+# It only runs when a VERCEL_TOKEN repo secret is configured; without one it
+# skips instead of failing every push.
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -15,7 +19,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check for Vercel token
+        id: token
+        run: |
+          if [ -n "${{ secrets.VERCEL_TOKEN }}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "VERCEL_TOKEN secret not set — skipping (Vercel Git integration handles deploys)."
+          fi
+
       - name: Deploy to Vercel
+        if: steps.token.outputs.available == 'true'
         uses: amondnet/vercel-action@v25
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
