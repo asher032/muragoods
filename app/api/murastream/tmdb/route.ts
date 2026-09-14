@@ -146,6 +146,14 @@ export async function GET(request: NextRequest) {
           'vote_count.gte': searchParams.get('vote_count.gte') || searchParams.get('vote_count_gte') || '0',
         });
         url = `/discover/${searchParams.get('type') || 'tv'}?${dsp}`;
+        // Asian-drama verticals (language-filtered TV discover): variety,
+        // reality, kids, and talk shows dominate popularity in every language
+        // and reappear under every genre chip — excluding them keeps filters
+        // meaningfully different. (10764 reality, 10762 kids, 10763 news,
+        // 10766 talk)
+        if ((searchParams.get('type') || 'tv') === 'tv' && searchParams.get('with_original_language')) {
+          url += '&without_genres=10764,10762,10763,10766';
+        }
         break;
       }
       case 'genres':
@@ -338,6 +346,38 @@ function sampleResponse(searchParams: URLSearchParams): NextResponse {
 
   const filterByType = (items: typeof SAMPLE_MEDIA) => items.filter(i => i.mediaType === type);
 
+  // Discover honors the client's filters (genre, year, language, sort) so
+  // the drama browse page shows genuinely different rows per chip instead of
+  // the same pool every time. The vote-count floor is skipped — a curated
+  // catalog has no noise for it to filter.
+  if (action === 'discover') {
+    const genre = (searchParams.get('with_genres') || '').split(',').filter(Boolean);
+    const lang = searchParams.get('with_original_language') || '';
+    const year = searchParams.get('first_air_date_year') || '';
+    const sortBy = searchParams.get('sort_by') || 'popularity.desc';
+    let pool = filterByType(SAMPLE_MEDIA).filter(i => {
+      if (lang && i.originalLanguage !== lang) return false;
+      if (year && i.year !== year) return false;
+      if (genre.length) {
+        const ids = i.genreIds || [];
+        if (!genre.every(g => ids.includes(Number(g)))) return false;
+      }
+      return true;
+    });
+    if (sortBy.startsWith('vote_average')) pool.sort((a, b) => (b.voteAverage ?? 0) - (a.voteAverage ?? 0));
+    else if (sortBy === 'first_air_date.desc' || sortBy === 'primary_release_date.desc') {
+      pool.sort((a, b) => (b.year || '').localeCompare(a.year || ''));
+    } else {
+      pool.sort((a, b) => (b.voteAverage ?? 0) - (a.voteAverage ?? 0)); // popularity proxy
+    }
+    return NextResponse.json({
+      page,
+      results: page <= 1 ? pool : [],
+      total_pages: 1,
+      total_results: pool.length,
+    });
+  }
+
   if (action === 'movie_details' || action === 'tv_details') {
     const id = Number(searchParams.get('id'));
     const item = SAMPLE_MEDIA.find(i => i.id === id) || SAMPLE_MEDIA[0];
@@ -380,8 +420,8 @@ function sampleResponse(searchParams: URLSearchParams): NextResponse {
     return NextResponse.json({ results: SAMPLE_MEDIA.filter(i => i.title.toLowerCase().includes(q)) });
   }
 
-  // List actions (trending / popular / top_rated / upcoming / discover):
-  // paginate the sample pool. Page 2+ is empty, which ends infinite scroll.
+  // List actions (trending / popular / top_rated / upcoming): paginate the
+  // sample pool. Page 2+ is empty, which ends infinite scroll.
   const pool = filterByType(SAMPLE_MEDIA);
   return NextResponse.json({
     page,

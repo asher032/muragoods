@@ -11,6 +11,7 @@ export type MediaItem = {
   year?: string;
   overview?: string;
   genreIds?: number[];
+  voteCount?: number;
   releaseDate?: string;
   name?: string;
   originalLanguage?: string;
