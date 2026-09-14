@@ -208,7 +208,10 @@ console.log('[3] watch party');
       }
     })().catch(() => { /* aborted at the end */ });
 
-    await sleep(3000); // wait for the initial snapshot
+    // Initial snapshot: deadline-based, not a fixed sleep — a cold serverless
+    // lambda can take several seconds to spin up the stream on the first hit.
+    const snapDeadline = Date.now() + 15000;
+    while (Date.now() < snapDeadline && events.length === 0) await sleep(300);
     check('initial snapshot arrives over SSE', events.length >= 1 && events[0].state?.id === 27205, JSON.stringify(events[0]));
 
     await api(`/api/murastream/party?code=${code}`, {

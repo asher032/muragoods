@@ -1,0 +1,67 @@
+# CI: gates every pull request with typecheck, build, and the API integration
+# suite. Runs the Next.js production server against a disposable MongoDB
+# service container, so no secrets are needed — the TMDB route falls back to
+# its sample catalog and the suite exercises profile/orders/party endpoints
+# against the ephemeral database.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PORT: 3000
+      # Throwaway DB inside the service container; the app connects on boot.
+      MONGODB_URI: mongodb://localhost:27017/muragoods-ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Start server
+        run: |
+          npm run start &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/ > /dev/null; then
+              echo "server is up"; exit 0
+            fi
+            sleep 2
+          done
+          echo "server failed to start" >&2
+          exit 1
+
+      - name: Integration suite
+        run: BASE_URL=http://localhost:3000 node scripts/integration-test.mjs
