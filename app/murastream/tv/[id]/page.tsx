@@ -8,6 +8,7 @@ import MuraStreamCard from '../../components/MuraStreamCard';
 import { useMuraStreamStore } from '../../hooks/useMuraStreamStore';
 import { useShareLink } from '../../hooks/useShareLink';
 import { ShareIcon, CheckIcon } from '../../components/MuraStreamIcons';
+import MuraStreamComments from '../../components/MuraStreamComments';
 import { Star } from 'lucide-react';
 export default function TvDetailPage() {
   const params = useParams();
@@ -16,6 +17,7 @@ export default function TvDetailPage() {
 
   const [show, setShow] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showTrailer, setShowTrailer] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [seasonData, setSeasonData] = useState<any[]>([]);
   const [seasonLoading, setSeasonLoading] = useState(false);
@@ -77,6 +79,11 @@ export default function TvDetailPage() {
   const epCount = show.number_of_episodes || 0;
   const liked = isLiked(Number(tvId));
   const inList = isInMyList(Number(tvId));
+  // Trailer (YouTube via TMDB videos) — normalize the array shape first.
+  const videos: Array<{ type: string; url?: string }> = Array.isArray(show.videos)
+    ? show.videos
+    : ((show.videos as { results?: Array<{ type: string; url?: string }> } | null)?.results ?? []);
+  const trailer = videos.find((v) => v.type === 'Trailer') || videos[0];
 
   return (
     <div className="ms-page-enter" style={{ position: 'relative', minHeight: '100vh' }}>
@@ -154,6 +161,13 @@ export default function TvDetailPage() {
                 color: liked ? '#ef4444' : 'var(--ms-text-muted)', padding: '14px 22px', borderRadius: '12px',
                 fontSize: '13px', fontWeight: 600, cursor: 'pointer',
               }}>{liked ? 'Liked' : 'Like'}</button>
+              {trailer && (
+                <button onClick={() => setShowTrailer(true)} style={{
+                  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+                  color: 'var(--ms-text-muted)', padding: '14px 22px', borderRadius: '12px',
+                  fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                }}>Trailer</button>
+              )}
               <button onClick={() => copyShareLink({ id: Number(tvId), mediaType: 'tv', title: show.name || show.title })} style={{
                 background: shared ? 'rgba(6,214,160,0.12)' : 'rgba(255,255,255,0.06)',
                 border: `1px solid ${shared ? 'rgba(6,214,160,0.4)' : 'rgba(255,255,255,0.1)'}`,
@@ -239,12 +253,32 @@ export default function TvDetailPage() {
 
         {/* Recommended */}
         {show.recommendations?.results?.length > 0 && (
-          <div style={{ marginTop: '48px', marginBottom: '60px' }}>
+          <div style={{ marginTop: '48px' }}>
             <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--ms-text-strong)', margin: '0 0 18px' }}>Recommended</h3>
             <div style={{ display: 'flex', gap: '18px', overflowX: 'auto', paddingBottom: '8px' }} className="ms-scroll">
               {show.recommendations.results.slice(0, 10).map((item: any) => (
                 <MuraStreamCard key={item.id} item={item} />
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Comments — The Screening Room */}
+        <MuraStreamComments mediaType="tv" tmdbId={Number(tvId)} title={show.name || 'this show'} />
+
+        {/* Trailer Modal */}
+        {showTrailer && trailer && (
+          <div onClick={() => setShowTrailer(false)} style={{
+            position: 'fixed', inset: 0, zIndex: 999,
+            background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+          }}>
+            <div onClick={e => e.stopPropagation()} style={{
+              width: '90%', maxWidth: '900px', aspectRatio: '16/9',
+              borderRadius: '16px', overflow: 'hidden',
+              boxShadow: '0 16px 64px rgba(0,0,0,0.5)',
+            }}>
+              <iframe src={trailer.url} title="Trailer" style={{ width: '100%', height: '100%', border: 'none' }} allowFullScreen />
             </div>
           </div>
         )}

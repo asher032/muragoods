@@ -24,7 +24,12 @@ function sanitizeState(raw: unknown): Record<string, unknown> | null {
   const season = Math.max(1, Math.floor(Number(s.season)) || 1);
   const episode = Math.max(1, Math.floor(Number(s.episode)) || 1);
   const source = typeof s.source === 'string' && /^[a-z0-9-]{1,24}$/i.test(s.source) ? s.source : '';
-  return { type, id, season, episode, source, updatedAt: new Date() };
+  // Host's playback start (wall-clock ms). Guests use it to align timelines.
+  const startAtNum = Number(s.startAt);
+  const startAt = Number.isFinite(startAtNum) && startAtNum > 0 ? Math.floor(startAtNum) : undefined;
+  const next: Record<string, unknown> = { type, id, season, episode, source, updatedAt: new Date() };
+  if (startAt !== undefined) next.startAt = startAt;
+  return next;
 }
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/1, O/0 confusion

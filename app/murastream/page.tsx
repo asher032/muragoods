@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Users } from 'lucide-react';
 import MuraStreamCard from './components/MuraStreamCard';
 import MuraStreamLoader from './components/MuraStreamLoader';
@@ -320,12 +320,14 @@ function ContinueWatchingRow({ items }: { items: ContinueWatchingItem[] }) {
   );
 }
 
-export default function MuraStreamHome() {
+function MuraStreamHomeContent() {
   const [trendingMovies, setTrendingMovies] = useState<MediaItem[]>([]);
   const [trendingTV, setTrendingTV] = useState<MediaItem[]>([]);
   const [popularMovies, setPopularMovies] = useState<MediaItem[]>([]);
   const [popularTV, setPopularTV] = useState<MediaItem[]>([]);
   const [dramaLists, setDramaLists] = useState<Record<string, MediaItem[]>>({});
+  // Extra discover rows: cartoons (genre 16) and all-time famous TV.
+  const [extraLists, setExtraLists] = useState<Record<string, MediaItem[]>>({});
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<MediaItem[]>([]);
@@ -333,12 +335,8 @@ export default function MuraStreamHome() {
   const [searchError, setSearchError] = useState(false);
   const { continueWatching } = useMuraStreamStore();
   const [activeTab, setActiveTab] = useState('trending');
-  // Party code from ?party= — read once on mount; the card is informational.
+  // Party code from ?party= — the card is informational.
   const [partyCode, setPartyCode] = useState<string | null>(null);
-  useEffect(() => {
-    const m = window.location.search.match(/party=([A-Za-z0-9]{4,8})/);
-    if (m) setPartyCode(m[1].toUpperCase());
-  }, []);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchAbortRef = useRef<AbortController | null>(null);
 
@@ -349,11 +347,17 @@ export default function MuraStreamHome() {
     return res.json();
   }, []);
 
+  // Tab + party code sync from the URL. Depends on the query string so
+  // client-side navigations like View All (/murastream?tab=movies) actually
+  // re-run when we're already on /murastream.
+  const searchString = useSearchParams().toString();
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(searchString);
     const tab = params.get('tab');
     if (tab) setActiveTab(tab);
-  }, []);
+    const m = (params.get('party') || '').match(/^([A-Za-z0-9]{4,8})$/);
+    if (m) setPartyCode(m[1].toUpperCase());
+  }, [searchString]);
 
   useEffect(() => {
     async function load() {
@@ -383,6 +387,20 @@ export default function MuraStreamHome() {
           DRAMA_SECTIONS.forEach((s, i) => { next[s.id] = dramaRes[i]; });
           setDramaLists(next);
         } catch { setDramaLists({}); }
+
+        // Cartoons + famous rows (independent — never block the main rows).
+        try {
+          const [cM, cTV, fTV] = await Promise.all([
+            fetchTMDB('discover', { type: 'movie', with_genres: '16', 'vote_count.gte': '200' }).catch(() => ({ results: [] })),
+            fetchTMDB('discover', { type: 'tv', with_genres: '16', 'vote_count.gte': '100' }).catch(() => ({ results: [] })),
+            fetchTMDB('discover', { type: 'tv', 'vote_count.gte': '1000' }).catch(() => ({ results: [] })),
+          ]);
+          setExtraLists({
+            cartoonMovies: cM.results || [],
+            cartoonTV: cTV.results || [],
+            famousTV: fTV.results || [],
+          });
+        } catch { setExtraLists({}); }
 
       } catch (err) {
         console.error('Failed to load MuraStream data:', err);
@@ -547,18 +565,23 @@ export default function MuraStreamHome() {
                 <MediaRow title="Trending TV Shows" items={trendingTV} loading={loading} viewAllHref="/murastream?tab=tv" />
                 <MediaRow title="Popular Movies" items={popularMovies} loading={loading} viewAllHref="/murastream?tab=movies" />
                 <MediaRow title="K-Dramas Everyone's Watching" items={dramaLists.kdrama || []} loading={loading} viewAllHref="/murastream/kdrama" />
+                <MediaRow title="Cartoons & Animation 🎨" items={[...(extraLists.cartoonMovies || []), ...(extraLists.cartoonTV || [])].slice(0, 20)} loading={loading} viewAllHref="/murastream/genres?type=movie&genre=16" />
+                <MediaRow title="Famous TV Shows 🔥" items={extraLists.famousTV || []} loading={loading} viewAllHref="/murastream/genres?type=tv" />
               </>
             )}
             {activeTab === 'movies' && (
               <>
                 <MediaRow title="Popular Movies" items={popularMovies} loading={loading} />
                 <MediaRow title="Trending Movies" items={trendingMovies} loading={loading} />
+                <MediaRow title="Cartoon Movies 🎨" items={extraLists.cartoonMovies || []} loading={loading} viewAllHref="/murastream/genres?type=movie&genre=16" />
               </>
             )}
             {activeTab === 'tv' && (
               <>
                 <MediaRow title="Popular TV Shows" items={popularTV} loading={loading} />
                 <MediaRow title="Trending TV" items={trendingTV} loading={loading} />
+                <MediaRow title="Famous TV Shows 🔥" items={extraLists.famousTV || []} loading={loading} viewAllHref="/murastream/genres?type=tv" />
+                <MediaRow title="Cartoon TV Shows 🎨" items={extraLists.cartoonTV || []} loading={loading} viewAllHref="/murastream/genres?type=tv&genre=16" />
               </>
             )}            {activeTab === 'kdrama' && (
               <>
@@ -617,5 +640,18 @@ export default function MuraStreamHome() {
         </div>
       </div>
     </>
+  );
+}
+
+export default function MuraStreamHome() {
+  return (
+    <Suspense fallback={
+      <div style={{ padding: '120px 24px', textAlign: 'center', color: '#666' }}>
+        <div className="custom-loader" />
+        <p style={{ fontSize: 13, fontFamily: '-apple-system, sans-serif' }}>Loading MuraStream…</p>
+      </div>
+    }>
+      <MuraStreamHomeContent />
+    </Suspense>
   );
 }

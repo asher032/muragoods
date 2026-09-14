@@ -16,7 +16,11 @@ export default function MuraStreamSearchPage() {
   const [searchType, setSearchType] = useState<'all' | 'kdrama'>('all');
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastQueryRef = useRef('');
+  // Key of the last *issued* request ("query|type") so re-runs of the effect
+  // (e.g. doSearch identity changing) never re-enter the loading state for a
+  // search that already has results — the old results.length-based guard
+  // stalled the page on "Searching..." after every successful search.
+  const lastKeyRef = useRef('');
 
   const doSearch = useCallback(async (q: string, type: string) => {
     if (!q.trim()) {
@@ -24,9 +28,6 @@ export default function MuraStreamSearchPage() {
       setSearchState('idle');
       return;
     }
-
-    if (q.trim() === lastQueryRef.current && results.length > 0) return;
-    lastQueryRef.current = q.trim();
 
     // Cancel previous request
     abortRef.current?.abort();
@@ -61,22 +62,27 @@ export default function MuraStreamSearchPage() {
       setSearchState('error');
       setResults([]);
     }
-  }, [results.length]);
+  }, []);
 
-  // Debounced search
+  // Debounced search — only issues a request when the query/filter combo
+  // actually changed.
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    abortRef.current?.abort();
 
     if (!query.trim()) {
+      abortRef.current?.abort();
       setResults([]);
       setSearchState('idle');
-      lastQueryRef.current = '';
+      lastKeyRef.current = '';
       return;
     }
 
+    const key = `${query.trim()}|${searchType}`;
+    if (key === lastKeyRef.current) return; // already showing these results
+
     setSearchState('loading');
     timerRef.current = setTimeout(() => {
+      lastKeyRef.current = key;
       doSearch(query, searchType);
     }, 350);
 
@@ -127,7 +133,7 @@ export default function MuraStreamSearchPage() {
           <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.442.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10"/>
         </svg>
         {query && (
-          <button onClick={() => { setQuery(''); lastQueryRef.current = ''; }}
+          <button onClick={() => { setQuery(''); lastKeyRef.current = ''; }}
             style={{
               position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
               background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%',
@@ -140,7 +146,7 @@ export default function MuraStreamSearchPage() {
       {/* Type filter */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
         {(['all', 'kdrama'] as const).map(type => (
-          <button key={type} onClick={() => { setSearchType(type); lastQueryRef.current = ''; }}
+          <button key={type} onClick={() => { setSearchType(type); lastKeyRef.current = ''; }}
             style={{
               padding: '8px 16px', borderRadius: '8px',
               border: searchType === type ? '1px solid rgba(229,9,20,0.4)' : '1px solid rgba(255,255,255,0.06)',
@@ -165,7 +171,7 @@ export default function MuraStreamSearchPage() {
           <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
             Search is temporarily unavailable
           </p>
-          <button onClick={() => { lastQueryRef.current = ''; doSearch(query, searchType); }}
+          <button onClick={() => { lastKeyRef.current = ''; doSearch(query, searchType); }}
             style={{
               padding: '10px 20px', borderRadius: '8px', border: '1px solid rgba(229,9,20,0.3)',
               background: 'rgba(229,9,20,0.1)', color: '#E50914',
