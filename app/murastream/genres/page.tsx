@@ -41,6 +41,11 @@ function GenreBrowseContent() {
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState(false); // network/TMDB failure — retryable, distinct from empty
+  // Self-healing: when a filter combo yields nothing, progressively relax it
+  // (drop year → drop sort → drop genre) and show what we relaxed, so the
+  // user never stares at a dead "Nothing matches" screen.
+  const [relaxNote, setRelaxNote] = useState<string>('');
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [surprising, setSurprising] = useState(false);
   // Daily hero + chip keyboard nav
@@ -114,6 +119,8 @@ function GenreBrowseContent() {
     setLoading(true);
     setPage(1);
     setHasMore(true);
+    setError(false);
+    setRelaxNote('');
     fetch(buildUrl(1), { signal: controller.signal })
       .then(r => (r.ok ? r.json() : { results: [] }))
       .then(d => {
@@ -121,12 +128,28 @@ function GenreBrowseContent() {
         setItems(results);
         setHasMore((d.total_pages || 1) > 1 && results.length > 0);
         setLoading(false);
+        if (results.length === 0) {
+          // Genuinely empty with the current filters → auto-relax (only when
+          // a filter is on; an unfiltered empty result is a real error state).
+          if (year !== 'All Years') {
+            setFilter('year', 'All Years');
+            setRelaxNote('No titles for that year — showing all years instead.');
+          } else if (sort !== 'popularity.desc') {
+            setFilter('sort', 'popularity.desc');
+            setRelaxNote('No titles with that sort — back to Most Popular.');
+          } else if (genre) {
+            setFilter('genre', '');
+            setRelaxNote('Nothing in that genre — showing everything.');
+          } else {
+            setError(true);
+          }
+        }
       })
       .catch(err => {
-        if (err.name !== 'AbortError') { setItems([]); setLoading(false); }
+        if (err.name !== 'AbortError') { setItems([]); setError(true); setLoading(false); }
       });
     return () => controller.abort();
-  }, [buildUrl]);
+  }, [buildUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Infinite scroll
   useEffect(() => {
@@ -389,9 +412,51 @@ function GenreBrowseContent() {
         </button>
       </div>
 
+      {/* Self-healing notice: filters were auto-relaxed to keep content flowing */}
+      {relaxNote && !loading && items.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          padding: '9px 14px', marginBottom: 16, borderRadius: 10,
+          background: 'rgba(229,9,20,0.08)', border: '1px solid rgba(229,9,20,0.25)',
+          color: 'var(--ms-text-dim)', fontSize: 12.5,
+        }}>
+          <span>{relaxNote}</span>
+          <button onClick={() => setRelaxNote('')} aria-label="Dismiss" style={{
+            background: 'none', border: 'none', color: 'var(--ms-text-ghost)',
+            fontSize: 15, cursor: 'pointer', lineHeight: 1, padding: '0 4px',
+          }}>×</button>
+        </div>
+      )}
+
       {/* Grid */}
       {loading ? (
         <MuraStreamLoader fullScreen={false} text="Loading titles..." />
+      ) : items.length === 0 && error ? (
+        <div style={{
+          textAlign: 'center', padding: '56px 20px', color: 'var(--ms-text-faint)',
+          background: 'var(--ms-surface)', borderRadius: 14, border: '1px solid var(--ms-border)',
+        }}>
+          <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--ms-text)', margin: '0 0 6px' }}>
+            Couldn't load titles right now
+          </p>
+          <p style={{ fontSize: 13, margin: '0 0 16px' }}>
+            The movie database hiccuped. This isn't a filter problem — a retry usually fixes it.
+          </p>
+          <button
+            onClick={() => { setLoading(true); setError(false);
+              fetch(buildUrl(1))
+                .then(r => (r.ok ? r.json() : { results: [] }))
+                .then(d => { setItems(d.results || []); setHasMore((d.total_pages || 1) > 1 && (d.results || []).length > 0); })
+                .catch(() => setError(true))
+                .finally(() => setLoading(false));
+            }}
+            style={{
+              padding: '9px 22px', borderRadius: 9, cursor: 'pointer',
+              border: '1px solid rgba(229,9,20,0.5)', background: 'rgba(229,9,20,0.14)',
+              color: '#E50914', fontFamily: '-apple-system, sans-serif', fontSize: 13, fontWeight: 700,
+            }}
+          >Retry</button>
+        </div>
       ) : items.length === 0 ? (
         <div style={{
           textAlign: 'center', padding: '56px 20px', color: 'var(--ms-text-faint)',
