@@ -3,16 +3,22 @@ import dbConnect from '@/app/lib/mongodb';
 import User from '@/app/lib/models/User';
 
 const ADMIN_EMAIL = 'mhaxthedog@gmail.com';
-const ADMIN_PASSWORD = 'Jesusmaryosepcasiram';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const ADMIN_NAME = 'MuraAdmin';
 
 // Seed a second admin too
 const ADMIN2_EMAIL = 'muragoods0@gmail.com';
-const ADMIN2_PASSWORD = 'Jesusmaryosepcasiram';
+const ADMIN2_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const ADMIN2_NAME = 'MuraAdmin2';
 
 export async function POST() {
   try {
+    if (!ADMIN_PASSWORD) {
+      return NextResponse.json(
+        { success: false, error: 'ADMIN_PASSWORD is not configured in the environment' },
+        { status: 503 },
+      );
+    }
     await dbConnect();
     const results = [];
 

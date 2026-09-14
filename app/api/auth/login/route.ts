@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import User from '@/app/lib/models/User';
 
-const ADMIN_EMAILS = ['mhaxthedog@gmail.com', 'muragoods0@gmail.com'];
-const ADMIN_PASSWORD = 'Jesusmaryosepcasiram';
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'mhaxthedog@gmail.com,muragoods0@gmail.com')
+  .split(',')
+  .map((e) => e.trim());
+// Admin password lives in the ADMIN_PASSWORD environment variable — never in source.
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 
 export async function POST(req: Request) {
   try {
@@ -17,7 +20,7 @@ export async function POST(req: Request) {
     let user = await User.findOne({ email });
 
     // Auto-create admin accounts if they don't exist in DB yet
-    if (!user && ADMIN_EMAILS.includes(email) && password === ADMIN_PASSWORD) {
+    if (!user && ADMIN_PASSWORD && ADMIN_EMAILS.includes(email) && password === ADMIN_PASSWORD) {
       user = await User.create({
         name: email === 'mhaxthedog@gmail.com' ? 'MuraAdmin' : 'MuraAdmin2',
         email,
@@ -30,7 +33,7 @@ export async function POST(req: Request) {
 
     // If user is an admin email, ensure role is set correctly and password matches
     if (user && ADMIN_EMAILS.includes(email)) {
-      if (user.password !== password && password === ADMIN_PASSWORD) {
+      if (user.password !== password && ADMIN_PASSWORD && password === ADMIN_PASSWORD) {
         user.password = ADMIN_PASSWORD;
       }
       if (user.role !== 'admin') {

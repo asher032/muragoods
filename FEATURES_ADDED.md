@@ -35,7 +35,7 @@
 ### 5. **Strict Admin Access Control**
 - **Single Authorized Account:**
   - **Email:** `mhaxthedog@gmail.com`
-  - **Password:** `Jesusmaryosepcasiram`
+  - **Password:** `(redacted — set via the ADMIN_PASSWORD environment variable)`
 - **Security:** All other login attempts rejected with "UNAUTHORIZED" message
 - **Access URL:** `/admin`
 - **Enforcement:** Backend validation prevents unauthorized access
@@ -149,7 +149,7 @@ Each order now includes:
 
 **Admin (Strict Access):**
 - Email: `mhaxthedog@gmail.com`
-- Password: `Jesusmaryosepcasiram`
+- Password: `(redacted — set via the ADMIN_PASSWORD environment variable)`
 - Access: https://muragoods-1xx6.vercel.app/admin
 
 ## ⚡ Technical Implementation

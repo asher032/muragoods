@@ -61,12 +61,12 @@ export type Order = {
   pointsEarned?: number;
 };
 
-export const adminEmails = ["muragoods0@gmail.com", "mhaxthedog@gmail.com"];
+export const adminEmails = (process.env.ADMIN_EMAILS || "mhaxthedog@gmail.com,muragoods0@gmail.com")
+  .split(",")
+  .map((e) => e.trim());
 
-export const adminCredentials = {
-  email: "mhaxthedog@gmail.com",
-  password: "Jesusmaryosepcasiram",
-};
+// Admin passwords are configured via the ADMIN_PASSWORD environment variable,
+// never stored in source.
 
 export const products: Product[] = [
   {
