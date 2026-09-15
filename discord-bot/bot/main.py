@@ -117,11 +117,14 @@ async def _health_server() -> None:
 
     app = web.Application()
     app.router.add_get("/health", health)
+    # Render/other hosts set $PORT; default 8080 for local + Docker healthcheck.
+    import os
+    port = int(os.environ.get("PORT", "8080"))
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", 8080)
+    site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    log.info("Health endpoint on :8080/health")
+    log.info("Health endpoint on :%d/health", port)
     while True:
         await asyncio.sleep(3600)
 
