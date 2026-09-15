@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Icon } from '@/app/components/Icon';
+import { safeNavigate } from '@/app/lib/safe-navigate';
 import { CircleCheck, CircleX, TriangleAlert, X } from 'lucide-react';
 export type NotificationType = 'info' | 'success' | 'warning' | 'error' | 'support' | 'order';
 
@@ -110,6 +112,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 }
 
 function Toast({ notification, onDismiss }: { notification: Notification; onDismiss: () => void }) {
+  const router = useRouter();
   const colors: Record<NotificationType, { bg: string; border: string; icon: React.ReactNode; text: string }> = {
     info: { bg: 'rgba(72,149,239,0.12)', border: 'rgba(72,149,239,0.3)', icon: 'ℹ️', text: '#4895ef' },
     success: { bg: 'rgba(6,214,160,0.12)', border: 'rgba(6,214,160,0.3)', icon: <CircleCheck color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, text:'#06d6a0' },
@@ -123,7 +126,7 @@ function Toast({ notification, onDismiss }: { notification: Notification; onDism
 
   return (
     <div
-      onClick={() => { onDismiss(); if (notification.url) window.location.href = notification.url; }}
+      onClick={() => { onDismiss(); safeNavigate(notification.url, router); }}
       style={{
         background: 'var(--mario-bg-card)',
         border: `1px solid ${c.border}`,

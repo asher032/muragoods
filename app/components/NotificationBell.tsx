@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useNotifications, type Notification } from './NotificationSystem';
+import { safeNavigate } from '@/app/lib/safe-navigate';
 import { Bell, CircleCheck, CircleX, Info, MessageCircle, Package, TriangleAlert } from 'lucide-react';
 export function NotificationBell() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearNotifications } = useNotifications();
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -137,7 +140,7 @@ export function NotificationBell() {
                     markAsRead(notif.id);
                     if (notif.url) {
                       setIsOpen(false);
-                      window.location.href = notif.url;
+                      safeNavigate(notif.url, router);
                     }
                   }}
                 />

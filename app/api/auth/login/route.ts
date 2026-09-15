@@ -3,6 +3,7 @@ import dbConnect from '@/app/lib/mongodb';
 import User from '@/app/lib/models/User';
 import { hashPassword, verifyPassword, isHashed } from '@/app/lib/password';
 import { rateLimit, clientIp } from '@/app/lib/rate-limit';
+import { setSessionCookie } from '@/app/lib/session';
 
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'mhaxthedog@gmail.com,muragoods0@gmail.com')
   .split(',')
@@ -101,7 +102,9 @@ export async function POST(req: Request) {
 
     const role = user.role || 'user';
 
-    return NextResponse.json({
+    // Issue the httpOnly session cookie — identity now comes from the
+    // server-signed cookie, not from what the browser claims.
+    const res = NextResponse.json({
       success: true,
       data: {
         name: user.name,
@@ -111,6 +114,7 @@ export async function POST(req: Request) {
         createdAt: user.createdAt,
       },
     });
+    return setSessionCookie(res, user.email);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'An error occurred';
     return NextResponse.json({ success: false, error: message }, { status: 400 });

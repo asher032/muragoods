@@ -19,11 +19,28 @@ function check(name, cond, detail = '') {
   else { failed++; failures.push(name); console.log(`  FAIL  ${name}${detail ? ` — ${detail}` : ''}`); }
 }
 
+// Cookie jar: signup/login set an httpOnly session cookie and every
+// subsequent call sends it — mirrors how the browser actually behaves.
+const COOKIE_JAR = new Map();
+
+function jarHeader() {
+  return [...COOKIE_JAR.entries()].map(([k, v]) => `${k}=${v}`).join('; ');
+}
+
 async function api(path, opts = {}) {
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    headers: { 'Content-Type': 'application/json', ...(COOKIE_JAR.size ? { cookie: jarHeader() } : {}), ...(opts.headers || {}) },
     ...opts,
   });
+  for (const raw of res.headers.getSetCookie?.() || []) {
+    const [pair] = raw.split(';');
+    const eq = pair.indexOf('=');
+    if (eq > 0) {
+      const name = pair.slice(0, eq).trim();
+      const value = pair.slice(eq + 1).trim();
+      if (value && value !== '') COOKIE_JAR.set(name, value);
+    }
+  }
   let body = null;
   try { body = await res.json(); } catch { /* non-JSON */ }
   return { status: res.status, body };
@@ -38,10 +55,10 @@ const PASSWORD = 'Integration123!';
 console.log(`\nIntegration tests against ${BASE}\n`);
 
 // ─── 1. Account profile ─────────────────────────────────────────────
-console.log('[1] account profile');
+console.log('[1] account profile (session-based — the old ?email= IDOR is closed)');
 {
   const missing = await api('/api/account/profile');
-  check('GET without email → 400', missing.status === 400);
+  check('GET without session → 401', missing.status === 401, `status ${missing.status}`);
 
   const signup = await api('/api/auth/signup', {
     method: 'POST',
@@ -49,22 +66,22 @@ console.log('[1] account profile');
   });
   check('signup succeeds', signup.status === 200 || signup.status === 201, `status ${signup.status}`);
 
-  const prof = await api(`/api/account/profile?email=${encodeURIComponent(EMAIL)}`);
-  check('GET returns the user', prof.status === 200 && prof.body?.data?.email === EMAIL);
+  const prof = await api('/api/account/profile');
+  check('GET (session) returns the user', prof.status === 200 && prof.body?.data?.email === EMAIL);
   check('new user coinBalance is 0', prof.body?.data?.coinBalance === 0, JSON.stringify(prof.body?.data));
 
   const badName = await api('/api/account/profile', {
-    method: 'PATCH', body: JSON.stringify({ email: EMAIL, name: 'x' }),
+    method: 'PATCH', body: JSON.stringify({ name: 'x' }),
   });
   check('PATCH short name → 400', badName.status === 400);
 
   const badAvatar = await api('/api/account/profile', {
-    method: 'PATCH', body: JSON.stringify({ email: EMAIL, avatar: 'javascript:alert(1)' }),
+    method: 'PATCH', body: JSON.stringify({ avatar: 'javascript:alert(1)' }),
   });
   check('PATCH non-image avatar → 400', badAvatar.status === 400);
 
   const good = await api('/api/account/profile', {
-    method: 'PATCH', body: JSON.stringify({ email: EMAIL, name: 'Integration Tester II' }),
+    method: 'PATCH', body: JSON.stringify({ name: 'Integration Tester II' }),
   });
   check('PATCH valid name → 200', good.status === 200 && good.body?.data?.name === 'Integration Tester II');
 }
@@ -108,7 +125,7 @@ let orderId = '';
   // give the after() callback a moment
   await new Promise(r => setTimeout(r, 1500));
 
-  const after = await api(`/api/account/profile?email=${encodeURIComponent(EMAIL)}`);
+  const after = await api('/api/account/profile');
   check('coins awarded automatically on Delivered (server PATCH chain)', after.body?.data?.coinBalance === 50, `balance ${after.body?.data?.coinBalance}`);
 
   const award = await api('/api/orders/award-coins', { method: 'POST', body: JSON.stringify({ orderId }) });
@@ -117,7 +134,7 @@ let orderId = '';
   const again = await api('/api/orders/award-coins', { method: 'POST', body: JSON.stringify({ orderId }) });
   check('double award stays idempotent', again.body?.data?.alreadyAwarded === true);
 
-  const final = await api(`/api/account/profile?email=${encodeURIComponent(EMAIL)}`);
+  const final = await api('/api/account/profile');
   check('balance still exactly 50 after retries', final.body?.data?.coinBalance === 50, `balance ${final.body?.data?.coinBalance}`);
 }
 

@@ -70,6 +70,16 @@ const rarityColors: Record<string, string> = {
   legendary: 'var(--gold-bright)',
 };
 
+// Serializable history entry — React elements can NEVER go into
+// localStorage (they come back as plain objects and crash React on render).
+interface HistoryEntry {
+  id: string;
+  label: string;
+  rarity: 'common' | 'rare' | 'legendary';
+  date: string;
+  tier?: string | null;
+}
+
 export default function MysteryBoxPage() {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -78,7 +88,7 @@ export default function MysteryBoxPage() {
   const [boxShaking, setBoxShaking] = useState(false);
   const [boxOpened, setBoxOpened] = useState(false);
   const [showPrize, setShowPrize] = useState(false);
-  const [history, setHistory] = useState<(Prize & { date: string })[]>([]);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [totalOpened, setTotalOpened] = useState(0);
   const [totalSpent, setTotalSpent] = useState(0);
   const [legendaryCount, setLegendaryCount] = useState(0);
@@ -96,7 +106,28 @@ export default function MysteryBoxPage() {
     const savedHistory = localStorage.getItem('muragoods_mystery_history');
     if (savedHistory) {
       try {
-        setHistory(JSON.parse(savedHistory));
+        const parsed: unknown = JSON.parse(savedHistory);
+        if (Array.isArray(parsed)) {
+          // Sanitize: keep only clean scalar fields (older builds stored React
+          // elements here, which crash on reload — drop anything malformed).
+          const clean: HistoryEntry[] = [];
+          for (const raw of parsed) {
+            const e = raw as Record<string, unknown>;
+            if (typeof e?.id === 'string' && typeof e?.label === 'string' && typeof e?.date === 'string') {
+              clean.push({
+                id: e.id,
+                label: e.label,
+                rarity: e.rarity === 'rare' || e.rarity === 'legendary' ? e.rarity : 'common',
+                date: e.date,
+                tier: typeof e.tier === 'string' ? e.tier : null,
+              });
+            }
+          }
+          setHistory(clean);
+          if (clean.length !== parsed.length) {
+            localStorage.setItem('muragoods_mystery_history', JSON.stringify(clean));
+          }
+        }
       } catch { /* empty */ }
     }
     const savedTotal = parseInt(localStorage.getItem('muragoods_mystery_total') || '0', 10);
@@ -197,8 +228,9 @@ export default function MysteryBoxPage() {
         }
       }
 
-      // Save to history
-      const entry = { ...prize, date: new Date().toISOString(), tier: tierDrop };
+      // Save to history — plain data only (id/label/rarity), icons are
+      // looked up from the prize table at render time.
+      const entry: HistoryEntry = { id: prize.id, label: prize.label, rarity: prize.rarity, date: new Date().toISOString(), tier: tierDrop };
       const newHistory = [entry, ...history].slice(0, 50);
       setHistory(newHistory);
       localStorage.setItem('muragoods_mystery_history', JSON.stringify(newHistory));
@@ -317,7 +349,11 @@ export default function MysteryBoxPage() {
                 className={`deco-btn deco-btn-lg rounded-2xl ${isOpening ? 'opacity-60 cursor-not-allowed' : coins < BOX_COST ? 'opacity-40 cursor-not-allowed' : 'deco-btn-gold pulse-glow'}`}
                 style={{ fontFamily: 'var(--font-arcade)', minWidth: '220px' }}
               >
-                {isOpening ? 'OPENING...' : coins < BOX_COST ? 'NOT ENOUGH COINS' : `<Gift color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> OPEN (<Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> ${BOX_COST})`}
+                {isOpening ? 'OPENING...' : coins < BOX_COST ? 'NOT ENOUGH COINS' : (
+                  <>
+                    <Gift color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> OPEN (<Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {BOX_COST})
+                  </>
+                )}
               </button>
             ) : (
               <button
@@ -436,18 +472,22 @@ export default function MysteryBoxPage() {
                 Recent Wins
               </h2>
               <div className="space-y-2 max-h-64 overflow-y-auto">
-                {history.slice(0, 10).map((entry, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 bg-[var(--charcoal-light)] rounded-xl border border-[rgba(242,240,228,0.08)]">
-                    <span className="text-xl">{entry.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[9px] text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)' }}>{entry.label}</p>
-                      <p className="text-[8px] text-[var(--pewter)]">{new Date(entry.date).toLocaleDateString()}</p>
+                {history.slice(0, 10).map((entry, i) => {
+                  const prizeDef = prizes.find(p => p.id === entry.id);
+                  const color = rarityColors[entry.rarity] || rarityColors.common;
+                  return (
+                    <div key={i} className="flex items-center gap-3 p-3 bg-[var(--charcoal-light)] rounded-xl border border-[rgba(242,240,228,0.08)]">
+                      <span className="text-xl">{prizeDef?.icon ?? <Icon name="gift" size={20} />}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[9px] text-[var(--cream)]" style={{ fontFamily: 'var(--font-arcade)' }}>{entry.label}</p>
+                        <p className="text-[8px] text-[var(--pewter)]">{new Date(entry.date).toLocaleDateString()}</p>
+                      </div>
+                      <span className="text-[8px] px-2 py-1 rounded-lg" style={{ fontFamily: 'var(--font-arcade)', color, background: `${color}15`, border: `1px solid ${color}40` }}>
+                        {rarityLabels[entry.rarity] || 'COMMON'}
+                      </span>
                     </div>
-                    <span className="text-[8px] px-2 py-1 rounded-lg" style={{ fontFamily: 'var(--font-arcade)', color: rarityColors[entry.rarity], background: `${rarityColors[entry.rarity]}15`, border: `1px solid ${rarityColors[entry.rarity]}40` }}>
-                      {rarityLabels[entry.rarity]}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

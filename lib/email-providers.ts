@@ -154,6 +154,11 @@ class GmailProvider implements EmailProvider {
             user: process.env.EMAIL_USER || 'muragoods0@gmail.com',
             pass: process.env.EMAIL_PASSWORD || '',
           },
+          // Timeouts so a hung SMTP connection can't pin a serverless
+          // function (DoS-by-slow-SMTP).
+          connectionTimeout: 10_000,
+          greetingTimeout: 10_000,
+          socketTimeout: 15_000,
         });
       }
       await (this.transporter as { sendMail: (opts: Record<string, unknown>) => Promise<unknown> }).sendMail({

@@ -91,6 +91,46 @@ export async function GET(request: NextRequest) {
   const language = searchParams.get('lang') || 'en-US';
   const page = searchParams.get('page') || '1';
 
+  // Secondary TV source (TVmaze — free, no key): schedule/tv shows. Handled
+  // before the TMDB credential check so it works even without a TMDB key.
+  if (action === 'tvmaze') {
+    const tz = searchParams.get('country') || 'US';
+    const tmDate = searchParams.get('date');
+    const tvmUrl = `https://api.tvmaze.com/schedule?country=${encodeURIComponent(tz)}${tmDate ? `&date=${encodeURIComponent(tmDate)}` : ''}`;
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8_000);
+      const tvmRes = await fetch(tvmUrl, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!tvmRes.ok) throw new Error(`tvmaze ${tvmRes.status}`);
+      const raw = (await tvmRes.json()) as Array<{
+        id: number; name: string; show?: { id: number; name: string; poster?: string | null; image?: { medium?: string; original?: string } | null; genres?: string[]; premiered?: string };
+        image?: { medium?: string; original?: string } | null;
+      }>;
+      const seen = new Set<number>();
+      const results = (Array.isArray(raw) ? raw : [])
+        .map((e) => e.show || { id: e.id, name: e.name, image: e.image, premiered: undefined })
+        .filter((s): s is NonNullable<typeof s> => !!s && !!s.name)
+        .filter((s) => { if (seen.has(s.id)) return false; seen.add(s.id); return true; })
+        .slice(0, 40)
+        .map((s) => ({
+          id: s.id,
+          title: s.name,
+          mediaType: 'tv' as const,
+          posterPath: s.poster || s.image?.original || s.image?.medium || '',
+          year: (s.premiered || '').substring(0, 4),
+          voteAverage: 0,
+          genreIds: [] as number[],
+        }));
+      return NextResponse.json(
+        { results },
+        { headers: { 'Cache-Control': 'public, max-age=600, stale-while-revalidate=1800' } },
+      );
+    } catch {
+      return NextResponse.json({ results: [] });
+    }
+  }
+
   const token = process.env.TMDB_ACCESS_TOKEN || process.env.TMDB_API_KEY;
   if (!token) {
     // No credentials (local dev — the Vercel CLI redacts secrets it pulls).
@@ -117,6 +157,9 @@ export async function GET(request: NextRequest) {
         break;
       case 'upcoming':
         url = `/movie/upcoming?page=${page}&language=${language}`;
+        break;
+      case 'now_playing':
+        url = `/movie/now_playing?page=${page}&language=${language}`;
         break;
       case 'movie_details':
         url = `/movie/${searchParams.get('id')}?append_to_response=credits,videos,similar,recommendations&language=${language}`;
