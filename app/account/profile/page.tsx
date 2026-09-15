@@ -55,11 +55,12 @@ export default function AccountProfilePage() {
       if (savedAvatar) setAvatar(savedAvatar);
       if (userData.userId) setUserId(userData.userId);
 
-      // Fetch profile from the account API — server avatar wins over the
-      // localStorage cache so a saved avatar follows the user across devices.
+      // Fetch profile from the account API — the server derives identity
+      // from the session cookie; server avatar wins over the localStorage
+      // cache so a saved avatar follows the user across devices.
       async function fetchAccount() {
         try {
-          const res = await fetch(`/api/account/profile?email=${encodeURIComponent(userData.email)}`);
+          const res = await fetch('/api/account/profile');
           if (!res.ok) return;
           const result = await res.json();
           if (result.success && result.data) {
@@ -165,7 +166,7 @@ export default function AccountProfilePage() {
       fetch('/api/account/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user?.email, avatar: dataUrl }),
+        body: JSON.stringify({ avatar: dataUrl }),
       }).catch(() => { /* offline — stays local */ });
       setUploadingAvatar(false);
     };
@@ -183,7 +184,7 @@ export default function AccountProfilePage() {
       const res = await fetch('/api/account/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user?.email, name }),
+        body: JSON.stringify({ name }),
       });
       const result = await res.json();
       if (result.success) {

@@ -285,7 +285,7 @@ export default function AdminPage() {
         <UsersCoinsPanel userName={email} />
 
         {/* ─── Content Lock Switch ─────────────────────────── */}
-        <LockPanel adminEmail={email} />
+        <LockPanel />
       </div>
 
       {/* Receipt Preview Modal */}

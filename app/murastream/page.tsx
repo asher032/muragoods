@@ -331,6 +331,10 @@ function MuraStreamHomeContent() {
   const [dramaLists, setDramaLists] = useState<Record<string, MediaItem[]>>({});
   // Extra discover rows: cartoons (genre 16) and all-time famous TV.
   const [extraLists, setExtraLists] = useState<Record<string, MediaItem[]>>({});
+  // "Load More" — pulls deeper pages of popular movies/TV and genre rows.
+  const [moreLists, setMoreLists] = useState<Record<string, MediaItem[]>>({});
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreCount, setLoadMoreCount] = useState(0);
   // Draft text for the navigational search bar (Enter → full search page).
   const [searchDraft, setSearchDraft] = useState('');
   const router = useRouter();
@@ -360,10 +364,11 @@ function MuraStreamHomeContent() {
   }, [searchString]);
 
   // Depth: pull 2 TMDB pages per row (~40 titles each) so rows feel Netflix-deep.
-  const fetchDeep = useCallback(async (action: string, params: Record<string, string> = {}) => {
+  // startPage lets "Load More" continue from deeper pages.
+  const fetchDeep = useCallback(async (action: string, params: Record<string, string> = {}, startPage = 1) => {
     const [p1, p2] = await Promise.all([
-      fetchTMDB(action, { ...params, page: '1' }),
-      fetchTMDB(action, { ...params, page: '2' }).catch(() => ({ results: [] })),
+      fetchTMDB(action, { ...params, page: String(startPage) }),
+      fetchTMDB(action, { ...params, page: String(startPage + 1) }).catch(() => ({ results: [] })),
     ]);
     const seen = new Set<number>();
     const merged: MediaItem[] = [];
@@ -404,15 +409,21 @@ function MuraStreamHomeContent() {
 
         // Cartoons + famous rows (independent — never block the main rows).
         try {
-          const [cM, cTV, fTV] = await Promise.all([
+          const [cM, cTV, fTV, up, np, trM] = await Promise.all([
             fetchDeep('discover', { type: 'movie', with_genres: '16', 'vote_count.gte': '200' }).catch(() => [] as MediaItem[]),
             fetchDeep('discover', { type: 'tv', with_genres: '16', 'vote_count.gte': '100' }).catch(() => [] as MediaItem[]),
             fetchDeep('discover', { type: 'tv', 'vote_count.gte': '1000' }).catch(() => [] as MediaItem[]),
+            fetchDeep('upcoming', {}).catch(() => [] as MediaItem[]),
+            fetchDeep('now_playing', {}).catch(() => [] as MediaItem[]),
+            fetchDeep('top_rated', { type: 'movie' }).catch(() => [] as MediaItem[]),
           ]);
           setExtraLists({
             cartoonMovies: cM,
             cartoonTV: cTV,
             famousTV: fTV,
+            upcoming: up,
+            nowPlaying: np,
+            topMovies: trM,
           });
         } catch { setExtraLists({}); }
 
@@ -424,6 +435,37 @@ function MuraStreamHomeContent() {
     }
     load();
   }, [fetchTMDB]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const base = 3 + loadMoreCount * 2;
+      const [pM2, pTV2, act, com, hor, sci] = await Promise.all([
+        fetchDeep('popular', { type: 'movie' }, base).catch(() => [] as MediaItem[]),
+        fetchDeep('popular', { type: 'tv' }, base).catch(() => [] as MediaItem[]),
+        fetchDeep('discover', { type: 'movie', with_genres: '28', 'vote_count.gte': '300' }).catch(() => [] as MediaItem[]),
+        fetchDeep('discover', { type: 'movie', with_genres: '35', 'vote_count.gte': '300' }).catch(() => [] as MediaItem[]),
+        fetchDeep('discover', { type: 'movie', with_genres: '27', 'vote_count.gte': '200' }).catch(() => [] as MediaItem[]),
+        fetchDeep('discover', { type: 'movie', with_genres: '878', 'vote_count.gte': '300' }).catch(() => [] as MediaItem[]),
+      ]);
+      const dedupe = (existing: MediaItem[], incoming: MediaItem[]) => {
+        const ids = new Set(existing.map(i => i.id));
+        return [...existing, ...incoming.filter(i => !ids.has(i.id))];
+      };
+      setPopularMovies(prev => dedupe(prev, pM2));
+      setPopularTV(prev => dedupe(prev, pTV2));
+      setMoreLists(prev => ({
+        action: dedupe(prev.action || [], act),
+        comedy: dedupe(prev.comedy || [], com),
+        horror: dedupe(prev.horror || [], hor),
+        scifi: dedupe(prev.scifi || [], sci),
+      }));
+      setLoadMoreCount(c => c + 1);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, loadMoreCount, fetchDeep]);
 
   const heroItem = activeTab === 'trending' && trendingMovies.length > 0
     ? trendingMovies[0]
@@ -517,6 +559,8 @@ function MuraStreamHomeContent() {
                 <MediaRow title="Trending TV Shows" items={trendingTV} loading={loading} viewAllHref="/murastream?tab=tv" />
                 <MediaRow title="Popular Movies" items={popularMovies} loading={loading} viewAllHref="/murastream?tab=movies" />
                 <MediaRow title="K-Dramas Everyone's Watching" items={dramaLists.kdrama || []} loading={loading} viewAllHref="/murastream/kdrama" />
+                <MediaRow title="In Theaters Now" items={extraLists.nowPlaying || []} loading={loading} viewAllHref="/murastream/genres?type=movie" />
+                <MediaRow title="Coming Soon" items={extraLists.upcoming || []} loading={loading} viewAllHref="/murastream/genres?type=movie" />
                 <MediaRow title="Cartoons & Animation" icon={Baby} items={[...(extraLists.cartoonMovies || []), ...(extraLists.cartoonTV || [])].slice(0, 20)} loading={loading} viewAllHref="/murastream/genres?type=movie&genre=16" />
                 <MediaRow title="Famous TV Shows" icon={Flame} items={extraLists.famousTV || []} loading={loading} viewAllHref="/murastream/genres?type=tv" />
               </>
@@ -525,7 +569,18 @@ function MuraStreamHomeContent() {
               <>
                 <MediaRow title="Popular Movies" items={popularMovies} loading={loading} />
                 <MediaRow title="Trending Movies" items={trendingMovies} loading={loading} />
+                <MediaRow title="Top Rated of All Time" items={extraLists.topMovies || []} loading={loading} />
+                <MediaRow title="In Theaters Now" items={extraLists.nowPlaying || []} loading={loading} />
+                <MediaRow title="Coming Soon" items={extraLists.upcoming || []} loading={loading} />
                 <MediaRow title="Cartoon Movies" icon={Baby} items={extraLists.cartoonMovies || []} loading={loading} viewAllHref="/murastream/genres?type=movie&genre=16" />
+                {(moreLists.action?.length || moreLists.comedy?.length || moreLists.horror?.length || moreLists.scifi?.length) ? (
+                  <>
+                    <MediaRow title="Action" items={moreLists.action || []} loading={loadingMore} />
+                    <MediaRow title="Comedy" items={moreLists.comedy || []} loading={loadingMore} />
+                    <MediaRow title="Horror" items={moreLists.horror || []} loading={loadingMore} />
+                    <MediaRow title="Sci-Fi" items={moreLists.scifi || []} loading={loadingMore} />
+                  </>
+                ) : null}
               </>
             )}
             {activeTab === 'tv' && (
@@ -576,6 +631,27 @@ function MuraStreamHomeContent() {
                 </div>
               </>
             )}
+
+        {/* Load More — deeper pages of popular + fresh genre rows */}
+        <div style={{ textAlign: 'center', padding: '8px 0 28px' }}>
+          <button
+            onClick={loadMore}
+            disabled={loadingMore}
+            style={{
+              background: 'rgba(229,9,20,0.12)',
+              border: '1px solid rgba(229,9,20,0.35)',
+              color: '#E50914',
+              padding: '12px 40px',
+              borderRadius: '12px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+              fontSize: '13px', fontWeight: 700,
+              cursor: loadingMore ? 'wait' : 'pointer',
+              opacity: loadingMore ? 0.6 : 1,
+            }}
+          >
+            {loadingMore ? 'Loading more…' : 'Load More Movies & Shows'}
+          </button>
+        </div>
 
         {/* Footer */}
         <div style={{

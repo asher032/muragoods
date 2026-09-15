@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import SiteFlag from '@/app/lib/models/SiteFlag';
+import { requireAdmin } from '@/app/lib/session';
 
 // Site flags API — the admin-only content lock.
 //  GET   /api/admin/site-flags                  → { contentLocked, lockedAt, ... }
-//  PATCH /api/admin/site-flags { contentLocked } → flips the lock (admin only)
+//  PATCH /api/admin/site-flags { contentLocked } → flips the lock (admin session only)
+//
+// GET stays public: the gate on MuraStream/hub pages must be readable by
+// every visitor (that's the point of a lock). PATCH mutates — admin session.
 
 export async function GET() {
   try {
@@ -18,23 +22,19 @@ export async function GET() {
         lockedMessage: doc?.lockedMessage ?? '',
       },
     });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to load flags';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  } catch {
+    console.error('[site-flags GET] failed');
+    return NextResponse.json({ success: false, error: 'Failed to load flags' }, { status: 500 });
   }
 }
 
 export async function PATCH(req: Request) {
   try {
+    const auth = await requireAdmin(req);
+    if (auth.response) return auth.response;
+
     await dbConnect();
     const body = await req.json().catch(() => ({}));
-    const requester: string = typeof body.email === 'string' ? body.email.toLowerCase() : '';
-    const admins: string[] = (process.env.ADMIN_EMAILS || 'mhaxthedog@gmail.com,muragoods0@gmail.com')
-      .split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
-    if (!requester || !admins.includes(requester)) {
-      return NextResponse.json({ success: false, error: 'Admins only' }, { status: 403 });
-    }
-
     const contentLocked = !!body.contentLocked;
     const lockedMessage: string = typeof body.lockedMessage === 'string'
       ? body.lockedMessage.slice(0, 200)
@@ -45,8 +45,8 @@ export async function PATCH(req: Request) {
       { upsert: true, new: true },
     );
     return NextResponse.json({ success: true, data: { contentLocked, lockedMessage } });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to update flags';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  } catch {
+    console.error('[site-flags PATCH] failed');
+    return NextResponse.json({ success: false, error: 'Failed to update flags' }, { status: 500 });
   }
 }

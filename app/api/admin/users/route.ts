@@ -2,10 +2,14 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import User from '@/app/lib/models/User';
 import Order from '@/app/lib/models/Order';
+import { requireAdmin } from '@/app/lib/session';
 
-// GET — List all users with stats
+// GET — List all users with stats (admin session required)
 export async function GET(req: Request) {
   try {
+    const auth = await requireAdmin(req);
+    if (auth.response) return auth.response;
+
     await dbConnect();
     const url = new URL(req.url);
     const email = url.searchParams.get('email');

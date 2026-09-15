@@ -98,11 +98,8 @@ export function useCoins() {
     let cancelled = false;
     const sync = async () => {
       try {
-        const raw = localStorage.getItem('user');
-        if (!raw) return;
-        const email = (JSON.parse(raw) as { email?: string }).email;
-        if (!email) return;
-        const res = await fetch(`/api/account/profile?email=${encodeURIComponent(email)}`);
+        // Identity comes from the session cookie server-side now.
+        const res = await fetch('/api/account/profile');
         if (!res.ok) return;
         const data = await res.json();
         const serverBalance = typeof data?.data?.coinBalance === 'number' ? data.data.coinBalance : null;

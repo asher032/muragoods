@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { sendVerificationEmail } from '@/lib/email';
 import { hashPassword } from '@/app/lib/password';
 import { rateLimit, clientIp } from '@/app/lib/rate-limit';
+import { setSessionCookie } from '@/app/lib/session';
 
 export async function POST(req: Request) {
   // Rate limit: 4 signups per IP per hour, plus a burst guard of 5 per 10 min.
@@ -82,7 +83,7 @@ export async function POST(req: Request) {
       console.error('[Signup] Email send failed:', e);
     }
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       data: {
         name: user.name,
@@ -95,6 +96,7 @@ export async function POST(req: Request) {
         emailSent,
       },
     }, { status: 201 });
+    return setSessionCookie(res, user.email);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'An error occurred';
     return NextResponse.json({ success: false, error: message }, { status: 400 });

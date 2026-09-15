@@ -20,13 +20,18 @@ function SearchContent() {
   const searchParams = useSearchParams();
 
   const urlQuery = searchParams.get('q') || '';
-  const urlType = (searchParams.get('type') === 'kdrama' ? 'kdrama' : 'all') as 'all' | 'kdrama';
+  const urlType = (['movie', 'tv', 'kdrama'].includes(searchParams.get('type') || '')
+    ? searchParams.get('type')
+    : 'all') as 'all' | 'movie' | 'tv' | 'kdrama';
 
   // Local input state follows the URL; typing writes back to the URL debounced.
   const [input, setInput] = useState(urlQuery);
   const [results, setResults] = useState<MediaItem[]>([]);
   const [searchState, setSearchState] = useState<SearchState>(urlQuery.trim() ? 'loading' : 'idle');
   const [errorMessage, setErrorMessage] = useState('');
+  // Live suggestions while typing (poster thumbnails, year, type).
+  const [suggestions, setSuggestions] = useState<MediaItem[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -57,6 +62,8 @@ function SearchContent() {
         const data = await res.json();
         let items: MediaItem[] = data.results || [];
         if (urlType === 'kdrama') items = items.filter(r => r.originalLanguage === 'ko');
+        else if (urlType === 'movie') items = items.filter(r => r.mediaType === 'movie');
+        else if (urlType === 'tv') items = items.filter(r => r.mediaType === 'tv');
         if (controller.signal.aborted) return;
         setResults(items);
         setSearchState(items.length > 0 ? 'success' : 'no-results');
@@ -72,6 +79,31 @@ function SearchContent() {
     return () => controller.abort();
   }, [urlQuery, urlType]);
 
+  // Live suggestions: separate, faster debounce — only while the input
+  // differs from the committed query.
+  useEffect(() => {
+    const q = input.trim();
+    if (q.length < 2 || q === urlQuery.trim()) {
+      setSuggestions([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/murastream/tmdb?action=search&q=${encodeURIComponent(q)}`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!controller.signal.aborted) setSuggestions((data.results || []).slice(0, 8));
+      } catch { /* suggestions are best-effort */ }
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [input, urlQuery]);
+
   // Debounced URL sync while typing (keeps the input responsive).
   const onInput = (value: string) => {
     setInput(value);
@@ -80,17 +112,16 @@ function SearchContent() {
       const q = value.trim();
       const sp = new URLSearchParams();
       if (q) sp.set('q', q);
-      if (urlType === 'kdrama') sp.set('type', 'kdrama');
+      if (urlType !== 'all') sp.set('type', urlType);
       router.replace(`/murastream/search?${sp.toString()}`, { scroll: false });
     }, 350);
   };
 
-  const setType = (t: 'all' | 'kdrama') => {
-    const q = urlQuery.trim();
-    const sp = new URLSearchParams();
-    if (q) sp.set('q', q);
-    if (t === 'kdrama') sp.set('type', 'kdrama');
-    router.replace(`/murastream/search?${sp.toString()}`, { scroll: false });
+  const setType = (t: 'all' | 'movie' | 'tv' | 'kdrama') => {
+    const q = urlQuery.trim();    const sp = new URLSearchParams();
+      if (q) sp.set('q', q);
+      if (t !== 'all') sp.set('type', t);
+      router.replace(`/murastream/search?${sp.toString()}`, { scroll: false });
   };
 
   const clear = () => {
@@ -116,7 +147,8 @@ function SearchContent() {
           placeholder="Search movies & TV shows..."
           value={input}
           onChange={e => onInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { if (pushTimerRef.current) clearTimeout(pushTimerRef.current); onInput(input); } }}
+          onKeyDown={e => { if (e.key === 'Enter') { if (pushTimerRef.current) clearTimeout(pushTimerRef.current); setShowSuggestions(false); onInput(input); } }}
+          autoComplete="off"
           autoFocus
           style={{
             width: '100%', padding: '14px 44px 14px 44px',
@@ -125,8 +157,8 @@ function SearchContent() {
             fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', outline: 'none',
             transition: 'border-color 0.2s, background 0.2s',
           }}
-          onFocus={e => { e.currentTarget.style.borderColor = 'rgba(229,9,20,0.4)'; e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; }}
-          onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+          onFocus={e => { e.currentTarget.style.borderColor = 'rgba(229,9,20,0.4)'; e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; setShowSuggestions(true); }}
+          onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; setTimeout(() => setShowSuggestions(false), 150); }}
         />
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="var(--ms-text-ghost)"
           style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }}
@@ -142,11 +174,44 @@ function SearchContent() {
               alignItems: 'center', justifyContent: 'center', color: 'var(--ms-text-dim)', fontSize: '14px',
             }}><X className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></button>
         )}
+
+        {/* Suggestions dropdown — posters, year, media type; tap to jump straight to the title */}
+        {showSuggestions && suggestions.length > 0 && (
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 50,
+            background: 'rgba(20,20,24,0.97)', border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '12px', overflow: 'hidden', boxShadow: '0 16px 48px rgba(0,0,0,0.6)',
+            backdropFilter: 'blur(12px)',
+          }}>
+            {suggestions.map(s => (
+              <button key={`${s.mediaType}-${s.id}`} onClick={() => router.push(`/murastream/${s.mediaType}/${s.id}`)}
+                onMouseDown={e => e.preventDefault()}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
+                  padding: '8px 12px', background: 'transparent', border: 'none',
+                  borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer', textAlign: 'left',
+                }}>
+                <div style={{ width: '34px', height: '50px', borderRadius: '6px', overflow: 'hidden', background: 'rgba(255,255,255,0.06)', flexShrink: 0 }}>
+                  {s.posterPath ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={s.posterPath} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : null}
+                </div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ms-text-strong)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.title}</p>
+                  <p style={{ fontSize: '11px', color: 'var(--ms-text-ghost)', margin: 0 }}>
+                    {s.year || '—'} · {s.mediaType === 'tv' ? 'TV Series' : 'Movie'}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Type filter */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-        {(['all', 'kdrama'] as const).map(t => (
+        {(['all', 'movie', 'tv', 'kdrama'] as const).map(t => (
           <button key={t} onClick={() => setType(t)}
             style={{
               padding: '8px 16px', borderRadius: '8px',
@@ -156,7 +221,7 @@ function SearchContent() {
               fontFamily: '-apple-system, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
               transition: 'all 0.2s',
             }}>
-            {t === 'all' ? 'All' : 'K-Drama'}
+            {t === 'all' ? 'All' : t === 'movie' ? 'Movies' : t === 'tv' ? 'TV Series' : 'K-Drama'}
           </button>
         ))}
       </div>
@@ -172,7 +237,7 @@ function SearchContent() {
           <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
             Search is temporarily unavailable
           </p>
-          <button onClick={() => router.replace(`/murastream/search?q=${encodeURIComponent(urlQuery)}${urlType === 'kdrama' ? '&type=kdrama' : ''}`)}
+          <button onClick={() => router.replace(`/murastream/search?q=${encodeURIComponent(urlQuery)}${urlType !== 'all' ? `&type=${urlType}` : ''}`)}
             style={{
               padding: '10px 20px', borderRadius: '8px', border: '1px solid rgba(229,9,20,0.3)',
               background: 'rgba(229,9,20,0.1)', color: '#E50914',

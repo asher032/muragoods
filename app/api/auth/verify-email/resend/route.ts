@@ -3,13 +3,20 @@ import dbConnect from '@/app/lib/mongodb';
 import User from '@/app/lib/models/User';
 import crypto from 'crypto';
 import { sendVerificationEmail } from '@/lib/email';
+import { rateLimit, clientIp } from '@/app/lib/rate-limit';
 
 export async function POST(req: Request) {
   try {
+    // Verification emails cost money and can spam people — 3 per 15 min.
+    const rl = rateLimit(`resend:${clientIp(req)}`, 3, 15 * 60_000);
+    if (!rl.ok) {
+      return NextResponse.json({ success: false, error: 'Too many requests — wait a bit.' }, { status: 429 });
+    }
+
     await dbConnect();
     const { email } = (await req.json()) as { email: string };
 
-    if (!email) {
+    if (!email || typeof email !== 'string') {
       return NextResponse.json({ success: false, error: 'Email is required' }, { status: 400 });
     }
 

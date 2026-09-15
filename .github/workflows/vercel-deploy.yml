@@ -10,6 +10,9 @@ on:
 # automatically, so this workflow is a fallback for explicit CLI deploys.
 # It only runs when a VERCEL_TOKEN repo secret is configured; without one it
 # skips instead of failing every push.
+permissions:
+  contents: read
+
 jobs:
   deploy:
     # This job targets the GitHub environment "production". When that
@@ -24,7 +27,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          persist-credentials: false
 
       - name: Check for Vercel token
         id: token

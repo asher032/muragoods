@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import User from '@/app/lib/models/User';
+import { requireAdmin } from '@/app/lib/session';
+import { rateLimit, clientIp } from '@/app/lib/rate-limit';
 
-// GET — Fetch a user's coin balance
+// GET — Fetch a user's coin balance (admin session required)
 export async function GET(req: Request) {
   try {
+    const auth = await requireAdmin(req);
+    if (auth.response) return auth.response;
+
     await dbConnect();
     const { searchParams } = new URL(req.url);
     const email = searchParams.get('email');
@@ -25,15 +30,27 @@ export async function GET(req: Request) {
   }
 }
 
-// PATCH — Add or deduct coins from a user
+// PATCH — Add or deduct coins from a user (admin session required)
 export async function PATCH(req: Request) {
   try {
+    const auth = await requireAdmin(req);
+    if (auth.response) return auth.response;
+    const rl = rateLimit(`coins:${auth.user.email}:${clientIp(req)}`, 30, 60_000);
+    if (!rl.ok) return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
+
     await dbConnect();
     const body = await req.json();
     const { email, action, amount, reason } = body;
 
     if (!email || !action || !amount || amount <= 0) {
       return NextResponse.json({ success: false, error: 'Missing required fields (email, action, amount)' }, { status: 400 });
+    }
+    // Strict input bounds — amount must be a sane positive integer.
+    if (!Number.isInteger(amount) || amount > 1_000_000) {
+      return NextResponse.json({ success: false, error: 'Amount must be a positive integer' }, { status: 400 });
+    }
+    if (typeof reason === 'string' && reason.length > 200) {
+      return NextResponse.json({ success: false, error: 'Reason too long' }, { status: 400 });
     }
 
     if (!['add', 'deduct'].includes(action)) {

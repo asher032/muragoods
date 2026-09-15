@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Lock, LockOpen } from 'lucide-react';
 
-export default function LockPanel({ adminEmail }: { adminEmail: string }) {
+export default function LockPanel() {
   const [locked, setLocked] = useState(false);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -15,7 +15,7 @@ export default function LockPanel({ adminEmail }: { adminEmail: string }) {
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
-    setLoading(true);
+    // loading starts true; avoid a sync setState inside the effect.
     try {
       const res = await fetch('/api/admin/site-flags', { cache: 'no-store' });
       const data = await res.json();
@@ -39,7 +39,7 @@ export default function LockPanel({ adminEmail }: { adminEmail: string }) {
       const res = await fetch('/api/admin/site-flags', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: adminEmail, contentLocked: !locked }),
+        body: JSON.stringify({ contentLocked: !locked }),
       });
       const data = await res.json();
       if (data?.success) {
@@ -52,7 +52,7 @@ export default function LockPanel({ adminEmail }: { adminEmail: string }) {
     } finally {
       setSaving(false);
     }
-  }, [adminEmail, locked]);
+  }, [locked]);
 
   return (
     <div className="border-2 border-[var(--gold)] bg-[var(--charcoal)] p-6 rounded-2xl mt-8">

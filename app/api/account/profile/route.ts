@@ -1,22 +1,24 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import User from '@/app/lib/models/User';
+import { getSessionUser } from '@/app/lib/session';
+import { rateLimit } from '@/app/lib/rate-limit';
 
-// Account profile API — lets the signed-in user view and update their own
-// display name and avatar. Email is the identity key (matches AuthContext's
-// localStorage user object).
+// Account profile API — identity comes exclusively from the signed session
+// cookie. The ?email= parameter is gone: it allowed any visitor to read or
+// overwrite any other user's profile (IDOR).
 
 const MAX_AVATAR_CHARS = 900_000; // ~650KB image as data URL
 
 export async function GET(req: Request) {
   try {
-    await dbConnect();
-    const { searchParams } = new URL(req.url);
-    const email = searchParams.get('email');
-    if (!email) {
-      return NextResponse.json({ success: false, error: 'email is required' }, { status: 400 });
+    const viewer = await getSessionUser(req);
+    if (!viewer) {
+      return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });
     }
-    const user = await User.findOne({ email }).select('name email userId avatar createdAt coinBalance perks');
+
+    await dbConnect();
+    const user = await User.findOne({ email: viewer.email }).select('name email userId avatar createdAt coinBalance perks bio preferences');
     if (!user) return NextResponse.json({ success: true, data: null });
     return NextResponse.json({
       success: true,
@@ -25,25 +27,30 @@ export async function GET(req: Request) {
         email: user.email,
         userId: user.userId,
         avatar: user.avatar || '',
+        bio: (user as { bio?: string }).bio || '',
+        preferences: (user as { preferences?: Record<string, unknown> }).preferences || {},
         createdAt: user.createdAt,
         coinBalance: user.coinBalance || 0,
         perks: user.perks || [],
       },
     });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'An error occurred';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  } catch {
+    console.error('[account/profile GET] failed');
+    return NextResponse.json({ success: false, error: 'Could not load profile' }, { status: 500 });
   }
 }
 
 export async function PATCH(req: Request) {
   try {
+    const viewer = await getSessionUser(req);
+    if (!viewer) {
+      return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });
+    }
+    const rl = rateLimit(`profile:${viewer.email}`, 20, 60_000);
+    if (!rl.ok) return NextResponse.json({ success: false, error: 'Too many updates — slow down' }, { status: 429 });
+
     await dbConnect();
     const body = await req.json().catch(() => ({}));
-    const email: string = typeof body.email === 'string' ? body.email.trim() : '';
-    if (!email) {
-      return NextResponse.json({ success: false, error: 'email is required' }, { status: 400 });
-    }
 
     const update: Record<string, unknown> = {};
 
@@ -53,6 +60,14 @@ export async function PATCH(req: Request) {
         return NextResponse.json({ success: false, error: 'Name must be 2–40 characters' }, { status: 400 });
       }
       update.name = name;
+    }
+
+    if (body.bio !== undefined) {
+      const bio = String(body.bio).trim();
+      if (bio.length > 200) {
+        return NextResponse.json({ success: false, error: 'Bio must be under 200 characters' }, { status: 400 });
+      }
+      update.bio = bio;
     }
 
     if (body.avatar !== undefined) {
@@ -66,13 +81,38 @@ export async function PATCH(req: Request) {
       update.avatar = avatar;
     }
 
+    // Structured preferences (theme, language, notifications, autoplay,
+    // visibility toggles). Only known keys are accepted, values validated.
+    if (body.preferences !== undefined) {
+      const prefsIn = (body.preferences || {}) as Record<string, unknown>;
+      const prefs: Record<string, unknown> = {};
+      const boolKeys = ['notifications', 'autoplay', 'profilePublic', 'activityPublic', 'watchlistPublic'];
+      for (const k of boolKeys) {
+        if (prefsIn[k] !== undefined) prefs[k] = Boolean(prefsIn[k]);
+      }
+      if (prefsIn.theme !== undefined) {
+        if (!['dark', 'light', 'system'].includes(String(prefsIn.theme))) {
+          return NextResponse.json({ success: false, error: 'Invalid theme' }, { status: 400 });
+        }
+        prefs.theme = String(prefsIn.theme);
+      }
+      if (prefsIn.language !== undefined) {
+        const lang = String(prefsIn.language);
+        if (!/^[a-z-]{2,10}$/i.test(lang)) {
+          return NextResponse.json({ success: false, error: 'Invalid language code' }, { status: 400 });
+        }
+        prefs.language = lang;
+      }
+      if (Object.keys(prefs).length > 0) update.preferences = prefs;
+    }
+
     if (Object.keys(update).length === 0) {
       return NextResponse.json({ success: false, error: 'Nothing to update' }, { status: 400 });
     }
 
-    const user = await User.findOneAndUpdate({ email }, update, {
+    const user = await User.findOneAndUpdate({ email: viewer.email }, update, {
       new: true,
-      select: 'name email userId avatar createdAt coinBalance',
+      select: 'name email userId avatar bio preferences createdAt coinBalance',
     });
     if (!user) {
       return NextResponse.json({ success: false, error: 'Account not found' }, { status: 404 });
@@ -84,12 +124,14 @@ export async function PATCH(req: Request) {
         email: user.email,
         userId: user.userId,
         avatar: user.avatar || '',
+        bio: (user as { bio?: string }).bio || '',
+        preferences: (user as { preferences?: Record<string, unknown> }).preferences || {},
         createdAt: user.createdAt,
         coinBalance: user.coinBalance || 0,
       },
     });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'An error occurred';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  } catch {
+    console.error('[account/profile PATCH] failed');
+    return NextResponse.json({ success: false, error: 'Could not update profile' }, { status: 500 });
   }
 }
