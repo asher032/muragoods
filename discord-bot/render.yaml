@@ -1,0 +1,35 @@
+services:
+  - type: worker
+    name: murastream-bot
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m bot.main
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false          # set in the Render dashboard (secret)
+      - key: DISCORD_CLIENT_ID
+        value: "1549395794853888020"
+      - key: DISCORD_PUBLIC_KEY
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: MURASTREAM_URL
+        value: "https://muragoods.vercel.app"
+      - key: TMDB_API_KEY
+        sync: false          # optional; the site proxy works without it
+      - key: DATABASE_URL
+        sync: false          # MongoDB URI (same cluster as the site)
+      - key: MONGO_URI
+        sync: false
+      - key: DISCORD_BRIDGE_SECRET
+        sync: false
+      - key: BOT_ACTIVITY
+        value: "MuraStream • /help"
+      - key: BOT_STATUS
+        value: "online"
+      - key: BOT_ADMIN_IDS
+        sync: false
