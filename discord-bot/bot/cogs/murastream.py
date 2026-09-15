@@ -56,7 +56,7 @@ class MediaCommands(commands.Cog):
             "`/8ball` `/coinflip` `/roll` `/poll` `/choose` `/avatar`\n"
             "`/userinfo` `/serverinfo`"), inline=False)
         e.add_field(name="🎟️ Tickets", value="`/ticket` — open a support ticket", inline=False)
-        e.add_field(name="ℹ️ Utility", value="`/status` `/ping` — health & latency", inline=False)
+        e.add_field(name="ℹ️ Utility", value="`/status` `/ping` `/dashboard` — health & web dashboard", inline=False)
         view = discord.ui.View()
         view.add_item(discord.ui.Button(label="🎬 Open MuraStream", url=bridge.home_url(), emoji="▶️"))
         view.add_item(discord.ui.Button(label="📜 Terms", url=f"{config.MURASTREAM_URL}/terms", emoji="📄"))
@@ -89,15 +89,18 @@ class MediaCommands(commands.Cog):
             bridge_status, bridge_status)
         lines.append(f"{icon} **Site bridge** — {label}")
 
-        ffmpeg_ok = True
+        ffmpeg_ok = False
         try:
+            import music as music_mod2
             import asyncio as _aio
-            proc = await _aio.create_subprocess_exec("ffmpeg", "-version",
-                                                     stdout=_aio.DEVNULL, stderr=_aio.DEVNULL)
-            await proc.wait()
+            proc = await _aio.create_subprocess_exec(
+                music_mod2.FFMPEG_EXE, "-version",
+                stdout=_aio.DEVNULL, stderr=_aio.DEVNULL)
+            await asyncio.wait_for(proc.wait(), timeout=5)
+            ffmpeg_ok = proc.returncode == 0
         except Exception:
             ffmpeg_ok = False
-        lines.append(f"{'🟢' if ffmpeg_ok else '🔴'} **Music** — {'ready' if ffmpeg_ok else 'FFmpeg missing'}")
+        lines.append(f"{'🟢' if ffmpeg_ok else '🔴'} **Music** — {'ready' if ffmpeg_ok else 'FFmpeg unavailable'}")
 
         e = embeds.embed("🩺 MuraBot Status", "\n".join(lines), embeds.OK if ffmpeg_ok else embeds.WARN)
         e.add_field(name="🏠 Servers", value=str(len(self.bot.guilds)), inline=True)
@@ -106,9 +109,31 @@ class MediaCommands(commands.Cog):
 
     @app_commands.command(name="ping", description="Bot latency.")
     async def ping(self, interaction: discord.Interaction):
-        latency = round(self.bot.latency * 1000)
+        latency = self.bot.latency or 0
+        # Gateway latency can be NaN during (re)connect — never crash on it.
+        ms = int(latency * 1000) if latency == latency else 0  # NaN check
         await interaction.response.send_message(
-            embed=embeds.embed("🏓 Pong!", f"Latency: **{latency} ms**", embeds.INFO))
+            embed=embeds.embed("🏓 Pong!", f"Latency: **{ms} ms**", embeds.INFO))
+
+    @app_commands.command(name="dashboard", description="Open the MuraBot web dashboard.")
+    async def dashboard(self, interaction: discord.Interaction):
+        e = embeds.embed(
+            "🌐 MuraBot Dashboard",
+            "Configure the bot for **your** server — no code, no IDs to guess:\n\n"
+            "• Toggle modules (music, moderation, leveling…)\n"
+            "• Set DJ role, music channel & control mode\n"
+            "• AutoMod thresholds & log channels\n"
+            "• Welcome messages with variables\n\n"
+            "Sign in with Discord — only servers where you have **Manage Server** appear.",
+            embeds.GOLD)
+        view = discord.ui.View()
+        view.add_item(discord.ui.Button(
+            label="🌐 OPEN DASHBOARD", url=f"{config.MURASTREAM_URL}/dashboard", emoji="⚙️"))
+        view.add_item(discord.ui.Button(
+            label="➕ Invite MuraBot",
+            url=f"https://discord.com/oauth2/authorize?client_id={config.DISCORD_CLIENT_ID}&permissions=154624&scope=bot%20applications.commands",
+            emoji="➕"))
+        await interaction.response.send_message(embed=e, view=view)
 
     @app_commands.command(name="search", description="Search movies and TV shows.")
     @app_commands.describe(query="Title to search for")

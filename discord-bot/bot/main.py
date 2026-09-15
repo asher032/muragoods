@@ -38,9 +38,10 @@ class MuraBot(commands.Bot):
             intents.message_content = True   # automod + XP from messages
             intents.members = True           # welcome events
         super().__init__(
-            command_prefix=commands.when_mentioned,  # prefix unused; slash only
+            command_prefix=commands.when_mentioned_or("mg!", "MuraBot "),
             intents=intents,
             help_command=None,
+            case_insensitive=True,
             allowed_mentions=discord.AllowedMentions(everyone=False, roles=False, replied_user=False),
         )
         self.initial_cogs = [
@@ -52,6 +53,7 @@ class MuraBot(commands.Bot):
             "cogs.fun",
             "cogs.leveling",
             "cogs.tickets",
+            "cogs.prefix",
         ]
 
     async def setup_hook(self) -> None:
@@ -79,14 +81,24 @@ class MuraBot(commands.Bot):
 
     async def on_ready(self) -> None:
         http_mod.set_status("discord", "online")
-        activity = discord.Activity(type=discord.ActivityType.watching, name=config.BOT_ACTIVITY)
-        status = {
-            "online": discord.Status.online,
-            "idle": discord.Status.idle,
-            "dnd": discord.Status.do_not_disturb,
-            "invisible": discord.Status.invisible,
-        }.get(config.BOT_STATUS.lower(), discord.Status.online)
-        await self.change_presence(activity=activity, status=status)
+        # Rich Presence: "Watching movies at https://muragoods.vercel.app/"
+        # Streaming-type presence shows a purple Play button-style presence;
+        # Watching reads naturally for a media bot. URL is public site only.
+        activity = discord.Streaming(
+            name="movies at https://muragoods.vercel.app/",
+            url="https://twitch.tv/discord",  # required for STREAMING type
+        )
+        # Fall back to a plain Watching presence if streaming URL rejected.
+        try:
+            await self.change_presence(
+                activity=activity,
+                status={"online": discord.Status.online, "idle": discord.Status.idle,
+                        "dnd": discord.Status.do_not_disturb}.get(
+                            config.BOT_STATUS.lower(), discord.Status.online))
+        except discord.HTTPException:
+            await self.change_presence(
+                activity=discord.Activity(type=discord.ActivityType.watching,
+                                          name="movies at https://muragoods.vercel.app/"))
         log.info("Logged in as %s (%s) - %d guilds", self.user, getattr(self.user, "id", "?"), len(self.guilds))
 
     async def on_guild_join(self, guild: discord.Guild) -> None:

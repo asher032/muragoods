@@ -154,11 +154,16 @@ async def top_requests(guild_id: int, limit: int = 10) -> list[dict]:
 
 # ── Cooldowns (Mongo-persisted, TTL index auto-cleans) ───────────────────
 async def check_cooldown(key: str, seconds: int) -> int:
-    """Returns remaining seconds if on cooldown, else 0 and starts the cooldown."""
+    """Returns remaining seconds if on cooldown, else 0 and starts the cooldown.
+    Mongo returns datetimes as naive-UTC — always normalize before comparing."""
     now = _now()
     doc = await _db.command_cooldowns.find_one({"key": key})
-    if doc and doc["expiresAt"] > now:
-        return int((doc["expiresAt"] - now).total_seconds()) + 1
+    if doc:
+        exp = doc["expiresAt"]
+        if isinstance(exp, datetime) and exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if exp > now:
+            return int((exp - now).total_seconds()) + 1
     await _db.command_cooldowns.update_one(
         {"key": key}, {"$set": {"expiresAt": now + timedelta(seconds=seconds)}}, upsert=True
     )
