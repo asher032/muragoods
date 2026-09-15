@@ -28,6 +28,19 @@ class ModerationCog(commands.Cog):
         perms = interaction.user.guild_permissions
         return perms.manage_guild or perms.moderate_members or perms.ban_members or perms.kick_members
 
+    @staticmethod
+    def _member_guard(interaction: discord.Interaction, user) -> str | None:
+        """Validate a moderation target. Returns an error message or None.
+        Handles unresolvable members (discord.py passes a raw str) and
+        self-targets — these must never crash before the interaction acks."""
+        if isinstance(user, str) or not hasattr(user, "id"):
+            return "That user couldn't be resolved — try picking them from the mention autocomplete."
+        if user.id == interaction.user.id:
+            return "You can't moderate yourself."
+        if getattr(user, "bot", False):
+            return "Bots can't be moderated this way."
+        return None
+
     async def _log(self, guild: discord.Guild, embed: discord.Embed) -> None:
         cfg = await database.get_guild_config(guild.id)
         channel_id = (cfg.get("channels") or {}).get("logs")
@@ -47,8 +60,9 @@ class ModerationCog(commands.Cog):
         if not self._is_mod(interaction):
             await interaction.response.send_message("Moderators only.", ephemeral=True)
             return
-        if user.bot or user.id == interaction.user.id:
-            await interaction.response.send_message("Invalid target.", ephemeral=True)
+        err = self._member_guard(interaction, user)
+        if err:
+            await interaction.response.send_message(err, ephemeral=True)
             return
         count = await database.add_warning(interaction.guild.id, user.id, interaction.user.id, reason[:300])
         await database.log_action(interaction.guild.id, interaction.user.id, user.id, "warn", reason[:300])
@@ -68,6 +82,10 @@ class ModerationCog(commands.Cog):
 
     @app_commands.command(name="warnings", description="Show a member's warnings.")
     async def warnings(self, interaction: discord.Interaction, user: discord.Member):
+        if isinstance(user, str) or not hasattr(user, "id"):
+            await interaction.response.send_message(
+                "That user couldn't be resolved — try the mention autocomplete.", ephemeral=True)
+            return
         entries = await database.get_warnings(interaction.guild.id, user.id)
         if not entries:
             await interaction.response.send_message(f"{user.mention} has a clean record ✨")
@@ -81,6 +99,10 @@ class ModerationCog(commands.Cog):
         if not self._is_mod(interaction):
             await interaction.response.send_message("Moderators only.", ephemeral=True)
             return
+        if isinstance(user, str) or not hasattr(user, "id"):
+            await interaction.response.send_message(
+                "That user couldn't be resolved — try the mention autocomplete.", ephemeral=True)
+            return
         ok = await database.clear_warnings(interaction.guild.id, user.id)
         await interaction.response.send_message(
             embed=utils.base_embed("🧹 Warnings cleared" if ok else "ℹ️ Nothing to clear",
@@ -91,6 +113,10 @@ class ModerationCog(commands.Cog):
     async def kick(self, interaction: discord.Interaction, user: discord.Member, reason: str = "No reason given"):
         if not interaction.user.guild_permissions.kick_members:
             await interaction.response.send_message("You need Kick Members permission.", ephemeral=True)
+            return
+        err = self._member_guard(interaction, user)
+        if err:
+            await interaction.response.send_message(err, ephemeral=True)
             return
         if user.top_role >= interaction.guild.me.top_role:
             await interaction.response.send_message("I can't kick someone with a role at or above mine.", ephemeral=True)
@@ -107,6 +133,10 @@ class ModerationCog(commands.Cog):
     async def ban(self, interaction: discord.Interaction, user: discord.Member, reason: str = "No reason given"):
         if not interaction.user.guild_permissions.ban_members:
             await interaction.response.send_message("You need Ban Members permission.", ephemeral=True)
+            return
+        err = self._member_guard(interaction, user)
+        if err:
+            await interaction.response.send_message(err, ephemeral=True)
             return
         if user.top_role >= interaction.guild.me.top_role:
             await interaction.response.send_message("I can't ban someone with a role at or above mine.", ephemeral=True)
@@ -142,6 +172,10 @@ class ModerationCog(commands.Cog):
         if not interaction.user.guild_permissions.moderate_members:
             await interaction.response.send_message("You need Moderate Members permission.", ephemeral=True)
             return
+        err = self._member_guard(interaction, user)
+        if err:
+            await interaction.response.send_message(err, ephemeral=True)
+            return
         minutes = max(1, min(minutes, 40320))  # 28-day max
         try:
             await user.timeout(discord.utils.utcnow() + discord.timedelta(minutes=minutes),
@@ -158,6 +192,10 @@ class ModerationCog(commands.Cog):
         if not interaction.user.guild_permissions.moderate_members:
             await interaction.response.send_message("You need Moderate Members permission.", ephemeral=True)
             return
+        err = self._member_guard(interaction, user)
+        if err:
+            await interaction.response.send_message(err, ephemeral=True)
+            return
         try:
             await user.timeout(None, reason=f"By {interaction.user}")
         except discord.Forbidden:
@@ -172,7 +210,7 @@ class ModerationCog(commands.Cog):
         if not interaction.user.guild_permissions.manage_messages:
             await interaction.response.send_message("You need Manage Messages permission.", ephemeral=True)
             return
-        amount = max(1, min(amount, 100))
+        amount = max(1, min(int(amount or 0), 100))
         await interaction.response.defer(ephemeral=True)
         deleted = await interaction.channel.purge(limit=amount)
         await interaction.followup.send(f"🧹 Deleted {len(deleted)} messages.", ephemeral=True)
@@ -210,6 +248,10 @@ class ModerationCog(commands.Cog):
                     channel_type: app_commands.Choice[str], channel: discord.TextChannel):
         if not interaction.user.guild_permissions.manage_guild:
             await interaction.response.send_message("You need Manage Server permission.", ephemeral=True)
+            return
+        if isinstance(channel, str) or not hasattr(channel, "id"):
+            await interaction.response.send_message(
+                "That channel couldn't be resolved — try the autocomplete.", ephemeral=True)
             return
         cfg = await database.get_guild_config(interaction.guild.id)
         channels = cfg.get("channels") or {}

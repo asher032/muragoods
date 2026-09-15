@@ -106,6 +106,38 @@ export default function HubPage() {
       <NavBar pageLabel="Menu" />
 
       <div style={{ maxWidth: '900px', margin: '0 auto', padding: '24px 16px 60px' }}>
+        {/* MuraBot Dashboard banner — discoverability for server owners */}
+        <Link href="/dashboard" style={{ textDecoration: 'none', display: 'block', marginBottom: '18px' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+            background: 'rgba(88,101,242,0.14)',
+            backdropFilter: 'blur(13px)',
+            WebkitBackdropFilter: 'blur(13px)',
+            border: '1px solid rgba(88,101,242,0.45)',
+            borderRadius: '20px',
+            padding: '14px 18px',
+            cursor: 'pointer',
+          }}>
+            <span style={{ fontSize: '26px' }}>🤖</span>
+            <span style={{ flex: 1 }}>
+              <span style={{ display: 'block', color: '#f5f5f7', fontWeight: 700, fontSize: '15px' }}>
+                MuraBot Dashboard
+              </span>
+              <span style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '12.5px' }}>
+                Configure the Discord bot for your server — music, moderation, welcome & more
+              </span>
+            </span>
+            <span style={{
+              padding: '8px 16px', background: '#5865F2', borderRadius: '10px',
+              color: '#fff', fontWeight: 700, fontSize: '13px', whiteSpace: 'nowrap',
+            }}>
+              Open →
+            </span>
+          </div>
+        </Link>
+
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
           {isLoggedIn && user && (

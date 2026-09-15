@@ -119,7 +119,8 @@ class FunCog(commands.Cog):
         e.add_field(name="Account created",
                     value=f"<t:{int(target.created_at.timestamp())}:R>", inline=True)
         if member and member.roles[1:]:
-            roles = " ".join(r.mention for r in reversed(member.roles[1:])[:15])
+            top_roles = list(reversed(member.roles[1:]))[:15]
+            roles = " ".join(r.mention for r in top_roles)
             e.add_field(name=f"Roles ({len(member.roles)-1})", value=roles[:1024], inline=False)
         await interaction.response.send_message(embed=e)
 
