@@ -1,7 +1,8 @@
-"""Bot entrypoint — loads cogs, syncs the command tree, resilient startup."""
+"""Bot entrypoint — loads cogs, syncs once, resilient startup, health endpoint."""
 
 import asyncio
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -13,6 +14,8 @@ from discord.ext import commands
 
 import config
 import database
+import embeds
+import net as http_mod
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,83 +29,92 @@ log = logging.getLogger("bot.main")
 _privileged_ok = True
 
 
-def build_bot() -> commands.Bot:
-    intents = discord.Intents.default()
-    if _privileged_ok:
-        intents.message_content = True   # automod scans messages
-        intents.members = True           # welcome events
-    bot = commands.Bot(
-        command_prefix=commands.when_mentioned,  # prefix unused; slash only
-        intents=intents,
-        help_command=None,
-        allowed_mentions=discord.AllowedMentions(everyone=False, roles=False, replied_user=False),
-    )
-    bot.initial_cogs = [
-        "cogs.murastream",
-        "cogs.watchtogether",
-        "cogs.music",
-        "cogs.moderation",
-        "cogs.muragoods",
-    ]
-    return bot
+class MuraBot(commands.Bot):
+    """All lifecycle handlers live on the class so a rebuilt instance keeps them."""
 
+    def __init__(self) -> None:
+        intents = discord.Intents.default()
+        if _privileged_ok:
+            intents.message_content = True   # automod + XP from messages
+            intents.members = True           # welcome events
+        super().__init__(
+            command_prefix=commands.when_mentioned,  # prefix unused; slash only
+            intents=intents,
+            help_command=None,
+            allowed_mentions=discord.AllowedMentions(everyone=False, roles=False, replied_user=False),
+        )
+        self.initial_cogs = [
+            "cogs.murastream",
+            "cogs.watchtogether",
+            "cogs.music",
+            "cogs.moderation",
+            "cogs.muragoods",
+            "cogs.fun",
+            "cogs.leveling",
+            "cogs.tickets",
+        ]
 
-bot = build_bot()
-
-
-@bot.event
-async def setup_hook() -> None:
-    await database.connect()
-    for cog in bot.initial_cogs:
+    async def setup_hook(self) -> None:
+        # Shared HTTP session must exist before any cog fetches data.
+        await http_mod.init()
         try:
-            await bot.load_extension(cog)
-            log.info("Loaded %s", cog)
-        except Exception:
-            log.exception("Failed to load %s", cog)
-    # Global slash sync (first propagation can take up to an hour).
-    synced = await bot.tree.sync()
-    log.info("Synced %d global slash commands", len(synced))
+            await database.connect()
+            http_mod.set_status("database", "online")
+        except Exception as exc:
+            log.error("Database unavailable at startup: %s", str(exc)[:200])
+            http_mod.set_status("database", "offline")
+        for cog in self.initial_cogs:
+            try:
+                await self.load_extension(cog)
+                log.info("Loaded %s", cog)
+            except Exception:
+                log.exception("Failed to load %s", cog)
+        # Sync ONCE per process start (global). Per-guild instant sync happens
+        # in on_guild_join. Re-syncing on every reconnect causes rate limits.
+        try:
+            synced = await self.tree.sync()
+            log.info("Successfully synced %d commands.", len(synced))
+        except discord.HTTPException as exc:
+            log.error("Command sync FAILED (will retry on next start): %s", str(exc)[:300])
+
+    async def on_ready(self) -> None:
+        http_mod.set_status("discord", "online")
+        activity = discord.Activity(type=discord.ActivityType.watching, name=config.BOT_ACTIVITY)
+        status = {
+            "online": discord.Status.online,
+            "idle": discord.Status.idle,
+            "dnd": discord.Status.do_not_disturb,
+            "invisible": discord.Status.invisible,
+        }.get(config.BOT_STATUS.lower(), discord.Status.online)
+        await self.change_presence(activity=activity, status=status)
+        log.info("Logged in as %s (%s) - %d guilds", self.user, getattr(self.user, "id", "?"), len(self.guilds))
+
+    async def on_guild_join(self, guild: discord.Guild) -> None:
+        try:
+            await self.tree.sync(guild=guild)
+            log.info("Guild-synced commands for %s", guild.id)
+        except discord.HTTPException:
+            log.warning("Guild sync failed for %s", guild.id)
 
 
-@bot.event
-async def on_ready() -> None:
-    activity = discord.Activity(type=discord.ActivityType.watching, name=config.BOT_ACTIVITY)
-    status = {
-        "online": discord.Status.online,
-        "idle": discord.Status.idle,
-        "dnd": discord.Status.do_not_disturb,
-        "invisible": discord.Status.invisible,
-    }.get(config.BOT_STATUS.lower(), discord.Status.online)
-    await bot.change_presence(activity=activity, status=status)
-    log.info(
-        "Logged in as %s (%s) - %d guilds - intents: %s",
-        bot.user, getattr(bot.user, "id", "?"), len(bot.guilds),
-        "full" if _privileged_ok else "reduced (no message-content/members)",
-    )
-
-
-@bot.event
-async def on_guild_join(guild: discord.Guild) -> None:
-    # Instant per-guild command availability on join.
-    try:
-        await bot.tree.sync(guild=guild)
-    except discord.HTTPException:
-        log.warning("Guild sync failed for %s", guild.id)
+bot = MuraBot()
 
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: Exception) -> None:
+    """Central error handler: user gets error ID, logs get the real exception."""
     if isinstance(error, discord.app_commands.CheckFailure):
         return
-    log.exception("Command error in %s", interaction.command)
-    msg = "Something went wrong running that command. The error has been logged."
-    if isinstance(error, discord.app_commands.CommandOnCooldown):
-        msg = f"Slow down — try again in {error.retry_after:.0f}s."
+    error_id = embeds.new_error_id()
+    command_name = interaction.command.qualified_name if interaction.command else "unknown"
+    log.error("[ERROR] command=/%s [ERROR_ID]=%s [EXCEPTION]=%r",
+              command_name, error_id, error)
     try:
+        e = embeds.err_embed(error_id)
         if interaction.response.is_done():
-            await interaction.followup.send(msg, ephemeral=True)
+            await interaction.followup.send(embed=e, ephemeral=True)
         else:
-            await interaction.response.send_message(msg, ephemeral=True)
+            await interaction.response.send_message(embed=e, ephemeral=True)
     except discord.HTTPException:
         pass
 
@@ -112,14 +124,15 @@ async def _health_server() -> None:
     from aiohttp import web
 
     async def health(_request: web.Request) -> web.Response:
-        ok = not bot.is_closed()
-        return web.json_response({"ok": ok, "guilds": len(bot.guilds)}, status=200 if ok else 503)
+        statuses = http_mod.get_status()
+        ok = not bot.is_closed() and statuses.get("discord") == "online"
+        return web.json_response({"ok": ok, "guilds": len(bot.guilds),
+                                  "subsystems": statuses},
+                                 status=200 if ok else 503)
 
     app = web.Application()
     app.router.add_get("/health", health)
-    # Render/other hosts set $PORT; default 8080 for local + Docker healthcheck.
-    import os
-    port = int(os.environ.get("PORT", "8080"))
+    port = int(os.environ.get("PORT") or 8080) or 8080  # PORT=0 → default
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)
@@ -129,47 +142,44 @@ async def _health_server() -> None:
         await asyncio.sleep(3600)
 
 
-async def run_bot() -> None:
-    """Start the bot; on privileged-intent rejection restart once with reduced intents."""
-    global bot, _privileged_ok
-    try:
-        await bot.start(config.DISCORD_TOKEN)
-    except discord.errors.PrivilegedIntentsRequired:
-        if not _privileged_ok:
-            raise
-        _privileged_ok = False
-        log.warning(
-            "Privileged intents are not enabled in the Developer Portal — "
-            "restarting WITHOUT them. Everything works except automod message "
-            "scanning and welcome messages. To enable: discord.com/developers/"
-            "applications -> your app -> Bot -> Privileged Gateway Intents."
-        )
-        await bot.close()
-        bot = build_bot()
-        await bot.start(config.DISCORD_TOKEN)
-
-
 async def main() -> None:
+    global bot, _privileged_ok
     problems = config.validate()
     if problems:
         for p in problems:
             log.error("CONFIG: %s", p)
         sys.exit(1)
     asyncio.create_task(_health_server())
-    # Exponential backoff reconnect loop — survives network drops.
+    # Exponential backoff reconnect loop — survives network drops and the
+    # privileged-intent fallback rebuild.
     delay = 5
     while True:
         try:
-            await run_bot()
+            await bot.start(config.DISCORD_TOKEN)
+            break  # clean shutdown
         except discord.LoginFailure:
             log.error("Discord rejected the token — check DISCORD_TOKEN.")
             sys.exit(1)
+        except discord.errors.PrivilegedIntentsRequired:
+            if _privileged_ok:
+                _privileged_ok = False
+                log.warning(
+                    "Privileged intents are not enabled in the Developer Portal — "
+                    "restarting WITHOUT them. Everything works except automod message "
+                    "scanning, XP-from-chat and welcome messages."
+                )
+                try:
+                    await bot.close()
+                except Exception:
+                    pass
+                bot = MuraBot()  # fresh instance, handlers intact (subclass)
+                delay = 5
+                continue
+            raise
         except (discord.HTTPException, asyncio.TimeoutError, OSError) as exc:
             log.warning("Connection lost (%s) — reconnecting in %ds", str(exc)[:200], delay)
             await asyncio.sleep(delay)
             delay = min(delay * 2, 300)
-        else:
-            delay = 5
 
 
 if __name__ == "__main__":
