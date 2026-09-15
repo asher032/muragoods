@@ -7,6 +7,7 @@ import discord
 
 import config
 import database
+from ui import SafeView  # re-export for cogs: utils.SafeView  # noqa: F401
 
 log = logging.getLogger("bot.utils")
 
@@ -60,15 +61,30 @@ def site_link_button(label: str, url: str, emoji: str | None = None) -> discord.
     return discord.ui.Button(label=label, url=url, emoji=emoji or "🔗")
 
 
+def on_cooldown(user_id: int, bucket: str, seconds: int | None = None) -> bool:
+    """Instant (no I/O) cooldown gate using in-memory buckets.
+    Called AFTER interaction.response.defer() so it can never cause a timeout."""
+    import time as _time
+    now = _time.monotonic()
+    key = (bucket, user_id)
+    last = _cooldowns.get(key)
+    if last is not None and now - last < (seconds or config.COMMAND_COOLDOWN_SECONDS):
+        return True
+    _cooldowns[key] = now
+    return False
+
+
+_cooldowns: dict[tuple[str, int], float] = {}
+
+
 async def cooldown_check(interaction: discord.Interaction, bucket: str, seconds: int | None = None) -> bool:
-    """Returns True if the user is allowed to proceed; False replies with remaining time."""
+    """DEPRECATED sync-style check kept for compatibility — non-blocking."""
     if interaction.user.id in config.BOT_ADMIN_IDS:
         return True
-    remaining = await database.check_cooldown(f"cmd:{bucket}:{interaction.user.id}", seconds or config.COMMAND_COOLDOWN_SECONDS)
-    if remaining:
+    if on_cooldown(interaction.user.id, bucket, seconds):
         try:
             await interaction.response.send_message(
-                embed=base_embed("⏳ Slow down", f"Try again in **{remaining}s**."),
+                embed=base_embed("⏳ Slow down", "Please try again in a few seconds."),
                 ephemeral=True,
             )
         except discord.HTTPException:

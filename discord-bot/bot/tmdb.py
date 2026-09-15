@@ -1,55 +1,52 @@
-"""TMDB metadata access — server-side key only (site proxy), TTL-cached, no secrets."""
+"""TMDB metadata via the site's server-side proxy — shared session, TTL cache."""
 
 import asyncio
 import logging
 import time
 from typing import Any
 
-import aiohttp
-
+import net as http
 import config
 
 log = logging.getLogger("bot.tmdb")
 
 _cache: dict[str, tuple[float, Any]] = {}
-_cache_lock = asyncio.Lock()
+_inflight: dict[str, asyncio.Future] = {}
+_lock = asyncio.Lock()
 CACHE_TTL = config.CACHE_TTL_SECONDS
-
-
-async def _fetch_json(url: str, params: dict[str, Any]) -> Any | None:
-    try:
-        timeout = aiohttp.ClientTimeout(total=config.HTTP_TIMEOUT)
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params, timeout=timeout) as resp:
-                if resp.status == 429:
-                    retry_after = float(resp.headers.get("Retry-After", "2"))
-                    log.warning("TMDB rate-limited, sleeping %.1fs", min(retry_after, 10))
-                    await asyncio.sleep(min(retry_after, 10))
-                    return None
-                if resp.status != 200:
-                    log.warning("TMDB request -> HTTP %d", resp.status)
-                    return None
-                return await resp.json()
-    except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
-        log.warning("TMDB request failed: %s", exc)
-        return None
 
 
 async def _get(params: dict[str, Any]) -> Any | None:
     key = repr(sorted(params.items()))
     now = time.monotonic()
-    async with _cache_lock:
+    async with _lock:
         hit = _cache.get(key)
         if hit and now - hit[0] < CACHE_TTL:
             return hit[1]
-
-    data = await _fetch_json(config.TMDB_PROXY, params)
-    if data is None:
+        fut = _inflight.get(key)
+        if fut is not None:
+            return await fut
+        fut = asyncio.get_running_loop().create_future()
+        _inflight[key] = fut
+    data: Any | None = None
+    try:
+        status, data = await http.get_json(config.TMDB_PROXY, params=params)
+        if status == 200 and data is not None:
+            async with _lock:
+                _cache[key] = (time.monotonic(), data)
+            http.set_status("movies", "online")
+            return data
+        if status == 0:
+            http.set_status("movies", "offline")
+        else:
+            http.set_status("movies", "degraded")
         return None
-
-    async with _cache_lock:
-        _cache[key] = (time.monotonic(), data)
-    return data
+    finally:
+        async with _lock:
+            _inflight.pop(key, None)
+            if not fut.done():
+                # Resolve waiters with whatever we got (None on failure).
+                fut.set_result(data)
 
 
 def _results(data: Any) -> list[dict[str, Any]]:
@@ -89,8 +86,7 @@ def _norm(item: dict[str, Any]) -> dict[str, Any]:
 
 async def search(query: str) -> list[dict[str, Any]]:
     data = await _get({"action": "search", "q": query})
-    items = _results(data)
-    return [_norm(i) for i in items if i.get("media_type") != "person"]
+    return [_norm(i) for i in _results(data) if i.get("media_type") != "person"]
 
 
 async def trending(media_type: str = "movie", window: str = "week") -> list[dict[str, Any]]:
@@ -113,11 +109,6 @@ async def upcoming() -> list[dict[str, Any]]:
     return [_norm(i) for i in _results(data)]
 
 
-async def now_playing() -> list[dict[str, Any]]:
-    data = await _get({"action": "now_playing", "type": "movie"})
-    return [_norm(i) for i in _results(data)]
-
-
 async def details(tmdb_id: int, media_type: str) -> dict[str, Any] | None:
     action = "movie_details" if media_type == "movie" else "tv_details"
     data = await _get({"action": action, "id": str(tmdb_id)})
@@ -127,14 +118,6 @@ async def details(tmdb_id: int, media_type: str) -> dict[str, Any] | None:
         items = data["results"]
         return _norm(items[0]) if items else None
     return _norm(data)
-
-
-async def tv_season(tmdb_id: int, season: int) -> list[dict[str, Any]]:
-    data = await _get({"action": "tv_season", "id": str(tmdb_id), "season": str(season)})
-    if isinstance(data, dict):
-        eps = data.get("episodes")
-        return eps if isinstance(eps, list) else []
-    return []
 
 
 async def recommendations(tmdb_id: int, media_type: str) -> list[dict[str, Any]]:

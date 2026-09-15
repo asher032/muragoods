@@ -6,6 +6,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "bot"))
 
+# The bot's local `http` module must win over Python's stdlib http package —
+# importing bot.main first establishes the correct module resolution.
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)-7s %(name)s: %(message)s")
 log = logging.getLogger("selfcheck")
 
@@ -14,6 +17,7 @@ failures: list[str] = []
 # 1. All modules import cleanly (catches syntax errors, missing deps).
 try:
     import config
+    import bot.net as http_mod
     import database
     import tmdb
     import bridge
@@ -37,7 +41,7 @@ else:
 
 # 3. Cogs import cleanly.
 import importlib
-for cog in ("cogs.murastream", "cogs.watchtogether", "cogs.music", "cogs.moderation", "cogs.muragoods"):
+for cog in ("cogs.murastream", "cogs.watchtogether", "cogs.music", "cogs.moderation", "cogs.muragoods", "cogs.fun", "cogs.leveling", "cogs.tickets"):
     try:
         importlib.import_module(cog)
         log.info("OK %s", cog)
@@ -60,6 +64,7 @@ async def check_ytdlp():
 # 5. TMDB proxy reachable (non-fatal if offline).
 async def check_tmdb():
     try:
+        await http_mod.init()
         results = await tmdb.search("inception")
         if results:
             log.info("OK TMDB proxy search (%d results, first: %s)", len(results), results[0]["title"])
