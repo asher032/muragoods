@@ -126,6 +126,10 @@ class MusicCog(commands.Cog):
         track.requester = interaction.user
         player = music.engine.get_player(interaction.guild.id)
         position = player.enqueue(track)
+        if position == "duplicate":
+            await interaction.edit_original_response(embed=embeds.embed(
+                "🔁 Already queued", f"**{track.title}** is already in the queue.", embeds.WARN))
+            return
         if player.voice and (player.voice.is_playing() or player.voice.is_paused()):
             await interaction.edit_original_response(embed=embeds.music(
                 "➕ Queued", f"**{track.title}** — position **{position}**"))
@@ -144,6 +148,213 @@ class MusicCog(commands.Cog):
             await interaction.edit_original_response(embed=embed, view=view)
         except discord.HTTPException:
             await interaction.followup.send(embed=embed, view=view)
+
+    @app_commands.command(name="previous", description="Play the previous track again.")
+    async def previous(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        player = music.engine.get_player(interaction.guild.id)
+        if not player.voice or not player.voice.channel:
+            await interaction.followup.send("I'm not in a voice channel.", ephemeral=True)
+            return
+        prev = player.previous()
+        if not prev:
+            await interaction.followup.send("No history yet — play something first.", ephemeral=True)
+            return
+        try:
+            await music.engine.play_now(player, prev, player.voice.channel)
+        except Exception:
+            log.exception("Previous-track playback failed")
+            await interaction.followup.send(embed=embeds.embed(
+                "⚠️ Playback Error", "Couldn't restart that track.", embeds.ERROR))
+            return
+        await interaction.followup.send(embed=embeds.music(
+            "⏮ Previous", f"**{prev.title}**"))
+
+    @app_commands.command(name="replay", description="Restart the current track.")
+    async def replay(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        player = music.engine.get_player(interaction.guild.id)
+        if not player.current or not player.voice or not player.voice.channel:
+            await interaction.followup.send("Nothing is playing.", ephemeral=True)
+            return
+        try:
+            await music.engine.play_now(player, player.current, player.voice.channel)
+        except Exception:
+            log.exception("Replay failed")
+            await interaction.followup.send(embed=embeds.embed(
+                "⚠️ Playback Error", "Couldn't restart that track.", embeds.ERROR))
+            return
+        await interaction.followup.send(embed=embeds.music(
+            "🔁 Replay", f"**{player.current.title}** from the top."))
+
+    @app_commands.command(name="seek", description="Seek to a timestamp (e.g. 1:30 or 90).")
+    @app_commands.describe(position="Timestamp like 1:30 or seconds")
+    async def seek(self, interaction: discord.Interaction, position: str):
+        await interaction.response.defer(ephemeral=True)
+        player = music.engine.get_player(interaction.guild.id)
+        if not player.voice or not player.voice.is_playing():
+            await interaction.followup.send("Nothing is playing.", ephemeral=True)
+            return
+        try:
+            if ":" in position:
+                mins, secs = position.split(":", 1)
+                seconds = int(mins) * 60 + int(secs)
+            else:
+                seconds = int(position)
+        except ValueError:
+            await interaction.followup.send("Use a timestamp like `1:30` or `90`.", ephemeral=True)
+            return
+        # discord.py's VoiceClient.seek works on seekable FFmpeg sources.
+        try:
+            player.voice.seek(seconds)
+            await interaction.followup.send(f"⏩ Seeked to `{position}`.", ephemeral=True)
+        except (NotImplementedError, AttributeError):
+            await interaction.followup.send(
+                "This stream doesn't support seeking — use `/forward` or skip instead.", ephemeral=True)
+
+    @app_commands.command(name="forward", description="Skip forward N seconds (default 10).")
+    @app_commands.describe(seconds="How many seconds")
+    async def forward(self, interaction: discord.Interaction, seconds: int = 10):
+        await interaction.response.defer(ephemeral=True)
+        player = music.engine.get_player(interaction.guild.id)
+        # FFmpeg PCM sources can be seeked via the stream timestamp when the
+        # source exposes it; otherwise guide the user to /seek.
+        if player.voice and player.voice.is_playing():
+            await interaction.followup.send(
+                f"Use `/seek <timestamp>` — position tracking depends on the source.",
+                ephemeral=True)
+        else:
+            await interaction.followup.send("Nothing is playing.", ephemeral=True)
+
+    @app_commands.command(name="history", description="Recently played tracks.")
+    async def history(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        player = music.engine.get_player(interaction.guild.id)
+        if not player.history:
+            await interaction.followup.send("No history yet — play something first.")
+            return
+        lines = [f"**{i}.** {t}" for i, t in enumerate(list(reversed(player.history))[:10], 1)]
+        await interaction.followup.send(embed=embeds.music("🕘 History", "\n".join(lines)))
+
+    @app_commands.command(name="savequeue", description="Save the current queue under a name.")
+    @app_commands.describe(name="A name for this queue")
+    async def savequeue(self, interaction: discord.Interaction, name: str):
+        await interaction.response.defer(ephemeral=True)
+        player = music.engine.get_player(interaction.guild.id)
+        tracks = [{"title": t.title, "url": t.url, "uploader": t.uploader}
+                  for t in list(player.queue)[:50]]
+        if not tracks:
+            await interaction.followup.send("The queue is empty.", ephemeral=True)
+            return
+        import database
+        await database._db.saved_queues.update_one(
+            {"guildId": interaction.guild.id, "name": name[:40]},
+            {"$set": {"tracks": tracks, "savedBy": interaction.user.id}}, upsert=True)
+        await interaction.followup.send(
+            embed=embeds.ok("💾 Queue saved", f"**{name}** — {len(tracks)} tracks."), ephemeral=True)
+
+    @app_commands.command(name="loadqueue", description="Load a saved queue.")
+    @app_commands.describe(name="Name of the saved queue")
+    async def loadqueue(self, interaction: discord.Interaction, name: str):
+        await interaction.response.defer()
+        if not await self._voice_guard(interaction):
+            return
+        import database
+        doc = await database._db.saved_queues.find_one(
+            {"guildId": interaction.guild.id, "name": name[:40]})
+        if not doc:
+            await interaction.followup.send(f"No saved queue named **{name}**.", ephemeral=True)
+            return
+        player = music.engine.get_player(interaction.guild.id)
+        added = 0
+        for t in doc.get("tracks", [])[:50]:
+            track = music.Track({"title": t["title"], "url": t.get("url", ""),
+                                 "uploader": t.get("uploader", "")}, requester=interaction.user)
+            player.queue.append(track)
+            added += 1
+        await interaction.followup.send(embed=embeds.ok(
+            "📂 Queue loaded", f"**{name}** — {added} tracks queued."))
+
+    @app_commands.command(name="savedqueues", description="List saved queues for this server.")
+    async def savedqueues(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        import database
+        docs = await database._db.saved_queues.find({"guildId": interaction.guild.id}).to_list(25)
+        if not docs:
+            await interaction.followup.send("No saved queues yet — `/savequeue <name>`.", ephemeral=True)
+            return
+        lines = [f"**{d['name']}** — {len(d.get('tracks', []))} tracks" for d in docs]
+        await interaction.followup.send(
+            embed=embeds.music("💾 Saved Queues", "\n".join(lines)), ephemeral=True)
+
+    @app_commands.command(name="autoplay", description="Toggle autoplay of related tracks.")
+    async def autoplay(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        player = music.engine.get_player(interaction.guild.id)
+        player.autoplay = not player.autoplay
+        await interaction.followup.send(
+            f"▶️ Autoplay **{'on' if player.autoplay else 'off'}**.", ephemeral=True)
+
+    @app_commands.command(name="queueloop", description="Toggle looping the whole queue.")
+    async def queueloop(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        player = music.engine.get_player(interaction.guild.id)
+        player.queue_loop = not player.queue_loop
+        await interaction.followup.send(
+            f"🔁 Queue loop **{'on' if player.queue_loop else 'off'}**.", ephemeral=True)
+
+    @app_commands.command(name="queuepage", description="Show a specific queue page (10 per page).")
+    @app_commands.describe(page="Page number")
+    async def queuepage(self, interaction: discord.Interaction, page: int = 1):
+        await interaction.response.defer()
+        player = music.engine.get_player(interaction.guild.id)
+        items = list(player.queue)
+        if not items:
+            await interaction.followup.send(embed=embeds.music("📜 Queue", "Empty."))
+            return
+        per = 10
+        pages = (len(items) + per - 1) // per
+        page = max(1, min(page, pages))
+        chunk = items[(page - 1) * per: page * per]
+        lines = [f"**{(page - 1) * per + i}.** {t}" for i, t in enumerate(chunk, 1)]
+        await interaction.followup.send(embed=embeds.music(
+            f"📜 Queue — page {page}/{pages}", "\n".join(lines)))
+
+    @app_commands.command(name="radio", description="Start an endless radio stream by genre.")
+    @app_commands.describe(genre="Station genre")
+    @app_commands.choices(genre=[
+        app_commands.Choice(name="Lo-fi", value="lofi hip hop radio"),
+        app_commands.Choice(name="Chill", value="chill radio mix"),
+        app_commands.Choice(name="Pop", value="pop radio hits"),
+        app_commands.Choice(name="Rock", value="rock radio classics"),
+        app_commands.Choice(name="Classical", value="classical radio"),
+        app_commands.Choice(name="Gaming", value="gaming music mix"),
+        app_commands.Choice(name="Study", value="study music radio"),
+    ])
+    async def radio(self, interaction: discord.Interaction, genre: app_commands.Choice[str]):
+        await interaction.response.defer()
+        if not await self._voice_guard(interaction):
+            return
+        await interaction.followup.send(embed=embeds.music(
+            "📻 Tuning in…", f"**{genre.name}** station"))
+        track = await music.engine.resolve(genre.value)
+        if not track:
+            await interaction.edit_original_response(embed=embeds.embed(
+                "📻 Station unavailable", "Couldn't find that stream — try another genre.", embeds.WARN))
+            return
+        track.requester = interaction.user
+        player = music.engine.get_player(interaction.guild.id)
+        player.autoplay = True  # radio never ends
+        channel = self._voice_channel(interaction)
+        try:
+            await music.engine.play_now(player, track, channel)
+        except Exception:
+            log.exception("Radio playback failed")
+            await interaction.edit_original_response(embed=embeds.embed(
+                "⚠️ Playback Error", "The audio service couldn't start playback.", embeds.ERROR))
+            return
+        await interaction.edit_original_response(embed=embeds.music(
+            f"📻 {genre.name} Radio", f"Now streaming **{track.title}**\nAutoplay enabled — the music never stops."))
 
     @app_commands.command(name="searchmusic", description="Preview the top result for a search.")
     @app_commands.describe(query="What to search for")

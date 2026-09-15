@@ -49,6 +49,8 @@ class MuraBot(commands.Bot):
             "cogs.watchtogether",
             "cogs.music",
             "cogs.moderation",
+            "cogs.security",
+            "cogs.community",
             "cogs.muragoods",
             "cogs.fun",
             "cogs.leveling",

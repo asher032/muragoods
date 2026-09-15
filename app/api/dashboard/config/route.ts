@@ -87,8 +87,25 @@ export async function PATCH(req: NextRequest) {
   };
   if (safe.modules && typeof safe.modules === 'object') {
     update.modules = Object.fromEntries(
-      Object.entries(safe.modules).slice(0, 12).map(([k, v]) => [k.slice(0, 30), Boolean(v)]),
+      Object.entries(safe.modules).slice(0, 16).map(([k, v]) => [k.slice(0, 30), Boolean(v)]),
     );
+  }
+  if (safe.securitySettings && typeof safe.securitySettings === 'object') {
+    const s = safe.securitySettings;
+    update.securitySettings = {
+      antiRaidEnabled: Boolean(s.antiRaidEnabled),
+      joinSpikeThreshold: Math.max(3, Math.min(50, Number(s.joinSpikeThreshold) || 8)),
+      antiNukeEnabled: Boolean(s.antiNukeEnabled),
+      minAccountAgeHours: Math.max(0, Math.min(168, Number(s.minAccountAgeHours) || 24)),
+    };
+  }
+  if (safe.community && typeof safe.community === 'object') {
+    const c = safe.community;
+    update.community = {
+      giveawayChannelId: String(c.giveawayChannelId || '').slice(0, 25),
+      suggestionChannelId: String(c.suggestionChannelId || '').slice(0, 25),
+      reportChannelId: String(c.reportChannelId || '').slice(0, 25),
+    };
   }
   if (safe.music && typeof safe.music === 'object') {
     const m = safe.music;
@@ -143,5 +160,21 @@ export async function PATCH(req: NextRequest) {
 
   await dbConnect();
   await DiscordGuildConfig.findOneAndUpdate({ guildId }, update, { upsert: true });
+
+  // Audit trail: who changed what (actor = Discord user id from token).
+  try {
+    const meResp = await fetch('https://discord.com/api/v10/users/@me', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    let actor = 'unknown';
+    if (meResp.ok) {
+      const me = (await meResp.json()) as { id?: string; username?: string };
+      actor = me.username ? `${me.username} (${me.id})` : actor;
+    }
+    const { auditConfigChange } = await import('@/app/lib/dashboard-audit');
+    await auditConfigChange(guildId, actor, 'Updated bot settings via dashboard');
+  } catch {
+    // Audit is best-effort; the config write already succeeded.
+  }
   return NextResponse.json({ success: true });
 }
