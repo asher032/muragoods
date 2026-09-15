@@ -1,5 +1,5 @@
 services:
-  - type: worker
+  - type: web
     name: murastream-bot
     runtime: python
     plan: free
@@ -21,10 +21,10 @@ services:
         value: "https://muragoods.vercel.app"
       - key: TMDB_API_KEY
         sync: false          # optional; the site proxy works without it
-      - key: DATABASE_URL
-        sync: false          # MongoDB URI (same cluster as the site)
       - key: MONGO_URI
-        sync: false
+        sync: false          # MongoDB URI (bot cluster)
+      - key: MONGO_DB
+        value: "murastream_bot"
       - key: DISCORD_BRIDGE_SECRET
         sync: false
       - key: BOT_ACTIVITY
