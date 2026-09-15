@@ -2,13 +2,31 @@
 
 import asyncio
 import logging
+import shutil
 from collections import deque
+from pathlib import Path
 from typing import Any, Optional
 
 import discord
 import yt_dlp
 
 log = logging.getLogger("bot.music")
+
+
+def _resolve_ffmpeg() -> str:
+    """Find an FFmpeg binary: PATH first, then the bundled imageio-ffmpeg one.
+    Returns 'ffmpeg' as a last resort so the error message stays accurate."""
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return "ffmpeg"
+
+
+FFMPEG_EXE = _resolve_ffmpeg()
 
 # yt-dlp: stream extraction only, no downloads to disk.
 YDL_OPTS = {
@@ -22,6 +40,7 @@ YDL_OPTS = {
 FFMPEG_OPTS = {
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
     "options": "-vn",
+    "executable": FFMPEG_EXE,
 }
 
 
