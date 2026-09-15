@@ -12,10 +12,15 @@ const DiscordGuildConfigSchema = new mongoose.Schema({
   modules: {
     music: { type: Boolean, default: true },
     moderation: { type: Boolean, default: true },
+    security: { type: Boolean, default: true },
     leveling: { type: Boolean, default: true },
     economy: { type: Boolean, default: true },
     fun: { type: Boolean, default: true },
     tickets: { type: Boolean, default: true },
+    giveaways: { type: Boolean, default: true },
+    suggestions: { type: Boolean, default: true },
+    reminders: { type: Boolean, default: true },
+    reputation: { type: Boolean, default: true },
     murastream: { type: Boolean, default: true },
   },
 
@@ -63,6 +68,21 @@ const DiscordGuildConfigSchema = new mongoose.Schema({
     channelId: { type: String, default: '' },
     newContent: { type: Boolean, default: false },
     requestUpdates: { type: Boolean, default: false },
+  },
+
+  // ── Security ────────────────────────────────────────────────
+  securitySettings: {
+    antiRaidEnabled: { type: Boolean, default: true },
+    joinSpikeThreshold: { type: Number, default: 8, min: 3, max: 50 },
+    antiNukeEnabled: { type: Boolean, default: true },
+    minAccountAgeHours: { type: Number, default: 24 },
+  },
+
+  // ── Giveaways / suggestions defaults ───────────────────────
+  community: {
+    giveawayChannelId: { type: String, default: '' },
+    suggestionChannelId: { type: String, default: '' },
+    reportChannelId: { type: String, default: '' },
   },
 
   updatedAt: { type: Date, default: Date.now },

@@ -50,6 +50,15 @@ class MediaCommands(commands.Cog):
         e.add_field(name="🛡️ Moderation", value=(
             "`/warn` `/warnings` `/clearwarnings` `/kick` `/ban` `/unban`\n"
             "`/mute` `/unmute` `/clear` `/lock` `/unlock` `/case` `/cases`"), inline=False)
+        e.add_field(name="🔐 Security", value=(
+            "`/security raidmode` `/security lockdown` `/security unlock`\n"
+            "`/security status` — anti-raid & anti-nuke"), inline=False)
+        e.add_field(name="🎁 Community", value=(
+            "`/giveaway` `/reroll` `/suggest` `/suggestions` `/report`\n"
+            "`/remind` `/rep` `/repleaderboard` `/achievements`"), inline=False)
+        e.add_field(name="🎵 Music — advanced", value=(
+            "`/previous` `/replay` `/seek` `/history` `/autoplay` `/queueloop`\n"
+            "`/savequeue` `/loadqueue` `/savedqueues` `/queuepage` `/radio`"), inline=False)
         e.add_field(name="📊 Leveling & Economy", value=(
             "`/rank` `/leaderboard` `/balance` `/daily` `/pay` `/shop`"), inline=False)
         e.add_field(name="🎮 Fun", value=(

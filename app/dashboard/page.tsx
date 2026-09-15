@@ -97,6 +97,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [audit, setAudit] = useState<Array<{ actor: string; summary: string; at: string }>>([]);
+  const [showAudit, setShowAudit] = useState(false);
 
   // Handle OAuth redirect: exchange the fragment token.
   useEffect(() => {
@@ -141,6 +144,7 @@ export default function DashboardPage() {
   const openGuild = useCallback(async (g: Guild) => {
     setSelected(g);
     setSaveState('idle');
+    setSearch('');
     const resp = await fetch(`/api/dashboard/config?guildId=${g.id}`, {
       headers: { 'x-discord-token': token },
     });
@@ -148,6 +152,25 @@ export default function DashboardPage() {
     if (data.success) setConfig(data.config || {});
     else setError(data.error || 'Failed to load config');
   }, [token]);
+
+  const loadAudit = useCallback(async () => {
+    if (!selected) return;
+    const resp = await fetch(`/api/dashboard/audit?guildId=${selected.id}`, {
+      headers: { 'x-discord-token': token },
+    });
+    const data = await resp.json();
+    if (data.success) setAudit(data.audit || []);
+  }, [selected, token]);
+
+  const resetDefaults = useCallback(async () => {
+    if (!selected || !confirm('Reset ALL settings for this server to defaults?')) return;
+    await fetch('/api/dashboard/audit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-discord-token': token },
+      body: JSON.stringify({ guildId: selected.id, action: 'reset' }),
+    });
+    openGuild(selected); // reload (defaults)
+  }, [selected, token, openGuild]);
 
   const save = useCallback(async () => {
     if (!selected) return;
@@ -179,6 +202,14 @@ export default function DashboardPage() {
   const mod = config.moderation || {};
   const mus = config.music || {};
   const wel = config.welcome || {};
+  const sec = ((config as Record<string, unknown>).securitySettings || {}) as Record<string, boolean | number>;
+
+  // Section visibility driven by the search bar.
+  const matches = useCallback((...keys: string[]) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return keys.some((k) => k.toLowerCase().includes(q));
+  }, [search]);
 
   return (
     <main style={{
@@ -260,79 +291,139 @@ export default function DashboardPage() {
         {token && selected && (
           <div>
             {/* Server switcher bar */}
-            <div style={{ ...glass, padding: '14px 18px', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ ...glass, padding: '14px 18px', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
               <button onClick={() => setSelected(null)} style={{
                 background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 14,
               }}>← Servers</button>
               <strong style={{ fontSize: 16 }}>{selected.name}</strong>
               <span style={{ flex: 1 }} />
+              <button onClick={resetDefaults} style={{
+                padding: '9px 16px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: 10, color: 'rgba(255,255,255,0.8)', cursor: 'pointer', fontSize: 13,
+              }}>Reset to Default</button>
+              <button onClick={() => { setShowAudit(!showAudit); if (!showAudit) loadAudit(); }} style={{
+                padding: '9px 16px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: 10, color: 'rgba(255,255,255,0.8)', cursor: 'pointer', fontSize: 13,
+              }}>🕘 Audit</button>
               <button onClick={save} style={{
                 padding: '9px 22px', background: saveState === 'saved' ? '#2ECC40' : '#e50914',
                 border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14,
               }}>
-                {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved ✓' : saveState === 'error' ? 'Error ✗' : 'Save changes'}
+                {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved ✓' : saveState === 'error' ? 'Error ✗' : 'Save Changes'}
               </button>
             </div>
 
+            {/* Search bar */}
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="🔍 Search settings… (music, automod, welcome, security)"
+              style={{
+                width: '100%', padding: '13px 18px', marginBottom: 18,
+                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: 14, color: '#f5f5f7', fontSize: 14, outline: 'none',
+                boxSizing: 'border-box', backdropFilter: 'blur(13px)',
+              }}
+            />
+
+            {/* Audit panel */}
+            {showAudit && (
+              <div style={{ ...glass, padding: 24, marginBottom: 16 }}>
+                <h3 style={{ margin: '0 0 12px', fontSize: 16 }}>🕘 Settings Audit History</h3>
+                {audit.length === 0 && <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13.5 }}>No changes recorded yet.</p>}
+                {audit.map((a, i) => (
+                  <div key={i} style={{
+                    padding: '10px 14px', marginBottom: 8, borderRadius: 10,
+                    background: 'rgba(255,255,255,0.05)', fontSize: 13.5,
+                  }}>
+                    <strong style={{ color: '#f5f5f7' }}>{a.actor}</strong>
+                    <span style={{ color: 'rgba(255,255,255,0.6)' }}> — {a.summary}</span>
+                    <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, marginLeft: 8 }}>
+                      {a.at ? new Date(a.at).toLocaleString() : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Modules */}
-            <div style={{ ...glass, padding: 24, marginBottom: 16 }}>
-              <h3 style={{ margin: '0 0 14px', fontSize: 16 }}>⚙️ Modules</h3>
-              {['music', 'moderation', 'leveling', 'economy', 'fun', 'tickets', 'murastream'].map((m) => (
-                <Toggle
-                  key={m}
-                  label={m.charAt(0).toUpperCase() + m.slice(1)}
-                  value={config.modules?.[m] ?? true}
-                  onChange={(v) => update('modules', m, v)}
-                />
-              ))}
-            </div>
+            {matches('modules', 'toggles', 'features') && (
+              <div style={{ ...glass, padding: 24, marginBottom: 16 }}>
+                <h3 style={{ margin: '0 0 14px', fontSize: 16 }}>⚙️ Modules</h3>
+                {['music', 'moderation', 'security', 'leveling', 'economy', 'fun', 'tickets', 'giveaways', 'suggestions', 'reminders', 'reputation', 'murastream'].map((m) => (
+                  <Toggle
+                    key={m}
+                    label={m.charAt(0).toUpperCase() + m.slice(1)}
+                    value={config.modules?.[m] ?? true}
+                    onChange={(v) => update('modules', m, v)}
+                  />
+                ))}
+              </div>
+            )}
 
             {/* Music */}
-            <div style={{ ...glass, padding: 24, marginBottom: 16 }}>
-              <h3 style={{ margin: '0 0 14px', fontSize: 16 }}>🎵 Music</h3>
-              <Field label="DJ Role ID" value={mus.djRoleId || ''} onChange={(v) => update('music', 'djRoleId', v)} placeholder="Role ID (right-click role → Copy ID)" />
-              <Field label="Music Channel ID" value={mus.musicChannelId || ''} onChange={(v) => update('music', 'musicChannelId', v)} placeholder="Channel ID" />
-              <label style={{ display: 'block', marginBottom: 12 }}>
-                <span style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.55)', marginBottom: 6 }}>Control mode</span>
-                <select
-                  value={mus.controlMode || 'everyone'}
-                  onChange={(e) => update('music', 'controlMode', e.target.value)}
-                  style={{
-                    width: '100%', padding: '11px 14px', background: 'rgba(255,255,255,0.06)',
-                    border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10,
-                    color: '#f5f5f7', fontSize: 14,
-                  }}
-                >
-                  <option value="everyone">Everyone can control</option>
-                  <option value="dj">DJ role only</option>
-                  <option value="moderators">Moderators only</option>
-                </select>
-              </label>
-              <Field label={`Default volume: ${mus.defaultVolume ?? 50}%`} value={String(mus.defaultVolume ?? 50)} onChange={(v) => update('music', 'defaultVolume', Number(v) || 50)} placeholder="50" />
-            </div>
+            {matches('music', 'dj', 'volume') && (
+              <div style={{ ...glass, padding: 24, marginBottom: 16 }}>
+                <h3 style={{ margin: '0 0 14px', fontSize: 16 }}>🎵 Music</h3>
+                <Field label="DJ Role ID" value={mus.djRoleId || ''} onChange={(v) => update('music', 'djRoleId', v)} placeholder="Role ID (right-click role → Copy ID)" />
+                <Field label="Music Channel ID" value={mus.musicChannelId || ''} onChange={(v) => update('music', 'musicChannelId', v)} placeholder="Channel ID" />
+                <label style={{ display: 'block', marginBottom: 12 }}>
+                  <span style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.55)', marginBottom: 6 }}>Control mode</span>
+                  <select
+                    value={mus.controlMode || 'everyone'}
+                    onChange={(e) => update('music', 'controlMode', e.target.value)}
+                    style={{
+                      width: '100%', padding: '11px 14px', background: 'rgba(255,255,255,0.06)',
+                      border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10,
+                      color: '#f5f5f7', fontSize: 14,
+                    }}
+                  >
+                    <option value="everyone">Everyone can control</option>
+                    <option value="dj">DJ role only</option>
+                    <option value="moderators">Moderators only</option>
+                  </select>
+                </label>
+                <Field label={`Default volume: ${mus.defaultVolume ?? 50}%`} value={String(mus.defaultVolume ?? 50)} onChange={(v) => update('music', 'defaultVolume', Number(v) || 50)} placeholder="50" />
+              </div>
+            )}
 
             {/* Moderation */}
-            <div style={{ ...glass, padding: 24, marginBottom: 16 }}>
-              <h3 style={{ margin: '0 0 14px', fontSize: 16 }}>🛡️ Moderation & AutoMod</h3>
-              <Field label="Moderator Role ID" value={mod.modRoleId || ''} onChange={(v) => update('moderation', 'modRoleId', v)} placeholder="Role ID" />
-              <Field label="Log Channel ID" value={mod.logChannelId || ''} onChange={(v) => update('moderation', 'logChannelId', v)} placeholder="Channel ID" />
-              <Toggle label="AutoMod enabled" value={mod.automodEnabled ?? true} onChange={(v) => update('moderation', 'automodEnabled', v)} />
-              <Toggle label="Anti-spam" value={mod.antiSpam ?? true} onChange={(v) => update('moderation', 'antiSpam', v)} />
-              <Toggle label="Anti-caps" value={mod.antiCaps ?? true} onChange={(v) => update('moderation', 'antiCaps', v)} />
-              <Toggle label="Anti-invite" value={mod.antiInvite ?? false} onChange={(v) => update('moderation', 'antiInvite', v)} />
-              <Toggle label="Anti-link" value={mod.antiLink ?? false} onChange={(v) => update('moderation', 'antiLink', v)} />
-              <Field label={`Caps threshold: ${mod.capsThreshold ?? 70}%`} value={String(mod.capsThreshold ?? 70)} onChange={(v) => update('moderation', 'capsThreshold', Number(v) || 70)} placeholder="70" />
-              <Field label={`Mention threshold: ${mod.mentionThreshold ?? 8}`} value={String(mod.mentionThreshold ?? 8)} onChange={(v) => update('moderation', 'mentionThreshold', Number(v) || 8)} placeholder="8" />
-            </div>
+            {matches('moderation', 'automod', 'spam', 'logs') && (
+              <div style={{ ...glass, padding: 24, marginBottom: 16 }}>
+                <h3 style={{ margin: '0 0 14px', fontSize: 16 }}>🛡️ Moderation & AutoMod</h3>
+                <Field label="Moderator Role ID" value={mod.modRoleId || ''} onChange={(v) => update('moderation', 'modRoleId', v)} placeholder="Role ID" />
+                <Field label="Log Channel ID" value={mod.logChannelId || ''} onChange={(v) => update('moderation', 'logChannelId', v)} placeholder="Channel ID" />
+                <Toggle label="AutoMod enabled" value={mod.automodEnabled ?? true} onChange={(v) => update('moderation', 'automodEnabled', v)} />
+                <Toggle label="Anti-spam" value={mod.antiSpam ?? true} onChange={(v) => update('moderation', 'antiSpam', v)} />
+                <Toggle label="Anti-caps" value={mod.antiCaps ?? true} onChange={(v) => update('moderation', 'antiCaps', v)} />
+                <Toggle label="Anti-invite" value={mod.antiInvite ?? false} onChange={(v) => update('moderation', 'antiInvite', v)} />
+                <Toggle label="Anti-link" value={mod.antiLink ?? false} onChange={(v) => update('moderation', 'antiLink', v)} />
+                <Field label={`Caps threshold: ${mod.capsThreshold ?? 70}%`} value={String(mod.capsThreshold ?? 70)} onChange={(v) => update('moderation', 'capsThreshold', Number(v) || 70)} placeholder="70" />
+                <Field label={`Mention threshold: ${mod.mentionThreshold ?? 8}`} value={String(mod.mentionThreshold ?? 8)} onChange={(v) => update('moderation', 'mentionThreshold', Number(v) || 8)} placeholder="8" />
+              </div>
+            )}
+
+            {/* Security */}
+            {matches('security', 'raid', 'nuke', 'lockdown') && (
+              <div style={{ ...glass, padding: 24, marginBottom: 16 }}>
+                <h3 style={{ margin: '0 0 14px', fontSize: 16 }}>🔐 Security</h3>
+                <Toggle label="Anti-raid (join spike detection)" value={Boolean(sec.antiRaidEnabled ?? true)} onChange={(v) => update('securitySettings', 'antiRaidEnabled', v)} />
+                <Field label={`Join spike threshold: ${sec.joinSpikeThreshold ?? 8} joins`} value={String(sec.joinSpikeThreshold ?? 8)} onChange={(v) => update('securitySettings', 'joinSpikeThreshold', Number(v) || 8)} placeholder="8" />
+                <Toggle label="Anti-nuke (mass-delete protection)" value={Boolean(sec.antiNukeEnabled ?? true)} onChange={(v) => update('securitySettings', 'antiNukeEnabled', v)} />
+                <Field label={`Min account age: ${sec.minAccountAgeHours ?? 24}h (raid screening)`} value={String(sec.minAccountAgeHours ?? 24)} onChange={(v) => update('securitySettings', 'minAccountAgeHours', Number(v) || 24)} placeholder="24" />
+              </div>
+            )}
 
             {/* Welcome */}
-            <div style={{ ...glass, padding: 24, marginBottom: 16 }}>
-              <h3 style={{ margin: '0 0 14px', fontSize: 16 }}>👋 Welcome</h3>
-              <Toggle label="Welcome messages" value={wel.enabled ?? false} onChange={(v) => update('welcome', 'enabled', v)} />
-              <Field label="Welcome Channel ID" value={wel.channelId || ''} onChange={(v) => update('welcome', 'channelId', v)} placeholder="Channel ID" />
-              <Field label="Auto-role ID" value={wel.autoRoleId || ''} onChange={(v) => update('welcome', 'autoRoleId', v)} placeholder="Role ID" />
-              <Field label="Message ({user}, {server}, {membercount})" value={wel.message || ''} onChange={(v) => update('welcome', 'message', v)} placeholder="👋 Welcome {user} to {server}!" />
-            </div>
+            {matches('welcome', 'greeting', 'auto-role') && (
+              <div style={{ ...glass, padding: 24, marginBottom: 16 }}>
+                <h3 style={{ margin: '0 0 14px', fontSize: 16 }}>👋 Welcome</h3>
+                <Toggle label="Welcome messages" value={wel.enabled ?? false} onChange={(v) => update('welcome', 'enabled', v)} />
+                <Field label="Welcome Channel ID" value={wel.channelId || ''} onChange={(v) => update('welcome', 'channelId', v)} placeholder="Channel ID" />
+                <Field label="Auto-role ID" value={wel.autoRoleId || ''} onChange={(v) => update('welcome', 'autoRoleId', v)} placeholder="Role ID" />
+                <Field label="Message ({user}, {server}, {membercount})" value={wel.message || ''} onChange={(v) => update('welcome', 'message', v)} placeholder="👋 Welcome {user} to {server}!" />
+              </div>
+            )}
 
             <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12.5, textAlign: 'center', marginTop: 20 }}>
               Settings save per-server and apply to the bot within ~60 seconds.

@@ -65,14 +65,21 @@ class GuildPlayer:
     def __init__(self, guild_id: int):
         self.guild_id = guild_id
         self.queue: deque[Track] = deque()
+        self.history: deque[Track] = deque(maxlen=50)   # recently played
         self.current: Optional[Track] = None
         self.playing: bool = False
-        self.loop: bool = False
+        self.loop: bool = False          # track loop
+        self.queue_loop: bool = False    # loop whole queue
+        self.autoplay: bool = False      # keep playing related tracks
         self.volume: float = 0.5
         self.voice: Optional[discord.VoiceClient] = None
         self.now_playing_message: Optional[discord.Message] = None
 
-    def enqueue(self, track: Track) -> int:
+    def enqueue(self, track: Track) -> int | str:
+        """Add a track. Returns queue position, or 'duplicate' if already queued."""
+        for t in self.queue:
+            if t.url and t.url == track.url:
+                return "duplicate"
         self.queue.append(track)
         return len(self.queue)
 
@@ -80,7 +87,24 @@ class GuildPlayer:
         if self.loop and self.current:
             return self.current
         if self.queue:
-            return self.queue.popleft()
+            if self.current:
+                self.history.append(self.current)
+            nxt = self.queue.popleft()
+            if self.queue_loop and not self.queue and self.current:
+                # Refill queue with just-finished history for seamless loop.
+                self.queue.append(self.current)
+            return nxt
+        if self.queue_loop and self.current:
+            return self.current
+        return None
+
+    def previous(self) -> Optional[Track]:
+        """Jump back one track: current goes to front, last history item plays."""
+        if self.current:
+            self.queue.appendleft(self.current)
+        if self.history:
+            prev = self.history.pop()
+            return prev
         return None
 
     def clear(self) -> None:
@@ -151,6 +175,14 @@ class MusicEngine:
             if not player.playing:
                 return
             next_track = player.pop_next()
+            if next_track is None and player.autoplay and player.current:
+                # Autoplay: queue a related track from the current one.
+                try:
+                    related = await self._related(player.current)
+                    if related:
+                        next_track = related
+                except Exception:
+                    pass
             if next_track is None:
                 player.current = None
                 player.playing = False
@@ -163,6 +195,13 @@ class MusicEngine:
         except Exception:
             log.exception("Track-end handler failed")
             player.playing = False
+
+    async def _related(self, track: Track) -> Optional[Track]:
+        """Find a related track for autoplay via yt-dlp mix/URL."""
+        if not track.url:
+            return None
+        data = await self.resolve(f"https://www.youtube.com/watch?v={track.url.split('=')[-1]}&list=RD{track.url.split('=')[-1]}")
+        return data
 
 
 engine = MusicEngine()
