@@ -1,0 +1,37 @@
+# Render Blueprint — repo-root level so "New + → Blueprint" just works.
+# All paths run inside discord-bot/ via rootDir, so requirements.txt and the
+# bot package resolve correctly.
+
+services:
+  - type: web
+    name: murastream-bot
+    runtime: python
+    plan: free
+    rootDir: discord-bot
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m bot.main
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false          # set in the Render dashboard (secret)
+      - key: DISCORD_CLIENT_ID
+        value: "1549395794853888020"
+      - key: DISCORD_PUBLIC_KEY
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: MURASTREAM_URL
+        value: "https://muragoods.vercel.app"
+      - key: MONGO_URI
+        sync: false          # MongoDB URI — password @ must be %40
+      - key: MONGO_DB
+        value: "murastream_bot"
+      - key: DISCORD_BRIDGE_SECRET
+        sync: false
+      - key: BOT_ACTIVITY
+        value: "MuraStream • /help"
+      - key: BOT_STATUS
+        value: "online"
+      - key: BOT_ADMIN_IDS
+        sync: false
