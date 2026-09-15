@@ -2,6 +2,7 @@
 // Server-side proxy to keep the TMDB API key secure
 import { NextRequest, NextResponse } from 'next/server';
 import { SAMPLE_MEDIA } from '@/app/murastream/data/sample-media';
+import { BAKED_CATALOG } from '@/app/murastream/data/baked-catalog';
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const IMG_BASE = 'https://image.tmdb.org/t/p';
@@ -337,14 +338,31 @@ async function tmdbFetch(url: string, headers: Record<string, string>, action: s
 }
 
 // ─── Sample fallback (no TMDB credentials configured) ────────────
-// Serves the sample catalog for list actions and synthesizes detail
-// responses so /murastream pages work end-to-end in local dev.
+// Serves the baked catalog (1200+ real titles: movies, TV, K/C/J-dramas,
+// cartoons, famous shows) for list actions and synthesizes detail responses
+// so /murastream pages work richly end-to-end in local dev.
 function sampleResponse(searchParams: URLSearchParams): NextResponse {
   const action = searchParams.get('action');
   const type = searchParams.get('type') === 'tv' ? 'tv' : 'movie';
   const page = Number(searchParams.get('page') || '1');
 
   const filterByType = (items: typeof SAMPLE_MEDIA) => items.filter(i => i.mediaType === type);
+
+  // Curated sample + baked catalog, deduped by id. Gives offline/dev mode a
+  // genuinely large library instead of a handful of titles.
+  const OFFLINE_POOL: typeof SAMPLE_MEDIA = [
+    ...SAMPLE_MEDIA,
+    ...(BAKED_CATALOG.popMovies as unknown as typeof SAMPLE_MEDIA),
+    ...(BAKED_CATALOG.topMovies as unknown as typeof SAMPLE_MEDIA),
+    ...(BAKED_CATALOG.popTV as unknown as typeof SAMPLE_MEDIA),
+    ...(BAKED_CATALOG.topTV as unknown as typeof SAMPLE_MEDIA),
+    ...(BAKED_CATALOG.kdrama as unknown as typeof SAMPLE_MEDIA),
+    ...(BAKED_CATALOG.cdrama as unknown as typeof SAMPLE_MEDIA),
+    ...(BAKED_CATALOG.jdrama as unknown as typeof SAMPLE_MEDIA),
+    ...(BAKED_CATALOG.cartoonMovies as unknown as typeof SAMPLE_MEDIA),
+    ...(BAKED_CATALOG.cartoonTV as unknown as typeof SAMPLE_MEDIA),
+    ...(BAKED_CATALOG.famousTV as unknown as typeof SAMPLE_MEDIA),
+  ].filter((v, i, a) => a.findIndex(x => x.id === v.id) === i);
 
   // Discover honors the client's filters (genre, year, language, sort) so
   // the drama browse page shows genuinely different rows per chip instead of
@@ -355,7 +373,7 @@ function sampleResponse(searchParams: URLSearchParams): NextResponse {
     const lang = searchParams.get('with_original_language') || '';
     const year = searchParams.get('first_air_date_year') || '';
     const sortBy = searchParams.get('sort_by') || 'popularity.desc';
-    let pool = filterByType(SAMPLE_MEDIA).filter(i => {
+    let pool = filterByType(OFFLINE_POOL).filter(i => {
       if (lang && i.originalLanguage !== lang) return false;
       if (year && i.year !== year) return false;
       if (genre.length) {
@@ -380,13 +398,13 @@ function sampleResponse(searchParams: URLSearchParams): NextResponse {
 
   if (action === 'movie_details' || action === 'tv_details') {
     const id = Number(searchParams.get('id'));
-    const item = SAMPLE_MEDIA.find(i => i.id === id) || SAMPLE_MEDIA[0];
+    const item = OFFLINE_POOL.find(i => i.id === id) || OFFLINE_POOL[0];
     return NextResponse.json({
       ...item,
       credits: { cast: [], crew: [] },
       videos: [],
-      similar: { results: SAMPLE_MEDIA.filter(i => i.id !== item.id).slice(0, 6) },
-      recommendations: { results: SAMPLE_MEDIA.filter(i => i.id !== item.id).slice(0, 6) },
+      similar: { results: OFFLINE_POOL.filter(i => i.id !== item.id).slice(0, 12) },
+      recommendations: { results: OFFLINE_POOL.filter(i => i.id !== item.id).slice(0, 12) },
       seasons: [],
       runtime: 120,
     });
@@ -394,7 +412,7 @@ function sampleResponse(searchParams: URLSearchParams): NextResponse {
   if (action === 'tv_season') {
     // Synthetic season: 8 episodes so the episode picker works in dev.
     const id = Number(searchParams.get('id'));
-    const item = SAMPLE_MEDIA.find(i => i.id === id);
+    const item = OFFLINE_POOL.find(i => i.id === id);
     const count = item?.mediaType === 'tv' ? 8 : 0;
     return NextResponse.json({ episodes: Array.from({ length: count }, (_, n) => ({
       id: (id || 0) * 100 + n + 1,
@@ -417,16 +435,19 @@ function sampleResponse(searchParams: URLSearchParams): NextResponse {
   }
   if (action === 'search') {
     const q = (searchParams.get('q') || '').toLowerCase();
-    return NextResponse.json({ results: SAMPLE_MEDIA.filter(i => i.title.toLowerCase().includes(q)) });
+    return NextResponse.json({ results: OFFLINE_POOL.filter(i =>
+      i.title.toLowerCase().includes(q) || (i.overview || '').toLowerCase().includes(q)
+    ) });
   }
 
-  // List actions (trending / popular / top_rated / upcoming): paginate the
-  // sample pool. Page 2+ is empty, which ends infinite scroll.
-  const pool = filterByType(SAMPLE_MEDIA);
+  // List actions (trending / popular / top_rated / upcoming): the offline
+  // pool is curated (not live-ranked), so every list serves the same deep
+  // pool regardless of page — the client dedupes by id when merging pages.
+  const pool = filterByType(OFFLINE_POOL);
   return NextResponse.json({
     page,
-    results: page <= 1 ? pool : [],
-    total_pages: 1,
+    results: pool,
+    total_pages: 2,
     total_results: pool.length,
   });
 }

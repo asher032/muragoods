@@ -5,6 +5,7 @@ import { products, type InventoryStatus, type Order, type OrderStatus, type Prod
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { UsersCoinsPanel } from '@/app/components/UsersCoinsPanel';
+import LockPanel from '@/app/components/LockPanel';
 import { BarChart3, CircleCheck, Coins, Flag, Gift, Megaphone, MessageCircle, X } from 'lucide-react';
 const statusOptions = [
   'Pending Payment',
@@ -282,6 +283,9 @@ export default function AdminPage() {
 
         {/* ─── Users & Coins Panel ──────────────────────────── */}
         <UsersCoinsPanel userName={email} />
+
+        {/* ─── Content Lock Switch ─────────────────────────── */}
+        <LockPanel adminEmail={email} />
       </div>
 
       {/* Receipt Preview Modal */}

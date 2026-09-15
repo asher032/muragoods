@@ -12,6 +12,13 @@ on:
 # skips instead of failing every push.
 jobs:
   deploy:
+    # This job targets the GitHub environment "production". When that
+    # environment is configured with "Required reviewers" (asher032), every
+    # run pauses here until the owner approves it — production only updates
+    # when you personally click Approve. Configure it once in:
+    #   GitHub → Settings → Environments → production → Required reviewers
+    environment:
+      name: production
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

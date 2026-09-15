@@ -7,6 +7,7 @@ import { NavBar } from '@/app/components/NavBar';
 import { CoinBalance } from '@/app/components/CoinBalance';
 import { Icon } from '@/app/components/Icon';
 import { BookOpen, Circle, Pencil, Sparkles, Store, Users } from 'lucide-react';
+import ContentLockGate from '@/app/components/ContentLockGate';
 export default function HubPage() {
   const [user, setUser] = useState<{ name?: string; email?: string } | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -100,7 +101,8 @@ export default function HubPage() {
   ];
 
   return (
-    <main style={{ minHeight: '100vh', background: 'var(--mario-bg)' }}>
+    <ContentLockGate>
+      <main style={{ minHeight: '100vh', background: 'var(--mario-bg)' }}>
       <NavBar pageLabel="Menu" />
 
       <div style={{ maxWidth: '900px', margin: '0 auto', padding: '24px 16px 60px' }}>
@@ -265,6 +267,7 @@ export default function HubPage() {
           ))}
         </div>
       </div>
-    </main>
+      </main>
+    </ContentLockGate>
   );
 }
