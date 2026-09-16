@@ -9,6 +9,7 @@ const PUBLIC_ROUTES = [
   '/signup',
   '/verify-email',
   '/forgot-password',
+  '/dashboard',
   '/api',
   '/_next',
   '/favicon.ico',
