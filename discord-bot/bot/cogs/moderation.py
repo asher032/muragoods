@@ -43,6 +43,22 @@ class ModerationCog(commands.Cog):
             return "Bots can't be moderated this way."
         return None
 
+    @staticmethod
+    def _hierarchy_guard(interaction: discord.Interaction, user) -> str | None:
+        """Discord role hierarchy: a moderator may only act on members whose
+        highest role is strictly below their own highest role. The guild
+        owner outranks everyone. Returns an error message or None."""
+        if not isinstance(user, discord.Member):
+            return None  # unresolvable targets handled by _member_guard
+        if interaction.user.id == interaction.guild.owner_id:
+            return None
+        if user.id == interaction.guild.owner_id:
+            return "You can't moderate the server owner."
+        if user.top_role >= interaction.user.top_role:
+            return (f"You can't moderate {user.mention} — their highest role "
+                    f"**{user.top_role.name}** is at or above yours.")
+        return None
+
     async def _log(self, guild: discord.Guild, embed: discord.Embed) -> None:
         cfg = await database.get_guild_config(guild.id)
         moderation = cfg.get("moderation") or {}
@@ -64,6 +80,10 @@ class ModerationCog(commands.Cog):
             await interaction.response.send_message("Moderators only.", ephemeral=True)
             return
         err = self._member_guard(interaction, user)
+        if err:
+            await interaction.response.send_message(err, ephemeral=True)
+            return
+        err = self._hierarchy_guard(interaction, user)
         if err:
             await interaction.response.send_message(err, ephemeral=True)
             return
@@ -124,6 +144,10 @@ class ModerationCog(commands.Cog):
         if user.top_role >= interaction.guild.me.top_role:
             await interaction.response.send_message("I can't kick someone with a role at or above mine.", ephemeral=True)
             return
+        err = self._hierarchy_guard(interaction, user)
+        if err:
+            await interaction.response.send_message(err, ephemeral=True)
+            return
         try:
             await user.kick(reason=f"By {interaction.user}: {reason[:200]}")
         except discord.Forbidden:
@@ -143,6 +167,10 @@ class ModerationCog(commands.Cog):
             return
         if user.top_role >= interaction.guild.me.top_role:
             await interaction.response.send_message("I can't ban someone with a role at or above mine.", ephemeral=True)
+            return
+        err = self._hierarchy_guard(interaction, user)
+        if err:
+            await interaction.response.send_message(err, ephemeral=True)
             return
         try:
             await user.ban(reason=f"By {interaction.user}: {reason[:200]}", delete_message_days=0)
@@ -179,7 +207,15 @@ class ModerationCog(commands.Cog):
         if err:
             await interaction.response.send_message(err, ephemeral=True)
             return
+        err = self._hierarchy_guard(interaction, user)
+        if err:
+            await interaction.response.send_message(err, ephemeral=True)
+            return
         minutes = max(1, min(minutes, 40320))  # 28-day max
+        if user.top_role >= interaction.guild.me.top_role:
+            await interaction.response.send_message(
+                "I can't timeout someone with a role at or above mine.", ephemeral=True)
+            return
         try:
             await user.timeout(discord.utils.utcnow() + timedelta(minutes=minutes),
                                reason=f"By {interaction.user}")
@@ -196,6 +232,10 @@ class ModerationCog(commands.Cog):
             await interaction.response.send_message("You need Moderate Members permission.", ephemeral=True)
             return
         err = self._member_guard(interaction, user)
+        if err:
+            await interaction.response.send_message(err, ephemeral=True)
+            return
+        err = self._hierarchy_guard(interaction, user)
         if err:
             await interaction.response.send_message(err, ephemeral=True)
             return
@@ -256,6 +296,92 @@ class ModerationCog(commands.Cog):
         await self._log(interaction.guild, utils.base_embed(
             "🔓 Channel unlocked", f"{interaction.channel.mention} by {interaction.user.mention}"))
         await interaction.response.send_message("🔓 Channel unlocked.")
+
+    # ── Permission audit ─────────────────────────────────────────────
+    @app_commands.command(name="permissionaudit",
+                          description="Audit what this bot can do here and flag anything risky.")
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def permissionaudit(self, interaction: discord.Interaction):
+        """Server-wide bot permission audit: what was granted vs. what the
+        bot actually needs, with plain-language risk flags."""
+        await interaction.response.defer(ephemeral=True)
+        me = interaction.guild.me
+        perms = me.guild_permissions
+
+        # What the bot NEEDS (aligned with config.invite_url least-privilege grant)
+        needed = {
+            "view_channel": "See channels", "send_messages": "Send messages",
+            "embed_links": "Rich embeds", "attach_files": "Transcripts/files",
+            "read_message_history": "Tickets/automod context", "connect": "Join voice",
+            "speak": "Play music", "use_application_commands": "Slash commands",
+            "moderate_members": "Timeouts (/mute, raid screening)",
+        }
+        # Powerful grants that deserve a flag if present
+        risky = {
+            "administrator": ("HIGH", "Full access to everything — overrides all other limits."),
+            "manage_roles": ("MEDIUM", "Can assign/rename/delete roles."),
+            "manage_webhooks": ("MEDIUM", "Can read messages via webhooks; can be abused to spam."),
+            "manage_guild": ("MEDIUM", "Can change server settings and invites."),
+            "manage_channels": ("LOW", "Needed for /lock, /unlock, lockdown, ticket channels."),
+            "manage_messages": ("LOW", "Needed for /clear and automod message deletion."),
+            "ban_members": ("LOW", "Needed for /ban, /unban and automod escalation."),
+            "kick_members": ("LOW", "Needed for /kick and automod escalation."),
+            "mention_everyone": ("MEDIUM", "Can ping @everyone — spam risk."),
+        }
+
+        lines: list[str] = []
+        for perm, label in needed.items():
+            lines.append(f"{'✅' if getattr(perms, perm, False) else '❌'} {label}")
+
+        flags: list[str] = []
+        for perm, (level, why) in risky.items():
+            if getattr(perms, perm, False):
+                flags.append(f"**{level}** · `{perm}` — {why}")
+
+        role_position_ok = True
+        warnings: list[str] = []
+        top = me.top_role
+        if top.is_default():
+            role_position_ok = False
+            warnings.append("Bot has NO roles — it cannot kick/ban/timeout anyone above @everyone.")
+        # Concrete hierarchy impact: how many members can the bot actually act on?
+        moderatable = 0
+        blocked = 0
+        for m in interaction.guild.members:
+            if m.bot or m.id == interaction.guild.owner_id:
+                continue
+            if m.top_role < top:
+                moderatable += 1
+            else:
+                blocked += 1
+        total_humans = moderatable + blocked
+        if blocked and total_humans:
+            pct = round(blocked * 100 / total_humans)
+            warnings.append(
+                f"Role hierarchy: **{blocked}/{total_humans} human members ({pct}%)** are at or "
+                f"above the bot's role — kick/ban/timeout will FAIL for them. "
+                f"Fix: Server Settings → Roles → drag **{top.name}** higher.")
+
+        counts = (
+            f"**Role position:** {top.position} of {len(interaction.guild.roles) - 1}\n"
+            f"**Members it can moderate:** {moderatable}/{total_humans} humans\n"
+            f"**Owner-granted by role:** {top.name or '@everyone'}"
+        )
+
+        e = utils.base_embed(
+            "🔍 Bot Permission Audit",
+            f"Bot: {me.mention} • Audited <t:{int(discord.utils.utcnow().timestamp())}:R>\n\n"
+            + "\n".join(lines))
+        e.add_field(name="Role / scope", value=counts, inline=False)
+        if flags:
+            e.add_field(name=f"⚠️ Extra grants flagged ({len(flags)})",
+                        value="\n".join(flags)[:1000], inline=False)
+        else:
+            e.add_field(name="⚠️ Extra grants", value="None — least-privilege setup 🎉", inline=False)
+        if warnings:
+            e.add_field(name="🚨 Problems", value="\n".join(warnings)[:1000], inline=False)
+        e.set_footer(text="Remove unneeded grants in Server Settings → Roles → Bot role")
+        await interaction.followup.send(embed=e, ephemeral=True)
 
     # ── Setup ─────────────────────────────────────────────────────────
     @app_commands.command(name="setup", description="Configure bot channels (admins).")
@@ -377,6 +503,10 @@ class ModerationCog(commands.Cog):
             escalation = (dashboard_mod.get("escalation") or ["warn", "timeout", "timeout", "kick", "ban"])
             step = escalation[min(strikes - 1, len(escalation) - 1)] if strikes else "warn"
             member = message.author if isinstance(message.author, discord.Member) else None
+            # Hierarchy guard: never escalate against the owner or anyone at/above the bot.
+            if (member and member.id == message.guild.owner_id) or (
+                    member and member.top_role >= message.guild.me.top_role):
+                step = "warn"
             if member and step == "timeout" and strikes >= 2:
                 from datetime import timedelta as _td
                 await member.timeout(discord.utils.utcnow() + _td(minutes=10),

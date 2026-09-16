@@ -3,9 +3,25 @@
 import { useState, useEffect } from 'react';
 import { useGuild } from '@/app/lib/guild-context';
 
+interface AuditFieldChange {
+  section: string;
+  field: string;
+  before: unknown;
+  after: unknown;
+}
+
+interface AuditEntry {
+  actor: string;
+  summary: string;
+  changes?: AuditFieldChange[];
+  before?: unknown;
+  after?: unknown;
+  at: string;
+}
+
 export default function AuditPage() {
   const { token, selected } = useGuild();
-  const [audit, setAudit] = useState<Array<{ actor: string; summary: string; at: string; before?: unknown; after?: unknown }>>([]);
+  const [audit, setAudit] = useState<AuditEntry[]>([]);
 
   const renderValue = (v: unknown): string | null => {
     if (v === undefined || v === null) return null;
@@ -65,7 +81,24 @@ export default function AuditPage() {
                 </span>
               </div>
               <p style={{ margin: 0, color: 'var(--cc-text-dim)', fontSize: 13.5 }}>{String(entry.summary)}</p>
-              {Boolean(entry.before || entry.after) && (
+              {Array.isArray(entry.changes) && entry.changes.length > 0 && (
+                <div style={{ marginTop: 10, display: 'grid', gap: 4 }}>
+                  {entry.changes.map((c, j) => (
+                    <div key={j} style={{
+                      display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'baseline',
+                      fontSize: 12.5, padding: '5px 10px', borderRadius: 6,
+                      background: 'rgba(255,255,255,0.03)',
+                    }}>
+                      <code style={{ color: 'var(--cc-accent)', fontSize: 12 }}>
+                        {c.section ? `${c.section}.` : ''}{c.field}
+                      </code>
+                      <span style={{ color: 'var(--cc-err)' }}>− {c.before === null || c.before === '' ? '(empty)' : String(c.before)}</span>
+                      <span style={{ color: 'var(--cc-ok)' }}>+ {c.after === null || c.after === '' ? '(empty)' : String(c.after)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {!Array.isArray(entry.changes) && Boolean(entry.before || entry.after) && (
                 <div style={{ marginTop: 8, fontSize: 12, color: 'var(--cc-text-faint)' }}>
                   {renderValue(entry.before) ? <div>Before: {String(renderValue(entry.before))}</div> : null}
                   {renderValue(entry.after) ? <div>After: {String(renderValue(entry.after))}</div> : null}

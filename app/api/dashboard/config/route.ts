@@ -160,9 +160,18 @@ export async function PATCH(req: NextRequest) {
   }
 
   const collection = await discordConfigCollection();
+
+  // Diff before writing so the audit trail records real before/after values.
+  const existing = await collection.findOne({ guildId });
+  const { diffConfigUpdate, auditConfigChange } = await import('@/app/lib/dashboard-audit');
+  const changes = diffConfigUpdate(
+    existing as Record<string, unknown> | null,
+    update as Record<string, unknown>,
+  );
+
   await collection.updateOne({ guildId }, { $set: update }, { upsert: true });
 
-  // Audit trail: who changed what (actor = Discord user id from token).
+  // Audit trail: who changed what (actor = Discord user from token).
   try {
     const meResp = await fetch('https://discord.com/api/v10/users/@me', {
       headers: { Authorization: `Bearer ${token}` },
@@ -172,8 +181,10 @@ export async function PATCH(req: NextRequest) {
       const me = (await meResp.json()) as { id?: string; username?: string };
       actor = me.username ? `${me.username} (${me.id})` : actor;
     }
-    const { auditConfigChange } = await import('@/app/lib/dashboard-audit');
-    await auditConfigChange(guildId, actor, 'Updated bot settings via dashboard');
+    const summary = changes.length
+      ? `Updated ${changes.length} setting${changes.length === 1 ? '' : 's'}: ${changes.slice(0, 3).map((c) => `${c.section ? `${c.section}.` : ''}${c.field}`).join(', ')}${changes.length > 3 ? '…' : ''}`
+      : 'Saved settings (no changes)';
+    await auditConfigChange(guildId, actor, summary, changes);
   } catch {
     // Audit is best-effort; the config write already succeeded.
   }
