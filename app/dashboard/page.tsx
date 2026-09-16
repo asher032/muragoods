@@ -30,9 +30,10 @@ interface GuildConfig {
 }
 
 const CLIENT_ID = '1549395794853888020';
-const REDIRECT_URI = typeof window !== 'undefined'
+const REDIRECT_URI = typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? `${window.location.origin}/dashboard`
-  : '';
+  : 'https://muragoods.vercel.app/dashboard';
 const SCOPES = 'identify guilds';
 
 const glass: React.CSSProperties = {

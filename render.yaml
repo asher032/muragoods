@@ -4,9 +4,11 @@
 
 services:
   - type: web
-    name: murastream-bot
+    name: murastream-bot-pf11
     runtime: python
-    plan: free
+    # Paid Render service keeps the Discord gateway process running 24/7.
+    # The free plan sleeps and disconnects the bot from Discord.
+    plan: starter
     rootDir: discord-bot
     buildCommand: pip install -r requirements.txt
     startCommand: python -m bot.main
