@@ -83,24 +83,18 @@ class MuraBot(commands.Bot):
 
     async def on_ready(self) -> None:
         http_mod.set_status("discord", "online")
-        # Rich Presence: "Watching movies at https://muragoods.vercel.app/"
-        # Streaming-type presence shows a purple Play button-style presence;
-        # Watching reads naturally for a media bot. URL is public site only.
-        activity = discord.Streaming(
-            name="movies at https://muragoods.vercel.app/",
-            url="https://twitch.tv/discord",  # required for STREAMING type
+        activity_name = config.BOT_ACTIVITY.strip() or "https://muragoods.vercel.app/"
+        if "twitch.tv" in activity_name.lower():
+            activity_name = "https://muragoods.vercel.app/"
+        activity = discord.Activity(
+            type=discord.ActivityType.watching,
+            name=activity_name,
         )
-        # Fall back to a plain Watching presence if streaming URL rejected.
-        try:
-            await self.change_presence(
-                activity=activity,
-                status={"online": discord.Status.online, "idle": discord.Status.idle,
-                        "dnd": discord.Status.do_not_disturb}.get(
-                            config.BOT_STATUS.lower(), discord.Status.online))
-        except discord.HTTPException:
-            await self.change_presence(
-                activity=discord.Activity(type=discord.ActivityType.watching,
-                                          name="movies at https://muragoods.vercel.app/"))
+        await self.change_presence(
+            activity=activity,
+            status={"online": discord.Status.online, "idle": discord.Status.idle,
+                    "dnd": discord.Status.do_not_disturb}.get(
+                        config.BOT_STATUS.lower(), discord.Status.online))
         log.info("Logged in as %s (%s) - %d guilds", self.user, getattr(self.user, "id", "?"), len(self.guilds))
 
     async def on_guild_join(self, guild: discord.Guild) -> None:

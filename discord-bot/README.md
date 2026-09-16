@@ -83,7 +83,7 @@ Permissions included: View Channels, Send Messages, Embed Links, Attach Files, R
 3. Keep the service on the `starter` plan; the free plan sleeps and disconnects the bot from Discord.
 4. Set the secret env vars in the Render dashboard, then deploy. The `/health` endpoint is used by Render to restart an unhealthy instance.
 
-The MuraBot dashboard is the Next.js app at `https://muragoods.vercel.app/dashboard` and should remain deployed through the repository's Vercel project. In the Discord Developer Portal, register this exact OAuth2 redirect URI: `https://muragoods.vercel.app/dashboard`. Vercel serves the dashboard and its API routes on demand, so it does not need a continuously running dashboard process. Set `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, and `DISCORD_BRIDGE_SECRET` in Vercel, using the same bridge secret as Render.
+The MuraBot dashboard is the Next.js app at `https://muragoods.vercel.app/dashboard` and should remain deployed through the repository's Vercel project. In the Discord Developer Portal, register this exact OAuth2 redirect URI: `https://muragoods.vercel.app/dashboard`. Vercel serves the dashboard and its API routes on demand, so it does not need a continuously running dashboard process. Set `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, and `DISCORD_BRIDGE_SECRET` in Vercel, using the same bridge secret as Render. `DISCORD_BOT_TOKEN` lets the dashboard populate channel and role selectors; it is never sent to the browser.
 
 **Docker** (any host):
 

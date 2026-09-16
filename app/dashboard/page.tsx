@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Activity, ChevronRight, LayoutDashboard, LogOut, Menu, Music2,
-  Settings2, ShieldCheck, Users, X,
+  Server, Settings2, ShieldCheck, Users, X,
 } from 'lucide-react';
 
 interface Guild {
@@ -31,6 +31,12 @@ interface GuildConfig {
   welcome?: { enabled?: boolean; channelId?: string; message?: string; autoRoleId?: string };
   tickets?: { categoryId?: string; supportRoleId?: string };
   notifications?: { channelId?: string; newContent?: boolean; requestUpdates?: boolean };
+}
+
+interface GuildResources {
+  channels: Array<{ id: string; name: string; type: number; parentId: string | null }>;
+  roles: Array<{ id: string; name: string }>;
+  members: Array<{ id: string; name: string }>;
 }
 
 const CLIENT_ID = '1549395794853888020';
@@ -92,6 +98,24 @@ function Field({ label, value, onChange, placeholder }: {
   );
 }
 
+function SelectField({ label, value, onChange, options, emptyLabel = 'Choose one' }: {
+  label: string; value: string; onChange: (value: string) => void;
+  options: Array<{ id: string; name: string }>; emptyLabel?: string;
+}) {
+  return (
+    <label style={{ display: 'block', marginBottom: 12 }}>
+      <span style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.55)', marginBottom: 6 }}>{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} style={{
+        width: '100%', padding: '11px 14px', background: '#202530', border: '1px solid #343b4a',
+        borderRadius: 8, color: '#f5f5f7', fontSize: 14,
+      }}>
+        <option value="">{emptyLabel}</option>
+        {options.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+      </select>
+    </label>
+  );
+}
+
 export default function DashboardPage() {
   const [token, setToken] = useState<string>('');
   const [guilds, setGuilds] = useState<Guild[]>([]);
@@ -104,6 +128,9 @@ export default function DashboardPage() {
   const [audit, setAudit] = useState<Array<{ actor: string; summary: string; at: string }>>([]);
   const [showAudit, setShowAudit] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
+  const [resources, setResources] = useState<GuildResources | null>(null);
+  const [resourcesError, setResourcesError] = useState('');
+  const [resourcesLoading, setResourcesLoading] = useState(false);
 
   // Handle OAuth redirect: exchange the fragment token.
   useEffect(() => {
@@ -157,6 +184,28 @@ export default function DashboardPage() {
     else setError(data.error || 'Failed to load config');
   }, [token]);
 
+  const loadResources = useCallback(async (guildId: string) => {
+    setResourcesLoading(true);
+    setResourcesError('');
+    try {
+      const response = await fetch(`/api/dashboard/resources?guildId=${guildId}`, {
+        headers: { 'x-discord-token': token },
+      });
+      const data = await response.json();
+      if (data.success) setResources(data);
+      else setResourcesError(data.error || 'Could not load server resources');
+    } catch {
+      setResourcesError('Could not load server resources');
+    } finally {
+      setResourcesLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (selected && token) loadResources(selected.id);
+    else setResources(null);
+  }, [selected, token, loadResources]);
+
   const loadAudit = useCallback(async () => {
     if (!selected) return;
     const resp = await fetch(`/api/dashboard/audit?guildId=${selected.id}`, {
@@ -206,6 +255,8 @@ export default function DashboardPage() {
   const mod = config.moderation || {};
   const mus = config.music || {};
   const wel = config.welcome || {};
+  const tickets = config.tickets || {};
+  const notifications = config.notifications || {};
   const sec = ((config as Record<string, unknown>).securitySettings || {}) as Record<string, boolean | number>;
 
   // Section visibility driven by the search bar.
@@ -366,6 +417,11 @@ export default function DashboardPage() {
               }}
             />
 
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 18, padding: '10px 13px', borderRadius: 8, background: '#141820', border: '1px solid #292e3a', color: '#8e96a6', fontSize: 12.5 }}>
+              <Server size={15} />
+              {resourcesLoading ? 'Loading channels, roles and members…' : resourcesError || 'Pick channels and roles below. No IDs needed.'}
+            </div>
+
             {/* Audit panel */}
             {showAudit && (
               <div style={{ ...glass, padding: 24, marginBottom: 16 }}>
@@ -405,8 +461,13 @@ export default function DashboardPage() {
             {matches('music', 'dj', 'volume') && (
               <div style={{ ...glass, padding: 24, marginBottom: 16 }}>
                 <h3 style={{ margin: '0 0 14px', fontSize: 16 }}>🎵 Music</h3>
-                <Field label="DJ Role ID" value={mus.djRoleId || ''} onChange={(v) => update('music', 'djRoleId', v)} placeholder="Role ID (right-click role → Copy ID)" />
-                <Field label="Music Channel ID" value={mus.musicChannelId || ''} onChange={(v) => update('music', 'musicChannelId', v)} placeholder="Channel ID" />
+                {resources ? <>
+                  <SelectField label="DJ role" value={mus.djRoleId || ''} onChange={(v) => update('music', 'djRoleId', v)} options={resources.roles} />
+                  <SelectField label="Music channel" value={mus.musicChannelId || ''} onChange={(v) => update('music', 'musicChannelId', v)} options={resources.channels.filter((channel) => channel.type === 2 || channel.type === 0)} />
+                </> : <>
+                  <Field label="DJ Role ID" value={mus.djRoleId || ''} onChange={(v) => update('music', 'djRoleId', v)} placeholder="Load server resources to choose a role" />
+                  <Field label="Music Channel ID" value={mus.musicChannelId || ''} onChange={(v) => update('music', 'musicChannelId', v)} placeholder="Load server resources to choose a channel" />
+                </>}
                 <label style={{ display: 'block', marginBottom: 12 }}>
                   <span style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.55)', marginBottom: 6 }}>Control mode</span>
                   <select
@@ -431,8 +492,13 @@ export default function DashboardPage() {
             {matches('moderation', 'automod', 'spam', 'logs') && (
               <div style={{ ...glass, padding: 24, marginBottom: 16 }}>
                 <h3 style={{ margin: '0 0 14px', fontSize: 16 }}>🛡️ Moderation & AutoMod</h3>
-                <Field label="Moderator Role ID" value={mod.modRoleId || ''} onChange={(v) => update('moderation', 'modRoleId', v)} placeholder="Role ID" />
-                <Field label="Log Channel ID" value={mod.logChannelId || ''} onChange={(v) => update('moderation', 'logChannelId', v)} placeholder="Channel ID" />
+                {resources ? <>
+                  <SelectField label="Moderator role" value={mod.modRoleId || ''} onChange={(v) => update('moderation', 'modRoleId', v)} options={resources.roles} />
+                  <SelectField label="Log channel" value={mod.logChannelId || ''} onChange={(v) => update('moderation', 'logChannelId', v)} options={resources.channels.filter((channel) => channel.type === 0 || channel.type === 5)} />
+                </> : <>
+                  <Field label="Moderator Role ID" value={mod.modRoleId || ''} onChange={(v) => update('moderation', 'modRoleId', v)} placeholder="Load server resources to choose a role" />
+                  <Field label="Log Channel ID" value={mod.logChannelId || ''} onChange={(v) => update('moderation', 'logChannelId', v)} placeholder="Load server resources to choose a channel" />
+                </>}
                 <Toggle label="AutoMod enabled" value={mod.automodEnabled ?? true} onChange={(v) => update('moderation', 'automodEnabled', v)} />
                 <Toggle label="Anti-spam" value={mod.antiSpam ?? true} onChange={(v) => update('moderation', 'antiSpam', v)} />
                 <Toggle label="Anti-caps" value={mod.antiCaps ?? true} onChange={(v) => update('moderation', 'antiCaps', v)} />
@@ -459,9 +525,36 @@ export default function DashboardPage() {
               <div style={{ ...glass, padding: 24, marginBottom: 16 }}>
                 <h3 style={{ margin: '0 0 14px', fontSize: 16 }}>👋 Welcome</h3>
                 <Toggle label="Welcome messages" value={wel.enabled ?? false} onChange={(v) => update('welcome', 'enabled', v)} />
-                <Field label="Welcome Channel ID" value={wel.channelId || ''} onChange={(v) => update('welcome', 'channelId', v)} placeholder="Channel ID" />
-                <Field label="Auto-role ID" value={wel.autoRoleId || ''} onChange={(v) => update('welcome', 'autoRoleId', v)} placeholder="Role ID" />
+                {resources ? <>
+                  <SelectField label="Welcome channel" value={wel.channelId || ''} onChange={(v) => update('welcome', 'channelId', v)} options={resources.channels.filter((channel) => channel.type === 0 || channel.type === 5)} />
+                  <SelectField label="Auto-role" value={wel.autoRoleId || ''} onChange={(v) => update('welcome', 'autoRoleId', v)} options={resources.roles} />
+                </> : <>
+                  <Field label="Welcome Channel ID" value={wel.channelId || ''} onChange={(v) => update('welcome', 'channelId', v)} placeholder="Load server resources to choose a channel" />
+                  <Field label="Auto-role ID" value={wel.autoRoleId || ''} onChange={(v) => update('welcome', 'autoRoleId', v)} placeholder="Load server resources to choose a role" />
+                </>}
                 <Field label="Message ({user}, {server}, {membercount})" value={wel.message || ''} onChange={(v) => update('welcome', 'message', v)} placeholder="👋 Welcome {user} to {server}!" />
+              </div>
+            )}
+
+            {matches('tickets', 'support', 'category') && (
+              <div style={{ ...glass, padding: 24, marginBottom: 16 }}>
+                <h3 style={{ margin: '0 0 14px', fontSize: 16 }}>🎫 Tickets</h3>
+                {resources ? <>
+                  <SelectField label="Ticket category" value={tickets.categoryId || ''} onChange={(v) => update('tickets', 'categoryId', v)} options={resources.channels.filter((channel) => channel.type === 4)} />
+                  <SelectField label="Support role" value={tickets.supportRoleId || ''} onChange={(v) => update('tickets', 'supportRoleId', v)} options={resources.roles} />
+                </> : <>
+                  <Field label="Ticket Category ID" value={tickets.categoryId || ''} onChange={(v) => update('tickets', 'categoryId', v)} placeholder="Load server resources to choose a category" />
+                  <Field label="Support Role ID" value={tickets.supportRoleId || ''} onChange={(v) => update('tickets', 'supportRoleId', v)} placeholder="Load server resources to choose a role" />
+                </>}
+              </div>
+            )}
+
+            {matches('notifications', 'alerts', 'new content', 'requests') && (
+              <div style={{ ...glass, padding: 24, marginBottom: 16 }}>
+                <h3 style={{ margin: '0 0 14px', fontSize: 16 }}>🔔 Notifications</h3>
+                {resources ? <SelectField label="Notification channel" value={notifications.channelId || ''} onChange={(v) => update('notifications', 'channelId', v)} options={resources.channels.filter((channel) => channel.type === 0 || channel.type === 5)} /> : <Field label="Notification Channel ID" value={notifications.channelId || ''} onChange={(v) => update('notifications', 'channelId', v)} placeholder="Load server resources to choose a channel" />}
+                <Toggle label="New content alerts" value={notifications.newContent ?? false} onChange={(v) => update('notifications', 'newContent', v)} />
+                <Toggle label="Request update alerts" value={notifications.requestUpdates ?? false} onChange={(v) => update('notifications', 'requestUpdates', v)} />
               </div>
             )}
 
