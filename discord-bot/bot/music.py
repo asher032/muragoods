@@ -130,7 +130,6 @@ class MusicEngine:
         self._players.pop(guild_id, None)
 
     async def resolve(self, query: str) -> Optional[Track]:
-<<<<<<< HEAD
         """Resolve a search query or URL to a Track via yt-dlp. Retries on failure."""
         last_exc: Optional[Exception] = None
         for attempt in range(3):
