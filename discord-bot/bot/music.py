@@ -186,6 +186,8 @@ class MusicEngine:
             ("ytsearch", get_ydl_opts()),
             ("ytsearch1", {**get_ydl_opts(), "default_search": None}),
             ("ytsearch5", {**get_ydl_opts(), "default_search": None}),
+            ("scsearch", {**get_ydl_opts(), "default_search": None}),
+            ("bandcamp", {**get_ydl_opts(), "default_search": None}),
             ("direct", {**get_ydl_opts(), "force_generic_extractor": True}),
         ]
         for strategy_name, strategy_opts in strategies:
@@ -194,6 +196,10 @@ class MusicEngine:
                 search_query = f"ytsearch1:{query}"
             elif strategy_name == "ytsearch5":
                 search_query = f"ytsearch5:{query}"
+            elif strategy_name == "scsearch":
+                search_query = f"scsearch:{query}"
+            elif strategy_name == "bandcamp":
+                search_query = f"bandcamp:{query}"
             for attempt in range(2):
                 try:
                     loop = asyncio.get_running_loop()
