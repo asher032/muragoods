@@ -52,8 +52,14 @@ class PrefixCog(commands.Cog, name="Prefix"):
         async with ctx.typing():
             track = await music.engine.resolve(query)
             if not track:
-                await ctx.send(embed=embeds.embed(
-                    "🔎 Track Not Found", "Try another search.", embeds.WARN))
+                err_detail = music.engine.get_resolve_error()
+                if err_detail:
+                    await ctx.send(embed=embeds.embed(
+                        "🔎 Track Not Found",
+                        f"yt-dlp: {err_detail}\nTry a different search or a direct URL.", embeds.WARN))
+                else:
+                    await ctx.send(embed=embeds.embed(
+                        "🔎 Track Not Found", "Try another search.", embeds.WARN))
                 return
             track.requester = ctx.author
             player = music.engine.get_player(ctx.guild.id)

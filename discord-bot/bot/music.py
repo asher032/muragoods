@@ -11,6 +11,8 @@ from typing import Any, Optional
 import discord
 import yt_dlp
 
+import config
+
 log = logging.getLogger("bot.music")
 
 
@@ -27,24 +29,30 @@ def _resolve_ffmpeg() -> str:
 
 FFMPEG_EXE = _resolve_ffmpeg()
 
-YDL_OPTS = {
-    "format": "bestaudio[acodec!=none]/bestaudio/best",
-    "noplaylist": True,
-    # Bare search terms ("lofi hip hop") are resolved via YouTube search.
-    # URLs are passed through untouched.
-    "default_search": "ytsearch",
-    "quiet": False,
-    "no_warnings": True,
-    "source_address": "0.0.0.0",
-    "nocheckcertificate": True,
-    "socket-timeout": 15,
-    "extractor_retries": 3,
-    "retries": 3,
-    "fragment_retries": 3,
-    "buffer": 65536,
-    "geo_bypass": True,
-    "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
-}
+
+def get_ydl_opts() -> dict[str, Any]:
+    """Build yt-dlp options, including proxy if configured."""
+    opts: dict[str, Any] = {
+        "format": "bestaudio[acodec!=none]/bestaudio/best",
+        "noplaylist": True,
+        "default_search": "ytsearch",
+        "quiet": False,
+        "no_warnings": True,
+        "source_address": "0.0.0.0",
+        "nocheckcertificate": True,
+        "socket-timeout": 20,
+        "extractor_retries": 5,
+        "retries": 5,
+        "fragment_retries": 5,
+        "buffer": 65536,
+        "geo_bypass": True,
+        "extractor_args": {"youtube": {"player_client": ["android", "web", "ios", "tv"]}},
+    }
+    proxy = config.YOUTUBE_PROXY
+    if proxy:
+        opts["proxy"] = proxy
+    return opts
+
 
 FFMPEG_OPTS = {
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
@@ -84,7 +92,6 @@ class GuildPlayer:
         self.volume: float = 0.5
         self.voice: Optional[discord.VoiceClient] = None
         self.now_playing_message: Optional[discord.Message] = None
-        # Position tracking (monotonic clock, survives pause/resume).
         self._play_started: float = 0.0
         self._play_offset: float = 0.0
         self._paused_at: Optional[float] = None
@@ -100,7 +107,6 @@ class GuildPlayer:
             self._paused_at = None
 
     def position(self) -> float:
-        """Approximate playback position of the current track, in seconds."""
         if not self.current or not self._play_started:
             return 0.0
         elapsed = self._paused_elapsed
@@ -154,6 +160,8 @@ class MusicEngine:
     def __init__(self):
         self._players: dict[int, GuildPlayer] = {}
         self.bot_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._last_resolve_error: Optional[str] = None
+        self._ydlp_version: str = "unknown"
 
     def get_player(self, guild_id: int) -> GuildPlayer:
         if guild_id not in self._players:
@@ -164,57 +172,72 @@ class MusicEngine:
         self._players.pop(guild_id, None)
 
     async def resolve(self, query: str) -> Optional[Track]:
-        """Resolve a search query or URL to a Track via yt-dlp. Retries on failure."""
-        last_exc: Optional[Exception] = None
-        for attempt in range(3):
+        """Resolve a search query or URL to a Track via yt-dlp.
+        Tries multiple strategies before giving up."""
+        self._last_resolve_error = None
+        if self._ydlp_version == "unknown":
             try:
-                loop = asyncio.get_running_loop()
-                with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
-                    data = await loop.run_in_executor(
-                        None, lambda: ydl.extract_info(query, download=False))
-                if data is None:
-                    last_exc = ValueError("yt-dlp returned None")
-                    continue
-                if "entries" in data:
-                    entries = [e for e in data["entries"] if e]
-                    if not entries:
-                        last_exc = ValueError("No entries found")
+                import yt_dlp as _yt
+                self._ydlp_version = _yt.version.__version__
+            except Exception:
+                pass
+        last_exc: Optional[Exception] = None
+        strategies = [
+            ("ytsearch", get_ydl_opts()),
+            ("ytsearch1", {**get_ydl_opts(), "default_search": None}),
+            ("ytsearch5", {**get_ydl_opts(), "default_search": None}),
+            ("direct", {**get_ydl_opts(), "force_generic_extractor": True}),
+        ]
+        for strategy_name, strategy_opts in strategies:
+            search_query = query
+            if strategy_name == "ytsearch1":
+                search_query = f"ytsearch1:{query}"
+            elif strategy_name == "ytsearch5":
+                search_query = f"ytsearch5:{query}"
+            for attempt in range(2):
+                try:
+                    loop = asyncio.get_running_loop()
+                    with yt_dlp.YoutubeDL(strategy_opts) as ydl:
+                        data = await loop.run_in_executor(
+                            None, lambda q=search_query: ydl.extract_info(q, download=False))
+                    if data is None:
+                        last_exc = ValueError(f"[{strategy_name}] yt-dlp returned None")
                         continue
-                    data = entries[0]
-                if not data.get("url") and not data.get("webpage_url"):
-                    last_exc = ValueError("No URL in result")
-                    continue
-                # A bare webpage URL is fine here: FFmpeg reconnects via
-                # yt-dlp's route only if url is direct; for search results the
-                # stream URL is what we want, so prefer it.
-                if not data.get("url"):
-                    data = await self._refresh_stream_url(data)
-                track = Track(data, requester=None)
-                log.info("resolve ok: %s (attempt %d)", track.title[:60], attempt + 1)
-                return track
-            except Exception as exc:
-                last_exc = exc
-                log.warning("yt-dlp attempt %d failed for %r: %s", attempt + 1, query[:100], exc)
-                if attempt < 2:
-                    await asyncio.sleep(1.5 * (attempt + 1))
-        log.error("yt-dlp failed after 3 attempts for %r: %s", query[:100], last_exc)
+                    if "entries" in data:
+                        entries = [e for e in data["entries"] if e]
+                        if not entries:
+                            last_exc = ValueError(f"[{strategy_name}] No entries found")
+                            continue
+                        data = entries[0]
+                    if not data.get("url") and not data.get("webpage_url"):
+                        last_exc = ValueError(f"[{strategy_name}] No URL in result")
+                        continue
+                    if not data.get("url"):
+                        data = await self._refresh_stream_url(data)
+                    track = Track(data, requester=None)
+                    log.info("resolve ok via %s: %s (attempt %d)", strategy_name, track.title[:60], attempt + 1)
+                    self._last_resolve_error = None
+                    return track
+                except Exception as exc:
+                    last_exc = exc
+                    self._last_resolve_error = str(exc)[:500]
+                    log.warning("yt-dlp %s attempt %d failed for %r: %s", strategy_name, attempt + 1, query[:100], exc)
+                    if attempt < 1:
+                        await asyncio.sleep(1)
+        log.error("yt-dlp failed after all strategies for %r: %s", query[:100], last_exc)
         return None
+
+    def get_resolve_error(self) -> Optional[str]:
+        return self._last_resolve_error
 
     async def play_now(self, player: GuildPlayer, track: Track,
                        voice_channel: discord.VoiceChannel, announce=None,
                        seek_to: float = 0.0) -> None:
-        # Guard against "Already playing audio" when /replay, /previous, /seek
-        # or /forward restarts a track while one is live. The queued track-end
-        # callback observes playing=False and exits without advancing the queue
-        # (duplicate-action protection for the stop() below).
         if player.voice and (player.voice.is_playing() or player.voice.is_paused()):
             player.playing = False
             player.voice.stop()
-            await asyncio.sleep(0)  # let the queued end-callback observe the flag
+            await asyncio.sleep(0)
         if not player.is_connected():
-            # Reuse the guild's existing voice client — /play after /join, or a
-            # connection made outside the engine — instead of failing with
-            # "Already connected to a voice channel".
             existing = voice_channel.guild.voice_client
             if existing and existing.is_connected():
                 player.voice = existing
@@ -259,9 +282,7 @@ class MusicEngine:
     async def _on_track_end(self, player: GuildPlayer, announce=None, err=None) -> None:
         try:
             if not player.playing:
-                return  # stopped/restarted intentionally — do not advance
-            # Recover once from a failed stream (e.g. expired YouTube URL on a
-            # long-queued track) by re-resolving the SAME track before moving on.
+                return
             if err and player.current:
                 source = player.current.url or player.current.stream_url
                 fresh = await self.resolve(source) if source else None
@@ -293,13 +314,12 @@ class MusicEngine:
             player.playing = False
 
     async def _refresh_stream_url(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Re-extract to obtain a direct stream URL when the webpage URL is all we have."""
         webpage = data.get("webpage_url") or data.get("url")
         if not webpage:
             return data
         try:
             loop = asyncio.get_running_loop()
-            with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
+            with yt_dlp.YoutubeDL(get_ydl_opts()) as ydl:
                 fresh = await loop.run_in_executor(
                     None, lambda: ydl.extract_info(webpage, download=False))
             if fresh and fresh.get("url"):

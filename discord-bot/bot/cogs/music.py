@@ -127,8 +127,15 @@ class MusicCog(commands.Cog):
         await interaction.followup.send(embed=embeds.music("🔎 Searching…", f"`{query[:80]}`"))
         track = await music.engine.resolve(query)
         if not track:
-            await interaction.edit_original_response(embed=embeds.embed(
-                "🔎 Track Not Found", "Try another search.", embeds.WARN))
+            err_detail = music.engine.get_resolve_error()
+            if err_detail:
+                await interaction.edit_original_response(embed=embeds.embed(
+                    "🔎 Track Not Found",
+                    f"yt-dlp: {err_detail}\nTry a different search or a direct URL.",
+                    embeds.WARN))
+            else:
+                await interaction.edit_original_response(embed=embeds.embed(
+                    "🔎 Track Not Found", "Try another search.", embeds.WARN))
             return
         track.requester = interaction.user
         player = music.engine.get_player(interaction.guild.id)
@@ -397,14 +404,39 @@ class MusicCog(commands.Cog):
         await interaction.edit_original_response(embed=embeds.music(
             f"📻 {genre.name} Radio", f"Now streaming **{track.title}**\nAutoplay enabled — the music never stops."))
 
+    @app_commands.command(name="musicinfo", description="Music subsystem diagnostics.")
+    async def music_info(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        lines = [f"yt-dlp: {music.engine._ydlp_version}"]
+        err = music.engine.get_resolve_error()
+        if err:
+            lines.append(f"Last error: {err[:300]}")
+        else:
+            lines.append("Last error: none")
+        p = music.engine.get_player(interaction.guild.id)
+        lines.append(f"Connected: {p.is_connected()}")
+        if p.voice and p.voice.is_connected():
+            ch = p.voice.channel
+            lines.append(f"Channel: {ch.name} ({len(ch.members)} members)")
+        lines.append(f"Current: {p.current or 'none'}")
+        lines.append(f"Queue: {len(p.queue)}")
+        await interaction.followup.send("\n".join(lines), ephemeral=True)
+
     @app_commands.command(name="searchmusic", description="Preview the top result for a search.")
     @app_commands.describe(query="What to search for")
     async def searchmusic(self, interaction: discord.Interaction, query: str):
         await interaction.response.defer()
         track = await music.engine.resolve(query)
         if not track:
-            await interaction.followup.send(embed=embeds.embed(
-                "🔎 Track Not Found", "Try another search.", embeds.WARN))
+            err_detail = music.engine.get_resolve_error()
+            if err_detail:
+                await interaction.followup.send(embed=embeds.embed(
+                    "🔎 Track Not Found",
+                    f"yt-dlp: {err_detail}\nTry a different search or a direct URL.",
+                    embeds.WARN))
+            else:
+                await interaction.followup.send(embed=embeds.embed(
+                    "🔎 Track Not Found", "Try another search.", embeds.WARN))
             return
         e = embeds.music("🎵 Top result", f"**{track.title}**\n{track.uploader}")
         if track.thumbnail:

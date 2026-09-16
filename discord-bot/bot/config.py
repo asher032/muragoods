@@ -39,6 +39,10 @@ MONGO_DB = _get("MONGO_DB", "murastream_bot")
 
 DEPLOY_WEBHOOK_URL = _get("DEPLOY_WEBHOOK_URL")
 
+# Proxy for yt-dlp to reach YouTube (Render datacenter IPs are often blocked).
+# Format: "http://user:pass@host:port" or "socks5://user:pass@host:port"
+YOUTUBE_PROXY = _get("YOUTUBE_PROXY")
+
 # ── Behaviour tuning ─────────────────────────────────────────────────────
 COMMAND_COOLDOWN_SECONDS = 3          # per-user anti-spam on API-backed commands
 REQUEST_COOLDOWN_SECONDS = 60         # /request per user

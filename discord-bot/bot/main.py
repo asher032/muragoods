@@ -79,6 +79,12 @@ class MuraBot(commands.Bot):
                 log.info("Loaded %s", cog)
             except Exception:
                 log.exception("Failed to load %s", cog)
+        # Log yt-dlp version for diagnostics.
+        try:
+            import yt_dlp
+            log.info("yt-dlp version: %s", yt_dlp.version.__version__)
+        except Exception as exc:
+            log.warning("Could not get yt-dlp version: %s", exc)
         # Sync ONCE per process start (global). Per-guild instant sync happens
         # in on_guild_join. Re-syncing on every reconnect causes rate limits.
         try:
