@@ -5,7 +5,7 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # Make sibling modules importable regardless of how the bot is launched.
@@ -146,8 +146,15 @@ async def on_app_command_error(interaction: discord.Interaction, error: Exceptio
 
 
 async def _health_server() -> None:
-    """Tiny HTTP endpoint for host healthchecks (Render/Docker)."""
+    """Tiny HTTP endpoint for host healthchecks (Render/Docker) + the
+    music-state/control bridge the dashboard uses for REAL player data."""
     from aiohttp import web
+
+    def _authorized(request: web.Request) -> bool:
+        secret = config.BRIDGE_SECRET
+        if not secret:
+            return False
+        return request.headers.get("Authorization", "") == f"Bearer {secret}"
 
     async def health(_request: web.Request) -> web.Response:
         statuses = http_mod.get_status()
@@ -173,8 +180,276 @@ async def _health_server() -> None:
             "shard_count": shard_count,
         }, status=200 if ok else 503)
 
+    def _track_dict(t) -> dict:
+        if t is None:
+            return None
+        return {
+            "title": t.title, "uploader": t.uploader, "duration": t.duration,
+            "thumbnail": t.thumbnail, "url": t.url,
+            "requester": str(t.requester) if t.requester else None,
+        }
+
+    async def music_state(request: web.Request) -> web.Response:
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            return web.json_response({"ok": False, "error": "Bot not in that guild"}, status=404)
+        import music as music_mod
+        p = music_mod.engine.get_player(guild_id)
+        vc = p.voice
+        connected = bool(vc and vc.is_connected())
+        state = "idle"
+        if connected and vc.is_paused():
+            state = "paused"
+        elif connected and (vc.is_playing() or p.playing):
+            state = "playing"
+        return web.json_response({
+            "ok": True,
+            "connected": connected,
+            "state": state,
+            "voiceChannel": vc.channel.name if connected and vc.channel else None,
+            "current": _track_dict(p.current),
+            "position": round(p.position()) if p.current else 0,
+            "volume": int(p.volume * 100),
+            "loop": p.loop,
+            "queueLoop": p.queue_loop,
+            "autoplay": p.autoplay,
+            "queue": [_track_dict(t) for t in list(p.queue)[:20]],
+            "queueLength": len(p.queue),
+            "history": [_track_dict(t) for t in list(reversed(p.history))[:10]],
+        })
+
+    async def music_control(request: web.Request) -> web.Response:
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+        action = str(body.get("action") or "")
+        import music as music_mod
+        p = music_mod.engine.get_player(guild_id)
+        vc = p.voice if (p.voice and p.voice.is_connected()) else None
+
+        def need_voice() -> web.Response | None:
+            if not vc:
+                return web.json_response(
+                    {"ok": False, "error": "Bot is not connected to a voice channel"}, status=409)
+            return None
+
+        try:
+            if action == "pause":
+                if r := need_voice():
+                    return r
+                if vc.is_playing():
+                    vc.pause()
+                    p.mark_paused()
+                return web.json_response({"ok": True, "state": "paused"})
+            if action == "resume":
+                if r := need_voice():
+                    return r
+                if vc.is_paused():
+                    vc.resume()
+                    p.mark_resumed()
+                return web.json_response({"ok": True, "state": "playing"})
+            if action == "skip":
+                if r := need_voice():
+                    return r
+                p.playing = True  # allow the track-end handler to advance
+                vc.stop()
+                return web.json_response({"ok": True})
+            if action == "stop":
+                if r := need_voice():
+                    return r
+                p.clear()
+                p.playing = False
+                vc.stop()
+                return web.json_response({"ok": True})
+            if action == "volume":
+                if r := need_voice():
+                    return r
+                level = max(1, min(150, int(body.get("level") or 50)))
+                p.volume = level / 100
+                if isinstance(vc.source, discord.PCMVolumeTransformer):
+                    vc.source.volume = p.volume
+                return web.json_response({"ok": True, "volume": level})
+            if action == "loop":
+                p.loop = not p.loop
+                return web.json_response({"ok": True, "loop": p.loop})
+            if action == "queueLoop":
+                p.queue_loop = not p.queue_loop
+                return web.json_response({"ok": True, "queueLoop": p.queue_loop})
+            if action == "shuffle":
+                import random as _random
+                items = list(p.queue)
+                _random.shuffle(items)
+                p.queue.clear()
+                p.queue.extend(items)
+                return web.json_response({"ok": True, "queueLength": len(items)})
+            if action == "remove":
+                pos = int(body.get("position") or 0)
+                if pos < 1 or pos > len(p.queue):
+                    return web.json_response({"ok": False, "error": "Bad position"}, status=400)
+                removed = p.queue[pos - 1]
+                del p.queue[pos - 1]
+                return web.json_response({"ok": True, "removed": removed.title})
+            if action == "disconnect":
+                if vc:
+                    p.clear()
+                    p.playing = False
+                    await vc.disconnect(force=True)
+                p.voice = None
+                music_mod.engine.remove_player(guild_id)
+                return web.json_response({"ok": True})
+            return web.json_response({"ok": False, "error": f"Unknown action: {action}"}, status=400)
+        except Exception as exc:
+            log.warning("music_control %s failed for guild %s: %s", action, guild_id, str(exc)[:150])
+            return web.json_response({"ok": False, "error": str(exc)[:200]}, status=500)
+
+    async def member_lookup(request: web.Request) -> web.Response:
+        """Real member data + moderation history for the dashboard."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        user_id = int(request.match_info["user_id"])
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            return web.json_response({"ok": False, "error": "Bot not in that guild"}, status=404)
+        member = guild.get_member(user_id)
+        if not member:
+            return web.json_response({"ok": False, "error": "Member not found"}, status=404)
+        import database as db
+        warn_list = await db.get_warnings(guild_id, user_id)
+        cases = await db.user_cases(guild_id, user_id, limit=15)
+        return web.json_response({
+            "ok": True,
+            "member": {
+                "id": str(member.id),
+                "username": member.name,
+                "displayName": member.display_name,
+                "avatar": member.display_avatar.url if member.display_avatar else None,
+                "roles": [{"id": str(r.id), "name": r.name, "color": str(r.color)}
+                          for r in reversed(member.roles[1:])],
+                "joinedAt": member.joined_at.isoformat() if member.joined_at else None,
+                "accountCreated": member.created_at.isoformat(),
+                "timedOutUntil": member.timed_out_until.isoformat() if member.is_timed_out() else None,
+                "topRole": member.top_role.name,
+            },
+            "warnings": [{"reason": w["reason"], "moderatorId": str(w["moderatorId"]),
+                          "at": w["at"].isoformat() if hasattr(w["at"], "isoformat") else str(w["at"])}
+                         for w in warn_list],
+            "cases": [{"caseId": c["caseId"], "action": c["action"], "reason": c["reason"],
+                       "moderatorId": str(c["moderatorId"]),
+                       "createdAt": c["createdAt"].isoformat() if hasattr(c["createdAt"], "isoformat") else str(c["createdAt"])}
+                      for c in cases],
+        })
+
+    async def mod_action(request: web.Request) -> web.Response:
+        """Dashboard-initiated moderation: re-checks EVERYTHING server-side.
+        Never trusts the frontend — hierarchy, bot perms, target resolution
+        and Discord API result are all evaluated here."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+        action = str(body.get("action") or "")
+        target_id = int(body.get("userId") or 0)
+        reason = str(body.get("reason") or "Dashboard action")[:300]
+        minutes = max(1, min(int(body.get("minutes") or 10), 40320))
+        actor_label = str(body.get("actor") or "Dashboard moderator")[:60]
+
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            return web.json_response({"ok": False, "error": "Bot not in that guild"}, status=404)
+        me = guild.me
+        member = guild.get_member(target_id)
+        if action != "unban" and not member:
+            return web.json_response({"ok": False, "error": "Member not found in this server"}, status=404)
+        if member and member.id == me.id:
+            return web.json_response({"ok": False, "error": "I can't moderate myself"}, status=400)
+        if member and member.id == guild.owner_id:
+            return web.json_response({"ok": False, "error": "I can't moderate the server owner"}, status=400)
+
+        def hierarchy_blocked() -> web.Response | None:
+            if member and member.top_role >= me.top_role:
+                return web.json_response({
+                    "ok": False,
+                    "error": ("I cannot moderate this member because their highest role is "
+                              "equal to or higher than mine. Fix: Server Settings → Roles → "
+                              f"drag my role above {member.top_role.name}.")}, status=409)
+            return None
+
+        import database as db
+        try:
+            if action == "warn":
+                if r := hierarchy_blocked():
+                    return r
+                count = await db.add_warning(guild_id, target_id, 0, reason)
+                case_id = await db.add_case(guild_id, target_id, 0, "warn", reason)
+                if member:
+                    try:
+                        await member.send(embed=discord.Embed(
+                            title=f"⚠️ Warning — {guild.name}", description=reason[:300]))
+                    except (discord.Forbidden, discord.HTTPException):
+                        pass
+                return web.json_response({"ok": True, "caseId": case_id, "warningCount": count})
+            if action == "timeout":
+                if r := hierarchy_blocked():
+                    return r
+                if not me.guild_permissions.moderate_members:
+                    return web.json_response({"ok": False, "error": "I lack Moderate Members permission"}, status=403)
+                await member.timeout(discord.utils.utcnow() + timedelta(minutes=minutes),
+                                     reason=f"Dashboard: {reason[:150]}")
+                case_id = await db.add_case(guild_id, target_id, 0, "timeout", reason, f"{minutes}m")
+                await db.log_action(guild_id, 0, target_id, "timeout", f"{reason[:200]} (dashboard: {actor_label})")
+                return web.json_response({"ok": True, "caseId": case_id})
+            if action == "kick":
+                if r := hierarchy_blocked():
+                    return r
+                if not me.guild_permissions.kick_members:
+                    return web.json_response({"ok": False, "error": "I lack Kick Members permission"}, status=403)
+                await member.kick(reason=f"Dashboard ({actor_label}): {reason[:150]}")
+                case_id = await db.add_case(guild_id, target_id, 0, "kick", reason)
+                await db.log_action(guild_id, 0, target_id, "kick", f"{reason[:200]} (dashboard: {actor_label})")
+                return web.json_response({"ok": True, "caseId": case_id})
+            if action == "ban":
+                if r := hierarchy_blocked():
+                    return r
+                if not me.guild_permissions.ban_members:
+                    return web.json_response({"ok": False, "error": "I lack Ban Members permission"}, status=403)
+                await guild.ban(discord.Object(id=target_id), reason=f"Dashboard ({actor_label}): {reason[:150]}",
+                                delete_message_days=0)
+                case_id = await db.add_case(guild_id, target_id, 0, "ban", reason)
+                await db.log_action(guild_id, 0, target_id, "ban", f"{reason[:200]} (dashboard: {actor_label})")
+                return web.json_response({"ok": True, "caseId": case_id})
+            if action == "unban":
+                if not me.guild_permissions.ban_members:
+                    return web.json_response({"ok": False, "error": "I lack Ban Members permission"}, status=403)
+                try:
+                    banned = await guild.fetch_ban(discord.Object(id=target_id))
+                except discord.NotFound:
+                    return web.json_response({"ok": False, "error": "User is not banned"}, status=404)
+                await guild.unban(banned.user, reason=f"Dashboard ({actor_label})")
+                case_id = await db.add_case(guild_id, target_id, 0, "unban", reason)
+                return web.json_response({"ok": True, "caseId": case_id})
+            return web.json_response({"ok": False, "error": f"Unknown action: {action}"}, status=400)
+        except discord.Forbidden:
+            return web.json_response({"ok": False, "error": "Discord rejected the action (Forbidden)"}, status=403)
+        except discord.HTTPException as exc:
+            return web.json_response({"ok": False, "error": f"Discord API error {exc.status}"}, status=502)
+
     app = web.Application()
     app.router.add_get("/health", health)
+    app.router.add_get("/music/state/{guild_id:\\d+}", music_state)
+    app.router.add_post("/music/control/{guild_id:\\d+}", music_control)
+    app.router.add_get("/mod/member/{guild_id:\\d+}/{user_id:\\d+}", member_lookup)
+    app.router.add_post("/mod/action/{guild_id:\\d+}", mod_action)
     port = int(os.environ.get("PORT") or 8080) or 8080  # PORT=0 → default
     runner = web.AppRunner(app)
     await runner.setup()

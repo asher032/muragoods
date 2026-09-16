@@ -72,6 +72,37 @@ class ModerationCog(commands.Cog):
             except discord.HTTPException:
                 pass
 
+    async def _case_and_log(self, interaction: discord.Interaction, user, action: str,
+                            reason: str, duration: str = "") -> int | None:
+        """Record a case + persist action + send to the mod-log channel.
+        Returns the case ID (or None). Never raises — logging must not break
+        the moderation action itself."""
+        case_id = None
+        try:
+            case_id = await database.add_case(
+                interaction.guild.id, user.id, interaction.user.id, action,
+                reason, duration)
+        except Exception:
+            log.warning("Case recording failed for %s in %s", action, interaction.guild.id)
+        await database.log_action(interaction.guild.id, interaction.user.id, user.id, action, reason[:300])
+        e = utils.base_embed(
+            f"📋 Case #{case_id}" if case_id else f"📋 {action}",
+            f"**Action:** {action.upper()}\n**Target:** {user.mention} (`{user.id}`)\n"
+            f"**Moderator:** {interaction.user.mention}\n**Reason:** {reason[:300]}"
+            + (f"\n**Duration:** {duration}" if duration else ""))
+        e.timestamp = discord.utils.utcnow()
+        await self._log(interaction.guild, e)
+        return case_id
+
+    async def _dm_target(self, user, guild: discord.Guild, action: str, reason: str) -> None:
+        """Best-effort DM notification. Closed DMs must never fail the action."""
+        try:
+            await user.send(embed=utils.base_embed(
+                f"✉️ You received a {action} in {guild.name}",
+                f"Reason: {reason[:300]}\nIf you believe this is a mistake, contact the staff."))
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
     # ── Warnings ──────────────────────────────────────────────────────
     @app_commands.command(name="warn", description="Warn a member.")
     @app_commands.describe(user="Member to warn", reason="Why?")
@@ -88,7 +119,8 @@ class ModerationCog(commands.Cog):
             await interaction.response.send_message(err, ephemeral=True)
             return
         count = await database.add_warning(interaction.guild.id, user.id, interaction.user.id, reason[:300])
-        await database.log_action(interaction.guild.id, interaction.user.id, user.id, "warn", reason[:300])
+        await self._case_and_log(interaction, user, "warn", reason)
+        await self._dm_target(user, interaction.guild, "warning", reason)
         await interaction.response.send_message(
             embed=utils.base_embed("⚠️ Warning issued",
                                    f"{user.mention} — warning **#{count}**\nReason: {reason}"))
@@ -153,7 +185,8 @@ class ModerationCog(commands.Cog):
         except discord.Forbidden:
             await interaction.response.send_message("I lack permission to kick that member.", ephemeral=True)
             return
-        await database.log_action(interaction.guild.id, interaction.user.id, user.id, "kick", reason[:300])
+        await self._case_and_log(interaction, user, "kick", reason)
+        await self._dm_target(user, interaction.guild, "kick", reason)
         await interaction.response.send_message(embed=utils.base_embed("👢 Kicked", f"{user.mention} — {reason}"))
 
     @app_commands.command(name="ban", description="Ban a member.")
@@ -177,7 +210,8 @@ class ModerationCog(commands.Cog):
         except discord.Forbidden:
             await interaction.response.send_message("I lack permission to ban that member.", ephemeral=True)
             return
-        await database.log_action(interaction.guild.id, interaction.user.id, user.id, "ban", reason[:300])
+        await self._case_and_log(interaction, user, "ban", reason)
+        await self._dm_target(user, interaction.guild, "ban", reason)
         await interaction.response.send_message(embed=utils.base_embed("🔨 Banned", f"{user.mention} — {reason}"))
 
     @app_commands.command(name="unban", description="Unban a user by ID.")
@@ -194,6 +228,7 @@ class ModerationCog(commands.Cog):
         except discord.Forbidden:
             await interaction.response.send_message("I lack permission to unban.", ephemeral=True)
             return
+        await self._case_and_log(interaction, user, "unban", f"Unbanned by {interaction.user}")
         await interaction.response.send_message(embed=utils.base_embed("✅ Unbanned", f"<@{user_id}> can rejoin."))
 
     # ── Mute / unmute ─────────────────────────────────────────────────
@@ -222,7 +257,8 @@ class ModerationCog(commands.Cog):
         except discord.Forbidden:
             await interaction.response.send_message("I lack permission to timeout that member.", ephemeral=True)
             return
-        await database.log_action(interaction.guild.id, interaction.user.id, user.id, "mute", f"{minutes}m")
+        await self._case_and_log(interaction, user, "mute", f"Timed out by {interaction.user}", f"{minutes}m")
+        await self._dm_target(user, interaction.guild, "timeout", f"{minutes} minutes")
         await interaction.response.send_message(
             embed=utils.base_embed("🔇 Muted", f"{user.mention} for **{minutes}** minutes."))
 
@@ -244,7 +280,108 @@ class ModerationCog(commands.Cog):
         except discord.Forbidden:
             await interaction.response.send_message("I lack permission.", ephemeral=True)
             return
+        await self._case_and_log(interaction, user, "unmute", f"Timeout removed by {interaction.user}")
         await interaction.response.send_message(embed=utils.base_embed("🔊 Unmuted", f"{user.mention} can speak again."))
+
+    # ── Explicit timeout names (aliases of mute/unmute) ─────────────
+    @app_commands.command(name="timeout", description="Timeout a member (explicit name).")
+    @app_commands.describe(user="Member to timeout", minutes="Duration in minutes", reason="Why")
+    async def timeout_cmd(self, interaction: discord.Interaction, user: discord.Member,
+                          minutes: int, reason: str = "No reason given"):
+        await interaction.response.defer()
+        if not interaction.user.guild_permissions.moderate_members:
+            await interaction.followup.send("You need Moderate Members permission.", ephemeral=True)
+            return
+        err = self._member_guard(interaction, user)
+        if err:
+            await interaction.followup.send(err, ephemeral=True)
+            return
+        err = self._hierarchy_guard(interaction, user)
+        if err:
+            await interaction.followup.send(err, ephemeral=True)
+            return
+        minutes = max(1, min(minutes, 40320))
+        if user.top_role >= interaction.guild.me.top_role:
+            await interaction.followup.send(
+                "❌ I cannot moderate this member because their highest role is equal to or higher than mine.",
+                ephemeral=True)
+            return
+        try:
+            await user.timeout(discord.utils.utcnow() + timedelta(minutes=minutes),
+                               reason=f"By {interaction.user}: {reason[:150]}")
+        except discord.Forbidden:
+            await interaction.followup.send("I lack permission to timeout that member.", ephemeral=True)
+            return
+        await self._case_and_log(interaction, user, "timeout", reason, f"{minutes}m")
+        await self._dm_target(user, interaction.guild, "timeout", reason)
+        await interaction.followup.send(
+            embed=utils.base_embed("🔇 Timed out", f"{user.mention} for **{minutes}** minutes — {reason}"))
+
+    @app_commands.command(name="untimeout", description="Remove a member's timeout.")
+    async def untimeout(self, interaction: discord.Interaction, user: discord.Member):
+        await interaction.response.defer()
+        if not interaction.user.guild_permissions.moderate_members:
+            await interaction.followup.send("You need Moderate Members permission.", ephemeral=True)
+            return
+        err = self._member_guard(interaction, user)
+        if err:
+            await interaction.followup.send(err, ephemeral=True)
+            return
+        if not user.is_timed_out():
+            await interaction.followup.send(f"{user.mention} is not timed out.", ephemeral=True)
+            return
+        try:
+            await user.timeout(None, reason=f"By {interaction.user}")
+        except discord.Forbidden:
+            await interaction.followup.send("I lack permission.", ephemeral=True)
+            return
+        await self._case_and_log(interaction, user, "untimeout", f"Timeout removed by {interaction.user}")
+        await interaction.followup.send(
+            embed=utils.base_embed("🔊 Timeout removed", f"{user.mention} can speak again."))
+
+    # ── Slowmode / nick ─────────────────────────────────────────────
+    @app_commands.command(name="slowmode", description="Set channel slowmode (Manage Channels).")
+    @app_commands.describe(seconds="0 to disable, max 21600")
+    async def slowmode(self, interaction: discord.Interaction, seconds: int):
+        if not interaction.user.guild_permissions.manage_channels:
+            await interaction.response.send_message("You need Manage Channels permission.", ephemeral=True)
+            return
+        seconds = max(0, min(seconds, 21600))
+        try:
+            await interaction.channel.edit(slowmode_delay=seconds,
+                                           reason=f"By {interaction.user}")
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                "I need **Manage Channels** permission in this channel.", ephemeral=True)
+            return
+        await self._log(interaction.guild, utils.base_embed(
+            "🐌 Slowmode changed",
+            f"{interaction.channel.mention} → **{seconds}s** by {interaction.user.mention}"))
+        await interaction.response.send_message(
+            f"🐌 Slowmode set to **{seconds}s**." if seconds else "🐌 Slowmode disabled.")
+
+    @app_commands.command(name="nick", description="Change a member's nickname (Manage Nicknames).")
+    @app_commands.describe(user="Member to rename", nickname="New nickname (empty to reset)")
+    async def nick(self, interaction: discord.Interaction, user: discord.Member, nickname: str = ""):
+        if not interaction.user.guild_permissions.manage_nicknames:
+            await interaction.response.send_message("You need Manage Nicknames permission.", ephemeral=True)
+            return
+        err = self._member_guard(interaction, user)
+        if err:
+            await interaction.response.send_message(err, ephemeral=True)
+            return
+        try:
+            await user.edit(nick=nickname[:32] or None, reason=f"By {interaction.user}")
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                "I can't change that nickname — check my role position and permissions.", ephemeral=True)
+            return
+        await self._log(interaction.guild, utils.base_embed(
+            "✏️ Nickname changed",
+            f"{user.mention} → **{nickname[:32] or '(reset)'}** by {interaction.user.mention}"))
+        await interaction.response.send_message(
+            embed=utils.base_embed("✏️ Nickname changed",
+                                   f"{user.mention} → **{nickname[:32] or '(reset to username)'}**"))
 
     # ── Clear / lock ──────────────────────────────────────────────────
     @app_commands.command(name="clear", description="Delete recent messages in this channel.")
@@ -262,6 +399,16 @@ class ModerationCog(commands.Cog):
                 "I need **Manage Messages** permission in this channel to purge.", ephemeral=True)
             return
         await interaction.followup.send(f"🧹 Deleted {len(deleted)} messages.", ephemeral=True)
+        await self._log(interaction.guild, utils.base_embed(
+            "🧹 Messages purged",
+            f"**{len(deleted)}** messages removed in {interaction.channel.mention} by {interaction.user.mention}"))
+
+    @app_commands.command(name="purge", description="Delete recent messages (alias of /clear).")
+    @app_commands.describe(amount="How many (1–100)")
+    async def purge(self, interaction: discord.Interaction, amount: int):
+        # /clear is a plain Command attribute, not a bound method — call the
+        # callback directly (calling the Command object raises TypeError).
+        await self.clear.callback(self, interaction, amount)
 
     @app_commands.command(name="lock", description="Lock this channel (stop members sending).")
     async def lock(self, interaction: discord.Interaction):

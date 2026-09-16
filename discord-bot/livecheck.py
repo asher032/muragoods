@@ -220,6 +220,30 @@ async def run(voice_channel_id: int | None, guild_id: int | None) -> int:
     # Command handlers
     await test_all_commands(bot)
 
+    # Music failure paths — spec requires honest rejection, not fake success.
+    try:
+        from cogs.music import MusicCog
+        music_cog = bot.get_cog("MusicCog")
+        if music_cog and target_guild:
+            inter = make_interaction(target_guild)
+            # Simulate a user NOT in voice: _voice_channel returns None → guard must reject.
+            class _NoVoiceUser:
+                voice = None
+            inter.user = _NoVoiceUser()
+            await inter.response.defer()
+            guarded = await music_cog._voice_guard(inter)
+            record("music guard: rejects user not in voice", guarded is False,
+                   "followup sent" if inter.followup.sent else "no rejection message")
+            # /disconnect exists as an alias of /leave?
+            names = {c.name for cog in bot.cogs.values()
+                     for c in cog.__cog_app_commands__
+                     if not isinstance(c, app_commands.Group)}
+            record("music: /disconnect registered", "disconnect" in names)
+        else:
+            record("music failure paths", None, "MusicCog not loaded")
+    except Exception as exc:
+        record("music failure paths", False, str(exc)[:120])
+
     # Voice path (only with --voice)
     if voice_channel_id and target_guild:
         channel = target_guild.get_channel(voice_channel_id)

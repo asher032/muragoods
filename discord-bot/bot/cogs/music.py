@@ -88,6 +88,8 @@ class MusicControls(utils.SafeView):
 
 
 class MusicCog(commands.Cog):
+    """Named "MusicCog" so livecheck can look it up via bot.get_cog."""
+
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         # The voice player thread needs the bot's event loop to schedule the
@@ -142,6 +144,16 @@ class MusicCog(commands.Cog):
         channel = self._voice_channel(interaction)
         try:
             await music.engine.play_now(player, track, channel)
+        except asyncio.TimeoutError:
+            log.warning("Playback start timed out")
+            await interaction.edit_original_response(embed=embeds.embed(
+                "⏱ Playback Timeout", "The voice connection didn't respond in time. Try again — if it keeps failing, Discord voice may be degraded.", embeds.WARN))
+            return
+        except discord.ClientException as exc:
+            log.warning("Playback refused: %s", exc)
+            await interaction.edit_original_response(embed=embeds.embed(
+                "⚠️ Voice Error", f"Discord refused playback: {exc}", embeds.ERROR))
+            return
         except Exception:
             log.exception("Playback failed")
             await interaction.edit_original_response(embed=embeds.embed(
@@ -536,12 +548,21 @@ class MusicCog(commands.Cog):
         channel = self._voice_channel(interaction)
         player = music.engine.get_player(interaction.guild.id)
         try:
-            if player.voice:
+            if player.voice and player.voice.is_connected():
                 await player.voice.move_to(channel)
+            elif player.voice:
+                # Stale handle from a force-disconnect — recreate cleanly.
+                player.voice = await channel.connect(self_deaf=True, timeout=15)
             else:
-                player.voice = await channel.connect(self_deaf=True)
-        except discord.HTTPException:
-            await interaction.followup.send("Couldn't join that channel.", ephemeral=True)
+                player.voice = await channel.connect(self_deaf=True, timeout=15)
+        except asyncio.TimeoutError:
+            await interaction.followup.send("⏱ Voice handshake timed out — Discord didn't respond in time. Try again.", ephemeral=True)
+            return
+        except discord.ClientException:
+            await interaction.followup.send("⚠️ Already connected elsewhere — try `/leave` first.", ephemeral=True)
+            return
+        except discord.HTTPException as exc:
+            await interaction.followup.send(f"⚠️ Discord refused the join ({exc.code if hasattr(exc, 'code') else 'HTTP error'}). Check my Connect/Speak permissions there.", ephemeral=True)
             return
         await interaction.followup.send(f"👋 Joined **{channel.name}**.", ephemeral=True)
 
@@ -555,6 +576,10 @@ class MusicCog(commands.Cog):
         player.clear()
         music.engine.remove_player(interaction.guild.id)
         await interaction.followup.send("👋 Left the voice channel.", ephemeral=True)
+
+    @app_commands.command(name="disconnect", description="Disconnect the bot from voice (alias of /leave).")
+    async def disconnect(self, interaction: discord.Interaction):
+        await self.leave.callback(self, interaction)
 
 
 async def setup(bot: commands.Bot):
