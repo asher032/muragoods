@@ -28,11 +28,10 @@ def _resolve_ffmpeg() -> str:
 FFMPEG_EXE = _resolve_ffmpeg()
 
 YDL_OPTS = {
-    "format": "bestaudio/best",
+    "format": "bestaudio[acodec!=none]/bestaudio/best",
     "noplaylist": True,
     "quiet": False,
     "no_warnings": True,
-    "default_search": "ytsearch",
     "source_address": "0.0.0.0",
     "nocheckcertificate": True,
     "socket-timeout": 15,
@@ -40,6 +39,8 @@ YDL_OPTS = {
     "retries": 3,
     "fragment_retries": 3,
     "buffer": 65536,
+    "geo_bypass": True,
+    "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
 }
 
 FFMPEG_OPTS = {
@@ -129,6 +130,7 @@ class MusicEngine:
         self._players.pop(guild_id, None)
 
     async def resolve(self, query: str) -> Optional[Track]:
+<<<<<<< HEAD
         """Resolve a search query or URL to a Track via yt-dlp. Retries on failure."""
         last_exc: Optional[Exception] = None
         for attempt in range(3):
@@ -164,9 +166,12 @@ class MusicEngine:
                        voice_channel: discord.VoiceChannel, announce=None) -> None:
         if not player.is_connected():
             try:
-                player.voice = await voice_channel.connect(self_deaf=True)
-            except discord.ClientException:
-                pass
+                player.voice = await voice_channel.connect(self_deaf=True, timeout=20)
+            except (discord.ClientException, asyncio.TimeoutError) as exc:
+                player.voice = None
+                raise RuntimeError("Could not connect to the voice channel") from exc
+        if not player.voice or not player.voice.is_connected():
+            raise RuntimeError("Voice connection was not established")
         player.current = track
         player.playing = True
         src = discord.FFmpegPCMAudio(track.stream_url, **FFMPEG_OPTS)

@@ -8,6 +8,7 @@ from discord import app_commands
 from discord.ext import commands
 
 import database
+import config
 import utils
 
 log = logging.getLogger("bot.moderation")
@@ -43,7 +44,8 @@ class ModerationCog(commands.Cog):
 
     async def _log(self, guild: discord.Guild, embed: discord.Embed) -> None:
         cfg = await database.get_guild_config(guild.id)
-        channel_id = (cfg.get("channels") or {}).get("logs")
+        moderation = cfg.get("moderation") or {}
+        channel_id = moderation.get("logChannelId") or (cfg.get("channels") or {}).get("logs")
         if not channel_id:
             return
         channel = guild.get_channel(int(channel_id))
@@ -264,15 +266,33 @@ class ModerationCog(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         cfg = await database.get_guild_config(member.guild.id)
-        channel_id = (cfg.get("channels") or {}).get("welcome")
+        welcome = cfg.get("welcome") or {}
+        channel_id = welcome.get("channelId") or (cfg.get("channels") or {}).get("welcome")
+        if welcome and not welcome.get("enabled", False):
+            return
         if not channel_id:
             return
         channel = member.guild.get_channel(int(channel_id))
         if not isinstance(channel, discord.TextChannel):
             return
-        embed = utils.base_embed(
-            "🎬 Welcome to MuraStream!",
-            f"Hey {member.mention} — explore movies, anime, music, games and more.")
+        message = str(welcome.get("message") or "Hey {user} — welcome to {server}!")
+        for variable, value in {
+            "{user}": member.mention,
+            "{username}": member.display_name,
+            "{server}": member.guild.name,
+            "{membercount}": str(member.guild.member_count or 0),
+            "{userid}": str(member.id),
+        }.items():
+            message = message.replace(variable, value)
+        embed = utils.base_embed("🎬 Welcome to MuraStream!", message)
+        auto_role_id = welcome.get("autoRoleId")
+        if auto_role_id:
+            role = member.guild.get_role(int(auto_role_id))
+            if role:
+                try:
+                    await member.add_roles(role, reason="Dashboard welcome auto-role")
+                except discord.HTTPException:
+                    log.warning("Could not assign welcome role %s in %s", auto_role_id, member.guild.id)
         view = discord.ui.View()
         view.add_item(utils.site_link_button("🎬 MuraStream", config.MURASTREAM_URL, "▶️"))
         view.add_item(utils.site_link_button("🍔 Muragoods", f"{config.MURASTREAM_URL}/hub", "🍔"))
@@ -287,21 +307,32 @@ class ModerationCog(commands.Cog):
         if message.author.bot or not message.guild:
             return
         cfg = await database.get_guild_config(message.guild.id)
-        automod = cfg.get("automod") or {}
-        if not automod.get("enabled", True):
+        dashboard_mod = cfg.get("moderation") or {}
+        legacy_automod = cfg.get("automod") or {}
+        automod = {
+            "enabled": dashboard_mod.get("automodEnabled", legacy_automod.get("enabled", True)),
+            "blockLinks": dashboard_mod.get("antiLink", legacy_automod.get("blockLinks", False)),
+            "blockInvites": dashboard_mod.get("antiInvite", False),
+            "antiCaps": dashboard_mod.get("antiCaps", True),
+            "mentionThreshold": int(dashboard_mod.get("mentionThreshold", MENTION_LIMIT)),
+        }
+        if not automod["enabled"]:
             return
 
         violations: list[str] = []
         # Mention spam
-        if len(message.mentions) >= MENTION_LIMIT:
+        if len(message.mentions) >= automod["mentionThreshold"]:
             violations.append("mention spam")
         # Link filtering (if enabled per guild)
-        if automod.get("blockLinks") and re.search(r"https?://", message.content):
+        if automod["blockLinks"] and re.search(r"https?://", message.content):
             if not self._is_mod_msg(message):
                 violations.append("links")
+        if automod["blockInvites"] and re.search(r"(?:discord\.gg|discord(?:app)?\.com/invite)/", message.content, re.I):
+            if not self._is_mod_msg(message):
+                violations.append("invites")
         # Excessive caps
         letters = [c for c in message.content if c.isalpha()]
-        if len(letters) >= 20 and sum(c.isupper() for c in letters) / len(letters) > 0.8:
+        if automod["antiCaps"] and len(letters) >= 20 and sum(c.isupper() for c in letters) / len(letters) > 0.8:
             violations.append("caps")
 
         if not violations:
