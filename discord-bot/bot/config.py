@@ -62,19 +62,15 @@ def validate() -> list[str]:
 def invite_url() -> str:
     """Least-privilege invite: no Administrator."""
     perms = (
-        # view/send/embed/link/attach/read history/mention/use app commands
-        "1024"
-        + (1 << 10)   # send messages in threads
-        + (1 << 11)   # connect (voice)
-        + (1 << 12)   # speak (voice)
-        + (1 << 14)   # mute members (music /voicecontrol needs it rarely; keep minimal)
-        + (1 << 20)   # moderate members (timeouts for /mute)
-        + (1 << 13)   # move members not requested — omit
+        (1 << 10)   # View Channels
+        | (1 << 11)  # Send Messages
+        | (1 << 14)  # Embed Links
+        | (1 << 15)  # Attach Files
+        | (1 << 16)  # Read History
+        | (1 << 20)  # Connect (voice) — REQUIRED for music
+        | (1 << 21)  # Speak (voice) — REQUIRED for music
+        | (1 << 28)  # Use Slash Commands
     )
-    # Keep it simple and auditable:
-    perms = 154624  # View Channels, Send Messages, Embed Links, Attach Files,
-                    # Read History, Mention Everyone(off), Connect, Speak,
-                    # Use Slash Commands, Moderate Members
     return (
         f"https://discord.com/oauth2/authorize?client_id={DISCORD_CLIENT_ID}"
         f"&permissions={perms}&scope=bot%20applications.commands"

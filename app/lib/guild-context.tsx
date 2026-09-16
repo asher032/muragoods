@@ -2,84 +2,146 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 
-interface Guild {
+// ── Dashboard session context ────────────────────────────────────────────
+// Authentication lives in an HttpOnly session cookie managed by the server
+// (/api/auth/discord/*). The browser holds no Discord token at all. The
+// selected guild is stored server-side on the session, so it survives
+// browser restarts, new tabs and devices — one selection, ever.
+
+export interface DashGuild {
   id: string;
   name: string;
   icon: string | null;
   owner: boolean;
-  members: number | null;
+}
+
+export interface DashMe {
+  authenticated: boolean;
+  user?: { discordId: string; username: string; globalName: string; avatar: string | null; avatarUrl: string | null };
+  guilds?: DashGuild[];
+  selectedGuildId?: string | null;
+  bot?: { online: boolean; latency: number | null; guilds: number | null };
+  lastAuthAt?: string;
+  sessionExpiresAt?: string;
 }
 
 interface GuildContextType {
-  token: string;
-  setToken: (t: string) => void;
-  selected: Guild | null;
-  setSelected: (g: Guild | null) => void;
-  guilds: Guild[];
-  setGuilds: (g: Guild[]) => void;
-  loading: boolean;
-  setLoading: (v: boolean) => void;
+  authChecked: boolean;      // /me has answered at least once
+  authenticated: boolean;
+  me: DashMe | null;
+  user: DashMe['user'] | null;
+  guilds: DashGuild[];
+  selected: DashGuild | null;
+  botOnline: boolean;
+  botLatency: number | null;
+  loginUrl: string;          // server-built OAuth entry (never contains secrets)
   error: string;
   setError: (e: string) => void;
-  loginUrl: string;
+  setSelected: (g: DashGuild | null) => void;  // persists server-side
+  refresh: () => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const GuildContext = createContext<GuildContextType | null>(null);
 
-const STORAGE_KEY = 'mb_guild_selected';
-
 export function GuildProvider({ children }: { children: ReactNode }) {
-  const [token, setTokenState] = useState<string>('');
-  const [selected, setSelectedState] = useState<Guild | null>(null);
-  const [guilds, setGuilds] = useState<Guild[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [me, setMe] = useState<DashMe | null>(null);
+  const [guilds, setGuilds] = useState<DashGuild[]>([]);
+  const [selected, setSelectedState] = useState<DashGuild | null>(null);
+  const [botOnline, setBotOnline] = useState(false);
+  const [botLatency, setBotLatency] = useState<number | null>(null);
   const [error, setError] = useState('');
 
-  const setToken = useCallback((t: string) => {
-    setTokenState(t);
-    if (t) {
-      sessionStorage.setItem('mb_token', t);
-    } else {
-      sessionStorage.removeItem('mb_token');
+  const loadMe = useCallback(async () => {
+    try {
+      const resp = await fetch('/api/auth/discord/me', { cache: 'no-store' });
+      const data = (await resp.json()) as DashMe;
+      setMe(data);
+      setAuthenticated(Boolean(data.authenticated));
+      if (data.authenticated && data.guilds) {
+        setGuilds(data.guilds);
+        if (data.selectedGuildId) {
+          const sel = data.guilds.find((g) => g.id === data.selectedGuildId) || null;
+          setSelectedState(sel);
+        } else {
+          setSelectedState(null);
+        }
+      } else {
+        setGuilds([]);
+        setSelectedState(null);
+      }
+    } catch {
+      setMe({ authenticated: false });
+      setAuthenticated(false);
+    } finally {
+      setAuthChecked(true);
     }
   }, []);
 
-  const setSelected = useCallback((g: Guild | null) => {
-    setSelectedState(g);
-    if (g) {
-      try {
-        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(g));
-      } catch { /* ignore */ }
-    } else {
-      try {
-        sessionStorage.removeItem(STORAGE_KEY);
-      } catch { /* ignore */ }
-    }
-  }, []);
+  useEffect(() => { void loadMe(); }, [loadMe]);
 
+  // Bot status pill — real data from the bot service via the site API.
   useEffect(() => {
-    const saved = sessionStorage.getItem('mb_token');
-    if (saved) setToken(saved);
-    const sel = sessionStorage.getItem(STORAGE_KEY);
-    if (sel) {
+    if (!authenticated) return;
+    let alive = true;
+    const load = async () => {
       try {
-        const parsed = JSON.parse(sel) as Guild;
-        setSelectedState(parsed);
-        // Also add to guilds list if not already there
-        setGuilds((prev) => {
-          if (prev.some((g) => g.id === parsed.id)) return prev;
-          return [...prev, parsed];
-        });
-      } catch { /* ignore */ }
-    }
-  }, [setToken]);
+        const resp = await fetch('/api/dashboard/status', { cache: 'no-store' });
+        if (!resp.ok) return;
+        const data = (await resp.json()) as {
+          status?: string;
+          services?: Record<string, { status?: string; responseTime?: number }>;
+        };
+        if (!alive) return;
+        setBotOnline(data.services?.botGateway?.status === 'ok');
+        setBotLatency(data.services?.botGateway?.responseTime ?? null);
+      } catch { /* keep last state */ }
+    };
+    void load();
+    const t = setInterval(load, 45_000);
+    return () => { alive = false; clearInterval(t); };
+  }, [authenticated]);
 
-  const loginUrl = 'https://discord.com/oauth2/authorize?client_id=1549395794853888020&redirect_uri=https%3A%2F%2Fmuragoods.vercel.app%2Fdashboard&response_type=token&scope=identify%20guilds';
+  // Server-side, permission-verified selection.
+  const setSelected = useCallback((g: DashGuild | null) => {
+    setSelectedState(g); // optimistic
+    if (!g) return;
+    void (async () => {
+      try {
+        const resp = await fetch('/api/auth/discord/logout', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ guildId: g.id }),
+        });
+        if (!resp.ok) {
+          const data = (await resp.json().catch(() => null)) as { error?: string } | null;
+          setError(data?.error || 'Could not switch server');
+          void loadMe(); // roll back to the server truth
+        }
+      } catch {
+        setError('Network error while switching server');
+      }
+    })();
+  }, [loadMe]);
+
+  const logout = useCallback(async () => {
+    try { await fetch('/api/auth/discord/logout', { method: 'POST' }); } catch { /* ignore */ }
+    setAuthenticated(false);
+    setMe(null);
+    setGuilds([]);
+    setSelectedState(null);
+    window.location.href = '/dashboard';
+  }, []);
+
+  const loginUrl = '/api/auth/discord';
 
   return (
     <GuildContext.Provider value={{
-      token, setToken, selected, setSelected, guilds, setGuilds,
-      loading, setLoading, error, setError, loginUrl,
+      authChecked, authenticated, me, user: me?.user ?? null,
+      guilds, selected, botOnline, botLatency, loginUrl, error, setError,
+      setSelected, refresh: loadMe, logout,
     }}>
       {children}
     </GuildContext.Provider>

@@ -1,94 +1,64 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { useGuild } from '@/app/lib/guild-context';
 import { Bot, Menu } from 'lucide-react';
 import Sidebar from './Sidebar';
 import ServerSwitcher from './ServerSwitcher';
-import { dashboardApi, type BotStatusResponse } from '../lib/api';
 
-const CLIENT_ID = '1549395794853888020';
-const SCOPES = 'identify guilds';
-const REDIRECT =
-  typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? `${window.location.origin}/dashboard`
-    : 'https://muragoods.vercel.app/dashboard';
-const LOGIN_URL = `https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT)}&response_type=token&scope=${encodeURIComponent(SCOPES)}`;
+// ── Dashboard shell ──────────────────────────────────────────────────────
+// Auth is a server-side session (HttpOnly cookie). This shell:
+//   • while /me is in flight → "Connecting to Discord…" (never a login flash)
+//   • valid session + selected guild → the app
+//   • valid session, no selection → the server chooser
+//   • no session → login gate
+// A stale selected guild (permissions changed server-side) is caught here and
+// the chooser reappears — the server, not the browser, decides authenticity.
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const pathname = usePathname();
-  const { token, setToken, guilds, setGuilds, selected, setSelected, loading, setLoading, error, setError } = useGuild();
+  const {
+    authChecked, authenticated, guilds, selected, botOnline,
+    loginUrl, error, setSelected, logout,
+  } = useGuild();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [status, setStatus] = useState<BotStatusResponse | null>(null);
 
-  // OAuth fragment capture → token. Every /api/dashboard/* call re-verifies the
-  // token against Discord server-side; the browser never holds elevated trust.
+  // Reset an invalid selection when the guild list arrives without it.
   useEffect(() => {
-    const hash = window.location.hash.substring(1);
-    const params = new URLSearchParams(hash);
-    const access = params.get('access_token');
-    if (access) {
-      setToken(access);
-      window.location.hash = '';
+    if (authenticated && selected && guilds.length > 0 && !guilds.some((g) => g.id === selected.id)) {
+      setSelected(null);
     }
-    router.replace(pathname); // strip the OAuth fragment from the visible URL
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [authenticated, selected, guilds, setSelected]);
 
-  // Load manageable guilds (server-side filtered to MANAGE_GUILD/ADMIN).
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    setLoading(true);
-    (async () => {
-      try {
-        const resp = await dashboardApi.guilds(token);
-        if (cancelled) return;
-        if (!resp.ok) {
-          if (resp.status === 401) {
-            sessionStorage.removeItem('mb_token');
-            setToken('');
-          }
-          setError(resp.error || 'Failed to load servers');
-          return;
-        }
-        setGuilds(resp.data.guilds);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load servers');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+  // While the session check is still running — never flash the login gate.
+  if (!authChecked) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'grid', placeItems: 'center',
+        background: 'var(--cc-bg, #0a0a0e)',
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: 64, height: 64, margin: '0 auto 18px', borderRadius: 18,
+            display: 'grid', placeItems: 'center',
+            background: 'linear-gradient(135deg, rgba(88,101,242,0.9), rgba(88,101,242,0.55))',
+            boxShadow: '0 12px 40px rgba(88,101,242,0.35)',
+          }}>
+            <Bot size={32} color="#fff" />
+          </div>
+          <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 14, margin: 0 }}>
+            Connecting to Discord…
+          </p>
+        </div>
+      </div>
+    );
+  }
 
-  // Live bot status for the sidebar footer + topbar pill.
-  useEffect(() => {
-    let alive = true;
-    const load = async () => {
-      try {
-        const resp = await fetch('/api/dashboard/status', { cache: 'no-store' });
-        const data = await resp.json();
-        if (alive) setStatus(data);
-      } catch { /* status stays stale until next poll */ }
-    };
-    load();
-    const t = setInterval(load, 45_000);
-    return () => { alive = false; clearInterval(t); };
-  }, []);
-
-  const logout = useCallback(() => {
-    setSelected(null);
-    setToken('');
-    setGuilds([]);
-    sessionStorage.removeItem('mb_token');
-    sessionStorage.removeItem('mb_guild_selected');
-    router.replace('/dashboard');
-  }, [setSelected, setToken, setGuilds, router]);
-
-  // ─── Login gate (no token or no server selected) ───
-  if (!token || !selected) {
+  // Not authenticated — the only place the login button appears.
+  if (!authenticated) {
+    const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const authError = params?.get('auth_error');
     return (
       <div style={{
         minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24,
@@ -110,30 +80,84 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             Discord Bot Control Center
           </p>
           <p style={{ margin: '0 0 26px', fontSize: 12.5, color: 'rgba(255,255,255,0.4)' }}>
-            Sign in with Discord to manage your servers. Every request is verified server-side
-            against your Discord permissions.
+            One secure server-side session. No repeated logins — sign in once and
+            the dashboard stays authenticated for 30 days of activity.
           </p>
-          {error && (
+          {(authError || error) && (
             <div className="cc-alert cc-alert-error" role="alert" style={{ textAlign: 'left', marginBottom: 16 }}>
-              {error}
+              {authError || error}
             </div>
           )}
-          {loading && <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>Loading your servers…</p>}
-          <a href={LOGIN_URL} className="cc-btn cc-btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
+          <a href={loginUrl} className="cc-btn cc-btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
             Connect with Discord
           </a>
           <p style={{ marginTop: 18, fontSize: 11.5, color: 'rgba(255,255,255,0.35)' }}>
-            Requires <strong>Manage Server</strong> permission. Tokens stay in sessionStorage and are
-            never stored server-side.
+            Requires <strong>Manage Server</strong> permission. Tokens never touch the
+            browser — the OAuth code is exchanged on the server.
           </p>
         </div>
       </div>
     );
   }
 
-  // ─── Authenticated app shell ───
-  const botOnline = status?.services.botGateway.status === 'ok';
+  // Authenticated but no server chosen yet (or the choice was revoked
+  // server-side) — show the chooser, not a fake dashboard.
+  if (!selected) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24,
+        background: 'var(--cc-bg)',
+      }}>
+        <div className="cc-card" style={{ maxWidth: 480, width: '100%', padding: '32px 32px' }}>
+          <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 800, color: '#fff' }}>
+            Choose a server
+          </h1>
+          <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--cc-text-dim)' }}>
+            Servers where you have <strong>Manage Server</strong> permission. Your
+            selection is remembered across visits.
+          </p>
+          {error && <div className="cc-alert cc-alert-error" role="alert" style={{ marginBottom: 14 }}>{error}</div>}
+          <div style={{ display: 'grid', gap: 8 }}>
+            {guilds.length === 0 && (
+              <p style={{ color: 'var(--cc-text-faint)', fontSize: 13, margin: 0 }}>
+                You don&apos;t manage any servers yet. Add the MuraGoods bot to one of your
+                servers first, then sign out and back in to refresh this list.
+              </p>
+            )}
+            {guilds.map((g) => (
+              <button
+                key={g.id}
+                className="cc-btn"
+                style={{ justifyContent: 'flex-start', gap: 12, padding: '10px 14px' }}
+                onClick={() => setSelected(g)}
+              >
+                {g.icon ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={g.icon} alt="" width={28} height={28} style={{ borderRadius: 8 }} />
+                ) : (
+                  <span style={{
+                    width: 28, height: 28, borderRadius: 8, background: 'rgba(88,101,242,0.35)',
+                    display: 'grid', placeItems: 'center', fontSize: 13, color: '#fff',
+                  }}>
+                    {g.name.charAt(0).toUpperCase()}
+                  </span>
+                )}
+                <span style={{ color: '#fff', fontWeight: 600 }}>{g.name}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--cc-text-faint)' }}>
+                  {g.owner ? 'Owner' : 'Manager'}
+                </span>
+              </button>
+            ))}
+          </div>
+          <button onClick={() => void logout()} className="cc-link" style={{ marginTop: 18, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12.5 }}>
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
 
+  // ─── Authenticated app shell ───
   return (
     <div style={{ minHeight: '100vh', background: 'var(--cc-bg)' }}>
       <Sidebar open={drawerOpen} onClose={() => setDrawerOpen(false)} status={botOnline ? 'online' : 'offline'} />

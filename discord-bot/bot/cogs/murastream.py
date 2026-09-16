@@ -140,7 +140,7 @@ class MediaCommands(commands.Cog):
             label="🌐 OPEN DASHBOARD", url=f"{config.MURASTREAM_URL}/dashboard", emoji="⚙️"))
         view.add_item(discord.ui.Button(
             label="➕ Invite MuraBot",
-            url=f"https://discord.com/oauth2/authorize?client_id={config.DISCORD_CLIENT_ID}&permissions=154624&scope=bot%20applications.commands",
+            url=f"https://discord.com/oauth2/authorize?client_id={config.DISCORD_CLIENT_ID}&permissions=271698944&scope=bot%20applications.commands",
             emoji="➕"))
         await interaction.response.send_message(embed=e, view=view)
 
