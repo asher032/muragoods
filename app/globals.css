@@ -122,6 +122,46 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+.dashboard-sidebar-close,
+.dashboard-mobile-open {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .dashboard-sidebar:not(.dashboard-sidebar-open) {
+    display: none !important;
+  }
+
+  .dashboard-sidebar.dashboard-sidebar-open {
+    display: flex !important;
+    position: fixed !important;
+    left: 0;
+    bottom: 0;
+    box-shadow: 18px 0 40px rgba(0, 0, 0, 0.35);
+  }
+
+  .dashboard-sidebar-close {
+    display: grid;
+    place-items: center;
+    margin-left: auto;
+    padding: 5px;
+    border: 0;
+    background: transparent;
+    color: #9299a8;
+  }
+
+  .dashboard-mobile-open {
+    display: inline-grid;
+    place-items: center;
+    margin: 0 0 8px;
+    padding: 5px;
+    border: 0;
+    border-radius: 6px;
+    background: #252b38;
+    color: #edf0f5;
+  }
+}
+
 /* ─── Mario Background ───────────────────────────────────────── */
 .mario-bg {
   background: linear-gradient(180deg, #0a0a18 0%, #16213e 40%, #1a1a2e 70%, #0f0f1a 100%);

@@ -7,6 +7,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import {
+  Activity, ChevronRight, LayoutDashboard, LogOut, Menu, Music2,
+  Settings2, ShieldCheck, Users, X,
+} from 'lucide-react';
 
 interface Guild {
   id: string;
@@ -37,11 +41,9 @@ const REDIRECT_URI = typeof window !== 'undefined' &&
 const SCOPES = 'identify guilds';
 
 const glass: React.CSSProperties = {
-  background: 'rgba(255,255,255,0.10)',
-  backdropFilter: 'blur(13px)',
-  WebkitBackdropFilter: 'blur(13px)',
-  border: '1px solid rgba(255,255,255,0.20)',
-  borderRadius: 20,
+  background: '#171a22',
+  border: '1px solid #292e3a',
+  borderRadius: 12,
 };
 
 function Toggle({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label: string }) {
@@ -101,6 +103,7 @@ export default function DashboardPage() {
   const [search, setSearch] = useState('');
   const [audit, setAudit] = useState<Array<{ actor: string; summary: string; at: string }>>([]);
   const [showAudit, setShowAudit] = useState(false);
+  const [mobileNav, setMobileNav] = useState(false);
 
   // Handle OAuth redirect: exchange the fragment token.
   useEffect(() => {
@@ -215,21 +218,54 @@ export default function DashboardPage() {
   return (
     <main style={{
       minHeight: '100vh',
-      background: 'radial-gradient(1200px 600px at 70% -10%, rgba(229,9,20,0.15), transparent), #0a0a0c',
-      color: '#f5f5f7',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      padding: '32px 18px 80px',
+      background: '#0e1015',
+      color: '#edf0f5',
+      fontFamily: 'var(--font-body), sans-serif',
     }}>
-      <div style={{ maxWidth: 860, margin: '0 auto' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 26 }}>
-          <div>
-            <p style={{ margin: 0, color: '#e50914', fontWeight: 700, letterSpacing: 2, fontSize: 12 }}>MURASTREAM</p>
-            <h1 style={{ margin: '4px 0 0', fontSize: 30, fontWeight: 800 }}>MuraBot Dashboard</h1>
+      <div style={{ display: 'flex', minHeight: '100vh' }}>
+        <aside className={`dashboard-sidebar${mobileNav ? ' dashboard-sidebar-open' : ''}`} style={{
+          width: 238, flexShrink: 0, padding: '24px 14px', background: '#13161d',
+          borderRight: '1px solid #292e3a', display: 'flex',
+          position: 'sticky', top: 0, height: '100vh', zIndex: 5, flexDirection: 'column',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 10px 28px' }}>
+            <span style={{ width: 32, height: 32, borderRadius: 9, background: '#5865f2', display: 'grid', placeItems: 'center', fontWeight: 900 }}>M</span>
+            <span style={{ fontWeight: 800, letterSpacing: '-.2px' }}>MuraBot</span>
+            <button className="dashboard-sidebar-close" onClick={() => setMobileNav(false)} aria-label="Close navigation"><X size={18} /></button>
           </div>
-          <Link href="/" style={{ color: 'rgba(255,255,255,0.55)', textDecoration: 'none', fontSize: 14 }}>
-            ← Site
-          </Link>
+          <p style={{ color: '#6f7787', fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase', padding: '0 10px', margin: '0 0 8px' }}>Workspace</p>
+          {[
+            { label: 'Overview', icon: LayoutDashboard, active: !selected },
+            { label: 'Server settings', icon: Settings2, active: Boolean(selected) },
+          ].map(({ label, icon: Icon, active }) => (
+            <button key={label} onClick={() => { if (label === 'Overview') setSelected(null); setMobileNav(false); }} style={{
+              display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 12px', marginBottom: 4,
+              border: 0, borderRadius: 8, cursor: 'pointer', textAlign: 'left', color: active ? '#fff' : '#8e96a6',
+              background: active ? '#252b38' : 'transparent', fontWeight: active ? 700 : 500, fontSize: 13,
+            }}><Icon size={17} />{label}</button>
+          ))}
+          <p style={{ color: '#6f7787', fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase', padding: '24px 10px 8px', margin: 0 }}>MuraBot</p>
+          {[
+            { label: 'Moderation', icon: ShieldCheck }, { label: 'Music', icon: Music2 },
+            { label: 'Members', icon: Users }, { label: 'Activity', icon: Activity },
+          ].map(({ label, icon: Icon }) => <button key={label} onClick={() => { setSearch(label.toLowerCase()); setSelected(selected); setMobileNav(false); }} style={{
+            display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '10px 12px', marginBottom: 2,
+            border: 0, borderRadius: 8, cursor: selected ? 'pointer' : 'default', textAlign: 'left', color: '#8e96a6', background: 'transparent', fontSize: 13,
+          }}><Icon size={16} />{label}</button>)}
+          <div style={{ marginTop: 'auto', padding: '22px 10px 0' }}>
+            <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#8e96a6', fontSize: 13, textDecoration: 'none' }}><LogOut size={16} />Back to Muragoods</Link>
+          </div>
+        </aside>
+        <section style={{ flex: 1, minWidth: 0, padding: '22px clamp(18px, 4vw, 54px) 70px' }}>
+        <div style={{ maxWidth: 1040, margin: '0 auto' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28, borderBottom: '1px solid #292e3a', paddingBottom: 18 }}>
+          <div>
+            <button className="dashboard-mobile-open" onClick={() => setMobileNav(true)} aria-label="Open navigation"><Menu size={20} /></button>
+            <p style={{ margin: 0, color: '#8d96a8', fontWeight: 700, letterSpacing: 1.2, fontSize: 11, textTransform: 'uppercase' }}>MuraBot control panel</p>
+            <h1 style={{ margin: '5px 0 0', fontSize: 28, letterSpacing: '-.7px', fontWeight: 800 }}>{selected ? selected.name : 'Your servers'}</h1>
+          </div>
+          {token && <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#8e96a6', fontSize: 12 }}><span style={{ width: 8, height: 8, borderRadius: 99, background: '#27c993' }} />Discord connected</div>}
         </div>
 
         {/* Login gate */}
@@ -254,7 +290,10 @@ export default function DashboardPage() {
         {/* Server selector */}
         {token && !selected && (
           <div style={{ ...glass, padding: 28 }}>
-            <h2 style={{ margin: '0 0 6px', fontSize: 19 }}>My Servers</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 16, marginBottom: 22 }}>
+              <div><p style={{ margin: '0 0 5px', color: '#8e96a6', fontSize: 12 }}>OVERVIEW</p><h2 style={{ margin: 0, fontSize: 21 }}>My Servers</h2></div>
+              <span style={{ color: '#6f7787', fontSize: 12 }}>{guilds.length} available</span>
+            </div>
             <p style={{ margin: '0 0 18px', color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>
               Only servers you can manage are shown.
             </p>
@@ -271,8 +310,8 @@ export default function DashboardPage() {
                 style={{
                   display: 'flex', alignItems: 'center', gap: 14, width: '100%',
                   padding: '13px 16px', marginBottom: 10, cursor: 'pointer',
-                  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 14, color: '#f5f5f7', fontSize: 15, textAlign: 'left',
+                  background: '#1d222c', border: '1px solid #303746',
+                  borderRadius: 9, color: '#f5f5f7', fontSize: 15, textAlign: 'left',
                 }}
               >
                 {g.icon
@@ -282,7 +321,7 @@ export default function DashboardPage() {
                   <strong>{g.name}</strong>
                   {g.members != null && <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12.5, marginLeft: 10 }}>{g.members} members</span>}
                 </span>
-                <span style={{ color: 'rgba(255,255,255,0.4)' }}>Configure →</span>
+                <span style={{ color: '#8e96a6', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>Configure <ChevronRight size={15} /></span>
               </button>
             ))}
           </div>
@@ -292,7 +331,7 @@ export default function DashboardPage() {
         {token && selected && (
           <div>
             {/* Server switcher bar */}
-            <div style={{ ...glass, padding: '14px 18px', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ ...glass, padding: '12px 16px', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
               <button onClick={() => setSelected(null)} style={{
                 background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 14,
               }}>← Servers</button>
@@ -307,8 +346,8 @@ export default function DashboardPage() {
                 borderRadius: 10, color: 'rgba(255,255,255,0.8)', cursor: 'pointer', fontSize: 13,
               }}>🕘 Audit</button>
               <button onClick={save} style={{
-                padding: '9px 22px', background: saveState === 'saved' ? '#2ECC40' : '#e50914',
-                border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14,
+                padding: '9px 22px', background: saveState === 'saved' ? '#27c993' : '#5865f2',
+                border: 'none', borderRadius: 8, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 14,
               }}>
                 {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved ✓' : saveState === 'error' ? 'Error ✗' : 'Save Changes'}
               </button>
@@ -318,12 +357,12 @@ export default function DashboardPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="🔍 Search settings… (music, automod, welcome, security)"
+              placeholder="Search settings…"
               style={{
                 width: '100%', padding: '13px 18px', marginBottom: 18,
-                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
-                borderRadius: 14, color: '#f5f5f7', fontSize: 14, outline: 'none',
-                boxSizing: 'border-box', backdropFilter: 'blur(13px)',
+                background: '#171a22', border: '1px solid #292e3a',
+                borderRadius: 8, color: '#f5f5f7', fontSize: 14, outline: 'none',
+                boxSizing: 'border-box',
               }}
             />
 
@@ -432,6 +471,8 @@ export default function DashboardPage() {
             </p>
           </div>
         )}
+        </div>
+        </section>
       </div>
     </main>
   );
