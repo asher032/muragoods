@@ -1,220 +1,273 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import {
-  Activity, ArrowRight, BarChart3, Bot, Coins, Film, Gamepad2, Gift,
-  ListMusic, Shield, Ticket, Users, Zap,
-} from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { useGuild } from '@/app/lib/guild-context';
-import { dashboardApi, type ActivityEntry, type BotStatusResponse, type GuildConfigDoc } from './lib/api';
+import { useGuildConfig, loadGuildResources } from '@/app/lib/use-guild-config';
+import { MODULES, type FieldDef } from '@/app/lib/discord-modules';
+import { dashboardApi, type BotStatusResponse } from './lib/api';
 
-interface Resources {
-  channels: Array<{ id: string; name: string; type: number }>;
-  roles: Array<{ id: string; name: string }>;
-  members: Array<{ id: string; name: string }>;
+interface Resource {
+  id: string;
+  name: string;
+  type?: number;
 }
 
-interface Stats {
-  commands: number;
-  members: number;
-  channels: number;
-  roles: number;
-}
-
-const MODULE_LINKS = [
-  { label: 'Moderation', href: '/dashboard/moderation', icon: <Shield size={16} /> },
-  { label: 'Music', href: '/dashboard/music', icon: <ListMusic size={16} /> },
-  { label: 'Leveling', href: '/dashboard/leveling', icon: <BarChart3 size={16} /> },
-  { label: 'Economy', href: '/dashboard/economy', icon: <Coins size={16} /> },
-  { label: 'Fun', href: '/dashboard/fun', icon: <Gamepad2 size={16} /> },
-  { label: 'Giveaways', href: '/dashboard/giveaways', icon: <Gift size={16} /> },
-  { label: 'Suggestions', href: '/dashboard/suggestions', icon: <Zap size={16} /> },
-  { label: 'Murastream', href: '/dashboard/murastream', icon: <Film size={16} /> },
-];
-
-export default function CommandCenterPage() {
+export default function DashboardHome() {
   const { token, selected } = useGuild();
-  const [config, setConfig] = useState<GuildConfigDoc | null>(null);
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [status, setStatus] = useState<BotStatusResponse | null>(null);
-  const [activity, setActivity] = useState<ActivityEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [banner, setBanner] = useState('');
-
-  const loadAll = useCallback(async () => {
-    if (!token || !selected) return;
-    setLoading(true);
-    setError('');
-    const [configRes, statusRes, auditRes, resRes] = await Promise.all([
-      dashboardApi.config(token, selected.id),
-      dashboardApi.status(),
-      dashboardApi.audit(token, selected.id),
-      fetch(`/api/dashboard/resources?guildId=${selected.id}`, { headers: { 'x-discord-token': token }, cache: 'no-store' })
-        .then((r) => r.json())
-        .catch(() => null),
-    ]);
-
-    if (!configRes.ok) {
-      setError(configRes.error);
-    } else {
-      setConfig(configRes.data.config);
-    }
-
-    if (statusRes.ok) setStatus(statusRes.data);
-
-    if (auditRes.ok) {
-      setActivity(auditRes.data.audit.slice(0, 8));
-    } else {
-      setActivity([]);
-    }
-
-    if (resRes?.success) {
-      const resources = resRes as Resources;
-      setStats({
-        members: resources.members?.length ?? 0,
-        channels: resources.channels?.length ?? 0,
-        roles: resources.roles?.length ?? 0,
-        commands: Array.isArray(config?.modules) ? Object.keys(config.modules).length : 0,
-      });
-    } else {
-      setStats(null);
-      setBanner('Server resources could not be loaded — counts hidden rather than estimated.');
-    }
-    setLoading(false);
-  }, [token, selected]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { config, saveState, error, save, update } = useGuildConfig();
+  const [resources, setResources] = useState<{ channels?: Resource[]; roles?: Resource[] } | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const [dirty, setDirty] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    loadAll();
-  }, [loadAll]);
+    if (!token || !selected) return;
+    let alive = true;
+    loadGuildResources(token, selected.id)
+      .then((data) => { if (alive && data?.success) setResources(data); })
+      .catch(() => { /* text-input fallback */ });
+    return () => { alive = false; };
+  }, [token, selected]);
 
-  const overall = status?.status ?? null;
-  const statusPill =
-    overall === 'ok' ? 'cc-status-online' : overall === 'degraded' ? 'cc-status-degraded' : overall === 'offline' ? 'cc-status-offline' : '';
+  // Track which sections have unsaved edits (dirty tracking drives inline Save).
+  const markDirty = (section: string, key: string, value: unknown) => {
+    update(section, key, value);
+    setDirty((prev) => new Set(prev).add(section));
+  };
 
-  const statCards: Array<{ label: string; value: string | number; href?: string; icon: React.ReactNode }> = [
-    { label: 'Bot Status', value: overall === 'ok' ? 'Online' : overall === 'degraded' ? 'Degraded' : 'Offline', href: '/dashboard/health', icon: <Bot size={16} /> },
-    { label: 'Members', value: stats?.members ?? '—', href: '/dashboard/directory/members', icon: <Users size={16} /> },
-    { label: 'Channels', value: stats?.channels ?? '—', href: '/dashboard/directory/channels', icon: <Activity size={16} /> },
-    { label: 'Roles', value: stats?.roles ?? '—', href: '/dashboard/directory/roles', icon: <Shield size={16} /> },
-    { label: 'Tickets', value: (config?.tickets as Record<string, unknown> | undefined)?.enabled ? 'Configured' : 'Setup needed', href: '/dashboard/tickets/center', icon: <Ticket size={16} /> },
-    { label: 'Analytics', value: 'View', href: '/dashboard/analytics', icon: <BarChart3 size={16} /> },
-  ];
+  const saveSection = async (section: string) => {
+    const ok = await save();
+    if (ok) {
+      setDirty((prev) => {
+        const next = new Set(prev);
+        next.delete(section);
+        return next;
+      });
+    }
+  };
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const resourceOptions = (type: string): Resource[] => {
+    if (!resources) return [];
+    if (type === 'channel' || type === 'category') return (resources.channels || []);
+    if (type === 'role') return (resources.roles || []);
+    return [];
+  };
+
+  const sectionValue = (moduleDef: { id: string }, field: FieldDef): unknown => {
+    const sectionKey = field.key.split('.')[0];
+    const shortKey = field.key.includes('.') ? field.key.split('.').slice(1).join('.') : field.key;
+    const section = (config as Record<string, Record<string, unknown>>)?.[sectionKey];
+    return section?.[shortKey] ?? field.default ?? '';
+  };
+
+  const status = useBotStatus();
+  const enabledCount = useMemo(
+    () => MODULES.filter((m) => config?.modules?.[m.id] ?? true).length,
+    [config],
+  );
+
+  if (!token) {
+    return (
+      <div className="cc-card" style={{ padding: 40, textAlign: 'center' }}>
+        <p style={{ margin: 0, color: 'var(--cc-text-faint)' }}>Sign in with Discord to manage your server.</p>
+      </div>
+    );
+  }
+  if (!selected) {
+    return (
+      <div className="cc-card" style={{ padding: 40, textAlign: 'center' }}>
+        <p style={{ margin: 0, color: 'var(--cc-text-faint)' }}>Select a server in the top bar to configure it.</p>
+      </div>
+    );
+  }
 
   return (
-    <div>
-      {/* Greeting */}
-      <div style={{ marginBottom: 22 }}>
-        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>
-          {greeting}, operator
-        </h1>
-        <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--cc-text-dim)' }}>
-          Manage the Muragoods bot for <strong style={{ color: '#fff' }}>{selected?.name}</strong> from one place.
-        </p>
+    <div style={{ maxWidth: 860 }}>
+      {/* Server header — Carl-style: big server identity + bot status chip */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 22 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {selected.icon ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={selected.icon} alt="" width={52} height={52} style={{ borderRadius: 14 }} />
+          ) : (
+            <div style={{
+              width: 52, height: 52, borderRadius: 14, background: 'var(--cc-accent)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 800, fontSize: 22, color: '#fff',
+            }}>{selected.name.charAt(0)}</div>
+          )}
+          <div>
+            <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#fff' }}>{selected.name}</h1>
+            <p style={{ margin: '2px 0 0', fontSize: 12.5, color: 'var(--cc-text-faint)' }}>
+              {enabledCount}/{MODULES.length} modules enabled · changes save per section
+            </p>
+          </div>
+        </div>
+        {status && (
+          <span className={`cc-status-pill ${status.status === 'ok' ? 'cc-status-online' : status.status === 'degraded' ? 'cc-status-degraded' : 'cc-status-offline'}`}>
+            <span className="cc-dot" />
+            Bot {status.status === 'ok' ? 'Online' : status.status === 'degraded' ? 'Degraded' : 'Offline'}
+          </span>
+        )}
       </div>
 
-      {/* Status strip */}
-      {status && (
-        <div className="cc-card" style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center', padding: '14px 18px', marginBottom: 22 }}>
-          <span className={`cc-status-pill ${statusPill}`}>
-            <span className="cc-dot" />
-            {overall === 'ok' ? 'All systems operational' : overall === 'degraded' ? 'Degraded' : 'Service issues'}
-          </span>
-          {(['database', 'botGateway', 'discordApi', 'dashboardBackend'] as const).map((svc) => (
-            <span key={svc} style={{ fontSize: 12.5, color: 'var(--cc-text-dim)' }}>
-              {svc === 'database' ? 'Database' : svc === 'botGateway' ? 'Bot Gateway' : svc === 'discordApi' ? 'Discord API' : 'Dashboard'}{' '}
-              <strong style={{ color: status.services[svc].status === 'ok' ? 'var(--cc-ok)' : status.services[svc].status === 'degraded' ? 'var(--cc-warn)' : 'var(--cc-err)' }}>
-                {status.services[svc].status}
-              </strong>
-              {' · '}{status.services[svc].responseTime}ms
-            </span>
-          ))}
-          <Link href="/dashboard/health" className="cc-link" style={{ marginLeft: 'auto', color: 'var(--cc-accent)' }}>
-            Details <ArrowRight size={12} style={{ display: 'inline', verticalAlign: '-2px' }} />
-          </Link>
-        </div>
-      )}
+      {error && <div className="cc-alert cc-alert-error" role="alert" style={{ marginBottom: 16 }}>{error}</div>}
 
-      {/* Error / banner states */}
-      {error && <div className="cc-alert cc-alert-error" style={{ marginBottom: 18 }}>{error}</div>}
-      {banner && <div className="cc-alert cc-alert-warning" style={{ marginBottom: 18 }}>{banner}</div>}
-      {loading && <div className="cc-alert" style={{ marginBottom: 18 }}>Loading command center data…</div>}
+      {/* Accordion modules — click to expand, inline Save inside each */}
+      <div style={{ display: 'grid', gap: 10 }}>
+        {MODULES.map((mod) => {
+          const isOpen = open === mod.id;
+          const enabled = config?.modules?.[mod.id] ?? true;
+          const isDirty = dirty.has(mod.id);
+          const configuredCount = mod.fields.filter((f) => {
+            const v = sectionValue(mod, f);
+            return v !== '' && v !== null && v !== undefined && v !== f.default;
+          }).length;
 
-      {/* Stat cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12, marginBottom: 24 }}>
-        {statCards.map((card) => {
-          const inner = (
-            <div className="cc-card" style={{ padding: '16px 18px', height: '100%', boxSizing: 'border-box', transition: 'border-color .15s ease, transform .15s ease' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: 'var(--cc-text-faint)' }}>
-                {card.icon}
-                <span className="cc-section-label">{card.label}</span>
-              </div>
-              <div style={{ fontSize: 22, fontWeight: 750, color: '#fff' }}>{card.value}</div>
+          return (
+            <div key={mod.id} className="cc-card" style={{ overflow: 'hidden' }}>
+              <button
+                onClick={() => setOpen(isOpen ? null : mod.id)}
+                aria-expanded={isOpen}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '14px 18px', background: 'transparent', border: 'none',
+                  cursor: 'pointer', textAlign: 'left',
+                }}
+              >
+                <span style={{ fontSize: 20 }}>{mod.icon}</span>
+                <span style={{ flex: 1 }}>
+                  <span style={{ display: 'block', color: '#fff', fontWeight: 700, fontSize: 14.5 }}>{mod.label}</span>
+                  <span style={{ display: 'block', color: 'var(--cc-text-faint)', fontSize: 12 }}>
+                    {mod.fields.length} settings{configuredCount > 0 ? ` · ${configuredCount} customized` : ''}
+                  </span>
+                </span>
+                {isDirty && <span className="cc-chip cc-chip-warn">unsaved</span>}
+                <span
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${enabled ? 'Disable' : 'Enable'} ${mod.label}`}
+                  onClick={(e) => { e.stopPropagation(); markDirty('modules', mod.id, !enabled); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); markDirty('modules', mod.id, !enabled); } }}
+                  style={{
+                    width: 40, height: 22, borderRadius: 11, position: 'relative', cursor: 'pointer',
+                    flexShrink: 0, background: enabled ? 'var(--cc-accent)' : 'rgba(255,255,255,0.14)',
+                    border: 'none', transition: 'all .2s', display: 'inline-block',
+                  }}
+                >
+                  <span style={{
+                    position: 'absolute', top: 3, left: enabled ? 21 : 3, width: 16, height: 16,
+                    borderRadius: 8, background: '#fff', transition: 'all .2s',
+                  }} />
+                </span>
+                <ChevronDown size={16} color="var(--cc-text-dim)" style={{
+                  transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s', flexShrink: 0,
+                }} />
+              </button>
+
+              {isOpen && enabled && (
+                <div style={{ borderTop: '1px solid var(--cc-border)', padding: '16px 18px', display: 'grid', gap: 14 }}>
+                  {mod.fields.map((f) => {
+                    const value = sectionValue(mod, f);
+                    const sectionKey = f.key.split('.')[0];
+                    const shortKey = f.key.includes('.') ? f.key.split('.').slice(1).join('.') : f.key;
+                    const options = resourceOptions(f.type);
+                    return (
+                      <div key={f.key}>
+                        <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 5 }}>
+                          {f.icon ? `${f.icon} ` : ''}{f.label}
+                          {f.help && <span style={{ color: 'var(--cc-text-faint)', marginLeft: 6 }}>({f.help})</span>}
+                        </label>
+                        {f.type === 'toggle' ? (
+                          <button
+                            onClick={() => markDirty(sectionKey, shortKey, !value)}
+                            aria-label={f.label}
+                            style={{
+                              width: 40, height: 22, borderRadius: 11, position: 'relative', cursor: 'pointer',
+                              background: value ? 'var(--cc-accent)' : 'rgba(255,255,255,0.14)', border: 'none', transition: 'all .2s',
+                            }}
+                          >
+                            <span style={{ position: 'absolute', top: 3, left: value ? 21 : 3, width: 16, height: 16, borderRadius: 8, background: '#fff', transition: 'all .2s' }} />
+                          </button>
+                        ) : (f.type === 'channel' || f.type === 'category' || f.type === 'role') && options.length > 0 ? (
+                          <select
+                            value={String(value || '')}
+                            onChange={(e) => markDirty(sectionKey, shortKey, e.target.value)}
+                            className="cc-input"
+                            style={{ width: '100%', appearance: 'none' }}
+                          >
+                            <option value="">— None selected —</option>
+                            {options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                          </select>
+                        ) : f.type === 'select' ? (
+                          <select
+                            value={String(value || '')}
+                            onChange={(e) => markDirty(sectionKey, shortKey, e.target.value)}
+                            className="cc-input"
+                            style={{ width: '100%', appearance: 'none' }}
+                          >
+                            {(f.options || []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        ) : f.type === 'number' ? (
+                          <input
+                            type="number"
+                            value={String(value ?? '')}
+                            onChange={(e) => markDirty(sectionKey, shortKey, Number(e.target.value))}
+                            placeholder={String(f.default ?? '')}
+                            className="cc-input"
+                            style={{ width: '100%' }}
+                          />
+                        ) : (
+                          <input
+                            value={String(value ?? '')}
+                            onChange={(e) => markDirty(sectionKey, shortKey, e.target.value)}
+                            placeholder={f.placeholder || String(f.default ?? '')}
+                            className="cc-input"
+                            style={{ width: '100%' }}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Inline save row — per section, real state */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 4 }}>
+                    <button
+                      onClick={() => { void saveSection(mod.id); }}
+                      disabled={saveState === 'saving' || !isDirty}
+                      className="cc-btn cc-btn-primary"
+                    >
+                      {saveState === 'saving' ? 'Saving…'
+                        : saveState === 'saved' && !isDirty ? '✓ Saved'
+                        : saveState === 'error' ? '✕ Failed — retry'
+                        : 'Save Changes'}
+                    </button>
+                    {!isDirty && saveState !== 'saving' && (
+                      <span style={{ color: 'var(--cc-text-faint)', fontSize: 12 }}>No changes</span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-          );
-          return card.href ? (
-            <Link key={card.label} href={card.href} style={{ textDecoration: 'none' }}>{inner}</Link>
-          ) : (
-            <div key={card.label}>{inner}</div>
           );
         })}
       </div>
 
-      {/* Activity + modules */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
-        {/* Activity feed */}
-        <div className="cc-card" style={{ padding: '18px 20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <h2 className="cc-card-title">Recent Activity</h2>
-            <Link href="/dashboard/audit" className="cc-link" style={{ color: 'var(--cc-accent)' }}>All activity</Link>
-          </div>
-          {activity.length === 0 ? (
-            <p style={{ fontSize: 13, color: 'var(--cc-text-faint)', margin: '10px 0' }}>
-              No configuration changes recorded yet. Saves from settings pages appear here.
-            </p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {activity.map((entry, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '9px 11px', borderRadius: 10, background: 'rgba(255,255,255,0.03)' }}>
-                  <span className="cc-chip cc-chip-accent" style={{ flexShrink: 0 }}>{entry.type ?? 'config'}</span>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, color: '#fff' }}>{entry.summary ?? 'Configuration updated'}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--cc-text-faint)' }}>
-                      {entry.actor ?? 'unknown'} · {new Date(entry.at).toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Module quick access */}
-        <div className="cc-card" style={{ padding: '18px 20px' }}>
-          <h2 className="cc-card-title" style={{ marginBottom: 12 }}>Modules</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
-            {MODULE_LINKS.map((m) => (
-              <Link
-                key={m.href}
-                href={m.href}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
-                  borderRadius: 10, textDecoration: 'none', fontSize: 13, color: 'var(--cc-text-dim)',
-                  background: 'rgba(255,255,255,0.03)', border: '1px solid var(--cc-border)',
-                  transition: 'all .15s ease',
-                }}
-              >
-                {m.icon}
-                {m.label}
-              </Link>
-            ))}
-          </div>
-        </div>
-      </div>
+      <p style={{ color: 'var(--cc-text-faint)', fontSize: 12, marginTop: 16 }}>
+        Saved per server (guildId + module) with a full before/after audit trail on the{' '}
+        <Link href="/dashboard/audit" style={{ color: 'var(--cc-accent)' }}>Audit Log</Link>. The bot picks up changes within ~60 seconds.
+      </p>
     </div>
   );
+}
+
+function useBotStatus(): BotStatusResponse | null {
+  const [status, setStatus] = useState<BotStatusResponse | null>(null);
+  useEffect(() => {
+    let alive = true;
+    dashboardApi.status().then((r) => { if (alive && r.ok) setStatus(r.data); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  return status;
 }
