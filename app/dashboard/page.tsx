@@ -9,8 +9,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Activity, ChevronRight, LayoutDashboard, LogOut, Menu, Music2,
-  Server, Settings2, ShieldCheck, Users, X,
+  Server, Settings2, ShieldCheck, Users, X, RefreshCw,
 } from 'lucide-react';
+import HeaderBar from './components/HeaderBar';
 
 interface Guild {
   id: string;
@@ -276,6 +277,7 @@ export default function DashboardPage() {
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       padding: '32px 18px 80px',
     }}>
+      <HeaderBar />
       <div style={{ maxWidth: 860, margin: '0 auto' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 26 }}>
