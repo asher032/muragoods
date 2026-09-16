@@ -83,6 +83,8 @@ class MuraBot(commands.Bot):
 
     async def on_ready(self) -> None:
         http_mod.set_status("discord", "online")
+        http_mod.set_status("music", "online")
+        log.info("Music subsystem online")
         activity_name = config.BOT_ACTIVITY.strip() or "https://muragoods.vercel.app/"
         if "twitch.tv" in activity_name.lower():
             activity_name = "https://muragoods.vercel.app/"
@@ -145,7 +147,8 @@ async def _health_server() -> None:
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    log.info("Health endpoint on :%d/health", port)
+    http_mod.set_status("music", "online")
+    log.info("Music subsystem online")
     while True:
         await asyncio.sleep(3600)
 
