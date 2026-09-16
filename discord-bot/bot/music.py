@@ -36,7 +36,13 @@ YDL_OPTS = {
     "no_warnings": True,
     "source_address": "0.0.0.0",
     "geo_bypass": True,
-    "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
+    "nocheckcertificate": True,
+    "extractor_args": {
+        "youtube": {
+            "player_client": ["web", "android", "ios", "msapp"],
+            "player_skip": "configs",
+        },
+    },
 }
 FFMPEG_OPTS = {
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
@@ -137,24 +143,31 @@ class MusicEngine:
         query = query.strip()
         if not query:
             return None
-        source = query if query.startswith(("http://", "https://")) else f"ytsearch1:{query}"
-        try:
-            with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
-                data = await loop.run_in_executor(None, lambda: ydl.extract_info(source, download=False))
-        except Exception as exc:
-            log.warning("yt-dlp failed for %r: %s", query[:100], exc)
-            return None
-        if data is None:
-            return None
-        if "entries" in data:
-            entries = [e for e in data["entries"] if e]
-            if not entries:
-                return None
-            data = entries[0]
-        if not data.get("url"):
-            log.warning("yt-dlp returned no playable stream for %r", query[:100])
-            return None
-        return Track(data, requester=None)  # requester set by caller
+        if query.startswith(("http://", "https://")):
+            sources = [query, f"ytsearch1:{query}"]
+        else:
+            sources = [f"ytsearch1:{query}", f"ytsearch5:{query}", query]
+        last_exc = None
+        for source in sources:
+            try:
+                with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
+                    data = await loop.run_in_executor(None, lambda s=source: ydl.extract_info(s, download=False))
+                if data is None:
+                    continue
+                if "entries" in data:
+                    entries = [e for e in data["entries"] if e]
+                    if not entries:
+                        continue
+                    data = entries[0]
+                if data.get("url"):
+                    log.info("yt-dlp resolved: %s", data.get("title", query)[:60])
+                    return Track(data, requester=None)
+                log.warning("yt-dlp returned no URL for %s", source[:60])
+            except Exception as exc:
+                last_exc = exc
+                log.warning("yt-dlp failed for %r: %s", source[:100], exc)
+        log.warning("All yt-dlp sources failed for %r: %s", query[:100], last_exc)
+        return None
 
     async def play_now(self, player: GuildPlayer, track: Track,
                        voice_channel: discord.VoiceChannel, announce=None) -> None:
