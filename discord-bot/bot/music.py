@@ -212,11 +212,24 @@ class MusicEngine:
             player.voice.stop()
             await asyncio.sleep(0)  # let the queued end-callback observe the flag
         if not player.is_connected():
-            try:
-                player.voice = await voice_channel.connect(self_deaf=True, timeout=20)
-            except (discord.ClientException, asyncio.TimeoutError) as exc:
-                player.voice = None
-                raise RuntimeError("Could not connect to the voice channel") from exc
+            # Reuse the guild's existing voice client — /play after /join, or a
+            # connection made outside the engine — instead of failing with
+            # "Already connected to a voice channel".
+            existing = voice_channel.guild.voice_client
+            if existing and existing.is_connected():
+                player.voice = existing
+                if existing.channel and existing.channel.id != voice_channel.id:
+                    try:
+                        await existing.move_to(voice_channel)
+                    except Exception:
+                        log.warning("Could not move to %s — playing from %s",
+                                    voice_channel.id, existing.channel.id)
+            else:
+                try:
+                    player.voice = await voice_channel.connect(self_deaf=True, timeout=20)
+                except (discord.ClientException, asyncio.TimeoutError) as exc:
+                    player.voice = None
+                    raise RuntimeError("Could not connect to the voice channel") from exc
         if not player.voice or not player.voice.is_connected():
             raise RuntimeError("Voice connection was not established")
         player.current = track

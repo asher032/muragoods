@@ -34,6 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "bot"))
 
 import discord
 from discord import app_commands
+from discord.ext import commands
 
 import config
 import database
@@ -100,11 +101,11 @@ def synth_args(command: app_commands.Command) -> dict[str, Any]:
             continue
         if param.choices:
             kwargs[param.name] = param.choices[0]
-        elif param.type == app_commands.AppCommandOptionType.string:
+        elif param.type == discord.AppCommandOptionType.string:
             kwargs[param.name] = "test"
-        elif param.type == app_commands.AppCommandOptionType.integer:
+        elif param.type == discord.AppCommandOptionType.integer:
             kwargs[param.name] = 1
-        elif param.type == app_commands.AppCommandOptionType.user:
+        elif param.type == discord.AppCommandOptionType.user:
             kwargs[param.name] = None  # handlers should error cleanly
         else:
             kwargs[param.name] = "test"
@@ -174,9 +175,16 @@ async def run(voice_channel_id: int | None, guild_id: int | None) -> int:
 
     try:
         # Load cogs without full setup_hook (skips DB + global sync).
+        # load_extension raises on already-loaded; a crash here means a real
+        # import problem, not a double-load (main.py loads once per process).
+        loaded = 0
         for cog in bot.initial_cogs:
-            await bot.load_extension(cog)
-        record("cogs loaded", True, f"{len(bot.initial_cogs)} cogs")
+            try:
+                await bot.load_extension(cog)
+                loaded += 1
+            except commands.errors.ExtensionAlreadyLoaded:
+                loaded += 1  # already registered — fine
+        record("cogs loaded", True, f"{loaded}/{len(bot.initial_cogs)} cogs")
     except Exception as exc:
         record("cogs loaded", False, str(exc)[:150])
 
