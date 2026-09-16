@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import dbConnect from '@/app/lib/mongodb';
-import DiscordGuildConfig from '@/app/lib/models/DiscordGuildConfig';
+import { discordConfigCollection } from '@/app/lib/discord-config';
 
 // Dashboard config API — authorization model:
 //   1. The caller presents a Discord access token (from the OAuth flow).
@@ -52,8 +51,8 @@ export async function GET(req: NextRequest) {
   const guild = manageable.get(guildId);
   if (!guild) return bad('You do not have permission to manage this server', 403);
 
-  await dbConnect();
-  let config = await DiscordGuildConfig.findOne({ guildId }).lean();
+  const collection = await discordConfigCollection();
+  let config = await collection.findOne({ guildId });
   if (!config) {
     config = { guildId, guildName: guild.name, guildIcon: guild.icon || '' };
   }
@@ -159,8 +158,8 @@ export async function PATCH(req: NextRequest) {
     };
   }
 
-  await dbConnect();
-  await DiscordGuildConfig.findOneAndUpdate({ guildId }, update, { upsert: true });
+  const collection = await discordConfigCollection();
+  await collection.updateOne({ guildId }, { $set: update }, { upsert: true });
 
   // Audit trail: who changed what (actor = Discord user id from token).
   try {
