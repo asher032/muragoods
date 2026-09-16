@@ -6,8 +6,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-const MANAGE_GUILD = 0x20;
-const ADMINISTRATOR = 0x8;
+const MANAGE_GUILD = BigInt(0x20);
+const ADMINISTRATOR = BigInt(0x8);
 
 interface DashGuild {
   id: string;
@@ -18,9 +18,10 @@ interface DashGuild {
   approximate_member_count?: number;
 }
 
-function hasManage(perms: string | number): boolean {
-  const p = typeof perms === 'string' ? Number(BigInt(perms)) : perms;
-  return Boolean((p & MANAGE_GUILD) || (p & ADMINISTRATOR));
+function hasManage(owner: boolean, perms: string | number): boolean {
+  if (owner) return true;
+  const p = BigInt(perms);
+  return (p & MANAGE_GUILD) !== BigInt(0) || (p & ADMINISTRATOR) !== BigInt(0);
 }
 
 export async function GET(req: NextRequest) {
@@ -40,7 +41,7 @@ export async function GET(req: NextRequest) {
   }
   const guilds = (await resp.json()) as DashGuild[];
   const manageable = guilds
-    .filter((g) => hasManage(g.permissions))
+    .filter((g) => hasManage(g.owner, g.permissions))
     .map((g) => ({
       id: g.id,
       name: g.name,

@@ -74,14 +74,16 @@ https://discord.com/oauth2/authorize?client_id=1549395794853888020&permissions=1
 
 Permissions included: View Channels, Send Messages, Embed Links, Attach Files, Read History, Connect, Speak, Use Slash Commands, Moderate Members.
 
-## Deployment (free tier)
+## Deployment
 
-**Render** (recommended, free worker plan):
+**Render** (recommended for the always-on bot):
 
 1. Push this folder to GitHub.
-2. Render → New → Worker → connect repo → root directory `discord-bot`.
-3. Render reads `render.yaml`; set the secret env vars in the dashboard.
-4. Free-tier caveat (honest): Render's free worker **does not guarantee 24/7 uptime** — instances restart periodically and may cold-start. The bot is built for this: it reconnects with exponential backoff, recovers state from Mongo, and restarts cleanly. For guaranteed uptime, Render's paid plan (~$7/mo) keeps it always-on.
+2. Render → New → Blueprint → connect the repository. The root `render.yaml` points at `discord-bot/`.
+3. Keep the service on the `starter` plan; the free plan sleeps and disconnects the bot from Discord.
+4. Set the secret env vars in the Render dashboard, then deploy. The `/health` endpoint is used by Render to restart an unhealthy instance.
+
+The MuraBot dashboard is the Next.js app at `https://muragoods.vercel.app/dashboard` and should remain deployed through the repository's Vercel project. In the Discord Developer Portal, register this exact OAuth2 redirect URI: `https://muragoods.vercel.app/dashboard`. Vercel serves the dashboard and its API routes on demand, so it does not need a continuously running dashboard process. Set `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, and `DISCORD_BRIDGE_SECRET` in Vercel, using the same bridge secret as Render.
 
 **Docker** (any host):
 

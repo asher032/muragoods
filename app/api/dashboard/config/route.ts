@@ -11,8 +11,8 @@ import DiscordGuildConfig from '@/app/lib/models/DiscordGuildConfig';
 
 export const dynamic = 'force-dynamic';
 
-const MANAGE_GUILD = 0x20;
-const ADMINISTRATOR = 0x8;
+const MANAGE_GUILD = BigInt(0x20);
+const ADMINISTRATOR = BigInt(0x8);
 
 interface DashGuild {
   id: string;
@@ -22,9 +22,10 @@ interface DashGuild {
   permissions: string | number;
 }
 
-function hasManage(perms: string | number): boolean {
-  const p = typeof perms === 'string' ? Number(BigInt(perms)) : perms;
-  return Boolean((p & MANAGE_GUILD) || (p & ADMINISTRATOR));
+function hasManage(owner: boolean, perms: string | number): boolean {
+  if (owner) return true;
+  const p = BigInt(perms);
+  return (p & MANAGE_GUILD) !== BigInt(0) || (p & ADMINISTRATOR) !== BigInt(0);
 }
 
 function bad(message: string, status = 400) {
@@ -38,7 +39,7 @@ async function getManageableGuilds(accessToken: string): Promise<Map<string, Das
   });
   if (!resp.ok) return new Map();
   const guilds = (await resp.json()) as DashGuild[];
-  return new Map(guilds.filter((g) => hasManage(g.permissions)).map((g) => [g.id, g]));
+  return new Map(guilds.filter((g) => hasManage(g.owner, g.permissions)).map((g) => [g.id, g]));
 }
 
 export async function GET(req: NextRequest) {
