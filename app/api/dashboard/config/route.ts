@@ -52,10 +52,11 @@ export async function GET(req: NextRequest) {
   if (!guild) return bad('You do not have permission to manage this server', 403);
 
   const collection = await discordConfigCollection();
-  let config = await collection.findOne({ guildId });
-  if (!config) {
-    config = { guildId, guildName: guild.name, guildIcon: guild.icon || '' };
-  }
+  const config = await collection.findOne({ guildId }) || {
+    guildId,
+    guildName: guild.name,
+    guildIcon: guild.icon || '',
+  };
   return NextResponse.json({
     success: true,
     guild: { id: guild.id, name: guild.name, icon: guild.icon },
