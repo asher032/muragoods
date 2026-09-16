@@ -30,12 +30,13 @@ FFMPEG_EXE = _resolve_ffmpeg()
 
 # yt-dlp: stream extraction only, no downloads to disk.
 YDL_OPTS = {
-    "format": "bestaudio/best",
+    "format": "bestaudio[acodec!=none]/bestaudio/best",
     "noplaylist": True,
     "quiet": True,
     "no_warnings": True,
-    "default_search": "ytsearch",
     "source_address": "0.0.0.0",
+    "geo_bypass": True,
+    "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
 }
 FFMPEG_OPTS = {
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
@@ -133,9 +134,13 @@ class MusicEngine:
     async def resolve(self, query: str) -> Optional[Track]:
         """Resolve a search query or URL to a Track via yt-dlp."""
         loop = asyncio.get_running_loop()
+        query = query.strip()
+        if not query:
+            return None
+        source = query if query.startswith(("http://", "https://")) else f"ytsearch1:{query}"
         try:
             with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
-                data = await loop.run_in_executor(None, lambda: ydl.extract_info(query, download=False))
+                data = await loop.run_in_executor(None, lambda: ydl.extract_info(source, download=False))
         except Exception as exc:
             log.warning("yt-dlp failed for %r: %s", query[:100], exc)
             return None
@@ -146,16 +151,27 @@ class MusicEngine:
             if not entries:
                 return None
             data = entries[0]
+        if not data.get("url"):
+            log.warning("yt-dlp returned no playable stream for %r", query[:100])
+            return None
         return Track(data, requester=None)  # requester set by caller
 
     async def play_now(self, player: GuildPlayer, track: Track,
                        voice_channel: discord.VoiceChannel, announce=None) -> None:
         """Connect (if needed) and start playing a track."""
+        self.bot_loop = asyncio.get_running_loop()
+        if not track.stream_url:
+            raise RuntimeError("Track has no playable stream URL")
+        if player.voice and player.voice.is_connected() and player.voice.channel != voice_channel:
+            await player.voice.move_to(voice_channel)
         if not player.is_connected():
             try:
-                player.voice = await voice_channel.connect(self_deaf=True)
-            except discord.ClientException:
-                pass
+                player.voice = await voice_channel.connect(self_deaf=True, timeout=20)
+            except (discord.ClientException, asyncio.TimeoutError) as exc:
+                player.voice = None
+                raise RuntimeError("Could not connect to the voice channel") from exc
+        if not player.voice or not player.voice.is_connected():
+            raise RuntimeError("Voice connection was not established")
         player.current = track
         player.playing = True
 
