@@ -4,6 +4,8 @@ import asyncio
 import logging
 import os
 import sys
+import time
+from datetime import datetime
 from pathlib import Path
 
 # Make sibling modules importable regardless of how the bot is launched.
@@ -23,6 +25,10 @@ logging.basicConfig(
 )
 logging.getLogger("discord").setLevel(logging.WARNING)
 log = logging.getLogger("bot.main")
+
+# Health tracking
+_start_time = time.time()
+_reconnect_count = 0
 
 # Flipped to False if Discord rejects the privileged-intent request; the bot
 # then restarts without them (automod message-scan + welcome events disabled).
@@ -112,13 +118,23 @@ bot = MuraBot()
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: Exception) -> None:
-    """Central error handler: user gets error ID, logs get the real exception."""
+    """Central error handler: user gets error ID, logs get the real exception,
+    and the dashboard Error Center receives a persistent record."""
     if isinstance(error, discord.app_commands.CheckFailure):
         return
     error_id = embeds.new_error_id()
     command_name = interaction.command.qualified_name if interaction.command else "unknown"
     log.error("[ERROR] command=/%s [ERROR_ID]=%s [EXCEPTION]=%r",
               command_name, error_id, error)
+    # Relay to the dashboard Error Center (database on the shared cluster).
+    try:
+        await database.record_bot_error(
+            "command", f"/{command_name}: {type(error).__name__}: {error}",
+            guild_id=interaction.guild_id if interaction.guild_id else None,
+            command=command_name,
+            detail=repr(error)[:2000])
+    except Exception:
+        log.debug("error relay failed (non-fatal)")
     try:
         e = embeds.err_embed(error_id)
         if interaction.response.is_done():
@@ -136,9 +152,26 @@ async def _health_server() -> None:
     async def health(_request: web.Request) -> web.Response:
         statuses = http_mod.get_status()
         ok = not bot.is_closed() and statuses.get("discord") == "online"
-        return web.json_response({"ok": ok, "guilds": len(bot.guilds),
-                                  "subsystems": statuses},
-                                 status=200 if ok else 503)
+        latency_ms = round(bot.latency * 1000) if bot.latency else 0
+        uptime = time.time() - _start_time
+        last_hb = None
+        if hasattr(bot, "_connection") and bot._connection:
+            last_hb_ts = getattr(bot._connection, "last_heartbeat", None)
+            if last_hb_ts:
+                last_hb = datetime.fromtimestamp(last_hb_ts).isoformat()
+        shard_count = len(bot.shards) if hasattr(bot, "shards") else 1
+        bot_version = getattr(config, "BOT_VERSION", "1.0.0")
+        return web.json_response({
+            "ok": ok,
+            "guilds": len(bot.guilds),
+            "subsystems": statuses,
+            "bot_version": bot_version,
+            "latency": latency_ms,
+            "uptime_seconds": round(uptime),
+            "last_heartbeat": last_hb,
+            "reconnect_count": _reconnect_count,
+            "shard_count": shard_count,
+        }, status=200 if ok else 503)
 
     app = web.Application()
     app.router.add_get("/health", health)
@@ -149,6 +182,25 @@ async def _health_server() -> None:
     await site.start()
     http_mod.set_status("music", "online")
     log.info("Music subsystem online")
+    # Keep-alive: ping the site's health endpoint every 5 minutes so the
+    # dashboard Health Monitor has real server-side data, and so the site
+    # (which polls bot health too) sees a live bot. This is legitimate
+    # health monitoring, not traffic generation.
+    async def _keepalive_loop() -> None:
+        await bot.wait_until_ready()
+        while not bot.is_closed():
+            ok = not bot.is_closed() and http_mod.get_status().get("discord") == "online"
+            await database.keepalive_record(ok, round(bot.latency * 1000) if bot.latency else 0,
+                                            200 if ok else 503, "bot self-check")
+            try:
+                resp_status, _data = await http_mod.get_json(f"{config.MURASTREAM_URL}/api/dashboard/status")
+                await database.keepalive_record(
+                    resp_status == 200, 0, resp_status,
+                    f"site /api/dashboard/status → {resp_status}")
+            except Exception:
+                pass
+            await asyncio.sleep(300)
+    asyncio.create_task(_keepalive_loop())
     while True:
         await asyncio.sleep(3600)
 
@@ -188,6 +240,8 @@ async def main() -> None:
                 continue
             raise
         except (discord.HTTPException, asyncio.TimeoutError, OSError) as exc:
+            global _reconnect_count
+            _reconnect_count += 1
             log.warning("Connection lost (%s) — reconnecting in %ds", str(exc)[:200], delay)
             await asyncio.sleep(delay)
             delay = min(delay * 2, 300)

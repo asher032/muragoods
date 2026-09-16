@@ -2,6 +2,7 @@
 
 import logging
 import re
+from datetime import timedelta
 
 import discord
 from discord import app_commands
@@ -73,7 +74,7 @@ class ModerationCog(commands.Cog):
                                    f"{user.mention} — warning **#{count}**\nReason: {reason}"))
         if count >= 3:
             try:
-                await user.timeout(discord.utils.utcnow() + discord.timedelta(minutes=60),
+                await user.timeout(discord.utils.utcnow() + timedelta(minutes=60),
                                    reason="3 warnings (automod escalation)")
                 await interaction.followup.send(
                     embed=utils.base_embed("🛡️ Escalation", f"{user.mention} reached 3 warnings — muted for 1 hour."))
@@ -180,7 +181,7 @@ class ModerationCog(commands.Cog):
             return
         minutes = max(1, min(minutes, 40320))  # 28-day max
         try:
-            await user.timeout(discord.utils.utcnow() + discord.timedelta(minutes=minutes),
+            await user.timeout(discord.utils.utcnow() + timedelta(minutes=minutes),
                                reason=f"By {interaction.user}")
         except discord.Forbidden:
             await interaction.response.send_message("I lack permission to timeout that member.", ephemeral=True)
@@ -214,7 +215,12 @@ class ModerationCog(commands.Cog):
             return
         amount = max(1, min(int(amount or 0), 100))
         await interaction.response.defer(ephemeral=True)
-        deleted = await interaction.channel.purge(limit=amount)
+        try:
+            deleted = await interaction.channel.purge(limit=amount)
+        except discord.Forbidden:
+            await interaction.followup.send(
+                "I need **Manage Messages** permission in this channel to purge.", ephemeral=True)
+            return
         await interaction.followup.send(f"🧹 Deleted {len(deleted)} messages.", ephemeral=True)
 
     @app_commands.command(name="lock", description="Lock this channel (stop members sending).")
@@ -222,9 +228,16 @@ class ModerationCog(commands.Cog):
         if not interaction.user.guild_permissions.manage_channels:
             await interaction.response.send_message("You need Manage Channels permission.", ephemeral=True)
             return
-        overwrite = interaction.channel.overwrites_for(interaction.guild.default_role)
-        overwrite.send_messages = False
-        await interaction.channel.set_permissions(interaction.guild.default_role, overwrite=overwrite)
+        try:
+            overwrite = interaction.channel.overwrites_for(interaction.guild.default_role)
+            overwrite.send_messages = False
+            await interaction.channel.set_permissions(interaction.guild.default_role, overwrite=overwrite)
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                "I need **Manage Channels** permission here to lock.", ephemeral=True)
+            return
+        await self._log(interaction.guild, utils.base_embed(
+            "🔒 Channel locked", f"{interaction.channel.mention} by {interaction.user.mention}"))
         await interaction.response.send_message("🔒 Channel locked.")
 
     @app_commands.command(name="unlock", description="Unlock this channel.")
@@ -232,9 +245,16 @@ class ModerationCog(commands.Cog):
         if not interaction.user.guild_permissions.manage_channels:
             await interaction.response.send_message("You need Manage Channels permission.", ephemeral=True)
             return
-        overwrite = interaction.channel.overwrites_for(interaction.guild.default_role)
-        overwrite.send_messages = None
-        await interaction.channel.set_permissions(interaction.guild.default_role, overwrite=overwrite)
+        try:
+            overwrite = interaction.channel.overwrites_for(interaction.guild.default_role)
+            overwrite.send_messages = None
+            await interaction.channel.set_permissions(interaction.guild.default_role, overwrite=overwrite)
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                "I need **Manage Channels** permission here to unlock.", ephemeral=True)
+            return
+        await self._log(interaction.guild, utils.base_embed(
+            "🔓 Channel unlocked", f"{interaction.channel.mention} by {interaction.user.mention}"))
         await interaction.response.send_message("🔓 Channel unlocked.")
 
     # ── Setup ─────────────────────────────────────────────────────────
@@ -320,6 +340,16 @@ class ModerationCog(commands.Cog):
             return
 
         violations: list[str] = []
+        # Message spam (per-user within SPAM_WINDOW) — dashboard antiSpam toggle
+        if dashboard_mod.get("antiSpam", True) and not self._is_mod_msg(message):
+            import time as _time
+            key = (message.guild.id, message.author.id)
+            now_ms = _time.monotonic()
+            times = [t for t in self._msg_times.get(key, []) if now_ms - t <= SPAM_WINDOW]
+            times.append(now_ms)
+            self._msg_times[key] = times
+            if len(times) > SPAM_LIMIT:
+                violations.append("spam")
         # Mention spam
         if len(message.mentions) >= automod["mentionThreshold"]:
             violations.append("mention spam")
@@ -342,6 +372,23 @@ class ModerationCog(commands.Cog):
         except discord.HTTPException:
             return
         strikes = await database.automod_inc_strike(message.guild.id, message.author.id, violations[0])
+        # Escalation ladder from the dashboard (warn → timeout → kick → ban)
+        try:
+            escalation = (dashboard_mod.get("escalation") or ["warn", "timeout", "timeout", "kick", "ban"])
+            step = escalation[min(strikes - 1, len(escalation) - 1)] if strikes else "warn"
+            member = message.author if isinstance(message.author, discord.Member) else None
+            if member and step == "timeout" and strikes >= 2:
+                from datetime import timedelta as _td
+                await member.timeout(discord.utils.utcnow() + _td(minutes=10),
+                                     reason=f"Automod: repeated {violations[0]}")
+            elif member and step == "kick" and strikes >= 4:
+                await member.kick(reason=f"Automod: repeated {violations[0]}")
+            elif member and step == "ban" and strikes >= 5:
+                await member.ban(reason=f"Automod: repeated {violations[0]}", delete_message_days=0)
+        except discord.Forbidden:
+            pass
+        except discord.HTTPException:
+            pass
         await message.channel.send(
             f"{message.author.mention} message removed ({violations[0]}) — strike {strikes}.",
             delete_after=5)

@@ -30,6 +30,9 @@ FFMPEG_EXE = _resolve_ffmpeg()
 YDL_OPTS = {
     "format": "bestaudio[acodec!=none]/bestaudio/best",
     "noplaylist": True,
+    # Bare search terms ("lofi hip hop") are resolved via YouTube search.
+    # URLs are passed through untouched.
+    "default_search": "ytsearch",
     "quiet": False,
     "no_warnings": True,
     "source_address": "0.0.0.0",
@@ -55,7 +58,10 @@ class Track:
         self.title: str = data.get("title", "Unknown title")
         self.uploader: str = data.get("uploader", "Unknown artist")
         self.duration: int = int(data.get("duration") or 0)
-        self.thumbnail: str = data.get("thumbnail") or data.get("thumbnails", [{}])[0].get("url", "") if data.get("thumbnails") else ""
+        thumb = data.get("thumbnail")
+        if not thumb and data.get("thumbnails"):
+            thumb = data["thumbnails"][0].get("url", "")
+        self.thumbnail: str = thumb or ""
         self.url: str = data.get("url") or data.get("webpage_url", "") or ""
         self.stream_url: str = data.get("url") or data.get("webpage_url", "") or ""
         self.requester = requester
@@ -78,6 +84,34 @@ class GuildPlayer:
         self.volume: float = 0.5
         self.voice: Optional[discord.VoiceClient] = None
         self.now_playing_message: Optional[discord.Message] = None
+        # Position tracking (monotonic clock, survives pause/resume).
+        self._play_started: float = 0.0
+        self._play_offset: float = 0.0
+        self._paused_at: Optional[float] = None
+        self._paused_elapsed: float = 0.0
+
+    def mark_paused(self) -> None:
+        if self._paused_at is None and self._play_started:
+            self._paused_at = time.monotonic()
+
+    def mark_resumed(self) -> None:
+        if self._paused_at is not None:
+            self._paused_elapsed += time.monotonic() - self._paused_at
+            self._paused_at = None
+
+    def position(self) -> float:
+        """Approximate playback position of the current track, in seconds."""
+        if not self.current or not self._play_started:
+            return 0.0
+        elapsed = self._paused_elapsed
+        if self._paused_at is not None:
+            elapsed += time.monotonic() - self._paused_at
+        else:
+            elapsed += time.monotonic() - self._play_started
+        dur = float(self.current.duration) if self.current.duration else 0.0
+        if dur > 0:
+            elapsed = min(elapsed, dur)
+        return max(0.0, elapsed)
 
     def enqueue(self, track: Track) -> int | str:
         for t in self.queue:
@@ -150,6 +184,11 @@ class MusicEngine:
                 if not data.get("url") and not data.get("webpage_url"):
                     last_exc = ValueError("No URL in result")
                     continue
+                # A bare webpage URL is fine here: FFmpeg reconnects via
+                # yt-dlp's route only if url is direct; for search results the
+                # stream URL is what we want, so prefer it.
+                if not data.get("url"):
+                    data = await self._refresh_stream_url(data)
                 track = Track(data, requester=None)
                 log.info("resolve ok: %s (attempt %d)", track.title[:60], attempt + 1)
                 return track
@@ -162,7 +201,16 @@ class MusicEngine:
         return None
 
     async def play_now(self, player: GuildPlayer, track: Track,
-                       voice_channel: discord.VoiceChannel, announce=None) -> None:
+                       voice_channel: discord.VoiceChannel, announce=None,
+                       seek_to: float = 0.0) -> None:
+        # Guard against "Already playing audio" when /replay, /previous, /seek
+        # or /forward restarts a track while one is live. The queued track-end
+        # callback observes playing=False and exits without advancing the queue
+        # (duplicate-action protection for the stop() below).
+        if player.voice and (player.voice.is_playing() or player.voice.is_paused()):
+            player.playing = False
+            player.voice.stop()
+            await asyncio.sleep(0)  # let the queued end-callback observe the flag
         if not player.is_connected():
             try:
                 player.voice = await voice_channel.connect(self_deaf=True, timeout=20)
@@ -173,21 +221,44 @@ class MusicEngine:
             raise RuntimeError("Voice connection was not established")
         player.current = track
         player.playing = True
-        src = discord.FFmpegPCMAudio(track.stream_url, **FFMPEG_OPTS)
+        opts = dict(FFMPEG_OPTS)
+        if seek_to and seek_to > 0:
+            opts["before_options"] = f"{opts['before_options']} -ss {int(seek_to)}"
+        src = discord.FFmpegPCMAudio(track.stream_url, **opts)
         src = discord.PCMVolumeTransformer(src, volume=player.volume)
+        player._play_started = time.monotonic()
+        player._play_offset = float(seek_to or 0.0)
+        player._paused_at = None
+        player._paused_elapsed = 0.0
 
         def _after(err):
             if err:
                 log.warning("Player error: %s", err)
-            loop = self.bot_loop or asyncio.get_running_loop()
-            asyncio.run_coroutine_threadsafe(self._on_track_end(player, announce), loop)
+            loop = self.bot_loop
+            if loop is None or loop.is_closed():
+                log.error("Bot loop unavailable for track-end handling; queue halted")
+                return
+            asyncio.run_coroutine_threadsafe(
+                self._on_track_end(player, announce, err), loop)
 
         player.voice.play(src, after=_after)
 
-    async def _on_track_end(self, player: GuildPlayer, announce=None) -> None:
+    async def _on_track_end(self, player: GuildPlayer, announce=None, err=None) -> None:
         try:
             if not player.playing:
-                return
+                return  # stopped/restarted intentionally — do not advance
+            # Recover once from a failed stream (e.g. expired YouTube URL on a
+            # long-queued track) by re-resolving the SAME track before moving on.
+            if err and player.current:
+                source = player.current.url or player.current.stream_url
+                fresh = await self.resolve(source) if source else None
+                if fresh and player.voice and player.voice.channel:
+                    fresh.requester = player.current.requester
+                    try:
+                        await self.play_now(player, fresh, player.voice.channel, announce)
+                        return
+                    except Exception:
+                        log.warning("Re-resolve retry failed for %r", fresh.title[:60])
             next_track = player.pop_next()
             if next_track is None and player.autoplay and player.current:
                 try:
@@ -207,6 +278,22 @@ class MusicEngine:
         except Exception:
             log.exception("Track-end handler failed")
             player.playing = False
+
+    async def _refresh_stream_url(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Re-extract to obtain a direct stream URL when the webpage URL is all we have."""
+        webpage = data.get("webpage_url") or data.get("url")
+        if not webpage:
+            return data
+        try:
+            loop = asyncio.get_running_loop()
+            with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
+                fresh = await loop.run_in_executor(
+                    None, lambda: ydl.extract_info(webpage, download=False))
+            if fresh and fresh.get("url"):
+                return fresh
+        except Exception as exc:
+            log.warning("Stream URL refresh failed for %r: %s", str(webpage)[:80], exc)
+        return data
 
     async def _related(self, track: Track) -> Optional[Track]:
         if not track.url:
