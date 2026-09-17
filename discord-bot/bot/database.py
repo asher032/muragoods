@@ -43,6 +43,9 @@ async def connect() -> None:
     await _db.reaction_roles.create_index("messageId", unique=True, sparse=True)
     await _db.analytics.create_index([("guildId", DESCENDING), ("day", ASCENDING)])
     await _db.config_audit.create_index([("guildId", DESCENDING), ("at", DESCENDING)])
+    await _db.bot_errors.create_index([("createdAt", DESCENDING)])
+    await _db.bot_errors.create_index("resolved")
+    await _db.keepalive.create_index("updatedAt", expireAfterSeconds=0)
     log.info("Connected to MongoDB (%s)", config.MONGO_DB)
 
 
@@ -273,6 +276,11 @@ async def end_giveaway(message_id: int) -> dict | None:
     return doc
 
 
+async def last_ended_giveaway(channel_id: int) -> dict | None:
+    return await _db.giveaways.find_one(
+        {"channelId": channel_id, "ended": True}).sort("endsAt", DESCENDING)
+
+
 # ── Suggestions / reports / reminders ────────────────────────────────
 async def add_suggestion(guild_id: int, user_id: int, text: str) -> int:
     seq = await _db.counters.find_one_and_update(
@@ -289,6 +297,22 @@ async def set_suggestion_status(guild_id: int, sugg_id: int, status: str) -> boo
     res = await _db.suggestions.update_one(
         {"guildId": guild_id, "suggId": sugg_id}, {"$set": {"status": status}})
     return res.modified_count > 0
+
+
+async def vote_suggestion(guild_id: int, sugg_id: int, user_id: int, up: bool) -> tuple[int, int]:
+    """One vote per user per suggestion. Returns (up_count, down_count)."""
+    field = "votersUp" if up else "votersDown"
+    other = "votersDown" if up else "votersUp"
+    doc = await _db.suggestions.find_one({"guildId": guild_id, "suggId": sugg_id})
+    if not doc:
+        return 0, 0
+    if user_id in doc.get(field, []):
+        return len(doc.get("votersUp", [])), len(doc.get("votersDown", []))
+    await _db.suggestions.update_one(
+        {"guildId": guild_id, "suggId": sugg_id},
+        {"$addToSet": {field: user_id}, "$pull": {other: user_id}})
+    doc = await _db.suggestions.find_one({"guildId": guild_id, "suggId": sugg_id})
+    return len(doc.get("votersUp", [])), len(doc.get("votersDown", []))
 
 
 async def add_reminder(user_id: int, channel_id: int, text: str, due_at, recurring_hours: int = 0) -> None:
@@ -344,6 +368,42 @@ async def audit_config_change(guild_id: int, actor: str, summary: str) -> None:
 async def get_config_audit(guild_id: int, limit: int = 15) -> list[dict]:
     return await _db.config_audit.find({"guildId": guild_id}) \
         .sort("at", DESCENDING).to_list(limit)
+
+
+# ── Error relay (bot → website → dashboard Error Center) ────────────────
+async def record_bot_error(source: str, message: str, *, guild_id: int | None = None,
+                           command: str | None = None, severity: str = "error",
+                           detail: str | None = None) -> str | None:
+    """Store a bot-side error in the shared cluster for the dashboard.
+    Never raises — telemetry must never take down a command."""
+    try:
+        doc = {
+            "source": source[:40], "message": message[:500],
+            "severity": severity, "command": (command or "")[:60],
+            "guildId": str(guild_id) if guild_id else "",
+            "detail": (detail or "")[:2000], "resolved": False,
+            "createdAt": _now(),
+        }
+        res = await _db.bot_errors.insert_one(doc)
+        return str(res.inserted_id)
+    except Exception:
+        log.debug("record_bot_error failed (non-fatal)")
+        return None
+
+
+async def keepalive_record(ok: bool, latency_ms: int, status_code: int,
+                           detail: str = "") -> None:
+    """Append a keep-alive health check result (rolling window, capped doc)."""
+    try:
+        entry = {"ok": ok, "latencyMs": latency_ms, "status": status_code,
+                 "detail": detail[:200], "at": _now()}
+        await _db.keepalive.update_one(
+            {"_id": "current"},
+            {"$set": {"last": entry, "updatedAt": _now()},
+             "$push": {"history": {"$each": [entry], "$slice": -200}}},
+            upsert=True)
+    except Exception:
+        log.debug("keepalive_record failed (non-fatal)")
 
 
 # ── Cooldowns (Mongo-persisted, TTL index auto-cleans) ───────────────────

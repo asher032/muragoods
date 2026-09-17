@@ -69,7 +69,7 @@ FFmpeg must be on your `PATH` (music only). On Linux: `sudo apt install ffmpeg`.
 Least-privilege invite (no Administrator):
 
 ```
-https://discord.com/oauth2/authorize?client_id=1549395794853888020&permissions=154624&scope=bot%20applications.commands
+https://discord.com/oauth2/authorize?client_id=1549395794853888020&permissions=271698944&scope=bot%20applications.commands
 ```
 
 Permissions included: View Channels, Send Messages, Embed Links, Attach Files, Read History, Connect, Speak, Use Slash Commands, Moderate Members.

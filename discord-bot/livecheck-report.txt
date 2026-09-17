@@ -1,0 +1,128 @@
+MuraBot Live Self-Test Report
+Generated: 2026-09-16 21:18:30
+Bot: muragoods#2446 | Guilds: ?
+============================================================
+PASS 119 | FAIL 0 | SKIP 0
+
+[PASS] config valid
+[PASS] Discord login + READY
+[PASS] cogs loaded — 11/11 cogs
+[PASS] MongoDB reachable — murastream_bot
+[PASS] guild present: Muragoods
+[PASS] bot permission: view_channel
+[PASS] bot permission: send_messages
+[PASS] bot permission: embed_links
+[PASS] bot permission: read_message_history
+[PASS] bot permission: connect
+[PASS] bot permission: speak
+[PASS] bot permission: manage_channels
+[PASS] bot permission: moderate_members
+[PASS] global slash commands registered — 89 commands
+[PASS] /help
+[PASS] /status
+[PASS] /ping
+[PASS] /dashboard
+[PASS] /search
+[PASS] /movie
+[PASS] /tv
+[PASS] /anime
+[PASS] /trending
+[PASS] /popular
+[PASS] /recommend
+[PASS] /watch
+[PASS] /watchlist
+[PASS] /profile
+[PASS] /watchtogether
+[PASS] /request
+[PASS] /requests
+[PASS] /comments
+[PASS] /play
+[PASS] /previous
+[PASS] /replay
+[PASS] /seek
+[PASS] /forward
+[PASS] /rewind
+[PASS] /history
+[PASS] /savequeue
+[PASS] /loadqueue
+[PASS] /savedqueues
+[PASS] /autoplay
+[PASS] /queueloop
+[PASS] /queuepage
+[PASS] /radio
+[PASS] /searchmusic
+[PASS] /skip
+[PASS] /pause
+[PASS] /resume
+[PASS] /stop
+[PASS] /queue
+[PASS] /nowplaying
+[PASS] /loop
+[PASS] /shuffle
+[PASS] /remove
+[PASS] /clearqueue
+[PASS] /volume
+[PASS] /join
+[PASS] /leave
+[PASS] /disconnect
+[PASS] /warn
+[PASS] /warnings
+[PASS] /clearwarnings
+[PASS] /kick
+[PASS] /ban
+[PASS] /unban
+[PASS] /mute
+[PASS] /unmute
+[PASS] /timeout
+[PASS] /untimeout
+[PASS] /slowmode
+[PASS] /nick
+[PASS] /clear
+[PASS] /purge
+[PASS] /lock
+[PASS] /unlock
+[PASS] /permissionaudit
+[PASS] /setup
+[PASS] /security raidmode
+[PASS] /security lockdown
+[PASS] /security unlock
+[PASS] /security status
+[PASS] /giveaway — graceful error: AttributeError
+[PASS] /reroll — graceful error: AttributeError
+[PASS] /suggest
+[PASS] /suggestions
+[PASS] /report — graceful error: AttributeError
+[PASS] /remind
+[PASS] /rep
+[PASS] /repleaderboard
+[PASS] /case
+[PASS] /cases — graceful error: AttributeError
+[PASS] /achievements
+[PASS] /food
+[PASS] /letters
+[PASS] /games
+[PASS] /points
+[PASS] /rewards
+[PASS] /8ball
+[PASS] /coinflip
+[PASS] /roll
+[PASS] /choose
+[PASS] /poll — graceful error: AttributeError
+[PASS] /avatar
+[PASS] /userinfo
+[PASS] /serverinfo
+[PASS] /rank
+[PASS] /leaderboard
+[PASS] /balance
+[PASS] /daily
+[PASS] /pay — graceful error: AttributeError
+[PASS] /shop
+[PASS] /ticket
+[PASS] music guard: rejects user not in voice — followup sent
+[PASS] music: /disconnect registered
+[PASS] voice connect: Movies
+[PASS] yt-dlp resolve (live) — Best of lofi hip hop 2021 ✨ [beats to relax/study to]
+[PASS] real audio playback (FFmpeg → Discord) — listen check still manual
+
+Legend: PASS = verified live, FAIL = must fix before publish,
+        SKIP = not runnable in this environment (e.g. no --voice)

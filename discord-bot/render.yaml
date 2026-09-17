@@ -4,6 +4,7 @@ services:
     runtime: python
     plan: starter
     region: oregon
+    rootDir: discord-bot
     buildCommand: pip install -r requirements.txt
     startCommand: python -m bot.main
     healthCheckPath: /health
@@ -28,7 +29,7 @@ services:
       - key: DISCORD_BRIDGE_SECRET
         sync: false
       - key: BOT_ACTIVITY
-        value: "MuraStream • /help"
+        value: "https://muragoods.vercel.app/"
       - key: BOT_STATUS
         value: "online"
       - key: BOT_ADMIN_IDS

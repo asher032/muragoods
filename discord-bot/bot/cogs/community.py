@@ -42,16 +42,33 @@ class GiveawayEntryView(utils.SafeView):
 
 
 class SuggestionVoteView(utils.SafeView):
-    def __init__(self):
+    """Vote buttons persist real tallies in the suggestions collection."""
+
+    def __init__(self, sugg_id: int):
         super().__init__(timeout=None)
+        self.sugg_id = sugg_id
 
     @discord.ui.button(emoji="👍", style=discord.ButtonStyle.success)
     async def up(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("👍 Counted — staff review suggestions regularly.", ephemeral=True)
+        try:
+            up, down = await database.vote_suggestion(interaction.guild.id, self.sugg_id,
+                                                      interaction.user.id, up=True)
+            await interaction.response.send_message(
+                f"👍 Counted — **{up}** up / **{down}** down.", ephemeral=True)
+        except Exception:
+            log.exception("Suggestion vote failed")
+            await interaction.response.send_message("Vote failed — try again.", ephemeral=True)
 
     @discord.ui.button(emoji="👎", style=discord.ButtonStyle.danger)
     async def down(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("👎 Counted.", ephemeral=True)
+        try:
+            up, down = await database.vote_suggestion(interaction.guild.id, self.sugg_id,
+                                                      interaction.user.id, up=False)
+            await interaction.response.send_message(
+                f"👎 Counted — **{up}** up / **{down}** down.", ephemeral=True)
+        except Exception:
+            log.exception("Suggestion vote failed")
+            await interaction.response.send_message("Vote failed — try again.", ephemeral=True)
 
 
 class CommunityCog(commands.Cog):
@@ -87,8 +104,21 @@ class CommunityCog(commands.Cog):
         if not interaction.user.guild_permissions.manage_guild:
             await interaction.followup.send("You need **Manage Server** permission.", ephemeral=True)
             return
-        await interaction.followup.send(
-            "Reroll works on the most recent ended giveaway in that channel — check the pins.", ephemeral=True)
+        doc = await database.last_ended_giveaway(channel.id)
+        if not doc or not doc.get("entries"):
+            await interaction.followup.send(
+                "No ended giveaway with entries found in that channel.", ephemeral=True)
+            return
+        winners_n = min(int(doc.get("winners") or 1), len(doc["entries"]))
+        winners = random.sample(doc["entries"], winners_n)
+        mentions = " ".join(f"<@{w}>" for w in winners)
+        try:
+            await channel.send(
+                content=f"🎉 Reroll! {mentions} — you won **{doc['prize']}**!",
+                embed=embeds.ok("🎁 Giveaway Rerolled", f"**{doc['prize']}**\nNew winner(s): {mentions}"))
+            await interaction.followup.send("Reroll sent ✅", ephemeral=True)
+        except discord.HTTPException as exc:
+            await interaction.followup.send(f"Discord rejected the reroll: {exc.status}", ephemeral=True)
 
     # ── Suggestions ───────────────────────────────────────────────────
     @app_commands.command(name="suggest", description="Submit a server suggestion.")
@@ -102,8 +132,23 @@ class CommunityCog(commands.Cog):
         e = embeds.embed(f"💡 Suggestion #{sugg_id}", text[:450], embeds.INFO)
         e.add_field(name="Submitted by", value=interaction.user.mention, inline=True)
         e.add_field(name="Status", value="🗳️ Open", inline=True)
-        e.set_footer(text="Staff: /suggest manage <id> approve|deny|review • MuraStream")
-        await interaction.followup.send(embed=e, view=SuggestionVoteView())
+        e.set_footer(text="Staff: /suggestions <id> approve|deny|review • MuraStream")
+        # Post to the configured suggestion channel when one is set.
+        target: discord.abc.Messageable = interaction.channel
+        try:
+            cfg = await database.get_guild_config(interaction.guild.id)
+            sugg_ch = (cfg.get("community") or {}).get("suggestionChannelId")
+            if sugg_ch:
+                ch = interaction.guild.get_channel(int(sugg_ch))
+                if isinstance(ch, discord.TextChannel):
+                    target = ch
+        except Exception:
+            log.warning("Suggestion channel lookup failed — posting inline")
+        await target.send(embed=e, view=SuggestionVoteView(sugg_id))
+        if target is not interaction.channel:
+            await interaction.followup.send(
+                embed=embeds.ok("💡 Suggestion posted", f"Sent to {target.mention} as **#{sugg_id}"),
+                ephemeral=True)
 
     @app_commands.command(name="suggestions", description="Manage a suggestion (Manage Messages).")
     @app_commands.describe(sugg_id="Suggestion number", status="New status")

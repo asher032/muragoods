@@ -1,3 +1,4 @@
+import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
 
 // List Discord servers the authenticated user can manage (Manage Server or
@@ -25,7 +26,7 @@ function hasManage(owner: boolean, perms: string | number): boolean {
 }
 
 export async function GET(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   if (!token) {
     return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
   }

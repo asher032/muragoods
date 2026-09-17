@@ -45,6 +45,7 @@ class MusicControls(utils.SafeView):
         player = self._player()
         if player.voice and player.voice.is_playing():
             player.voice.pause()
+            player.mark_paused()
             await interaction.response.send_message("⏸ Paused.", ephemeral=True)
         else:
             await interaction.response.send_message("Nothing is playing.", ephemeral=True)
@@ -54,6 +55,7 @@ class MusicControls(utils.SafeView):
         player = self._player()
         if player.voice and player.voice.is_paused():
             player.voice.resume()
+            player.mark_resumed()
             await interaction.response.send_message("▶️ Resumed.", ephemeral=True)
         else:
             await interaction.response.send_message("Nothing is paused.", ephemeral=True)
@@ -86,8 +88,13 @@ class MusicControls(utils.SafeView):
 
 
 class MusicCog(commands.Cog):
+    """Named "MusicCog" so livecheck can look it up via bot.get_cog."""
+
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        # The voice player thread needs the bot's event loop to schedule the
+        # track-end callback; without this the queue can silently stall.
+        music.engine.bot_loop = bot.loop
 
     @staticmethod
     def _voice_channel(interaction: discord.Interaction):
@@ -120,8 +127,15 @@ class MusicCog(commands.Cog):
         await interaction.followup.send(embed=embeds.music("🔎 Searching…", f"`{query[:80]}`"))
         track = await music.engine.resolve(query)
         if not track:
-            await interaction.edit_original_response(embed=embeds.embed(
-                "🔎 Track Not Found", "Try another search.", embeds.WARN))
+            err_detail = music.engine.get_resolve_error()
+            if err_detail:
+                await interaction.edit_original_response(embed=embeds.embed(
+                    "🔎 Track Not Found",
+                    f"yt-dlp: {err_detail}\nTry a different search or a direct URL.",
+                    embeds.WARN))
+            else:
+                await interaction.edit_original_response(embed=embeds.embed(
+                    "🔎 Track Not Found", "Try another search.", embeds.WARN))
             return
         track.requester = interaction.user
         player = music.engine.get_player(interaction.guild.id)
@@ -137,6 +151,16 @@ class MusicCog(commands.Cog):
         channel = self._voice_channel(interaction)
         try:
             await music.engine.play_now(player, track, channel)
+        except asyncio.TimeoutError:
+            log.warning("Playback start timed out")
+            await interaction.edit_original_response(embed=embeds.embed(
+                "⏱ Playback Timeout", "The voice connection didn't respond in time. Try again — if it keeps failing, Discord voice may be degraded.", embeds.WARN))
+            return
+        except discord.ClientException as exc:
+            log.warning("Playback refused: %s", exc)
+            await interaction.edit_original_response(embed=embeds.embed(
+                "⚠️ Voice Error", f"Discord refused playback: {exc}", embeds.ERROR))
+            return
         except Exception:
             log.exception("Playback failed")
             await interaction.edit_original_response(embed=embeds.embed(
@@ -192,7 +216,7 @@ class MusicCog(commands.Cog):
     async def seek(self, interaction: discord.Interaction, position: str):
         await interaction.response.defer(ephemeral=True)
         player = music.engine.get_player(interaction.guild.id)
-        if not player.voice or not player.voice.is_playing():
+        if not player.voice or not player.voice.channel or not player.current:
             await interaction.followup.send("Nothing is playing.", ephemeral=True)
             return
         try:
@@ -204,27 +228,51 @@ class MusicCog(commands.Cog):
         except ValueError:
             await interaction.followup.send("Use a timestamp like `1:30` or `90`.", ephemeral=True)
             return
-        # discord.py's VoiceClient.seek works on seekable FFmpeg sources.
         try:
-            player.voice.seek(seconds)
-            await interaction.followup.send(f"⏩ Seeked to `{position}`.", ephemeral=True)
-        except (NotImplementedError, AttributeError):
+            await music.engine.play_now(
+                player, player.current, player.voice.channel, seek_to=max(0, seconds))
+        except Exception:
+            log.exception("Seek failed")
             await interaction.followup.send(
-                "This stream doesn't support seeking — use `/forward` or skip instead.", ephemeral=True)
+                "⚠️ Couldn't seek — restarting the stream failed.", ephemeral=True)
+            return
+        await interaction.followup.send(f"⏩ Seeked to `{position}`.", ephemeral=True)
+
+    async def _nudge(self, interaction: discord.Interaction, delta: int, label: str) -> None:
+        player = music.engine.get_player(interaction.guild.id)
+        if not player.voice or not player.voice.channel or not player.current:
+            await interaction.followup.send("Nothing is playing.", ephemeral=True)
+            return
+        target = int(player.position()) + delta
+        duration = player.current.duration or 0
+        if duration and target >= duration - 1:
+            # Past the end — advance to the next track instead.
+            player.voice.stop()
+            await interaction.followup.send("⏭ Past the end — skipping.", ephemeral=True)
+            return
+        try:
+            await music.engine.play_now(
+                player, player.current, player.voice.channel, seek_to=max(0, target))
+        except Exception:
+            log.exception("%s failed", label)
+            await interaction.followup.send(
+                "⚠️ Couldn't jump — restarting the stream failed.", ephemeral=True)
+            return
+        arrow = "⏩" if delta > 0 else "⏪"
+        await interaction.followup.send(
+            f"{arrow} {label} {abs(delta)}s → `{player.position():.0f}s`.", ephemeral=True)
 
     @app_commands.command(name="forward", description="Skip forward N seconds (default 10).")
     @app_commands.describe(seconds="How many seconds")
     async def forward(self, interaction: discord.Interaction, seconds: int = 10):
         await interaction.response.defer(ephemeral=True)
-        player = music.engine.get_player(interaction.guild.id)
-        # FFmpeg PCM sources can be seeked via the stream timestamp when the
-        # source exposes it; otherwise guide the user to /seek.
-        if player.voice and player.voice.is_playing():
-            await interaction.followup.send(
-                f"Use `/seek <timestamp>` — position tracking depends on the source.",
-                ephemeral=True)
-        else:
-            await interaction.followup.send("Nothing is playing.", ephemeral=True)
+        await self._nudge(interaction, max(1, seconds), "Forward")
+
+    @app_commands.command(name="rewind", description="Jump back N seconds (default 10).")
+    @app_commands.describe(seconds="How many seconds")
+    async def rewind(self, interaction: discord.Interaction, seconds: int = 10):
+        await interaction.response.defer(ephemeral=True)
+        await self._nudge(interaction, -max(1, seconds), "Rewind")
 
     @app_commands.command(name="history", description="Recently played tracks.")
     async def history(self, interaction: discord.Interaction):
@@ -356,14 +404,39 @@ class MusicCog(commands.Cog):
         await interaction.edit_original_response(embed=embeds.music(
             f"📻 {genre.name} Radio", f"Now streaming **{track.title}**\nAutoplay enabled — the music never stops."))
 
+    @app_commands.command(name="musicinfo", description="Music subsystem diagnostics.")
+    async def music_info(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        lines = [f"yt-dlp: {music.engine._ydlp_version}"]
+        err = music.engine.get_resolve_error()
+        if err:
+            lines.append(f"Last error: {err[:300]}")
+        else:
+            lines.append("Last error: none")
+        p = music.engine.get_player(interaction.guild.id)
+        lines.append(f"Connected: {p.is_connected()}")
+        if p.voice and p.voice.is_connected():
+            ch = p.voice.channel
+            lines.append(f"Channel: {ch.name} ({len(ch.members)} members)")
+        lines.append(f"Current: {p.current or 'none'}")
+        lines.append(f"Queue: {len(p.queue)}")
+        await interaction.followup.send("\n".join(lines), ephemeral=True)
+
     @app_commands.command(name="searchmusic", description="Preview the top result for a search.")
     @app_commands.describe(query="What to search for")
     async def searchmusic(self, interaction: discord.Interaction, query: str):
         await interaction.response.defer()
         track = await music.engine.resolve(query)
         if not track:
-            await interaction.followup.send(embed=embeds.embed(
-                "🔎 Track Not Found", "Try another search.", embeds.WARN))
+            err_detail = music.engine.get_resolve_error()
+            if err_detail:
+                await interaction.followup.send(embed=embeds.embed(
+                    "🔎 Track Not Found",
+                    f"yt-dlp: {err_detail}\nTry a different search or a direct URL.",
+                    embeds.WARN))
+            else:
+                await interaction.followup.send(embed=embeds.embed(
+                    "🔎 Track Not Found", "Try another search.", embeds.WARN))
             return
         e = embeds.music("🎵 Top result", f"**{track.title}**\n{track.uploader}")
         if track.thumbnail:
@@ -389,6 +462,7 @@ class MusicCog(commands.Cog):
         player = music.engine.get_player(interaction.guild.id)
         if player.voice and player.voice.is_playing():
             player.voice.pause()
+            player.mark_paused()
             await interaction.followup.send("⏸ Paused.", ephemeral=True)
         else:
             await interaction.followup.send("Nothing is playing.", ephemeral=True)
@@ -399,6 +473,7 @@ class MusicCog(commands.Cog):
         player = music.engine.get_player(interaction.guild.id)
         if player.voice and player.voice.is_paused():
             player.voice.resume()
+            player.mark_resumed()
             await interaction.followup.send("▶️ Resumed.", ephemeral=True)
         else:
             await interaction.followup.send("Nothing is paused.", ephemeral=True)
@@ -427,14 +502,21 @@ class MusicCog(commands.Cog):
         current = f"**Now:** {player.current}\n\n" if player.current else ""
         await interaction.followup.send(embed=embeds.music("📜 Queue", current + "\n".join(lines)))
 
-    @app_commands.command(name="nowplaying", description="Show the currently playing track.")
+    @app_commands.command(name="nowplaying", description="Show the currently playing track with a progress bar.")
     async def nowplaying(self, interaction: discord.Interaction):
         await interaction.response.defer()
         player = music.engine.get_player(interaction.guild.id)
         if not player.current:
             await interaction.followup.send("Nothing is playing right now.", ephemeral=True)
             return
-        await interaction.followup.send(embed=now_playing_embed(player.current),
+        e = now_playing_embed(player.current)
+        dur = player.current.duration or 0
+        if dur:
+            pos = int(player.position())
+            filled = int((min(pos, dur) / dur) * 18)
+            bar = "▰" * filled + "▱" * (18 - filled)
+            e.add_field(name="⏳ Progress", value=f"{embeds.fmt_duration(pos)} {bar} {embeds.fmt_duration(dur)}", inline=False)
+        await interaction.followup.send(embed=e,
                                         view=MusicControls(interaction.guild.id))
 
     @app_commands.command(name="loop", description="Toggle looping the current track.")
@@ -498,12 +580,21 @@ class MusicCog(commands.Cog):
         channel = self._voice_channel(interaction)
         player = music.engine.get_player(interaction.guild.id)
         try:
-            if player.voice:
+            if player.voice and player.voice.is_connected():
                 await player.voice.move_to(channel)
+            elif player.voice:
+                # Stale handle from a force-disconnect — recreate cleanly.
+                player.voice = await channel.connect(self_deaf=True, timeout=15)
             else:
-                player.voice = await channel.connect(self_deaf=True)
-        except discord.HTTPException:
-            await interaction.followup.send("Couldn't join that channel.", ephemeral=True)
+                player.voice = await channel.connect(self_deaf=True, timeout=15)
+        except asyncio.TimeoutError:
+            await interaction.followup.send("⏱ Voice handshake timed out — Discord didn't respond in time. Try again.", ephemeral=True)
+            return
+        except discord.ClientException:
+            await interaction.followup.send("⚠️ Already connected elsewhere — try `/leave` first.", ephemeral=True)
+            return
+        except discord.HTTPException as exc:
+            await interaction.followup.send(f"⚠️ Discord refused the join ({exc.code if hasattr(exc, 'code') else 'HTTP error'}). Check my Connect/Speak permissions there.", ephemeral=True)
             return
         await interaction.followup.send(f"👋 Joined **{channel.name}**.", ephemeral=True)
 
@@ -517,6 +608,10 @@ class MusicCog(commands.Cog):
         player.clear()
         music.engine.remove_player(interaction.guild.id)
         await interaction.followup.send("👋 Left the voice channel.", ephemeral=True)
+
+    @app_commands.command(name="disconnect", description="Disconnect the bot from voice (alias of /leave).")
+    async def disconnect(self, interaction: discord.Interaction):
+        await self.leave.callback(self, interaction)
 
 
 async def setup(bot: commands.Bot):

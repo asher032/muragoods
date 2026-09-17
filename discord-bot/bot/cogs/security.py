@@ -2,12 +2,14 @@
 
 import asyncio
 import logging
+import time
 from datetime import timedelta
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
+import database
 import embeds
 
 log = logging.getLogger("bot.security")
@@ -24,7 +26,32 @@ class SecurityCog(commands.Cog):
         self.bot = bot
         self._joins: dict[int, list[float]] = {}       # guild_id -> join timestamps
         self._raid_mode: dict[int, bool] = {}          # guild_id -> active
+        self._raid_until: dict[int, float] = {}        # guild_id -> auto-disable time
+        self._raid_tasks: set[asyncio.Task] = set()
         self._channel_deletes: dict[int, list[float]] = {}
+        self._settings_cache: dict[int, tuple[float, dict]] = {}  # guild -> (loaded_at, settings)
+
+    async def _settings(self, guild_id: int) -> dict:
+        """Dashboard securitySettings with a 60s cache — never hardcode what the owner configured."""
+        hit = self._settings_cache.get(guild_id)
+        now = time.monotonic()
+        if hit and now - hit[0] < 60:
+            return hit[1]
+        defaults = {
+            "antiRaidEnabled": True,
+            "joinSpikeThreshold": JOIN_SPIKE,
+            "antiNukeEnabled": True,
+            "minAccountAgeHours": MIN_ACCOUNT_AGE_HOURS,
+        }
+        try:
+            cfg = await database.get_guild_config(guild_id)
+            sec = cfg.get("securitySettings") or {}
+            settings = {**defaults, **{k: v for k, v in sec.items() if k in defaults}}
+        except Exception:
+            log.warning("Could not load securitySettings for %s — using defaults", guild_id)
+            settings = defaults
+        self._settings_cache[guild_id] = (now, settings)
+        return settings
 
     def _recent(self, lst: list[float], window: float, now: float) -> list[float]:
         return [t for t in lst if now - t <= window]
@@ -32,19 +59,27 @@ class SecurityCog(commands.Cog):
     # ── Anti-raid: join spike detection ───────────────────────────────
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-        import time
         now = time.monotonic()
+        settings = await self._settings(member.guild.id)
+        threshold = int(settings.get("joinSpikeThreshold") or JOIN_SPIKE)
+        min_age_h = int(settings.get("minAccountAgeHours") or MIN_ACCOUNT_AGE_HOURS)
         lst = self._recent(self._joins.setdefault(member.guild.id, []), JOIN_WINDOW, now)
         lst.append(now)
         self._joins[member.guild.id] = lst
 
-        if len(lst) >= JOIN_SPIKE and not self._raid_mode.get(member.guild.id):
+        # Auto-expire raid mode (non-blocking — checked on every join).
+        if self._raid_mode.get(member.guild.id) and now >= self._raid_until.get(member.guild.id, 0):
+            self._raid_mode[member.guild.id] = False
+
+        if (settings.get("antiRaidEnabled", True) and len(lst) >= threshold
+                and not self._raid_mode.get(member.guild.id)):
             self._raid_mode[member.guild.id] = True
+            self._raid_until[member.guild.id] = now + 600
             e = embeds.embed(
                 "🚨 RAID MODE ENABLED",
                 f"**{len(lst)} joins in {JOIN_WINDOW}s** detected.\n"
                 "New members with accounts younger than "
-                f"{MIN_ACCOUNT_AGE_HOURS}h will be timed out.\n"
+                f"{min_age_h}h will be timed out.\n"
                 "Run `/security raidmode off` to disable.",
                 embeds.ERROR)
             for ch in member.guild.text_channels[:1]:
@@ -53,14 +88,11 @@ class SecurityCog(commands.Cog):
                     break
                 except discord.HTTPException:
                     break
-            # Auto-disable after 10 minutes.
-            await asyncio.sleep(600)
-            self._raid_mode[member.guild.id] = False
 
         # Suspicious-account screening during raid mode.
         if self._raid_mode.get(member.guild.id):
             age = discord.utils.utcnow() - member.created_at
-            if age < timedelta(hours=MIN_ACCOUNT_AGE_HOURS):
+            if age < timedelta(hours=min_age_h):
                 try:
                     await member.timeout(
                         discord.utils.utcnow() + timedelta(minutes=30),
@@ -71,13 +103,16 @@ class SecurityCog(commands.Cog):
     # ── Anti-nuke: mass channel deletion detection ────────────────────
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel):
-        import time
         now = time.monotonic()
         guild = channel.guild
+        settings = await self._settings(guild.id)
+        if not settings.get("antiNukeEnabled", True):
+            return
+        threshold = max(3, int(settings.get("joinSpikeThreshold") or DELETE_SPIKE))
         lst = self._recent(self._channel_deletes.setdefault(guild.id, []), DELETE_WINDOW, now)
         lst.append(now)
         self._channel_deletes[guild.id] = lst
-        if len(lst) >= DELETE_SPIKE:
+        if len(lst) >= threshold:
             audit = [entry async for entry in guild.audit_logs(limit=3, action=discord.AuditLogAction.channel_delete)]
             actor = audit[0].user if audit else None
             if actor and actor.id == self.bot.user.id:
@@ -114,6 +149,7 @@ class SecurityCog(commands.Cog):
             await interaction.followup.send("Administrator only.", ephemeral=True)
             return
         self._raid_mode[interaction.guild.id] = state.value == "on"
+        self._raid_until[interaction.guild.id] = time.monotonic() + 600 if state.value == "on" else 0
         await interaction.followup.send(embed=embeds.embed(
             "🚨 Raid mode **ON**" if state.value == "on" else "🟢 Raid mode **OFF**",
             "New accounts will be timed out on join." if state.value == "on"
