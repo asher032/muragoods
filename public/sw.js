@@ -1,8 +1,10 @@
-// Muragoods Service Worker v2 — Full PWA with Offline Menu Browsing
-const CACHE_NAME = 'muragoods-v3';
-const CACHE_NAME_STATIC = 'muragoods-static-v3';
-const CACHE_NAME_MENU = 'muragoods-menu-v3';
-const CACHE_NAME_API = 'muragoods-api-v3';
+// Muragoods Service Worker v3 — Full PWA with Offline Menu Browsing
+// v3: dashboard NEVER intercepted (always fresh from the network) and cache
+// generation bumped so older deployments' caches are dropped on activate.
+const CACHE_NAME = 'muragoods-v4';
+const CACHE_NAME_STATIC = 'muragoods-static-v4';
+const CACHE_NAME_MENU = 'muragoods-menu-v4';
+const CACHE_NAME_API = 'muragoods-api-v4';
 
 // Static assets to pre-cache on install
 const PRECACHE_URLS = [
@@ -71,6 +73,11 @@ self.addEventListener('fetch', (event) => {
   // Skip admin pages, checkout, and auth-related pages (should always be fresh)
   const skipPaths = ['/admin', '/checkout', '/api/auth'];
   if (skipPaths.some(p => url.pathname.startsWith(p))) return;
+
+  // Skip the bot dashboard and its APIs entirely: it must always reflect the
+  // latest deployment, never a cached shell. (An old SW version pinning the
+  // dashboard is exactly how users end up on a UI that no longer exists.)
+  if (url.pathname.startsWith('/dashboard') || url.pathname.startsWith('/api/dashboard')) return;
 
   // API requests: Network first, cache fallback
   if (url.pathname.startsWith('/api/')) {
