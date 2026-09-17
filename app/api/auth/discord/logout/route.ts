@@ -44,10 +44,23 @@ export async function PUT(req: NextRequest) {
     { $set: { selectedGuildId: guildId } },
   );
 
-  // Persist into the guild snapshot with fresh names/icons.
+  // Persist into the guild snapshot with fresh names/icons. The icon is stored
+  // as a resolved CDN URL (same shape as login) so the UI never renders a raw
+  // hash as an image source.
   await DiscordSession.updateOne(
     { sessionId: auth.session.sessionId, 'guilds.id': { $ne: guildId } },
-    { $push: { guilds: { id: check.guild.id, name: check.guild.name, icon: check.guild.icon, owner: check.guild.owner } } },
+    {
+      $push: {
+        guilds: {
+          id: check.guild.id,
+          name: check.guild.name,
+          icon: check.guild.icon
+            ? `https://cdn.discordapp.com/icons/${check.guild.id}/${check.guild.icon}.png`
+            : null,
+          owner: check.guild.owner,
+        },
+      },
+    },
   );
 
   return NextResponse.json({

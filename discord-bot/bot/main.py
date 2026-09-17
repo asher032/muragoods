@@ -174,6 +174,11 @@ async def _health_server() -> None:
                 last_hb = datetime.fromtimestamp(last_hb_ts).isoformat()
         shard_count = len(bot.shards) if hasattr(bot, "shards") else 1
         bot_version = getattr(config, "BOT_VERSION", "1.0.0")
+        # Make the privileged-intent state explicit: if message_content could
+        # not be requested, prefix commands are dead and the dashboard must be
+        # able to show that instead of pretending the bot is fully healthy.
+        if not _privileged_ok:
+            statuses = {**statuses, "prefix_commands": "disabled-no-message-content"}
         return web.json_response({
             "ok": ok,
             "guilds": len(bot.guilds),
@@ -511,11 +516,17 @@ async def main() -> None:
         except discord.errors.PrivilegedIntentsRequired:
             if _privileged_ok:
                 _privileged_ok = False
-                log.warning(
-                    "Privileged intents are not enabled in the Developer Portal — "
-                    "restarting WITHOUT them. Everything works except automod message "
-                    "scanning, XP-from-chat and welcome messages."
+                # NOT a cosmetic degradation: without message_content Discord
+                # never delivers normal messages, so EVERY `mg!` prefix command
+                # (mg!play included) silently does nothing. Say so loudly.
+                log.error(
+                    "PRIVILEGED INTENTS MISSING. Enable 'Message Content Intent' "
+                    "(and 'Server Members Intent') at "
+                    "https://discord.com/developers/applications → your app → Bot. "
+                    "Until then, `mg!` prefix commands (mg!play, mg!skip, …) will "
+                    "NOT respond — slash commands still work."
                 )
+                http_mod.set_status("prefix_commands", "disabled-no-message-content")
                 try:
                     await bot.close()
                 except Exception:
