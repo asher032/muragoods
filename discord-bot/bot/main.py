@@ -30,6 +30,54 @@ log = logging.getLogger("bot.main")
 _start_time = time.time()
 _reconnect_count = 0
 
+# Real gateway reconnects. `_reconnect_count` above only increments when the
+# OUTER login loop in main() re-runs, so it never observes discord.py's own
+# internal reconnects; `_gateway_reconnects` is driven by on_disconnect.
+_gateway_reconnects = 0
+# Discord's heartbeat interval is ~41s, so 150s without a heartbeat ACK means
+# the socket is dead rather than merely idle. Generous on purpose: a brief
+# reconnect must not flip /health to a failing state and provoke a restart.
+GATEWAY_STALE_AFTER = 150.0
+
+
+def gateway_liveness(bot) -> tuple[bool, float | None, str | None]:
+    """Measure real gateway liveness from the socket's own heartbeat ACK clock.
+
+    Returns ``(alive, heartbeat_age_seconds, last_heartbeat_iso)``.
+
+    Why the ACK clock and not a counter: ``ConnectionState.last_heartbeat`` does
+    not exist (verified absent on discord.py 2.7.1), so the previous lookup
+    returned null forever and ``discord`` stayed "online" even after the socket
+    died. ``DiscordWebSocket._last_ack`` is updated on every heartbeat ACK and
+    is not gated behind a client flag, so it is a genuine measurement.
+
+    ``on_socket_raw_receive`` is deliberately NOT used here: it only fires when
+    the client is built with ``enable_debug_events=True``, so depending on it
+    would freeze on a healthy bot and fabricate an outage.
+
+    If the ACK clock is unavailable (library drift), this falls back to the
+    ready flag rather than failing closed — never invent an outage.
+    """
+    hb_age: float | None = None
+    try:
+        acks = [
+            si.ws._last_ack
+            for si in bot.shards.values()
+            if getattr(si, "ws", None) is not None
+        ]
+        if acks:
+            hb_age = max(time.perf_counter() - a for a in acks)
+    except Exception:
+        hb_age = None
+
+    if hb_age is not None:
+        alive = hb_age < GATEWAY_STALE_AFTER
+        last_iso = datetime.fromtimestamp(time.time() - hb_age).isoformat()
+    else:
+        alive = bool(bot.is_ready())
+        last_iso = None
+    return alive, hb_age, last_iso
+
 # Flipped to False if Discord rejects the privileged-intent request; the bot
 # then restarts without them (automod message-scan + welcome events disabled).
 _privileged_ok = True
@@ -133,6 +181,26 @@ class MuraBot(commands.Bot):
         except discord.HTTPException as exc:
             log.error("Command sync FAILED (will retry on next start): %s", str(exc)[:300])
 
+    # ── Gateway lifecycle → honest /health status ────────────────────────
+    # `discord` was set to "online" once in on_ready and never cleared, so
+    # /health claimed a live bot even after the socket died. These handlers
+    # supply the missing offline/reconnecting half.
+    async def on_connect(self) -> None:
+        http_mod.set_status("discord", "connecting")
+
+    async def on_disconnect(self) -> None:
+        global _gateway_reconnects
+        _gateway_reconnects += 1
+        http_mod.set_status("discord", "reconnecting")
+        log.warning(
+            "Gateway disconnected (count=%d) — discord.py will auto-reconnect",
+            _gateway_reconnects,
+        )
+
+    async def on_resumed(self) -> None:
+        http_mod.set_status("discord", "online")
+        log.info("Gateway session resumed")
+
     async def on_ready(self) -> None:
         http_mod.set_status("discord", "online")
         # "ready" = the music cog loaded, NOT that playback is proven. Reporting
@@ -208,14 +276,19 @@ async def _health_server() -> None:
 
     async def health(_request: web.Request) -> web.Response:
         statuses = http_mod.get_status()
-        ok = not bot.is_closed() and statuses.get("discord") == "online"
         latency_ms = round(bot.latency * 1000) if bot.latency else 0
         uptime = time.time() - _start_time
-        last_hb = None
-        if hasattr(bot, "_connection") and bot._connection:
-            last_hb_ts = getattr(bot._connection, "last_heartbeat", None)
-            if last_hb_ts:
-                last_hb = datetime.fromtimestamp(last_hb_ts).isoformat()
+        # Real heartbeat liveness. `ConnectionState.last_heartbeat` does not
+        # exist (verified absent on discord.py 2.7.1), so the old lookup
+        # returned null forever. `DiscordWebSocket._last_ack` IS maintained on
+        # every heartbeat ACK and is not gated behind a client flag.
+        # `on_socket_raw_receive` is deliberately NOT used for this: it only
+        # fires when the client is built with enable_debug_events=True, so
+        # relying on it would freeze on a healthy bot and fabricate an outage.
+        gateway_alive, hb_age, last_hb = gateway_liveness(bot)
+        if not gateway_alive:
+            statuses = {**statuses, "discord": "stale-no-gateway-ack"}
+        ok = not bot.is_closed() and bool(bot.is_ready()) and gateway_alive
         shard_count = len(bot.shards) if hasattr(bot, "shards") else 1
         bot_version = getattr(config, "BOT_VERSION", "1.0.0")
         # Make the privileged-intent state explicit: if message_content could
@@ -235,7 +308,12 @@ async def _health_server() -> None:
             "latency": latency_ms,
             "uptime_seconds": round(uptime),
             "last_heartbeat": last_hb,
-            "reconnect_count": _reconnect_count,
+            "reconnect_count": _gateway_reconnects + _reconnect_count,
+            "gateway": {
+                "alive": gateway_alive,
+                "heartbeat_age_seconds": round(hb_age, 1) if hb_age is not None else None,
+                "stale_after_seconds": GATEWAY_STALE_AFTER,
+            },
             "shard_count": shard_count,
         }, status=200 if ok else 503)
 

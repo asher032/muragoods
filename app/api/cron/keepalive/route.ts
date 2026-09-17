@@ -10,7 +10,17 @@ export const maxDuration = 60;
 
 const BOT_HEALTH_URL = process.env.BOT_HEALTH_URL || 'https://murastream-bot-pf11.onrender.com/health';
 
-// Vercel Cron → /api/cron/keepalive every 10 minutes (vercel.json).
+// Vercel Cron → /api/cron/keepalive, scheduled ONCE PER DAY at 12:00 UTC
+// (see vercel.json).
+//
+// This is deliberately a monitor, not a keep-alive, and it CANNOT be turned
+// into one on this plan: Vercel's Hobby tier rejects any cron expression that
+// runs more than once per day ("Hobby accounts are limited to daily cron
+// jobs"), so */5 or */30 minute schedules fail at deploy time. A daily ping is
+// therefore far too sparse to prevent a Render Free web service from spinning
+// down after 15 minutes of inactivity. If the bot needs to stay awake, the
+// traffic must come from outside this project.
+//
 // Server-side health monitoring only: exercises this app's own database and
 // records the bot gateway's state. No synthetic user traffic, no analytics
 // manipulation, and no attempt to bypass hosting inactivity limits.
