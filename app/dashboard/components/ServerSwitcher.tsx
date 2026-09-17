@@ -86,8 +86,10 @@ export default function ServerSwitcher() {
               }}
             >
               {g.icon ? (
+                // The session stores a resolved CDN URL, so use it as-is —
+                // concatenating a hash onto the CDN path produced a broken icon.
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={`https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=32`} alt="" width={24} height={24} style={{ borderRadius: 7 }} />
+                <img src={g.icon} alt="" width={24} height={24} style={{ borderRadius: 7 }} />
               ) : (
                 <div style={{ width: 24, height: 24, borderRadius: 7, background: 'var(--cc-accent-soft)', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700 }}>
                   {g.name.slice(0, 1).toUpperCase()}

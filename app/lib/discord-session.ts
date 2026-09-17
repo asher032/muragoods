@@ -17,6 +17,27 @@ export const OAUTH_STATE_COOKIE = 'mg_oauth_state';
 
 const SESSION_TTL_DAYS = 30;
 
+/** Sliding session lifetime, also used by the OAuth callback's response. */
+export const SESSION_TTL_SECONDS = SESSION_TTL_DAYS * 24 * 60 * 60;
+
+/**
+ * The session cookie as a plain descriptor. The OAuth callback must set this
+ * DIRECTLY on the redirect response it runs — writing it through the
+ * `cookies()` jar and then returning a separately-constructed NextResponse is
+ * the kind of ambiguity that silently produces a logged-out redirect loop.
+ */
+export function sessionCookie(sessionId: string): {
+  name: string;
+  value: string;
+  options: ReturnType<typeof cookieOptions>;
+} {
+  return {
+    name: SESSION_COOKIE,
+    value: sessionId,
+    options: cookieOptions(SESSION_TTL_SECONDS),
+  };
+}
+
 export function cookieOptions(maxAgeSeconds: number) {
   return {
     httpOnly: true as const,
@@ -224,8 +245,9 @@ export async function sessionManagesGuild(
 }
 
 export async function setSessionCookie(sessionId: string): Promise<void> {
+  const { name, value, options } = sessionCookie(sessionId);
   const jar = await cookies();
-  jar.set(SESSION_COOKIE, sessionId, cookieOptions(SESSION_TTL_DAYS * 24 * 60 * 60));
+  jar.set(name, value, options);
 }
 
 export async function clearSessionCookie(): Promise<void> {
