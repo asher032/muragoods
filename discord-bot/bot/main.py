@@ -518,8 +518,55 @@ async def _health_server() -> None:
             _prefix_cache.clear()
         return web.json_response({"ok": True, "refreshed": guild_id or "all"})
 
+    async def music_diagnose(request: web.Request) -> web.Response:
+        """Run a REAL provider search from the runtime that serves the bot.
+
+        The playback code is identical to the version that resolves and plays
+        correctly outside Render, so when music fails in production the only
+        way to separate a code fault from an egress fault (datacenter IPs are
+        commonly challenged by YouTube) is to run the resolver HERE and report
+        the true error instead of guessing.
+        """
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+
+        query = (request.rel_url.query.get("q") or "Rick Astley Never Gonna Give You Up")[:200]
+        import music as music_mod
+
+        out: dict[str, object] = {"ok": False, "query": query, "ffmpeg": music_mod.FFMPEG_EXE}
+        try:
+            import yt_dlp
+            out["yt_dlp"] = yt_dlp.version.__version__
+        except Exception:
+            out["yt_dlp"] = None
+
+        t0 = time.monotonic()
+        try:
+            track = await asyncio.wait_for(music_mod.engine.resolve(query), timeout=60)
+        except asyncio.TimeoutError:
+            out["error"] = "resolve timed out after 60s"
+        except Exception as exc:
+            out["error"] = f"{type(exc).__name__}: {str(exc)[:300]}"
+        else:
+            out["elapsed"] = round(time.monotonic() - t0, 2)
+            if track is not None:
+                url = track.stream_url or ""
+                out.update({
+                    "ok": True,
+                    "title": track.title,
+                    "uploader": track.uploader,
+                    "duration": track.duration,
+                    "has_stream_url": bool(url),
+                    "stream_host": url.split("/")[2] if url.count("/") > 2 else None,
+                })
+            else:
+                out["error"] = music_mod.engine.get_resolve_error() or "no result returned"
+
+        return web.json_response(out, status=200 if out["ok"] else 503)
+
     app = web.Application()
     app.router.add_get("/health", health)
+    app.router.add_get("/music/diagnose", music_diagnose)
     app.router.add_post("/prefix/refresh", prefix_refresh)
     app.router.add_get("/music/state/{guild_id:\\d+}", music_state)
     app.router.add_post("/music/control/{guild_id:\\d+}", music_control)
