@@ -135,8 +135,12 @@ class MuraBot(commands.Bot):
 
     async def on_ready(self) -> None:
         http_mod.set_status("discord", "online")
-        http_mod.set_status("music", "online")
-        log.info("Music subsystem online")
+        # "ready" = the music cog loaded, NOT that playback is proven. Reporting
+        # "online" here would be a claim, not a measurement. The real verdict --
+        # provider reachability, ffmpeg, resolver errors -- comes from
+        # GET /music/diagnose, which actually performs a resolve.
+        http_mod.set_status("music", "ready")
+        log.info("Music subsystem ready (playback not yet exercised; see /music/diagnose)")
         activity_name = config.BOT_ACTIVITY.strip() or "https://muragoods.vercel.app/"
         if "twitch.tv" in activity_name.lower():
             activity_name = "https://muragoods.vercel.app/"
@@ -577,8 +581,8 @@ async def _health_server() -> None:
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    http_mod.set_status("music", "online")
-    log.info("Music subsystem online")
+    http_mod.set_status("music", "ready")
+    log.info("Music subsystem ready (playback not yet exercised; see /music/diagnose)")
     # Keep-alive: ping the site's health endpoint every 5 minutes so the
     # dashboard Health Monitor has real server-side data, and so the site
     # (which polls bot health too) sees a live bot. This is legitimate
