@@ -1,7 +1,11 @@
 import { cookies } from 'next/headers';
 import crypto from 'crypto';
+import type { HydratedDocument } from 'mongoose';
 import dbConnect from '@/app/lib/mongodb';
 import DiscordSession, { type IDiscordSession } from '@/app/lib/models/DiscordSession';
+
+/** A live Mongo document (has .save()), not just the plain interface. */
+type SessionDoc = HydratedDocument<IDiscordSession>;
 
 // ── Server-side session core ─────────────────────────────────────────────
 // The browser holds ONLY an opaque HttpOnly cookie. Access/refresh tokens
@@ -37,7 +41,7 @@ export async function createSession(params: {
   expiresIn: number;
   guilds: { id: string; name: string; icon: string | null; owner: boolean }[];
   selectedGuildId?: string | null;
-}): Promise<IDiscordSession> {
+}): Promise<SessionDoc> {
   await dbConnect();
   const now = new Date();
   const doc = await DiscordSession.create({
@@ -112,7 +116,7 @@ export interface DashUser {
 }
 
 /** Refresh the Discord access token using the stored refresh token. */
-async function refreshSessionToken(session: IDiscordSession): Promise<boolean> {
+async function refreshSessionToken(session: SessionDoc): Promise<boolean> {
   const clientId = process.env.DISCORD_CLIENT_ID;
   const clientSecret = process.env.DISCORD_CLIENT_SECRET;
   if (!clientId || !clientSecret) return false;
@@ -176,7 +180,7 @@ export async function getSession(): Promise<IValidatedSession | null> {
 }
 
 export interface IValidatedSession {
-  session: IDiscordSession;
+  session: SessionDoc;
   accessToken: string;
   discordId: string;
 }

@@ -1,3 +1,4 @@
+import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
 import { MongoClient, ObjectId } from 'mongodb';
 import { discordConfigCollection } from '@/app/lib/discord-config';
@@ -129,7 +130,7 @@ const COMMANDS: DiscordCommand[] = [
 ];
 
 export async function GET(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   const guildId = req.nextUrl.searchParams.get('guildId');
 
   if (!token) {

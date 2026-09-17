@@ -1,3 +1,4 @@
+import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -26,7 +27,7 @@ async function hasManage(token: string, guildId: string): Promise<boolean> {
 
 // GET → real player state for the guild
 export async function GET(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   const guildId = req.nextUrl.searchParams.get('guildId') || '';
   if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
   if (!/^\d{5,25}$/.test(guildId)) return NextResponse.json({ success: false, error: 'Valid guildId required' }, { status: 400 });
@@ -65,7 +66,7 @@ export async function GET(req: NextRequest) {
 
 // POST → real control action on the bot's player
 export async function POST(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
   let body: { guildId?: string; action?: string; level?: number; position?: number };
   try { body = await req.json(); } catch {

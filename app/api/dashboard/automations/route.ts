@@ -1,3 +1,4 @@
+import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 
@@ -17,7 +18,7 @@ async function getManageableGuilds(accessToken: string): Promise<Map<string, { i
 
 // GET /api/dashboard/automations?guildId=xxx — list automations
 export async function GET(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   const guildId = req.nextUrl.searchParams.get('guildId');
   if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
   if (!guildId || !/^\d{5,25}$/.test(guildId)) return NextResponse.json({ success: false, error: 'Valid guildId required' }, { status: 400 });
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
 
 // POST /api/dashboard/automations — create automation
 export async function POST(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
 
   let body: { guildId?: string; name?: string; action?: string; channelId?: string; message?: string; schedule?: Record<string, unknown>; timezone?: string; enabled?: boolean };
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
 
 // PATCH /api/dashboard/automations — update automation
 export async function PATCH(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
 
   let body: { guildId?: string; automationId?: string; updates?: Record<string, unknown> };
@@ -98,7 +99,7 @@ export async function PATCH(req: NextRequest) {
 
 // DELETE /api/dashboard/automations — delete automation
 export async function DELETE(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
 
   const guildId = req.nextUrl.searchParams.get('guildId') || '';

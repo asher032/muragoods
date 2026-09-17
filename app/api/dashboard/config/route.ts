@@ -1,3 +1,4 @@
+import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 
@@ -42,7 +43,7 @@ async function getManageableGuilds(accessToken: string): Promise<Map<string, Das
 }
 
 export async function GET(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   const guildId = req.nextUrl.searchParams.get('guildId');
   if (!token) return bad('Discord token required', 401);
   if (!guildId || !/^\d{5,25}$/.test(guildId)) return bad('Valid guildId required');
@@ -65,7 +66,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   if (!token) return bad('Discord token required', 401);
   const body = await req.json().catch(() => null);
   if (!body || typeof body !== 'object') return bad('Invalid JSON body');

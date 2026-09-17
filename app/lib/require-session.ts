@@ -5,6 +5,17 @@ import { getSession, sessionManagesGuild, type IValidatedSession } from './disco
 // the browser. Routes call `requireSession(req, guildId?)` first and only
 // proceed when it returns success.
 
+/**
+ * The Discord access token that belongs to the current server-side session.
+ * Routes use this INSTEAD of a browser-supplied `x-discord-token` header —
+ * the credential lives only in the HttpOnly session, never in the client.
+ * Returns null when there is no valid session.
+ */
+export async function sessionToken(): Promise<string | null> {
+  const auth = await getSession();
+  return auth ? auth.accessToken : null;
+}
+
 export interface SessionGuardOk {
   ok: true;
   accessToken: string;

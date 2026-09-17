@@ -1,10 +1,11 @@
+import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
 // POST /api/dashboard/refresh — refresh Discord data (channels, roles, members)
 export async function POST(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   const botToken = process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN;
   const guildId = req.headers.get('x-guild-id');
 

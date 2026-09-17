@@ -40,6 +40,13 @@ interface GuildContextType {
   setSelected: (g: DashGuild | null) => void;  // persists server-side
   refresh: () => Promise<void>;
   logout: () => Promise<void>;
+  // ── Legacy compatibility ────────────────────────────────────────────────
+  // Older dashboard pages gated on a client-held token. Credentials now live
+  // ONLY in the HttpOnly session cookie, so `token` is reduced to an
+  // authentication marker (never a credential) used purely as a render gate.
+  token: string | null;
+  setToken: (t: string | null) => void;
+  setGuilds: (g: DashGuild[]) => void;
 }
 
 const GuildContext = createContext<GuildContextType | null>(null);
@@ -49,6 +56,7 @@ export function GuildProvider({ children }: { children: ReactNode }) {
   const [authenticated, setAuthenticated] = useState(false);
   const [me, setMe] = useState<DashMe | null>(null);
   const [guilds, setGuilds] = useState<DashGuild[]>([]);
+  // Auth marker for legacy pages — never a credential.
   const [selected, setSelectedState] = useState<DashGuild | null>(null);
   const [botOnline, setBotOnline] = useState(false);
   const [botLatency, setBotLatency] = useState<number | null>(null);
@@ -136,12 +144,17 @@ export function GuildProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loginUrl = '/api/auth/discord';
+  const token = authenticated ? 'session' : null;
+  // Legacy no-op: pages used to stash a browser token here. The server session
+  // is authoritative, so this only nudges the app to re-read /me.
+  const setTokenCompat = useCallback((_t: string | null) => { /* no-op */ }, []);
 
   return (
     <GuildContext.Provider value={{
       authChecked, authenticated, me, user: me?.user ?? null,
       guilds, selected, botOnline, botLatency, loginUrl, error, setError,
       setSelected, refresh: loadMe, logout,
+      token, setToken: setTokenCompat, setGuilds,
     }}>
       {children}
     </GuildContext.Provider>

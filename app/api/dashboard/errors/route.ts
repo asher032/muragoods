@@ -1,3 +1,4 @@
+import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
 import { MongoClient, ObjectId } from 'mongodb';
 
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
 
 // ── GET — list errors for the Error Center (dashboard OAuth) ────────────
 export async function GET(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
   const guildId = req.nextUrl.searchParams.get('guildId') || '';
   if (guildId && !/^\d{5,25}$/.test(guildId)) {
@@ -121,7 +122,7 @@ export async function GET(req: NextRequest) {
 
 // ── PATCH — mark resolved / retry ────────────────────────────────────────
 export async function PATCH(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
 
   let body: { id?: string; resolved?: boolean };

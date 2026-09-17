@@ -1,3 +1,4 @@
+import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 import dbConnect from '@/app/lib/mongodb';
@@ -45,7 +46,7 @@ async function safeCount(collectionName: string, query: Record<string, unknown>)
 }
 
 export async function GET(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   const guildId = req.nextUrl.searchParams.get('guildId');
   const range = req.nextUrl.searchParams.get('range') || '7days';
 

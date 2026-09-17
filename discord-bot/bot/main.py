@@ -177,6 +177,10 @@ async def _health_server() -> None:
         return web.json_response({
             "ok": ok,
             "guilds": len(bot.guilds),
+            # Real guild IDs the bot is currently present in — the dashboard uses
+            # this to report "bot installed / not installed" per server instead
+            # of guessing.
+            "guild_ids": [str(g.id) for g in bot.guilds],
             "subsystems": statuses,
             "bot_version": bot_version,
             "latency": latency_ms,

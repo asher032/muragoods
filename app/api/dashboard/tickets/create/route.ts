@@ -1,3 +1,4 @@
+import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 
@@ -17,7 +18,7 @@ async function getManageableGuilds(accessToken: string): Promise<Map<string, { i
 
 // POST /api/dashboard/tickets/create — create a ticket via bot
 export async function POST(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   const botToken = process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN;
   const bridgeSecret = process.env.DISCORD_BRIDGE_SECRET;
 

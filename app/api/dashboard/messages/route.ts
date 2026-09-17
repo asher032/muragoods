@@ -1,10 +1,11 @@
+import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
 // POST /api/dashboard/messages — send a Discord message
 export async function POST(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   const botToken = process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN;
   if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
   if (!botToken) return NextResponse.json({ success: false, error: 'Bot token not configured' }, { status: 503 });

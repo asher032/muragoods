@@ -1,3 +1,4 @@
+import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
 import { MongoClient } from 'mongodb';
 import { existsSync } from 'fs';
@@ -284,7 +285,7 @@ async function discordDelete(path: string, token: string, bot: boolean): Promise
 }
 
 export async function POST(req: NextRequest) {
-  const userToken = req.headers.get('x-discord-token');
+  const userToken = (await sessionToken());
   const botToken = process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN;
   const body = await req.json().catch(() => null) as { guildId?: string; module?: string } | null;
 

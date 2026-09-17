@@ -1,3 +1,4 @@
+import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -40,7 +41,7 @@ async function botUsername(token: string): Promise<string> {
 
 // GET ?guildId=&userId= → real member profile + warnings + cases
 export async function GET(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   const guildId = req.nextUrl.searchParams.get('guildId') || '';
   const userId = req.nextUrl.searchParams.get('userId') || '';
   if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
@@ -73,7 +74,7 @@ export async function GET(req: NextRequest) {
 
 // POST → real moderation action (bot re-checks hierarchy + permissions)
 export async function POST(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
   let body: { guildId?: string; userId?: string; action?: string; reason?: string; minutes?: number };
   try { body = await req.json(); } catch {

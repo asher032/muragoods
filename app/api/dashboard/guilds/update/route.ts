@@ -1,3 +1,4 @@
+import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 
@@ -5,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 // PATCH /api/dashboard/guilds/update — update guild display info
 export async function PATCH(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
 
   let body: { guildId?: string; guildName?: string; guildIcon?: string | null };

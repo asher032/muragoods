@@ -1,3 +1,4 @@
+import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 
@@ -270,7 +271,7 @@ function discordStatus(status: number): number {
 }
 
 export async function GET(req: NextRequest) {
-  const accessToken = req.headers.get('x-discord-token') || '';
+  const accessToken = (await sessionToken()) || '';
   const guildId = req.nextUrl.searchParams.get('guildId') || '';
   const status = req.nextUrl.searchParams.get('status') || 'all';
   const search = (req.nextUrl.searchParams.get('search') || '').trim().toLowerCase();
@@ -334,7 +335,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const accessToken = req.headers.get('x-discord-token') || '';
+  const accessToken = (await sessionToken()) || '';
   let body: RecordValue = {};
   try {
     body = asRecord(await req.json());

@@ -1,3 +1,4 @@
+import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 
@@ -91,7 +92,7 @@ function staffIds(ticket: TicketRecord): string[] {
 }
 
 export async function GET(req: NextRequest) {
-  const accessToken = req.headers.get('x-discord-token') || '';
+  const accessToken = (await sessionToken()) || '';
   const guildId = req.nextUrl.searchParams.get('guildId') || '';
 
   if (!accessToken) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });

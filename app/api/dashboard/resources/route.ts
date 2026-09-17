@@ -1,3 +1,4 @@
+import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -27,7 +28,7 @@ async function discordGet<T>(path: string, token: string, bot = false): Promise<
 }
 
 export async function GET(req: NextRequest) {
-  const userToken = req.headers.get('x-discord-token');
+  const userToken = (await sessionToken());
   const guildId = req.nextUrl.searchParams.get('guildId');
   const botToken = process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN;
   if (!userToken || !guildId || !/^\d{5,25}$/.test(guildId)) {

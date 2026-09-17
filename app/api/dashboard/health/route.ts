@@ -1,3 +1,4 @@
+import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 
@@ -17,7 +18,7 @@ async function getManageableGuilds(accessToken: string): Promise<Map<string, { i
 
 // GET /api/dashboard/health — service health check
 export async function GET(req: NextRequest) {
-  const token = req.headers.get('x-discord-token');
+  const token = (await sessionToken());
   const guildId = req.nextUrl.searchParams.get('guildId');
   if (!token) return NextResponse.json({ ok: false, error: 'Discord token required' }, { status: 401 });
 
