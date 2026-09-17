@@ -168,9 +168,12 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           aria-hidden
         />
       )}
-      <div style={{ marginLeft: 264 }}>
+      <div className="cc-shell-main">
+        {/* Two explicit rows: selector (row 1) then nav + bot status (row 2).
+            Styling lives in cc.css with real breakpoints — no inline layout,
+            so nothing depends on accidental flex wrapping. */}
         <header className="cc-topbar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="cc-topbar-selector">
             <button
               className="cc-icon-btn cc-drawer-btn"
               aria-label="Open navigation"
@@ -180,7 +183,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             </button>
             <ServerSwitcher />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="cc-topbar-nav">
             <a href="/murastream" className="cc-link" style={{ color: 'rgba(255,255,255,0.55)' }}>MuraStream</a>
             <span className={`cc-status-pill ${botOnline ? 'cc-status-online' : 'cc-status-offline'}`}>
               <span className="cc-dot" />
