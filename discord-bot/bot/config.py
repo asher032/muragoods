@@ -20,6 +20,7 @@ DISCORD_PUBLIC_KEY = _get("DISCORD_PUBLIC_KEY")
 DISCORD_CLIENT_SECRET = _get("DISCORD_CLIENT_SECRET")
 
 BOT_STATUS = _get("BOT_STATUS", "online")          # online/idle/dnd/invisible
+BOT_PREFIX = _get("BOT_PREFIX", "mg!")             # default per-guild command prefix
 BOT_ACTIVITY = _get("BOT_ACTIVITY", "MuraStream • /help")
 
 # Comma-separated Discord user IDs allowed to use /requests admin actions.

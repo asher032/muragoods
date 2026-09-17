@@ -34,6 +34,46 @@ _reconnect_count = 0
 # then restarts without them (automod message-scan + welcome events disabled).
 _privileged_ok = True
 
+# ── Per-guild command prefix ─────────────────────────────────────────────
+# Cached per GUILD ID (never a single global value) with a short TTL, so a
+# prefix changed on the dashboard takes effect promptly even if the refresh
+# webhook can't be delivered. Default is config.BOT_PREFIX (mg!).
+_PREFIX_TTL = 30.0
+_prefix_cache: dict[str, tuple[float, str]] = {}
+
+
+def _prefix_cached(guild_id: int | str) -> str | None:
+    hit = _prefix_cache.get(str(guild_id))
+    if hit and time.monotonic() - hit[0] < _PREFIX_TTL:
+        return hit[1]
+    return None
+
+
+async def _guild_prefix(guild_id: int | str) -> str:
+    cached = _prefix_cached(guild_id)
+    if cached is not None:
+        return cached
+    try:
+        stored = await database.get_guild_prefix(guild_id)
+    except Exception as exc:
+        log.warning("Prefix lookup failed for guild %s: %s", guild_id, str(exc)[:150])
+        # Database down: fall back to the default rather than losing every
+        # prefix command. Do not cache the fallback.
+        return config.BOT_PREFIX
+    prefix = stored or config.BOT_PREFIX
+    _prefix_cache[str(guild_id)] = (time.monotonic(), prefix)
+    return prefix
+
+
+async def get_prefix(bot: commands.Bot, message: discord.Message):
+    """discord.py prefix resolver — per guild, cached by guild ID."""
+    prefixes = [config.BOT_PREFIX, "MuraBot "]
+    if message.guild is not None:
+        custom = await _guild_prefix(message.guild.id)
+        if custom and custom not in prefixes:
+            prefixes.insert(0, custom)
+    return commands.when_mentioned_or(*prefixes)(bot, message)
+
 
 class MuraBot(commands.Bot):
     """All lifecycle handlers live on the class so a rebuilt instance keeps them."""
@@ -44,7 +84,7 @@ class MuraBot(commands.Bot):
             intents.message_content = True   # automod + XP from messages
             intents.members = True           # welcome events
         super().__init__(
-            command_prefix=commands.when_mentioned_or("mg!", "MuraBot "),
+            command_prefix=get_prefix,
             intents=intents,
             help_command=None,
             case_insensitive=True,
@@ -459,8 +499,28 @@ async def _health_server() -> None:
         except discord.HTTPException as exc:
             return web.json_response({"ok": False, "error": f"Discord API error {exc.status}"}, status=502)
 
+    async def prefix_refresh(request: web.Request) -> web.Response:
+        """Dashboard tells us a guild's prefix changed — drop the cached value.
+
+        Best-effort: if this never arrives the short TTL still picks the change
+        up, so the prefix is never permanently stale.
+        """
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+        guild_id = str(body.get("guildId") or "").strip()
+        if guild_id:
+            _prefix_cache.pop(guild_id, None)
+        else:
+            _prefix_cache.clear()
+        return web.json_response({"ok": True, "refreshed": guild_id or "all"})
+
     app = web.Application()
     app.router.add_get("/health", health)
+    app.router.add_post("/prefix/refresh", prefix_refresh)
     app.router.add_get("/music/state/{guild_id:\\d+}", music_state)
     app.router.add_post("/music/control/{guild_id:\\d+}", music_control)
     app.router.add_get("/mod/member/{guild_id:\\d+}/{user_id:\\d+}", member_lookup)

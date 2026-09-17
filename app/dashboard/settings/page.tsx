@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
-  Bot, Check, ExternalLink, Link2, LogOut, RefreshCw, Server, ShieldAlert, User, X,
+  Bot, Check, ExternalLink, Link2, LogOut, RefreshCw, Server, ShieldAlert, Terminal, User, X,
 } from 'lucide-react';
 import { useGuild } from '@/app/lib/guild-context';
 import ServerSwitcher from '../components/ServerSwitcher';
@@ -52,6 +52,71 @@ export default function SettingsPage() {
   } = useGuild();
 
   const [install, setInstall] = useState<InstallState>({ checking: false, installed: null, inviteUrl: null, error: '' });
+
+  // ── Per-guild command prefix ──
+  const DEFAULT_PREFIX = 'mg!';
+  const [prefix, setPrefix] = useState('');
+  const [savedPrefix, setSavedPrefix] = useState('');
+  const [prefixState, setPrefixState] = useState<'idle' | 'loading' | 'saving'>('loading');
+  const [prefixMsg, setPrefixMsg] = useState('');
+  const [prefixErr, setPrefixErr] = useState('');
+
+  useEffect(() => {
+    if (!selected) return;
+    let alive = true;
+    setPrefixState('loading');
+    setPrefixErr('');
+    setPrefixMsg('');
+    fetch(`/api/dashboard/prefix?guildId=${encodeURIComponent(selected.id)}`, { cache: 'no-store' })
+      .then(async (resp) => {
+        const data = (await resp.json().catch(() => null)) as { success?: boolean; prefix?: string; error?: string } | null;
+        if (!alive) return;
+        if (!resp.ok || !data?.success) {
+          setPrefixErr(data?.error || `Could not load the prefix (HTTP ${resp.status})`);
+          setPrefixState('idle');
+          return;
+        }
+        setPrefix(data.prefix || DEFAULT_PREFIX);
+        setSavedPrefix(data.prefix || DEFAULT_PREFIX);
+        setPrefixState('idle');
+      })
+      .catch(() => {
+        if (alive) { setPrefixErr('Network error loading the prefix'); setPrefixState('idle'); }
+      });
+    return () => { alive = false; };
+  }, [selected]);
+
+  async function savePrefix(next: string) {
+    if (!selected) return;
+    setPrefixState('saving');
+    setPrefixErr('');
+    setPrefixMsg('');
+    try {
+      const resp = await fetch('/api/dashboard/prefix', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guildId: selected.id, prefix: next }),
+      });
+      const data = (await resp.json().catch(() => null)) as { success?: boolean; prefix?: string; error?: string; botNotified?: boolean } | null;
+      if (!resp.ok || !data?.success) {
+        setPrefixErr(data?.error || `Save failed (HTTP ${resp.status})`);
+        setPrefixState('idle');
+        return;
+      }
+      const applied = data.prefix || next;
+      setPrefix(applied);
+      setSavedPrefix(applied);
+      setPrefixMsg(
+        data.botNotified
+          ? `✓ Saved — \`${applied}\` is live in Discord now.`
+          : `✓ Saved. The bot will pick it up within ~30s (it did not acknowledge the refresh).`,
+      );
+    } catch {
+      setPrefixErr('Network error while saving — your change was NOT saved.');
+    } finally {
+      setPrefixState('idle');
+    }
+  }
 
   // Live per-guild bot installation check — server verifies we manage the guild.
   useEffect(() => {
@@ -140,6 +205,55 @@ export default function SettingsPage() {
             (30 days of activity; refreshed on use)
           </span>
         </Row>
+      </section>
+
+      {/* ── Command prefix (per server) ── */}
+      <section className="cc-card" style={{ padding: '18px 20px' }}>
+        <h2 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Terminal size={15} /> Command Prefix
+        </h2>
+        <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--cc-text-dim)' }}>
+          The prefix for <strong style={{ color: '#fff' }}>{selected?.name || 'this server'}</strong>. Stored per
+          server, so changing it here never affects any other server. Default is <code>{DEFAULT_PREFIX}</code>.
+        </p>
+
+        {prefixState === 'loading' ? (
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--cc-text-faint)' }}>Loading prefix…</p>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <input
+                className="cc-input"
+                value={prefix}
+                maxLength={10}
+                onChange={(e) => setPrefix(e.target.value)}
+                placeholder={DEFAULT_PREFIX}
+                aria-label="Command prefix"
+                style={{ maxWidth: 180 }}
+              />
+              <button
+                className="cc-btn cc-btn-primary"
+                disabled={prefixState === 'saving' || !prefix.trim() || prefix === savedPrefix}
+                onClick={() => void savePrefix(prefix.trim())}
+              >
+                {prefixState === 'saving' ? 'Saving…' : 'Save prefix'}
+              </button>
+              <button
+                className="cc-btn"
+                disabled={prefixState === 'saving' || savedPrefix === DEFAULT_PREFIX}
+                onClick={() => { setPrefix(DEFAULT_PREFIX); void savePrefix(DEFAULT_PREFIX); }}
+              >
+                <RefreshCw size={14} /> Reset to {DEFAULT_PREFIX}
+              </button>
+            </div>
+            <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--cc-text-faint)' }}>
+              1–10 characters. Example: <code>{prefix || DEFAULT_PREFIX}play</code>
+            </p>
+          </>
+        )}
+
+        {prefixMsg && <div className="cc-alert" role="status" style={{ marginTop: 10, fontSize: 12.5 }}>{prefixMsg}</div>}
+        {prefixErr && <div className="cc-alert cc-alert-error" role="alert" style={{ marginTop: 10, fontSize: 12.5 }}>{prefixErr}</div>}
       </section>
 
       {/* ── Server ── */}
