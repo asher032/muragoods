@@ -49,6 +49,53 @@ _ERROR_HINTS = {
 }
 
 
+DEFAULT_DB = "murastream_bot"
+# MongoDB rejects these in a database name; an empty name is equally unusable.
+_INVALID_DB_CHARS = ' /\\."$*<>:|?'
+
+# Which database name was actually selected, and why. Reported through
+# /health so the bot and the dashboard can be compared (the dashboard resolves
+# its name through mongoose, i.e. from the connection string).
+DB_NAME: str = ""
+DB_NAME_SOURCE: str = ""
+
+
+def _db_name_from_uri(uri: str) -> str:
+    """The database name embedded in the connection string, if any."""
+    try:
+        from urllib.parse import urlparse, unquote
+        path = (urlparse(uri or "").path or "").lstrip("/")
+        name = unquote(path.split("?")[0]).strip()
+        if not name or any(c in name for c in _INVALID_DB_CHARS):
+            return ""
+        return name
+    except Exception:
+        return ""
+
+
+def resolve_db_name() -> tuple[str, str]:
+    """Choose the database name, returning (name, source).
+
+    A configured-but-unusable name used to be logged and then used anyway, so
+    the client raised `InvalidName`, the connection failed, and the whole bot
+    ran with no persistence -- while the log line explaining it scrolled past.
+
+    An invalid name cannot be honoured in any case, so falling back cannot
+    overwrite working configuration. The fallback order matches the rule the
+    dashboard's driver already uses (the name in the connection string), so
+    both sides converge on the same database instead of drifting apart. The
+    choice is always reported, never silent.
+    """
+    configured = (config.MONGO_DB or "").strip()
+    if configured and not any(c in configured for c in _INVALID_DB_CHARS):
+        return configured, "MONGO_DB"
+    bad = f"MONGO_DB={config.MONGO_DB!r} is not usable" if configured else "MONGO_DB is unset"
+    from_uri = _db_name_from_uri(config.MONGO_URI or "")
+    if from_uri:
+        return from_uri, f"MONGO_URI ({bad})"
+    return DEFAULT_DB, f"default ({bad})"
+
+
 def diagnostic() -> dict[str, Any]:
     """Credential-free explanation of the current database state.
 
@@ -59,16 +106,18 @@ def diagnostic() -> dict[str, Any]:
     if not config.MONGO_URI:
         return {"configured": False, "error_class": "NotConfigured",
                 "hint": _ERROR_HINTS["NotConfigured"]}
+    where = {"database": DB_NAME or None, "database_source": DB_NAME_SOURCE or None}
     if LAST_ERROR is None and _db is not None:
-        return {"configured": True, "error_class": None, "hint": None}
+        return {"configured": True, "error_class": None, "hint": None, **where}
     if LAST_ERROR is None:
         # Configured, no failure recorded, but not connected: no attempt has
         # completed yet. Saying "connection failed" here would be a guess.
         return {"configured": True, "error_class": "NotConnected",
-                "hint": "No connection attempt has completed yet."}
+                "hint": "No connection attempt has completed yet.", **where}
     return {"configured": True, "error_class": LAST_ERROR,
             "hint": _ERROR_HINTS.get(LAST_ERROR,
-                                      "Connection failed; see service logs for the full traceback.")}
+                                      "Connection failed; see service logs for the full traceback."),
+            **where}
 
 
 def _now() -> datetime:
@@ -109,16 +158,17 @@ async def _connect_inner() -> None:
     # Reject an invalid database name with a precise message. Previously this
     # surfaced only as `database: offline`, which sent the reader looking for a
     # missing variable or a network problem when the actual fault was the name.
-    _name = config.MONGO_DB or ""
-    if not _name or any(ch in _name for ch in ' /\\."$*<>:|?'):
-        log.error(
-            "MONGO_DB=%r is not a valid MongoDB database name. Names cannot be "
-            "empty or contain spaces, dots, slashes, $, or similar. Unset "
-            "MONGO_DB to use the default 'murastream_bot'.",
-            config.MONGO_DB,
+    global DB_NAME, DB_NAME_SOURCE
+    DB_NAME, DB_NAME_SOURCE = resolve_db_name()
+    if DB_NAME_SOURCE != "MONGO_DB":
+        log.warning(
+            "Using database %r (%s). Set MONGO_DB on this host to choose it "
+            "explicitly; the dashboard resolves its own name from its "
+            "connection string, and the two must match.",
+            DB_NAME, DB_NAME_SOURCE,
         )
     _client = AsyncIOMotorClient(config.MONGO_URI, serverSelectionTimeoutMS=8000)
-    _db = _client[config.MONGO_DB]
+    _db = _client[DB_NAME]
     await _client.admin.command("ping")
 
     await _db.guild_config.create_index("guildId", unique=True)

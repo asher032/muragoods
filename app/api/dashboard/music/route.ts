@@ -68,14 +68,17 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const token = (await sessionToken());
   if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
-  let body: { guildId?: string; action?: string; level?: number; position?: number };
+  let body: { guildId?: string; action?: string; level?: number; position?: number; enabled?: boolean };
   try { body = await req.json(); } catch {
     return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 });
   }
   const guildId = String(body.guildId || '');
   const action = String(body.action || '');
   if (!/^\d{5,25}$/.test(guildId)) return NextResponse.json({ success: false, error: 'Valid guildId required' }, { status: 400 });
-  const allowed = ['pause', 'resume', 'skip', 'stop', 'volume', 'loop', 'queueLoop', 'shuffle', 'remove', 'disconnect'];
+  const allowed = [
+    'pause', 'resume', 'skip', 'stop', 'volume', 'loop', 'queueLoop',
+    'shuffle', 'remove', 'disconnect', 'seek', 'autoplay',
+  ];
   if (!allowed.includes(action)) return NextResponse.json({ success: false, error: 'Unknown action' }, { status: 400 });
   if (!(await hasManage(token, guildId))) {
     return NextResponse.json({ success: false, error: 'No permission for this server' }, { status: 403 });
@@ -90,7 +93,12 @@ export async function POST(req: NextRequest) {
     const resp = await fetch(`${BOT_BASE}/music/control/${guildId}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, level: body.level, position: body.position }),
+      body: JSON.stringify({
+        action,
+        level: body.level,
+        position: body.position,
+        enabled: body.enabled,
+      }),
       signal: controller.signal,
     });
     clearTimeout(timer);

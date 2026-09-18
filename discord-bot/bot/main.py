@@ -644,6 +644,32 @@ async def _health_server() -> None:
                 p.voice = None
                 music_mod.engine.remove_player(guild_id)
                 return web.json_response({"ok": True})
+            if action == "seek":
+                if r := need_voice():
+                    return r
+                if not p.current:
+                    return web.json_response(
+                        {"ok": False, "error": "Nothing is playing to seek within"}, status=409)
+                position = max(0, int(body.get("position") or 0))
+                duration = p.current.duration or 0
+                if duration and position >= duration:
+                    return web.json_response(
+                        {"ok": False,
+                         "error": f"Position {position}s is past the end of the track ({duration}s)"},
+                        status=400)
+                if not vc.channel:
+                    return web.json_response(
+                        {"ok": False, "error": "Voice channel is no longer available"}, status=409)
+                # Reuses the real playback path, so seeking genuinely re-creates
+                # the audio stream at an offset (ffmpeg -ss) instead of changing
+                # a number the dashboard displays.
+                await music_mod.engine.play_now(p, p.current, vc.channel,
+                                                seek_to=float(position))
+                return web.json_response({"ok": True, "position": position})
+            if action == "autoplay":
+                enabled = body.get("enabled")
+                p.autoplay = bool(enabled) if enabled is not None else (not p.autoplay)
+                return web.json_response({"ok": True, "autoplay": p.autoplay})
             return web.json_response({"ok": False, "error": f"Unknown action: {action}"}, status=400)
         except Exception as exc:
             log.warning("music_control %s failed for guild %s: %s", action, guild_id, str(exc)[:150])
