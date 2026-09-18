@@ -20,8 +20,8 @@ LAST_ERROR: str | None = None
 
 _ERROR_HINTS = {
     "NotConfigured": (
-        "No connection string on this host. Set MONGO_URI (also accepted: "
-        "MONGODB_URI, MONGO_URL, DATABASE_URL) in the service's environment."
+        "No connection string on this host. Set MONGO_URI (or DATABASE_URL) "
+        "in the service's environment."
     ),
     "ServerSelectionTimeoutError": (
         "The cluster could not be reached within 8s. Most likely the cluster's "
