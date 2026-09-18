@@ -34,6 +34,13 @@ _ERROR_HINTS = {
         "lacks rights on the target database."
     ),
     "ConfigurationError": "The connection string is malformed.",
+    "InvalidName": (
+        "The database NAME is invalid — not credentials, and not the network. "
+        "MongoDB rejects names containing spaces, dots, slashes, \\, $ and an "
+        "empty value. Check MONGO_DB on this host, or the database name after "
+        "the '/' in MONGO_URI. Unsetting MONGO_DB uses the default "
+        "murastream_bot."
+    ),
     "InvalidURI": "The connection string is malformed.",
     "SSLError": (
         "TLS negotiation failed. Check for a proxy or firewall intercepting "
@@ -54,8 +61,13 @@ def diagnostic() -> dict[str, Any]:
                 "hint": _ERROR_HINTS["NotConfigured"]}
     if LAST_ERROR is None and _db is not None:
         return {"configured": True, "error_class": None, "hint": None}
+    if LAST_ERROR is None:
+        # Configured, no failure recorded, but not connected: no attempt has
+        # completed yet. Saying "connection failed" here would be a guess.
+        return {"configured": True, "error_class": "NotConnected",
+                "hint": "No connection attempt has completed yet."}
     return {"configured": True, "error_class": LAST_ERROR,
-            "hint": _ERROR_HINTS.get(LAST_ERROR or "",
+            "hint": _ERROR_HINTS.get(LAST_ERROR,
                                       "Connection failed; see service logs for the full traceback.")}
 
 
@@ -93,6 +105,17 @@ async def _connect_inner() -> None:
         raise RuntimeError(
             "MONGO_URI is not set — the bot needs a MongoDB database. "
             "Use the website's cluster (see README) or a free MongoDB Atlas tier."
+        )
+    # Reject an invalid database name with a precise message. Previously this
+    # surfaced only as `database: offline`, which sent the reader looking for a
+    # missing variable or a network problem when the actual fault was the name.
+    _name = config.MONGO_DB or ""
+    if not _name or any(ch in _name for ch in ' /\\."$*<>:|?'):
+        log.error(
+            "MONGO_DB=%r is not a valid MongoDB database name. Names cannot be "
+            "empty or contain spaces, dots, slashes, $, or similar. Unset "
+            "MONGO_DB to use the default 'murastream_bot'.",
+            config.MONGO_DB,
         )
     _client = AsyncIOMotorClient(config.MONGO_URI, serverSelectionTimeoutMS=8000)
     _db = _client[config.MONGO_DB]
