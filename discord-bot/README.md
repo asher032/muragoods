@@ -129,6 +129,26 @@ discord-bot/
 - **Least privilege** — invite URL requests no Administrator; moderation uses Discord's own permission checks plus role-hierarchy guards.
 - **No secrets in logs** — the logger never prints tokens; login failures report a generic error.
 
+## Fragile internals the health checks depend on
+
+These are private/undocumented attributes. Each was chosen after checking the
+installed library rather than assuming, and each is read defensively — but if a
+dependency upgrade moves one, the code **falls back silently instead of failing
+loudly**, so the health output would become optimistically wrong. There are
+currently no automated tests guarding them. Verify these after any major
+`discord.py` or `yt-dlp` upgrade.
+
+| Relied on | Where | What breaks if it moves |
+|---|---|---|
+| `ws._keep_alive._last_ack` | `main.gateway_liveness()` | Falls back to `is_ready()`, which stays `true` forever once the bot has connected — so `/health` would report `discord: online` on a dead gateway, and `last_heartbeat` would be `null` again. |
+| `bot.ws` (non-sharded) and `ShardInfo._parent.ws` (sharded) | `main.gateway_liveness()` | Same silent fallback as above. Note `bot.shards` exists **only** on `AutoShardedClient`, and `ShardInfo.__slots__` is `('_parent','id','shard_count')` — there is no `ShardInfo.ws`. |
+| `ConnectionState.last_heartbeat` | do not use | Does not exist. A previous version read it and returned `null` forever. |
+| `database.LAST_ERROR`, `database._db` | `database.diagnostic()` | The `database_detail` hint degrades to a generic message, so a bad `MONGO_DB` looks the same as an unreachable cluster. |
+| `music.FFMPEG_EXE`, `music.FFMPEG_OK` | `music.probe()`, `/health` | `ffmpeg` in `/health` reports `null` ("not measured") rather than a wrong value. |
+| Keys in `net._status` | `net.py` | Any key with no active probe **stays `"starting"` forever** on an idle bot. This is exactly how `site_bridge` and `movies` appeared permanently broken. When adding a subsystem, add a probe with it. |
+| `INNERTUBE_CLIENTS` keys | `music.get_ydl_opts()` | A `player_client` name yt-dlp no longer implements makes extraction fail slowly rather than immediately. Verify with `python -c "from yt_dlp.extractor.youtube import _base; print(list(_base.INNERTUBE_CLIENTS))"`. |
+| Presence of a JS runtime | `music.js_runtimes()` | yt-dlp needs `deno`, `node`, `bun`, `qjs`, or `quickjs` to solve YouTube's signature challenge. With none, extraction can **stall** rather than error — which is indistinguishable from a blocked IP. `/music/diagnose` now reports which are available. |
+
 ## Honest limitations
 
 - **Free hosting sleeps** — Render's free tier restarts workers periodically; the bot auto-recovers but music playback stops during restarts. Paid tier removes this.

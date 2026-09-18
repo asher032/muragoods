@@ -23,22 +23,55 @@ export function useGuildConfig() {
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState('');
 
+  /**
+   * Report a failed request with the endpoint, the HTTP status and the server's
+   * own message.
+   *
+   * Previously a failure showed only `data.error || 'Failed to save'`, so a 401,
+   * a 403 and a 500 were indistinguishable — and if the response was not JSON
+   * (a platform error page, say) `resp.json()` threw and the real status was
+   * lost entirely, leaving a JSON parse message that pointed at nothing.
+   */
+  const describeFailure = async (
+    action: 'load' | 'save',
+    endpoint: string,
+    resp: Response | null,
+    thrown: unknown,
+  ): Promise<string> => {
+    if (!resp) {
+      return `Failed to ${action} ${endpoint}: network error — ${String(thrown)}`;
+    }
+    let serverMessage = '';
+    try {
+      const body = await resp.clone().json();
+      serverMessage = typeof body?.error === 'string' ? body.error : '';
+    } catch {
+      try {
+        serverMessage = (await resp.clone().text()).slice(0, 200).trim();
+      } catch {
+        serverMessage = '';
+      }
+    }
+    const suffix = serverMessage ? ` — ${serverMessage}` : '';
+    return `Failed to ${action} ${endpoint}: HTTP ${resp.status}${suffix}`;
+  };
+
   const load = useCallback(async () => {
     if (!token || !selected) return;
     setLoading(true);
     setError('');
+    const endpoint = `/api/dashboard/config?guildId=${selected.id}`;
+    let resp: Response | null = null;
     try {
-      const resp = await fetch(`/api/dashboard/config?guildId=${selected.id}`, {
-        headers: { 'x-discord-token': token },
-      });
+      resp = await fetch(endpoint, { headers: { 'x-discord-token': token } });
       const data = await resp.json();
       if (data.success) {
         setConfig(data.config || {});
       } else {
-        setError(data.error || 'Failed to load config');
+        setError(await describeFailure('load', endpoint, resp, null));
       }
     } catch (err) {
-      setError(String(err));
+      setError(await describeFailure('load', endpoint, resp, err));
     } finally {
       setLoading(false);
     }
@@ -48,8 +81,10 @@ export function useGuildConfig() {
     if (!token || !selected) return false;
     setSaveState('saving');
     setError('');
+    const endpoint = '/api/dashboard/config';
+    let resp: Response | null = null;
     try {
-      const resp = await fetch('/api/dashboard/config', {
+      resp = await fetch(endpoint, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'x-discord-token': token },
         body: JSON.stringify({ guildId: selected.id, config }),
@@ -59,15 +94,14 @@ export function useGuildConfig() {
         setSaveState('saved');
         setTimeout(() => setSaveState('idle'), 2500);
         return true;
-      } else {
-        setSaveState('error');
-        setError(data.error || 'Failed to save');
-        setTimeout(() => setSaveState('idle'), 3000);
-        return false;
       }
+      setSaveState('error');
+      setError(await describeFailure('save', endpoint, resp, null));
+      setTimeout(() => setSaveState('idle'), 3000);
+      return false;
     } catch (err) {
       setSaveState('error');
-      setError(String(err));
+      setError(await describeFailure('save', endpoint, resp, err));
       setTimeout(() => setSaveState('idle'), 3000);
       return false;
     }

@@ -37,12 +37,25 @@ def embed(title: str, description: str | None = None,
     return e
 
 
-def err_embed(error_id: str) -> discord.Embed:
-    """User-safe error embed; the real exception goes to server logs only."""
+def err_embed(error_id: str, reason: str | None = None,
+              hint: str | None = None) -> discord.Embed:
+    """User-safe error embed; the real exception goes to server logs only.
+
+    A bare "something went wrong" is unactionable — and because the same embed
+    is used for every failure, a user seeing it for command after command had
+    no way to tell an offline database from a missing permission. `reason`
+    states WHAT failed and `hint` what to do about it, without exposing the
+    exception, which can contain internals.
+    """
+    lines = ["We couldn't complete that action."]
+    if reason:
+        lines.append(f"**Reason:** {reason}")
+    if hint:
+        lines.append(hint)
+    lines.append(f"Error ID: `{error_id}`")
     return embed(
         "⚠️ Something went wrong",
-        "We couldn't complete that action.\n\n"
-        f"Error ID: `{error_id}`",
+        "\n\n".join(lines),
         color=ERROR,
     )
 
