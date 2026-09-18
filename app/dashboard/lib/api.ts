@@ -103,15 +103,55 @@ export interface BotServiceHealth {
   lastCheck: string;
 }
 
+// Real fields from the bot's own /health — the heartbeat-ACK clock, an actual
+// `ffmpeg -version` execution, and HTTP probes. Nothing here is inferred.
+export interface BotDetail {
+  ok: boolean | null;
+  latency: number | null;
+  uptimeSeconds: number | null;
+  lastHeartbeat: string | null;
+  reconnectCount: number | null;
+  gateway: {
+    alive: boolean | null;
+    heartbeatAgeSeconds: number | null;
+    staleAfterSeconds: number | null;
+  } | null;
+  subsystems: Record<string, string>;
+  ffmpeg: boolean | null;
+  guilds: number | null;
+  databaseDetail: { configured: boolean | null; errorClass: string | null; hint: string | null } | null;
+}
+
 export interface BotStatusResponse {
   status: 'ok' | 'degraded' | 'offline';
+  // The bot's status on its own. `status` above is an aggregate that also
+  // includes the site's backend, Discord's API and the site's database, so it
+  // must never be used to label the bot.
+  botStatus: 'ok' | 'degraded' | 'offline';
   checkedAt: string;
+  bot: BotDetail | null;
   services: {
     dashboardBackend: BotServiceHealth;
     botGateway: BotServiceHealth;
     discordApi: BotServiceHealth;
     database: BotServiceHealth;
   };
+}
+
+import { useEffect, useState } from 'react';
+
+// Shared so more than one page reads bot status the same way. The dashboard
+// home previously defined its own copy inline.
+export function useBotStatus(): BotStatusResponse | null {
+  const [status, setStatus] = useState<BotStatusResponse | null>(null);
+  useEffect(() => {
+    let alive = true;
+    dashboardApi.status()
+      .then((r) => { if (alive && r.ok) setStatus(r.data); })
+      .catch(() => { /* surfaced by the consuming page's own error state */ });
+    return () => { alive = false; };
+  }, []);
+  return status;
 }
 
 export interface GuildConfigDoc {

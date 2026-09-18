@@ -23,14 +23,91 @@ function getTimeoutMs(): number {
   return Number.isFinite(configured) && configured > 0 ? Math.min(configured, 30000) : DEFAULT_TIMEOUT_MS;
 }
 
-function getDashboardHealthUrl(request: NextRequest): string {
+// The SITE's own liveness. This must be the public /api/health, NOT
+// /api/dashboard/health: the latter requires a session cookie
+// (`sessionToken()` -> 401 "Discord token required"), and this probe runs
+// server-side with no cookies, so it returned 401 every single time and pinned
+// `dashboardBackend` to 'degraded' forever — which in turn forced the whole
+// aggregate to 'degraded' and made the dashboard label the BOT as degraded
+// while `botGateway` was measurably ok.
+function getSiteHealthUrl(request: NextRequest): string {
   const configured = process.env.DASHBOARD_HEALTH_URL?.trim();
   if (configured) return configured;
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (siteUrl) return new URL('/api/dashboard/health', siteUrl).toString();
+  if (siteUrl) return new URL('/api/health', siteUrl).toString();
 
-  return new URL('/api/dashboard/health', request.url).toString();
+  return new URL('/api/health', request.url).toString();
+}
+
+// ── The bot's own, really-measured state ────────────────────────────────
+// Everything below comes from fields the bot actually measures (heartbeat-ACK
+// clock, ffmpeg execution, HTTP probes). Nothing here is inferred client-side.
+interface BotDetail {
+  ok: boolean | null;
+  latency: number | null;
+  uptimeSeconds: number | null;
+  lastHeartbeat: string | null;
+  reconnectCount: number | null;
+  gateway: {
+    alive: boolean | null;
+    heartbeatAgeSeconds: number | null;
+    staleAfterSeconds: number | null;
+  } | null;
+  subsystems: Record<string, string>;
+  ffmpeg: boolean | null;
+  guilds: number | null;
+  databaseDetail: { configured: boolean | null; errorClass: string | null; hint: string | null } | null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
+}
+
+function num(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+async function fetchBotDetail(timeoutMs: number): Promise<BotDetail | null> {
+  try {
+    const response = await fetchWithTimeout(BOT_HEALTH_URL, timeoutMs);
+    // Deliberately not gated on response.ok: the bot returns 503 when it
+    // reports itself unhealthy, and that body is still a full, real payload.
+    // Discarding it was why the dashboard could not show WHY it was unhealthy.
+    const body = asRecord(await response.json());
+    if (!body) return null;
+    const gateway = asRecord(body.gateway);
+    const detail = asRecord(body.database_detail);
+    const subsystems = asRecord(body.subsystems);
+    return {
+      ok: typeof body.ok === 'boolean' ? body.ok : null,
+      latency: num(body.latency),
+      uptimeSeconds: num(body.uptime_seconds),
+      lastHeartbeat: typeof body.last_heartbeat === 'string' ? body.last_heartbeat : null,
+      reconnectCount: num(body.reconnect_count),
+      gateway: gateway
+        ? {
+            alive: typeof gateway.alive === 'boolean' ? gateway.alive : null,
+            heartbeatAgeSeconds: num(gateway.heartbeat_age_seconds),
+            staleAfterSeconds: num(gateway.stale_after_seconds),
+          }
+        : null,
+      subsystems: Object.fromEntries(
+        Object.entries(subsystems ?? {}).map(([k, v]) => [k, String(v)]),
+      ),
+      ffmpeg: typeof body.ffmpeg === 'boolean' ? body.ffmpeg : null,
+      guilds: num(body.guilds),
+      databaseDetail: detail
+        ? {
+            configured: typeof detail.configured === 'boolean' ? detail.configured : null,
+            errorClass: typeof detail.error_class === 'string' ? detail.error_class : null,
+            hint: typeof detail.hint === 'string' ? detail.hint : null,
+          }
+        : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
@@ -94,7 +171,7 @@ function isHealthyPayload(value: unknown): boolean {
 
 async function checkDashboardBackend(request: NextRequest, timeoutMs: number): Promise<ServiceHealth> {
   return checkHttpService(
-    getDashboardHealthUrl(request),
+    getSiteHealthUrl(request),
     timeoutMs,
     async (response) => {
       if (!response.ok) return 'degraded';
@@ -159,11 +236,12 @@ async function checkDatabase(timeoutMs: number): Promise<ServiceHealth> {
 
 export async function GET(request: NextRequest) {
   const timeoutMs = getTimeoutMs();
-  const [dashboardBackend, botGateway, discordApi, database] = await Promise.all([
+  const [dashboardBackend, botGateway, discordApi, database, bot] = await Promise.all([
     checkDashboardBackend(request, timeoutMs),
     checkBotGateway(timeoutMs),
     checkDiscordApi(timeoutMs),
     checkDatabase(timeoutMs),
+    fetchBotDetail(timeoutMs),
   ]);
 
   const services = [dashboardBackend, botGateway, discordApi, database];
@@ -173,9 +251,21 @@ export async function GET(request: NextRequest) {
       ? 'degraded'
       : 'ok';
 
+  // The BOT's own status, derived from the bot alone. The aggregate above
+  // includes the site's backend, Discord's API and the site's database, so
+  // labelling that aggregate "Bot" reported the website's health as the bot's
+  // — the pill read "Bot Degraded" while botGateway was ok.
+  const botStatus: HealthStatus = bot === null
+    ? 'offline'
+    : bot.gateway?.alive === false || bot.ok === false
+      ? 'degraded'
+      : 'ok';
+
   return NextResponse.json({
     status,
+    botStatus,
     checkedAt: new Date().toISOString(),
+    bot,
     services: {
       dashboardBackend,
       botGateway,

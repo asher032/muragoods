@@ -24,6 +24,33 @@ interface KeepaliveResponse {
 
 const NEXT_CHECK_POLL_MS = 45_000;
 
+const SUBSYSTEM_LABELS: Record<string, string> = {
+  discord: 'Discord gateway',
+  database: 'Database',
+  movies: 'Movie API',
+  music: 'Music',
+  site_bridge: 'Site bridge',
+};
+
+// Only a genuine "online"/"ready" is green. Anything else is surfaced verbatim
+// — including states like "starting" or "stale-no-gateway-ack", which is the
+// whole point: an unrecognised value must not silently render as healthy.
+function chipClass(value: string): string {
+  if (value === 'online' || value === 'ready') return 'cc-chip cc-chip-ok';
+  if (value === 'offline' || value === 'auth-missing' || value.startsWith('stale')) return 'cc-chip cc-chip-err';
+  return 'cc-chip cc-chip-warn';
+}
+
+function formatUptime(seconds: number | null): string {
+  if (seconds === null) return '—';
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
 export default function HealthPage() {
   const { token, selected } = useGuild();
   const [status, setStatus] = useState<BotStatusResponse | null>(null);
@@ -131,6 +158,107 @@ export default function HealthPage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* ── Bot runtime — real measurements from the bot's own /health ── */}
+      <div className="cc-card" style={{ padding: '16px 20px', marginBottom: 18 }}>
+        <div className="cc-section-label">🤖 Bot runtime — measured, not inferred</div>
+        {!status ? (
+          <p style={{ color: 'var(--cc-text-faint)', fontSize: 13, margin: '10px 0 0' }}>Waiting for the first check…</p>
+        ) : !status.bot ? (
+          <p style={{ color: '#ff6b6b', fontSize: 13, margin: '10px 0 0' }}>
+            The bot's /health could not be read, so no runtime values can be shown. This is a real
+            failure to reach the bot, not a missing measurement.
+          </p>
+        ) : (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14, marginTop: 12 }}>
+              <div>
+                <div className="cc-section-label">Gateway</div>
+                <div className="cc-chip" style={{ marginTop: 4 }}>
+                  {status.bot.gateway?.alive === null || status.bot.gateway === null
+                    ? 'unknown'
+                    : status.bot.gateway.alive ? 'alive' : 'NOT alive'}
+                </div>
+              </div>
+              <div>
+                <div className="cc-section-label">Heartbeat age</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>
+                  {status.bot.gateway?.heartbeatAgeSeconds !== null && status.bot.gateway
+                    ? `${status.bot.gateway.heartbeatAgeSeconds.toFixed(1)}s`
+                    : 'not measured'}
+                </div>
+                {status.bot.gateway?.staleAfterSeconds != null && (
+                  <div style={{ fontSize: 11.5, color: 'var(--cc-text-faint)' }}>
+                    stale after {status.bot.gateway.staleAfterSeconds}s
+                  </div>
+                )}
+              </div>
+              <div>
+                <div className="cc-section-label">Last heartbeat</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>
+                  {status.bot.lastHeartbeat
+                    ? new Date(status.bot.lastHeartbeat).toLocaleTimeString()
+                    : 'not measured'}
+                </div>
+              </div>
+              <div>
+                <div className="cc-section-label">Reconnects</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>
+                  {status.bot.reconnectCount ?? '—'}
+                </div>
+              </div>
+              <div>
+                <div className="cc-section-label">Uptime</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>
+                  {formatUptime(status.bot.uptimeSeconds)}
+                </div>
+              </div>
+              <div>
+                <div className="cc-section-label">Latency</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>
+                  {status.bot.latency != null ? `${status.bot.latency}ms` : '—'}
+                </div>
+              </div>
+              <div>
+                <div className="cc-section-label">FFmpeg</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>
+                  {status.bot.ffmpeg === null ? 'not measured' : status.bot.ffmpeg ? 'available' : 'MISSING'}
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--cc-text-faint)' }}>
+                  decoder measured on the bot host
+                </div>
+              </div>
+              <div>
+                <div className="cc-section-label">Guilds</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>{status.bot.guilds ?? '—'}</div>
+              </div>
+            </div>
+
+            {Object.keys(status.bot.subsystems).length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
+                {Object.entries(status.bot.subsystems).map(([key, value]) => (
+                  <span key={key} className={chipClass(value)}>
+                    {SUBSYSTEM_LABELS[key] ?? key}: {value}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {status.bot.databaseDetail && status.bot.subsystems.database !== 'online' && (
+              <div className="cc-alert cc-alert-error" style={{ marginTop: 14, fontSize: 13 }}>
+                <strong>
+                  Database {' '}
+                  {status.bot.databaseDetail.configured === false ? 'not configured' : 'unreachable'}
+                </strong>
+                {status.bot.databaseDetail.errorClass && (
+                  <span style={{ color: 'var(--cc-text-faint)' }}> ({status.bot.databaseDetail.errorClass})</span>
+                )}
+                {status.bot.databaseDetail.hint && <div style={{ marginTop: 4 }}>{status.bot.databaseDetail.hint}</div>}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>

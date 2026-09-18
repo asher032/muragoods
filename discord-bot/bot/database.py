@@ -13,6 +13,51 @@ log = logging.getLogger("bot.db")
 _client: AsyncIOMotorClient | None = None
 _db = None
 
+# Last connection failure. Stores only an exception CLASS NAME — never the URI,
+# credentials or server hostnames — so the dashboard can explain a failed
+# connection without leaking anything.
+LAST_ERROR: str | None = None
+
+_ERROR_HINTS = {
+    "NotConfigured": (
+        "No connection string on this host. Set MONGO_URI (also accepted: "
+        "MONGODB_URI, MONGO_URL, DATABASE_URL) in the service's environment."
+    ),
+    "ServerSelectionTimeoutError": (
+        "The cluster could not be reached within 8s. Most likely the cluster's "
+        "IP access list does not include this host's egress IP — not a "
+        "credentials problem. Confirm by running a read/write test from a "
+        "network that is known to be allowed."
+    ),
+    "OperationFailure": (
+        "Reached the cluster but the operation was refused — usually the user "
+        "lacks rights on the target database."
+    ),
+    "ConfigurationError": "The connection string is malformed.",
+    "InvalidURI": "The connection string is malformed.",
+    "SSLError": (
+        "TLS negotiation failed. Check for a proxy or firewall intercepting "
+        "the connection, or a stale tls/ssl option on the string."
+    ),
+}
+
+
+def diagnostic() -> dict[str, Any]:
+    """Credential-free explanation of the current database state.
+
+    `database: offline` on its own is unactionable — it cannot distinguish a
+    missing variable from an access-list rejection or bad credentials. This
+    exposes just enough to act on, and deliberately no more.
+    """
+    if not config.MONGO_URI:
+        return {"configured": False, "error_class": "NotConfigured",
+                "hint": _ERROR_HINTS["NotConfigured"]}
+    if LAST_ERROR is None and _db is not None:
+        return {"configured": True, "error_class": None, "hint": None}
+    return {"configured": True, "error_class": LAST_ERROR,
+            "hint": _ERROR_HINTS.get(LAST_ERROR or "",
+                                      "Connection failed; see service logs for the full traceback.")}
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -32,6 +77,17 @@ def _gid(guild_id: Any) -> str:
 
 
 async def connect() -> None:
+    """Connect, recording a credential-free reason if it fails."""
+    global LAST_ERROR
+    try:
+        await _connect_inner()
+        LAST_ERROR = None
+    except Exception as exc:
+        LAST_ERROR = type(exc).__name__
+        raise
+
+
+async def _connect_inner() -> None:
     global _client, _db
     if not config.MONGO_URI:
         raise RuntimeError(
