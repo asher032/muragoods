@@ -122,7 +122,11 @@ def diagnostic() -> dict[str, Any]:
     if not config.MONGO_URI:
         return {"configured": False, "error_class": "NotConfigured",
                 "hint": _ERROR_HINTS["NotConfigured"]}
-    where = {"database": DB_NAME or None, "database_source": DB_NAME_SOURCE or None}
+    where = {
+        "database": DB_NAME or None,
+        "database_source": DB_NAME_SOURCE or None,
+        "index_warnings": INDEX_WARNINGS or None,
+    }
     if LAST_ERROR is None and _db is not None:
         return {"configured": True, "error_class": None, "hint": None, **where}
     if LAST_ERROR is None:
@@ -164,6 +168,86 @@ async def connect() -> None:
         raise
 
 
+# Indexes that could not be created on this run. Reported, not fatal.
+INDEX_WARNINGS: list[str] = []
+
+
+async def _ensure_indexes() -> list[str]:
+    """Create the indexes, tolerating failure on any single one.
+
+    Index creation used to run unguarded inside the connect path, so ONE
+    refused or conflicting index threw, `connect()` recorded a failure, and
+    `/health` reported `database: offline` — for a database that had already
+    answered a ping and could serve reads and writes perfectly well. The ping
+    stays fatal because without it there is no database at all; an index is an
+    optimisation, so a failure is reported instead of hiding a working
+    database.
+    """
+    specs: list[tuple[str, str]] = [
+        ("guild_config.guildId", "unique"),
+        ("warnings.guildId_userId", ""),
+        ("moderation_actions.guildId_createdAt", ""),
+        ("media_requests.guildId_title_lc", ""),
+        ("media_requests.guildId_votes", ""),
+        ("command_cooldowns.expiresAt", "ttl"),
+        ("cases.guildId_caseId", ""),
+        ("giveaways.guildId_endsAt", ""),
+        ("suggestions.guildId_createdAt", ""),
+        ("reminders.dueAt", ""),
+        ("reputation.guildId_score", ""),
+        ("reaction_roles.messageId", "unique_sparse"),
+        ("analytics.guildId_day", ""),
+        ("config_audit.guildId_at", ""),
+        ("bot_errors.createdAt", ""),
+        ("bot_errors.resolved", ""),
+        ("keepalive.updatedAt", "ttl"),
+        ("music_feedback.guildId_userId_trackKey", "unique"),
+        ("music_feedback.guildId_trackKey_feedback", ""),
+    ]
+    keys: dict[str, list] = {
+        "guild_config.guildId": [("guildId", ASCENDING)],
+        "warnings.guildId_userId": [("guildId", DESCENDING), ("userId", DESCENDING)],
+        "moderation_actions.guildId_createdAt": [("guildId", DESCENDING), ("createdAt", DESCENDING)],
+        "media_requests.guildId_title_lc": [("guildId", DESCENDING), ("title_lc", DESCENDING)],
+        "media_requests.guildId_votes": [("guildId", DESCENDING), ("votes", DESCENDING)],
+        "command_cooldowns.expiresAt": [("expiresAt", ASCENDING)],
+        "cases.guildId_caseId": [("guildId", DESCENDING), ("caseId", DESCENDING)],
+        "giveaways.guildId_endsAt": [("guildId", DESCENDING), ("endsAt", ASCENDING)],
+        "suggestions.guildId_createdAt": [("guildId", DESCENDING), ("createdAt", DESCENDING)],
+        "reminders.dueAt": [("dueAt", ASCENDING)],
+        "reputation.guildId_score": [("guildId", DESCENDING), ("score", DESCENDING)],
+        "reaction_roles.messageId": [("messageId", ASCENDING)],
+        "analytics.guildId_day": [("guildId", DESCENDING), ("day", ASCENDING)],
+        "config_audit.guildId_at": [("guildId", DESCENDING), ("at", DESCENDING)],
+        "bot_errors.createdAt": [("createdAt", DESCENDING)],
+        "bot_errors.resolved": [("resolved", ASCENDING)],
+        "keepalive.updatedAt": [("updatedAt", ASCENDING)],
+        "music_feedback.guildId_userId_trackKey": [
+            ("guildId", ASCENDING), ("userId", ASCENDING), ("trackKey", ASCENDING)],
+        "music_feedback.guildId_trackKey_feedback": [
+            ("guildId", ASCENDING), ("trackKey", ASCENDING), ("feedback", ASCENDING)],
+    }
+    failures: list[str] = []
+    for label, kind in specs:
+        if _db is None:
+            break
+        collection, _, _field = label.partition(".")
+        kwargs: dict[str, Any] = {}
+        if kind == "unique":
+            kwargs["unique"] = True
+        elif kind == "unique_sparse":
+            kwargs.update(unique=True, sparse=True)
+        elif kind == "ttl":
+            kwargs["expireAfterSeconds"] = 0
+        try:
+            await _db[collection].create_index(keys[label], **kwargs)
+        except Exception as exc:
+            failures.append(f"{label}: {type(exc).__name__}")
+            log.warning("Index %s could not be created (%s): %s",
+                        label, type(exc).__name__, str(exc)[:160])
+    return failures
+
+
 async def _connect_inner() -> None:
     global _client, _db
     if not config.MONGO_URI:
@@ -187,26 +271,12 @@ async def _connect_inner() -> None:
     _db = _client[DB_NAME]
     await _client.admin.command("ping")
 
-    await _db.guild_config.create_index("guildId", unique=True)
-    await _db.warnings.create_index([("guildId", DESCENDING), ("userId", DESCENDING)])
-    await _db.moderation_actions.create_index([("guildId", DESCENDING), ("createdAt", DESCENDING)])
-    await _db.media_requests.create_index([("guildId", DESCENDING), ("title_lc", DESCENDING)])
-    await _db.media_requests.create_index([("guildId", DESCENDING), ("votes", DESCENDING)])
-    await _db.command_cooldowns.create_index("expiresAt", expireAfterSeconds=0)
-    await _db.cases.create_index([("guildId", DESCENDING), ("caseId", DESCENDING)])
-    await _db.giveaways.create_index([("guildId", DESCENDING), ("endsAt", ASCENDING)])
-    await _db.suggestions.create_index([("guildId", DESCENDING), ("createdAt", DESCENDING)])
-    await _db.reminders.create_index("dueAt")
-    await _db.reputation.create_index([("guildId", DESCENDING), ("score", DESCENDING)])
-    await _db.reaction_roles.create_index("messageId", unique=True, sparse=True)
-    await _db.analytics.create_index([("guildId", DESCENDING), ("day", ASCENDING)])
-    await _db.config_audit.create_index([("guildId", DESCENDING), ("at", DESCENDING)])
-    await _db.bot_errors.create_index([("createdAt", DESCENDING)])
-    await _db.bot_errors.create_index("resolved")
-    await _db.keepalive.create_index("updatedAt", expireAfterSeconds=0)
+    global INDEX_WARNINGS
+    INDEX_WARNINGS = await _ensure_indexes()
     # Log the RESOLVED name, never config.MONGO_DB: that variable has held a
     # full connection string (password included) on a real deployment.
-    log.info("Connected to MongoDB (%s)", DB_NAME)
+    log.info("Connected to MongoDB (%s)%s", DB_NAME,
+             f" — {len(INDEX_WARNINGS)} index warning(s)" if INDEX_WARNINGS else "")
 
 
 async def close() -> None:
