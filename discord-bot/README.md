@@ -74,6 +74,32 @@ https://discord.com/oauth2/authorize?client_id=1549395794853888020&permissions=2
 
 Permissions included: View Channels, Send Messages, Embed Links, Attach Files, Read History, Connect, Speak, Use Slash Commands, Moderate Members.
 
+### 5. Music: YouTube authentication (required on datacenter hosts)
+
+Music resolves through yt-dlp. YouTube **refuses datacenter egress IPs** and reports it as an extractor error:
+
+```
+ERROR: [youtube] <video-id>: Sign in to confirm you're not a bot.
+Use --cookies-from-browser or --cookies for the authentication.
+```
+
+This is neither a code fault nor a timeout, and retrying cannot clear it. Supply one of:
+
+| Variable | Value |
+| --- | --- |
+| `YT_COOKIES` | the **contents** of a Netscape cookie jar exported from a signed-in YouTube session; written to a private temp file at runtime |
+| `YT_COOKIES_FILE` | a path to that jar, if mounting a file is easier |
+| `YOUTUBE_PROXY` | a residential/rotating proxy URL, e.g. `http://user:pass@host:port` |
+
+`GET /music/diagnose` reports which are present (`cookies_configured`, `proxy_configured`), whether YouTube challenged this host during the last resolve (`youtube_challenged`), and a machine-readable `error_kind` plus `remedy`. Read it before guessing.
+
+Two deliberate behaviours, so a resolve never lies about what it found:
+
+- A result from a fallback provider (SoundCloud/Bandcamp) is **rejected** when its title does not overlap the query, or when it comes from a preview CDN (~30-second clip). Playing those while displaying the track title is the same class of lie as a fake success message.
+- A URL input is never re-searched on other providers, because those can only return a *different* video.
+
+`YT_FORMAT` and `YT_PLAYER_CLIENT` exist for deliberate overrides, but leaving both unset is the correct default: pinning either disables yt-dlp's own client rotation and format fallback, which is exactly what made resolves fail on the production host.
+
 ## Deployment
 
 **Render** (recommended for the always-on bot):
@@ -146,7 +172,8 @@ currently no automated tests guarding them. Verify these after any major
 | `database.LAST_ERROR`, `database._db` | `database.diagnostic()` | The `database_detail` hint degrades to a generic message, so a bad `MONGO_DB` looks the same as an unreachable cluster. |
 | `music.FFMPEG_EXE`, `music.FFMPEG_OK` | `music.probe()`, `/health` | `ffmpeg` in `/health` reports `null` ("not measured") rather than a wrong value. |
 | Keys in `net._status` | `net.py` | Any key with no active probe **stays `"starting"` forever** on an idle bot. This is exactly how `site_bridge` and `movies` appeared permanently broken. When adding a subsystem, add a probe with it. |
-| `INNERTUBE_CLIENTS` keys | `music.get_ydl_opts()` | A `player_client` name yt-dlp no longer implements makes extraction fail slowly rather than immediately. Verify with `python -c "from yt_dlp.extractor.youtube import _base; print(list(_base.INNERTUBE_CLIENTS))"`. |
+| `INNERTUBE_CLIENTS` keys | `music.get_ydl_opts()` (only when `YT_PLAYER_CLIENT` is set) | A `player_client` name yt-dlp no longer implements makes extraction fail slowly rather than immediately, and pinning the list at all disables yt-dlp's own rotation — which is why nothing is pinned by default. Verify with `python -c "from yt_dlp.extractor.youtube import _base; print(list(_base.INNERTUBE_CLIENTS))"`. |
+| `format` selector fallback semantics | `music.get_ydl_opts()` | A selector like `bestaudio[acodec!=none]/bestaudio/best` fails the **whole** request when every returned format lacks `acodec`, instead of falling through. This is what surfaced live as `Requested format is not available`. The default is now plain `bestaudio/best`. |
 | Presence of a JS runtime | `music.js_runtimes()` | yt-dlp needs `deno`, `node`, `bun`, `qjs`, or `quickjs` to solve YouTube's signature challenge. With none, extraction can **stall** rather than error — which is indistinguishable from a blocked IP. `/music/diagnose` now reports which are available. |
 
 ## Honest limitations
