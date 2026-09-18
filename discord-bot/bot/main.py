@@ -351,6 +351,30 @@ async def on_app_command_error(interaction: discord.Interaction, error: Exceptio
         pass
 
 
+# Failed resolves get a named remedy rather than one generic message. A YouTube
+# bot-challenge and a provider outage are different problems with different
+# owners, so they must not share one message.
+_RESOLVE_REMEDIES = {
+    "youtube_bot_challenge": (
+        "YouTube demands sign-in from this host's egress IP. Set YT_COOKIES (contents "
+        "of an exported Netscape cookie jar) or YT_COOKIES_FILE, or route extraction "
+        "through a proxy with YOUTUBE_PROXY. Retrying cannot help."
+    ),
+    "preview_only": (
+        "The fallback provider offered only a preview clip, which is not the track. "
+        "Fix the primary provider (see youtube_bot_challenge)."
+    ),
+    "fallback_mismatch": (
+        "A fallback provider returned a result that does not match the query; it was "
+        "rejected instead of played. Fix the primary provider."
+    ),
+}
+_RESOLVE_REMEDY_DEFAULT = (
+    "No provider returned a playable match. If cookies and a proxy are already set, "
+    "check last_resolve_error and js_runtimes."
+)
+
+
 async def _health_server() -> None:
     """Tiny HTTP endpoint for host healthchecks (Render/Docker) + the
     music-state/control bridge the dashboard uses for REAL player data."""
@@ -836,10 +860,22 @@ async def _health_server() -> None:
                     "duration": track.duration,
                     "has_stream_url": bool(url),
                     "stream_host": url.split("/")[2] if url.count("/") > 2 else None,
+                    # A preview CDN means a short clip, not the song.
+                    "preview_clip": music_mod.is_preview_url(url),
+                    "provider_host": track.source,
                 })
             else:
                 out["error"] = music_mod.engine.get_resolve_error() or "no result returned"
 
+        # Attach the machine-readable kind and its remedy to every outcome, so a
+        # failure never reads as an indistinguishable "timed out".
+        kind = music_mod.engine.get_error_kind()
+        out["error_kind"] = kind
+        # True even on success when a fallback served the request, so a working
+        # fallback cannot hide that the primary provider is refusing this host.
+        out["youtube_challenged"] = music_mod.engine.youtube_challenged()
+        if not out["ok"]:
+            out["remedy"] = _RESOLVE_REMEDIES.get(kind or "", _RESOLVE_REMEDY_DEFAULT)
         return web.json_response(out, status=200 if out["ok"] else 503)
 
     app = web.Application()

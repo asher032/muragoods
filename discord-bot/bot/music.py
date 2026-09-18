@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -111,6 +112,55 @@ def js_runtimes() -> dict[str, Any]:
     }
 
 
+# ── YouTube bot-challenge detection ───────────────────────────────────────
+# YouTube challenges datacenter egress IPs and reports it as an extractor
+# error, not an HTTP status:
+#   ERROR: [youtube] 4NRXx6U8ABQ: Sign in to confirm you're not a bot.
+# The old code could not tell that apart from any other failure, so it fell
+# through to the next provider and played whatever that returned -- observed
+# live returning an unrelated track and a 30-second preview clip. Naming the
+# challenge lets the failure carry its own remedy (cookies or a proxy) instead
+# of a generic "timed out".
+_BOT_CHALLENGE_MARKERS = (
+    "confirm you're not a bot",
+    "confirm you\u2019re not a bot",
+    "cookies for the authentication",
+    "use --cookies",
+)
+
+
+def is_bot_challenge(text: str | None) -> bool:
+    low = (text or "").lower()
+    return any(m in low for m in _BOT_CHALLENGE_MARKERS)
+
+
+def _search_tokens(text: str) -> list[str]:
+    return [t for t in re.findall(r"[a-z0-9]+", (text or "").lower()) if len(t) >= 3]
+
+
+def looks_relevant(query: str, title: str) -> bool:
+    """Whether a fallback provider's result plausibly answers the query.
+
+    Only used for the non-YouTube search fallbacks. Nothing compared the
+    query to the returned title before, so a mismatch was played silently.
+    """
+    tokens = _search_tokens(query)
+    if not tokens:
+        return True
+    in_title = set(re.findall(r"[a-z0-9]+", (title or "").lower()))
+    return any(tok in in_title for tok in tokens)
+
+
+def is_preview_url(url: str | None) -> bool:
+    """True for SoundCloud-style preview CDNs, which serve ~30s clips.
+
+    A preview is not the song; playing one while reporting the track title is
+    the same class of lie as a fake success message.
+    """
+    host = (url or "").split("/")[2].lower() if (url or "").count("/") > 2 else ""
+    return "preview" in host
+
+
 def get_ydl_opts() -> dict[str, Any]:
     """Build yt-dlp options, including cookies/proxy when configured."""
     # NOTE: no pinned format and no pinned player_client by default.
@@ -168,6 +218,10 @@ class Track:
         self.thumbnail: str = thumb or ""
         self.url: str = data.get("url") or data.get("webpage_url", "") or ""
         self.stream_url: str = data.get("url") or data.get("webpage_url", "") or ""
+        # Which provider/host actually answered. Reported so a fallback result
+        # is visibly a fallback rather than being indistinguishable from the
+        # primary provider's.
+        self.source: str = (self.stream_url or "").split("/")[2] if self.stream_url.count("/") > 2 else ""
         self.requester = requester
 
     def __str__(self) -> str:
@@ -257,6 +311,11 @@ class MusicEngine:
         self._players: dict[int, GuildPlayer] = {}
         self.bot_loop: Optional[asyncio.AbstractEventLoop] = None
         self._last_resolve_error: Optional[str] = None
+        self._last_error_kind: Optional[str] = None
+        # Whether YouTube challenged this host during the LAST resolve. Kept
+        # separate from error_kind so a fallback success is not reported as a
+        # failure -- the primary provider was still refused.
+        self._youtube_challenged: bool = False
         self._ydlp_version: str = "unknown"
 
     def get_player(self, guild_id: int) -> GuildPlayer:
@@ -277,16 +336,32 @@ class MusicEngine:
                 self._ydlp_version = _yt.version.__version__
             except Exception:
                 pass
+        self._last_error_kind = None
+        self._youtube_challenged = False
         last_exc: Optional[Exception] = None
-        strategies = [
-            ("ytsearch", get_ydl_opts()),
-            ("ytsearch1", {**get_ydl_opts(), "default_search": None}),
-            ("ytsearch5", {**get_ydl_opts(), "default_search": None}),
-            ("scsearch", {**get_ydl_opts(), "default_search": None}),
-            ("bandcamp", {**get_ydl_opts(), "default_search": None}),
-            ("direct", {**get_ydl_opts(), "force_generic_extractor": True}),
-        ]
+        # A URL must resolve to that URL. The search fallbacks would otherwise
+        # treat the URL itself as a search string and hand back some other
+        # provider's best guess at it.
+        is_url = bool(re.match(r"^https?://", query.strip(), re.I))
+        if is_url:
+            strategies = [("url", get_ydl_opts())]
+        else:
+            strategies = [
+                ("ytsearch", get_ydl_opts()),
+                ("ytsearch1", {**get_ydl_opts(), "default_search": None}),
+                ("ytsearch5", {**get_ydl_opts(), "default_search": None}),
+                ("scsearch", {**get_ydl_opts(), "default_search": None}),
+                ("bandcamp", {**get_ydl_opts(), "default_search": None}),
+                ("direct", {**get_ydl_opts(), "force_generic_extractor": True}),
+            ]
+        youtube_challenged = False
         for strategy_name, strategy_opts in strategies:
+            if youtube_challenged and strategy_name.startswith("ytsearch"):
+                # The challenge is a property of this host's egress IP, so the
+                # sibling YouTube strategies will be refused identically. Not
+                # retrying them is the difference between ~10s and ~80s.
+                log.info("skipping %s: YouTube already challenged this host's IP", strategy_name)
+                continue
             search_query = query
             if strategy_name == "ytsearch1":
                 search_query = f"ytsearch1:{query}"
@@ -317,12 +392,46 @@ class MusicEngine:
                     if not data.get("url"):
                         data = await self._refresh_stream_url(data)
                     track = Track(data, requester=None)
+                    if strategy_name in ("scsearch", "bandcamp"):
+                        # Fallback providers may answer with something else
+                        # entirely, or with a short preview clip.
+                        if is_preview_url(track.stream_url):
+                            last_exc = ValueError(
+                                f"[{strategy_name}] only a preview clip is available")
+                            if self._last_error_kind is None:
+                                self._last_error_kind = "preview_only"
+                            log.warning("rejecting preview clip from %s for %r", strategy_name, query[:80])
+                            continue
+                        if not looks_relevant(query, track.title):
+                            last_exc = ValueError(
+                                f"[{strategy_name}] result does not match the query: {track.title[:60]!r}")
+                            # First cause wins: a provider refusal is the root
+                            # cause, and a rejected fallback result is only a
+                            # symptom of it. Later strategies must not bury it.
+                            if self._last_error_kind is None:
+                                self._last_error_kind = "fallback_mismatch"
+                            log.warning("rejecting mismatched %s result %r for %r",
+                                        strategy_name, track.title[:60], query[:80])
+                            continue
                     log.info("resolve ok via %s: %s (attempt %d)", strategy_name, track.title[:60], attempt + 1)
                     self._last_resolve_error = None
+                    # Succeeded: there is no failure to describe, whatever the
+                    # primary provider did on the way here.
+                    self._last_error_kind = None
                     return track
                 except Exception as exc:
                     last_exc = exc
-                    self._last_resolve_error = str(exc)[:500]
+                    message = str(exc)[:500]
+                    self._last_resolve_error = message
+                    if is_bot_challenge(message):
+                        youtube_challenged = True
+                        self._youtube_challenged = True
+                        self._last_error_kind = "youtube_bot_challenge"
+                        log.warning(
+                            "YouTube bot-challenge on %s for %r — set YT_COOKIES (or "
+                            "YOUTUBE_PROXY) to authenticate; retrying cannot help",
+                            strategy_name, query[:80])
+                        break
                     log.warning("yt-dlp %s attempt %d failed for %r: %s", strategy_name, attempt + 1, query[:100], exc)
                     if attempt < 1:
                         await asyncio.sleep(1)
@@ -331,6 +440,18 @@ class MusicEngine:
 
     def get_resolve_error(self) -> Optional[str]:
         return self._last_resolve_error
+
+    def get_error_kind(self) -> Optional[str]:
+        """Machine-readable reason for the last failed resolve, or None."""
+        return self._last_error_kind
+
+    def youtube_challenged(self) -> bool:
+        """Whether YouTube refused this host during the last resolve.
+
+        True even when a fallback provider served the request, which is the
+        signal that cookies or a proxy are still needed for the primary source.
+        """
+        return self._youtube_challenged
 
     async def play_now(self, player: GuildPlayer, track: Track,
                        voice_channel: discord.VoiceChannel, announce=None,
