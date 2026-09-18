@@ -43,6 +43,13 @@ DEPLOY_WEBHOOK_URL = _get("DEPLOY_WEBHOOK_URL")
 # Proxy for yt-dlp to reach YouTube (Render datacenter IPs are often blocked).
 # Format: "http://user:pass@host:port" or "socks5://user:pass@host:port"
 YOUTUBE_PROXY = _get("YOUTUBE_PROXY")
+# Netscape cookie jar for yt-dlp. Datacenter egress IPs are routinely challenged
+# by YouTube's bot check, and supplying the operator's own cookies is the
+# standard remedy. Supply EITHER a path (YT_COOKIES_FILE) or the file's contents
+# (YT_COOKIES); contents are written to a private temp file at runtime. Cookies
+# are never logged and must never be committed.
+YT_COOKIES_FILE = _get("YT_COOKIES_FILE")
+YT_COOKIES = _get("YT_COOKIES")
 
 # ── Behaviour tuning ─────────────────────────────────────────────────────
 COMMAND_COOLDOWN_SECONDS = 3          # per-user anti-spam on API-backed commands

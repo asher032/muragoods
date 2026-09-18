@@ -2,7 +2,9 @@
 
 import asyncio
 import logging
+import os
 import shutil
+import tempfile
 import time
 from collections import deque
 from pathlib import Path
@@ -59,8 +61,58 @@ async def probe() -> bool:
     return ok
 
 
+_COOKIE_TMP: str | None = None
+
+
+def cookies_path() -> str | None:
+    """Path to a Netscape cookie jar for yt-dlp, or None.
+
+    YouTube challenges datacenter egress IPs, which surfaces as a resolve that
+    hangs rather than an error. Operators' own cookies are the standard fix;
+    both a file and inline contents are accepted so this works on hosts where
+    writing a file next to the code is awkward.
+    """
+    global _COOKIE_TMP
+    path = config.YT_COOKIES_FILE
+    if path:
+        return path if Path(path).exists() else None
+    raw = config.YT_COOKIES
+    if not raw:
+        return None
+    if _COOKIE_TMP is None or not Path(_COOKIE_TMP).exists():
+        fd, tmp = tempfile.mkstemp(prefix="ytcookies-", suffix=".txt")
+        os.close(fd)
+        Path(tmp).write_text(raw, encoding="utf-8")
+        try:
+            os.chmod(tmp, 0o600)
+        except OSError:
+            pass
+        _COOKIE_TMP = tmp
+    return _COOKIE_TMP
+
+
+def js_runtimes() -> dict[str, Any]:
+    """Which JavaScript runtimes yt-dlp can use to solve YouTube's challenges.
+
+    yt-dlp needs one of these for signature/n-parameter solving. Without any,
+    extraction can stall instead of failing fast — which is indistinguishable
+    from a blocked IP unless it is measured.
+    """
+    found = {name: (shutil.which(name) or None) for name in ("deno", "node", "bun", "qjs", "quickjs")}
+    try:
+        import yt_dlp_ejs  # noqa: F401
+        ejs = True
+    except Exception:
+        ejs = False
+    return {
+        "available": {k: bool(v) for k, v in found.items()},
+        "any": any(found.values()),
+        "yt_dlp_ejs_installed": ejs,
+    }
+
+
 def get_ydl_opts() -> dict[str, Any]:
-    """Build yt-dlp options, including proxy if configured."""
+    """Build yt-dlp options, including cookies/proxy when configured."""
     opts: dict[str, Any] = {
         "format": "bestaudio[acodec!=none]/bestaudio/best",
         "noplaylist": True,
@@ -75,11 +127,19 @@ def get_ydl_opts() -> dict[str, Any]:
         "fragment_retries": 5,
         "buffer": 65536,
         "geo_bypass": True,
-        "extractor_args": {"youtube": {"player_client": ["android", "web", "ios", "tv"]}},
+        # Client order is deliberate. `android_vr` and `tv_simply` are the
+        # clients that still serve audio to non-residential IPs; `web` and
+        # `ios` are kept as fallbacks. All five verified present in this
+        # yt-dlp build (INNERTUBE_CLIENTS), rather than assumed.
+        "extractor_args": {"youtube": {"player_client": [
+            "android_vr", "tv_simply", "tv", "web_safari", "ios", "web"]}},
     }
     proxy = config.YOUTUBE_PROXY
     if proxy:
         opts["proxy"] = proxy
+    cookies = cookies_path()
+    if cookies:
+        opts["cookiefile"] = cookies
     return opts
 
 

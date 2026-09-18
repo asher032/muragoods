@@ -266,6 +266,61 @@ class MuraBot(commands.Bot):
 bot = MuraBot()
 
 
+def describe_error(error: Exception) -> tuple[str, str | None]:
+    """Map a failure to a user-safe reason, so the embed says WHAT broke.
+
+    Every failure previously produced the identical "something went wrong"
+    embed, which is why a user could not tell an offline database from a
+    missing permission. Only safe, non-revealing text is returned; the
+    exception itself still goes to logs and the Error Center.
+    """
+    original = getattr(error, "original", error)
+
+    # Unwrap command-invoke wrappers so the real cause is classified.
+    for _ in range(3):
+        nxt = getattr(original, "original", None)
+        if nxt is None:
+            break
+        original = nxt
+
+    # Database first: when the bot cannot reach Mongo, everything that reads or
+    # writes raises, so this is the single most likely cause of a wall of
+    # identical command failures.
+    name = type(original).__name__
+    db_down = database.LAST_ERROR is not None or getattr(database, "_db", None) is None
+    if db_down and (
+        name in {"ServerSelectionTimeoutError", "InvalidName", "OperationFailure",
+                 "ConfigurationError", "AutoReconnect", "NetworkTimeout", "NotConnected"}
+        or "pymongo" in type(original).__module__
+        or "motor" in type(original).__module__
+    ):
+        detail = database.LAST_ERROR or "not connected"
+        return (
+            "The bot's database is unavailable, so this action could not read "
+            f"or save data ({detail}).",
+            "Operators: check MONGO_URI and MONGO_DB on the bot host.",
+        )
+
+    if isinstance(original, discord.Forbidden):
+        return (
+            "MuraGoods is missing a permission it needs in this server.",
+            "Check the bot's role position and permissions.",
+        )
+    if isinstance(original, discord.NotFound):
+        return ("The Discord resource this refers to no longer exists.", None)
+    if isinstance(original, discord.HTTPException):
+        if original.status == 429:
+            return ("Discord rate-limited this action.", "Please try again shortly.")
+        if 500 <= original.status < 600:
+            return (f"Discord returned a temporary error (HTTP {original.status}).",
+                    "This is on Discord's side — please retry.")
+        return (f"Discord rejected the request (HTTP {original.status}).", None)
+    if isinstance(original, asyncio.TimeoutError):
+        return ("A request timed out before it finished.", "Please try again.")
+    return (f"An unexpected error occurred ({name}).",
+            "The details are in the bot logs and the dashboard Error Center.")
+
+
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: Exception) -> None:
     """Central error handler: user gets error ID, logs get the real exception,
@@ -286,7 +341,8 @@ async def on_app_command_error(interaction: discord.Interaction, error: Exceptio
     except Exception:
         log.debug("error relay failed (non-fatal)")
     try:
-        e = embeds.err_embed(error_id)
+        reason, hint = describe_error(error)
+        e = embeds.err_embed(error_id, reason=reason, hint=hint)
         if interaction.response.is_done():
             await interaction.followup.send(embed=e, ephemeral=True)
         else:
@@ -738,7 +794,17 @@ async def _health_server() -> None:
         query = (request.rel_url.query.get("q") or "Rick Astley Never Gonna Give You Up")[:200]
         import music as music_mod
 
-        out: dict[str, object] = {"ok": False, "query": query, "ffmpeg": music_mod.FFMPEG_EXE}
+        out: dict[str, object] = {
+            "ok": False,
+            "query": query,
+            "ffmpeg": music_mod.FFMPEG_EXE,
+            # A resolve can succeed on a residential machine and stall on a
+            # datacenter host. These three facts distinguish the possible
+            # causes, so a failure is actionable instead of just "timed out".
+            "proxy_configured": bool(config.YOUTUBE_PROXY),
+            "cookies_configured": bool(music_mod.cookies_path()),
+            "js_runtimes": music_mod.js_runtimes(),
+        }
         try:
             import yt_dlp
             out["yt_dlp"] = yt_dlp.version.__version__
@@ -747,9 +813,16 @@ async def _health_server() -> None:
 
         t0 = time.monotonic()
         try:
-            track = await asyncio.wait_for(music_mod.engine.resolve(query), timeout=60)
+            track = await asyncio.wait_for(music_mod.engine.resolve(query), timeout=90)
         except asyncio.TimeoutError:
-            out["error"] = "resolve timed out after 60s"
+            out["elapsed"] = round(time.monotonic() - t0, 2)
+            out["error"] = (
+                "resolve timed out — yt-dlp produced no result. Most likely "
+                "YouTube is challenging this host's IP (set YOUTUBE_PROXY or "
+                "YT_COOKIES), or no JavaScript runtime is available to solve "
+                "the signature challenge (see js_runtimes)."
+            )
+            out["last_resolve_error"] = music_mod.engine.get_resolve_error()
         except Exception as exc:
             out["error"] = f"{type(exc).__name__}: {str(exc)[:300]}"
         else:
