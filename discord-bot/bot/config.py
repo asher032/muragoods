@@ -50,6 +50,11 @@ YOUTUBE_PROXY = _get("YOUTUBE_PROXY")
 # are never logged and must never be committed.
 YT_COOKIES_FILE = _get("YT_COOKIES_FILE")
 YT_COOKIES = _get("YT_COOKIES")
+# Optional overrides. Left unset by default on purpose: yt-dlp's own defaults
+# select a working format and rotate clients (including PO-token handling), and
+# pinning either was the cause of "Requested format is not available".
+YT_FORMAT = _get("YT_FORMAT")
+YT_PLAYER_CLIENT = _get("YT_PLAYER_CLIENT")
 
 # ── Behaviour tuning ─────────────────────────────────────────────────────
 COMMAND_COOLDOWN_SECONDS = 3          # per-user anti-spam on API-backed commands

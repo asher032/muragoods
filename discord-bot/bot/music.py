@@ -113,8 +113,18 @@ def js_runtimes() -> dict[str, Any]:
 
 def get_ydl_opts() -> dict[str, Any]:
     """Build yt-dlp options, including cookies/proxy when configured."""
+    # NOTE: no pinned format and no pinned player_client by default.
+    #
+    # Both were pinned, and that was actively harmful. A selector of
+    # `bestaudio[acodec!=none]` fails the whole request when every returned
+    # format lacks the `acodec` field, and pinning `player_client` disables
+    # yt-dlp's own multi-client fallback chain (including its PO-token
+    # handling). The observed live failure was exactly that:
+    #   [youtube] dQw4w9WgXcQ: Requested format is not available
+    # — YouTube had answered, so this was never an IP block. Both can still be
+    # overridden deliberately via env.
     opts: dict[str, Any] = {
-        "format": "bestaudio[acodec!=none]/bestaudio/best",
+        "format": config.YT_FORMAT or "bestaudio/best",
         "noplaylist": True,
         "default_search": "ytsearch",
         "quiet": False,
@@ -127,13 +137,10 @@ def get_ydl_opts() -> dict[str, Any]:
         "fragment_retries": 5,
         "buffer": 65536,
         "geo_bypass": True,
-        # Client order is deliberate. `android_vr` and `tv_simply` are the
-        # clients that still serve audio to non-residential IPs; `web` and
-        # `ios` are kept as fallbacks. All five verified present in this
-        # yt-dlp build (INNERTUBE_CLIENTS), rather than assumed.
-        "extractor_args": {"youtube": {"player_client": [
-            "android_vr", "tv_simply", "tv", "web_safari", "ios", "web"]}},
     }
+    if config.YT_PLAYER_CLIENT:
+        opts["extractor_args"] = {"youtube": {"player_client": [
+            c.strip() for c in config.YT_PLAYER_CLIENT.split(",") if c.strip()]}}
     proxy = config.YOUTUBE_PROXY
     if proxy:
         opts["proxy"] = proxy
