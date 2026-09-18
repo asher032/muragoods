@@ -383,18 +383,61 @@ async def _health_server() -> None:
         ws = getattr(bot, "ws", None)
         if ws is None:
             return web.json_response({"ok": False, "error": "No gateway socket"}, status=409)
+        try:
+            observe = float(request.query.get("observe", "6"))
+        except ValueError:
+            observe = 6.0
+        observe = max(0.0, min(observe, 30.0))
         before = _gateway_reconnects + _reconnect_count
+
+        # Record the transitions in-process, not over HTTP. A reconnect is
+        # shorter than the round trip to even observe it: 80 parallel /health
+        # requests fired 150ms after the close all still read "online", while
+        # reconnect_count incremented, proving the disconnect happened inside
+        # that window. Sampling the registry directly gives millisecond
+        # resolution, which is the only honest way to see the state change.
+        timeline: list[dict] = []
+        sampler = None
+        if observe:
+            async def _sample() -> None:
+                t0 = time.monotonic()
+                last: tuple | None = None
+                while time.monotonic() - t0 < observe:
+                    snap = (
+                        http_mod.get_status().get("discord"),
+                        gateway_liveness(bot)[0],
+                        _gateway_reconnects + _reconnect_count,
+                    )
+                    if snap != last:
+                        timeline.append({
+                            "t_ms": round((time.monotonic() - t0) * 1000),
+                            "discord": snap[0],
+                            "gateway_alive": snap[1],
+                            "reconnects": snap[2],
+                        })
+                        last = snap
+                    await asyncio.sleep(0.05)
+
+            sampler = asyncio.create_task(_sample())
+
         try:
             await ws.close()
         except Exception as exc:
+            if sampler:
+                sampler.cancel()
             return web.json_response({"ok": False, "error": type(exc).__name__}, status=500)
         log.warning("SELF-TEST: gateway socket closed deliberately (real disconnect)")
+        if sampler:
+            await sampler
         return web.json_response({
             "ok": True,
             "requested": True,
             "reconnect_count_before": before,
-            "note": "discord.py should auto-reconnect; poll /health for "
-                    "discord=reconnecting then online, with reconnect_count incremented",
+            "reconnect_count_after": _gateway_reconnects + _reconnect_count,
+            "distinct_discord_states": sorted({t["discord"] for t in timeline}),
+            "left_online": any(t["discord"] != "online" for t in timeline),
+            "timeline": timeline,
+            "final": http_mod.get_status().get("discord"),
         })
 
     def _track_dict(t) -> dict:
