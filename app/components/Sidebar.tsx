@@ -7,7 +7,7 @@ import Image from 'next/image';
 import { useCoins } from '@/app/hooks/useCoins';
 import MuraStreamIcon from '@/app/components/icons/MuraStreamIcon';
 import FlappyBirdIcon from '@/app/components/icons/FlappyBirdIcon';
-import { Coins, User } from 'lucide-react';
+import { Bot, Coins, User } from 'lucide-react';
 interface SidebarProps {
   open: boolean;
   onClose: () => void;
@@ -138,6 +138,21 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         ))}
 
 
+
+        {/* Discord bot — plain anchors, not client links: both targets are
+            real server routes (the install route 307s into Discord's own
+            server-selection step, /dashboard is the auth-gated dashboard). */}
+        <div>
+          <div className="sidebar-section-label">DISCORD</div>
+          <a href="/api/auth/discord/install" className="sidebar-link">
+            <span style={{ display: 'flex', alignItems: 'center', color: 'var(--mario-text-muted)' }}><Bot size={18} /></span>
+            <span>Add Muragoods Bot</span>
+          </a>
+          <a href="/dashboard" className="sidebar-link">
+            <span style={{ display: 'flex', alignItems: 'center', color: 'var(--mario-text-muted)' }}><Bot size={18} /></span>
+            <span>Bot Dashboard</span>
+          </a>
+        </div>
 
         {/* Footer */}
         <div style={{ padding: '20px 24px', borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: '12px' }}>

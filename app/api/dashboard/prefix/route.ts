@@ -50,5 +50,31 @@ export async function PATCH(req: NextRequest) {
 
   const collection = await discordConfigCollection();
   await collection.updateOne({ guildId }, { $set: { prefix, updatedAt: new Date() } }, { upsert: true });
-  return NextResponse.json({ success: true, prefix });
+
+  // Nudge the running bot so the new prefix applies immediately rather than
+  // waiting out its cache TTL. Best-effort: if the bot is unreachable this is
+  // NOT a save failure — the write above is durable and the cache expires
+  // shortly, so the prefix is never permanently stale. Reported honestly.
+  const botNotified = await notifyBot(guildId);
+
+  return NextResponse.json({ success: true, prefix, botNotified });
+}
+
+async function notifyBot(guildId: string): Promise<boolean> {
+  const secret = process.env.DISCORD_BRIDGE_SECRET;
+  if (!secret) return false;
+  const base = process.env.BOT_HEALTH_URL?.replace(/\/health$/, '')
+    || 'https://murastream-bot-pf11.onrender.com';
+  try {
+    const resp = await fetch(`${base}/prefix/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+      body: JSON.stringify({ guildId }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(5000),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
 }

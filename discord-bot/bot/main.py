@@ -30,9 +30,97 @@ log = logging.getLogger("bot.main")
 _start_time = time.time()
 _reconnect_count = 0
 
+# Real gateway reconnects. `_reconnect_count` above only increments when the
+# OUTER login loop in main() re-runs, so it never observes discord.py's own
+# internal reconnects; `_gateway_reconnects` is driven by on_disconnect.
+_gateway_reconnects = 0
+# Discord's heartbeat interval is ~41s, so 150s without a heartbeat ACK means
+# the socket is dead rather than merely idle. Generous on purpose: a brief
+# reconnect must not flip /health to a failing state and provoke a restart.
+GATEWAY_STALE_AFTER = 150.0
+
+
+def gateway_liveness(bot) -> tuple[bool, float | None, str | None]:
+    """Measure real gateway liveness from the socket's own heartbeat ACK clock.
+
+    Returns ``(alive, heartbeat_age_seconds, last_heartbeat_iso)``.
+
+    Why the ACK clock and not a counter: ``ConnectionState.last_heartbeat`` does
+    not exist (verified absent on discord.py 2.7.1), so the previous lookup
+    returned null forever and ``discord`` stayed "online" even after the socket
+    died. ``DiscordWebSocket._last_ack`` is updated on every heartbeat ACK and
+    is not gated behind a client flag, so it is a genuine measurement.
+
+    ``on_socket_raw_receive`` is deliberately NOT used here: it only fires when
+    the client is built with ``enable_debug_events=True``, so depending on it
+    would freeze on a healthy bot and fabricate an outage.
+
+    If the ACK clock is unavailable (library drift), this falls back to the
+    ready flag rather than failing closed — never invent an outage.
+    """
+    hb_age: float | None = None
+    try:
+        acks = [
+            si.ws._last_ack
+            for si in bot.shards.values()
+            if getattr(si, "ws", None) is not None
+        ]
+        if acks:
+            hb_age = max(time.perf_counter() - a for a in acks)
+    except Exception:
+        hb_age = None
+
+    if hb_age is not None:
+        alive = hb_age < GATEWAY_STALE_AFTER
+        last_iso = datetime.fromtimestamp(time.time() - hb_age).isoformat()
+    else:
+        alive = bool(bot.is_ready())
+        last_iso = None
+    return alive, hb_age, last_iso
+
 # Flipped to False if Discord rejects the privileged-intent request; the bot
 # then restarts without them (automod message-scan + welcome events disabled).
 _privileged_ok = True
+
+# ── Per-guild command prefix ─────────────────────────────────────────────
+# Cached per GUILD ID (never a single global value) with a short TTL, so a
+# prefix changed on the dashboard takes effect promptly even if the refresh
+# webhook can't be delivered. Default is config.BOT_PREFIX (mg!).
+_PREFIX_TTL = 30.0
+_prefix_cache: dict[str, tuple[float, str]] = {}
+
+
+def _prefix_cached(guild_id: int | str) -> str | None:
+    hit = _prefix_cache.get(str(guild_id))
+    if hit and time.monotonic() - hit[0] < _PREFIX_TTL:
+        return hit[1]
+    return None
+
+
+async def _guild_prefix(guild_id: int | str) -> str:
+    cached = _prefix_cached(guild_id)
+    if cached is not None:
+        return cached
+    try:
+        stored = await database.get_guild_prefix(guild_id)
+    except Exception as exc:
+        log.warning("Prefix lookup failed for guild %s: %s", guild_id, str(exc)[:150])
+        # Database down: fall back to the default rather than losing every
+        # prefix command. Do not cache the fallback.
+        return config.BOT_PREFIX
+    prefix = stored or config.BOT_PREFIX
+    _prefix_cache[str(guild_id)] = (time.monotonic(), prefix)
+    return prefix
+
+
+async def get_prefix(bot: commands.Bot, message: discord.Message):
+    """discord.py prefix resolver — per guild, cached by guild ID."""
+    prefixes = [config.BOT_PREFIX, "MuraBot "]
+    if message.guild is not None:
+        custom = await _guild_prefix(message.guild.id)
+        if custom and custom not in prefixes:
+            prefixes.insert(0, custom)
+    return commands.when_mentioned_or(*prefixes)(bot, message)
 
 
 class MuraBot(commands.Bot):
@@ -44,7 +132,7 @@ class MuraBot(commands.Bot):
             intents.message_content = True   # automod + XP from messages
             intents.members = True           # welcome events
         super().__init__(
-            command_prefix=commands.when_mentioned_or("mg!", "MuraBot "),
+            command_prefix=get_prefix,
             intents=intents,
             help_command=None,
             case_insensitive=True,
@@ -93,10 +181,34 @@ class MuraBot(commands.Bot):
         except discord.HTTPException as exc:
             log.error("Command sync FAILED (will retry on next start): %s", str(exc)[:300])
 
+    # ── Gateway lifecycle → honest /health status ────────────────────────
+    # `discord` was set to "online" once in on_ready and never cleared, so
+    # /health claimed a live bot even after the socket died. These handlers
+    # supply the missing offline/reconnecting half.
+    async def on_connect(self) -> None:
+        http_mod.set_status("discord", "connecting")
+
+    async def on_disconnect(self) -> None:
+        global _gateway_reconnects
+        _gateway_reconnects += 1
+        http_mod.set_status("discord", "reconnecting")
+        log.warning(
+            "Gateway disconnected (count=%d) — discord.py will auto-reconnect",
+            _gateway_reconnects,
+        )
+
+    async def on_resumed(self) -> None:
+        http_mod.set_status("discord", "online")
+        log.info("Gateway session resumed")
+
     async def on_ready(self) -> None:
         http_mod.set_status("discord", "online")
-        http_mod.set_status("music", "online")
-        log.info("Music subsystem online")
+        # "ready" = the music cog loaded, NOT that playback is proven. Reporting
+        # "online" here would be a claim, not a measurement. The real verdict --
+        # provider reachability, ffmpeg, resolver errors -- comes from
+        # GET /music/diagnose, which actually performs a resolve.
+        http_mod.set_status("music", "ready")
+        log.info("Music subsystem ready (playback not yet exercised; see /music/diagnose)")
         activity_name = config.BOT_ACTIVITY.strip() or "https://muragoods.vercel.app/"
         if "twitch.tv" in activity_name.lower():
             activity_name = "https://muragoods.vercel.app/"
@@ -164,14 +276,19 @@ async def _health_server() -> None:
 
     async def health(_request: web.Request) -> web.Response:
         statuses = http_mod.get_status()
-        ok = not bot.is_closed() and statuses.get("discord") == "online"
         latency_ms = round(bot.latency * 1000) if bot.latency else 0
         uptime = time.time() - _start_time
-        last_hb = None
-        if hasattr(bot, "_connection") and bot._connection:
-            last_hb_ts = getattr(bot._connection, "last_heartbeat", None)
-            if last_hb_ts:
-                last_hb = datetime.fromtimestamp(last_hb_ts).isoformat()
+        # Real heartbeat liveness. `ConnectionState.last_heartbeat` does not
+        # exist (verified absent on discord.py 2.7.1), so the old lookup
+        # returned null forever. `DiscordWebSocket._last_ack` IS maintained on
+        # every heartbeat ACK and is not gated behind a client flag.
+        # `on_socket_raw_receive` is deliberately NOT used for this: it only
+        # fires when the client is built with enable_debug_events=True, so
+        # relying on it would freeze on a healthy bot and fabricate an outage.
+        gateway_alive, hb_age, last_hb = gateway_liveness(bot)
+        if not gateway_alive:
+            statuses = {**statuses, "discord": "stale-no-gateway-ack"}
+        ok = not bot.is_closed() and bool(bot.is_ready()) and gateway_alive
         shard_count = len(bot.shards) if hasattr(bot, "shards") else 1
         bot_version = getattr(config, "BOT_VERSION", "1.0.0")
         # Make the privileged-intent state explicit: if message_content could
@@ -191,7 +308,12 @@ async def _health_server() -> None:
             "latency": latency_ms,
             "uptime_seconds": round(uptime),
             "last_heartbeat": last_hb,
-            "reconnect_count": _reconnect_count,
+            "reconnect_count": _gateway_reconnects + _reconnect_count,
+            "gateway": {
+                "alive": gateway_alive,
+                "heartbeat_age_seconds": round(hb_age, 1) if hb_age is not None else None,
+                "stale_after_seconds": GATEWAY_STALE_AFTER,
+            },
             "shard_count": shard_count,
         }, status=200 if ok else 503)
 
@@ -459,8 +581,75 @@ async def _health_server() -> None:
         except discord.HTTPException as exc:
             return web.json_response({"ok": False, "error": f"Discord API error {exc.status}"}, status=502)
 
+    async def prefix_refresh(request: web.Request) -> web.Response:
+        """Dashboard tells us a guild's prefix changed — drop the cached value.
+
+        Best-effort: if this never arrives the short TTL still picks the change
+        up, so the prefix is never permanently stale.
+        """
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+        guild_id = str(body.get("guildId") or "").strip()
+        if guild_id:
+            _prefix_cache.pop(guild_id, None)
+        else:
+            _prefix_cache.clear()
+        return web.json_response({"ok": True, "refreshed": guild_id or "all"})
+
+    async def music_diagnose(request: web.Request) -> web.Response:
+        """Run a REAL provider search from the runtime that serves the bot.
+
+        The playback code is identical to the version that resolves and plays
+        correctly outside Render, so when music fails in production the only
+        way to separate a code fault from an egress fault (datacenter IPs are
+        commonly challenged by YouTube) is to run the resolver HERE and report
+        the true error instead of guessing.
+        """
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+
+        query = (request.rel_url.query.get("q") or "Rick Astley Never Gonna Give You Up")[:200]
+        import music as music_mod
+
+        out: dict[str, object] = {"ok": False, "query": query, "ffmpeg": music_mod.FFMPEG_EXE}
+        try:
+            import yt_dlp
+            out["yt_dlp"] = yt_dlp.version.__version__
+        except Exception:
+            out["yt_dlp"] = None
+
+        t0 = time.monotonic()
+        try:
+            track = await asyncio.wait_for(music_mod.engine.resolve(query), timeout=60)
+        except asyncio.TimeoutError:
+            out["error"] = "resolve timed out after 60s"
+        except Exception as exc:
+            out["error"] = f"{type(exc).__name__}: {str(exc)[:300]}"
+        else:
+            out["elapsed"] = round(time.monotonic() - t0, 2)
+            if track is not None:
+                url = track.stream_url or ""
+                out.update({
+                    "ok": True,
+                    "title": track.title,
+                    "uploader": track.uploader,
+                    "duration": track.duration,
+                    "has_stream_url": bool(url),
+                    "stream_host": url.split("/")[2] if url.count("/") > 2 else None,
+                })
+            else:
+                out["error"] = music_mod.engine.get_resolve_error() or "no result returned"
+
+        return web.json_response(out, status=200 if out["ok"] else 503)
+
     app = web.Application()
     app.router.add_get("/health", health)
+    app.router.add_get("/music/diagnose", music_diagnose)
+    app.router.add_post("/prefix/refresh", prefix_refresh)
     app.router.add_get("/music/state/{guild_id:\\d+}", music_state)
     app.router.add_post("/music/control/{guild_id:\\d+}", music_control)
     app.router.add_get("/mod/member/{guild_id:\\d+}/{user_id:\\d+}", member_lookup)
@@ -470,8 +659,8 @@ async def _health_server() -> None:
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    http_mod.set_status("music", "online")
-    log.info("Music subsystem online")
+    http_mod.set_status("music", "ready")
+    log.info("Music subsystem ready (playback not yet exercised; see /music/diagnose)")
     # Keep-alive: ping the site's health endpoint every 5 minutes so the
     # dashboard Health Monitor has real server-side data, and so the site
     # (which polls bot health too) sees a live bot. This is legitimate

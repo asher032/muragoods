@@ -18,6 +18,19 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _gid(guild_id: Any) -> str:
+    """Discord guild IDs are stored as STRINGS everywhere.
+
+    The website's dashboard writes `guildId` as a string — a 64-bit snowflake
+    exceeds JavaScript's safe integer range, so its driver can only keep it
+    lossless as text. discord.py hands the bot ints. Querying with an int
+    matched nothing, so every dashboard setting silently failed to reach the
+    bot (and a second, orphaned document could exist per guild). Normalising
+    here guarantees exactly one document per guild, shared by both sides.
+    """
+    return str(guild_id)
+
+
 async def connect() -> None:
     global _client, _db
     if not config.MONGO_URI:
@@ -56,40 +69,55 @@ async def close() -> None:
 
 # ── Guild config ─────────────────────────────────────────────────────────
 async def get_guild_config(guild_id: int) -> dict[str, Any]:
-    doc = await _db.guild_config.find_one({"guildId": guild_id})
-    return doc or {"guildId": guild_id, "channels": {}, "automod": {"enabled": False}}
+    doc = await _db.guild_config.find_one({"guildId": _gid(guild_id)})
+    return doc or {"guildId": _gid(guild_id), "channels": {}, "automod": {"enabled": False}}
 
 
 async def set_guild_config(guild_id: int, update: dict[str, Any]) -> None:
     await _db.guild_config.update_one(
-        {"guildId": guild_id}, {"$set": {**update, "updatedAt": _now()}}, upsert=True
+        {"guildId": _gid(guild_id)}, {"$set": {**update, "updatedAt": _now()}}, upsert=True
     )
+
+
+async def get_guild_prefix(guild_id: int) -> str | None:
+    """The guild's custom command prefix, or None when it was never set.
+
+    Reads the same document the dashboard writes, so a prefix changed on the
+    website is the prefix the bot uses — with no per-guild crossover.
+    """
+    doc = await _db.guild_config.find_one({"guildId": _gid(guild_id)}, {"prefix": 1})
+    if not doc:
+        return None
+    prefix = doc.get("prefix")
+    if isinstance(prefix, str) and prefix.strip():
+        return prefix.strip()
+    return None
 
 
 # ── Warnings / moderation ────────────────────────────────────────────────
 async def add_warning(guild_id: int, user_id: int, moderator_id: int, reason: str) -> int:
     await _db.warnings.update_one(
-        {"guildId": guild_id, "userId": user_id},
+        {"guildId": _gid(guild_id), "userId": user_id},
         {"$push": {"entries": {"reason": reason, "moderatorId": moderator_id, "at": _now()}}},
         upsert=True,
     )
-    doc = await _db.warnings.find_one({"guildId": guild_id, "userId": user_id})
+    doc = await _db.warnings.find_one({"guildId": _gid(guild_id), "userId": user_id})
     return len(doc["entries"]) if doc else 0
 
 
 async def get_warnings(guild_id: int, user_id: int) -> list[dict]:
-    doc = await _db.warnings.find_one({"guildId": guild_id, "userId": user_id})
+    doc = await _db.warnings.find_one({"guildId": _gid(guild_id), "userId": user_id})
     return doc["entries"] if doc else []
 
 
 async def clear_warnings(guild_id: int, user_id: int) -> bool:
-    res = await _db.warnings.delete_one({"guildId": guild_id, "userId": user_id})
+    res = await _db.warnings.delete_one({"guildId": _gid(guild_id), "userId": user_id})
     return res.deleted_count > 0
 
 
 async def log_action(guild_id: int, moderator_id: int, target_id: int, action: str, reason: str) -> None:
     await _db.moderation_actions.insert_one(
-        {"guildId": guild_id, "moderatorId": moderator_id, "targetId": target_id,
+        {"guildId": _gid(guild_id), "moderatorId": moderator_id, "targetId": target_id,
          "action": action, "reason": reason, "createdAt": _now()}
     )
 
@@ -98,12 +126,12 @@ async def automod_inc_strike(guild_id: int, user_id: int, kind: str) -> int:
     """Record an automod violation; returns the strike count in the last hour."""
     window_start = _now() - timedelta(hours=1)
     await _db.automod_strikes.update_one(
-        {"guildId": guild_id, "userId": user_id, "kind": kind, "at": {"$gte": window_start}},
+        {"guildId": _gid(guild_id), "userId": user_id, "kind": kind, "at": {"$gte": window_start}},
         {"$inc": {"count": 1}, "$set": {"lastAt": _now()}},
         upsert=True,
     )
     doc = await _db.automod_strikes.find_one(
-        {"guildId": guild_id, "userId": user_id, "kind": kind, "at": {"$gte": window_start}}
+        {"guildId": _gid(guild_id), "userId": user_id, "kind": kind, "at": {"$gte": window_start}}
     )
     return doc["count"] if doc else 0
 
@@ -113,7 +141,7 @@ async def add_request(guild_id: int, user_id: int, user_name: str,
                       title: str, media_type: str, tmdb_id: int | None) -> tuple[int, bool]:
     """Returns (request_id, created_new). Duplicates become votes on the existing request."""
     title_lc = title.casefold().strip()
-    existing = await _db.media_requests.find_one({"guildId": guild_id, "title_lc": title_lc})
+    existing = await _db.media_requests.find_one({"guildId": _gid(guild_id), "title_lc": title_lc})
     if existing:
         await _db.media_requests.update_one(
             {"_id": existing["_id"]},
@@ -126,7 +154,7 @@ async def add_request(guild_id: int, user_id: int, user_name: str,
     )
     request_id = seq["seq"]
     await _db.media_requests.insert_one(
-        {"requestId": request_id, "guildId": guild_id, "title": title, "title_lc": title_lc,
+        {"requestId": request_id, "guildId": _gid(guild_id), "title": title, "title_lc": title_lc,
          "type": media_type, "tmdbId": tmdb_id, "requestedBy": user_id,
          "requestedByName": user_name, "status": "Requested", "votes": 1,
          "voterIds": [user_id], "createdAt": _now(), "updatedAt": _now()}
@@ -135,11 +163,11 @@ async def add_request(guild_id: int, user_id: int, user_name: str,
 
 
 async def find_request(guild_id: int, request_id: int) -> dict | None:
-    return await _db.media_requests.find_one({"guildId": guild_id, "requestId": request_id})
+    return await _db.media_requests.find_one({"guildId": _gid(guild_id), "requestId": request_id})
 
 
 async def vote_request(guild_id: int, request_id: int, user_id: int) -> tuple[bool, int]:
-    doc = await _db.media_requests.find_one({"guildId": guild_id, "requestId": request_id})
+    doc = await _db.media_requests.find_one({"guildId": _gid(guild_id), "requestId": request_id})
     if not doc:
         return False, 0
     if user_id in doc.get("voterIds", []):
@@ -152,14 +180,14 @@ async def vote_request(guild_id: int, request_id: int, user_id: int) -> tuple[bo
 
 async def set_request_status(guild_id: int, request_id: int, status: str) -> bool:
     res = await _db.media_requests.update_one(
-        {"guildId": guild_id, "requestId": request_id},
+        {"guildId": _gid(guild_id), "requestId": request_id},
         {"$set": {"status": status, "updatedAt": _now()}},
     )
     return res.modified_count > 0
 
 
 async def top_requests(guild_id: int, limit: int = 10) -> list[dict]:
-    return await _db.media_requests.find({"guildId": guild_id}).sort("votes", DESCENDING).to_list(limit)
+    return await _db.media_requests.find({"guildId": _gid(guild_id)}).sort("votes", DESCENDING).to_list(limit)
 
 
 # ── Moderation cases ─────────────────────────────────────────────────
@@ -174,7 +202,7 @@ async def add_case(guild_id: int, target_id: int, moderator_id: int,
                    action: str, reason: str, duration: str = "") -> int:
     case_id = await next_case_id(guild_id)
     await _db.cases.insert_one({
-        "guildId": guild_id, "caseId": case_id, "targetId": target_id,
+        "guildId": _gid(guild_id), "caseId": case_id, "targetId": target_id,
         "moderatorId": moderator_id, "action": action, "reason": reason[:500],
         "duration": duration, "notes": [], "createdAt": _now(),
     })
@@ -182,17 +210,17 @@ async def add_case(guild_id: int, target_id: int, moderator_id: int,
 
 
 async def get_case(guild_id: int, case_id: int) -> dict | None:
-    return await _db.cases.find_one({"guildId": guild_id, "caseId": case_id})
+    return await _db.cases.find_one({"guildId": _gid(guild_id), "caseId": case_id})
 
 
 async def user_cases(guild_id: int, target_id: int, limit: int = 10) -> list[dict]:
-    return await _db.cases.find({"guildId": guild_id, "targetId": target_id}) \
+    return await _db.cases.find({"guildId": _gid(guild_id), "targetId": target_id}) \
         .sort("caseId", DESCENDING).to_list(limit)
 
 
 async def add_case_note(guild_id: int, case_id: int, note: str) -> bool:
     res = await _db.cases.update_one(
-        {"guildId": guild_id, "caseId": case_id},
+        {"guildId": _gid(guild_id), "caseId": case_id},
         {"$push": {"notes": {"text": note[:300], "at": _now()}}})
     return res.modified_count > 0
 
@@ -202,21 +230,21 @@ async def give_rep(guild_id: int, giver_id: int, target_id: int) -> tuple[bool, 
     """+1 rep to target; each giver can rep a person once per 24h."""
     cutoff = _now() - timedelta(hours=24)
     recent = await _db.rep_log.find_one({
-        "guildId": guild_id, "giverId": giver_id, "targetId": target_id,
+        "guildId": _gid(guild_id), "giverId": giver_id, "targetId": target_id,
         "at": {"$gte": cutoff}})
     if recent:
-        doc = await _db.reputation.find_one({"guildId": guild_id, "userId": target_id})
+        doc = await _db.reputation.find_one({"guildId": _gid(guild_id), "userId": target_id})
         return False, (doc or {}).get("score", 0)
-    await _db.rep_log.insert_one({"guildId": guild_id, "giverId": giver_id,
+    await _db.rep_log.insert_one({"guildId": _gid(guild_id), "giverId": giver_id,
                                   "targetId": target_id, "at": _now()})
     doc = await _db.reputation.find_one_and_update(
-        {"guildId": guild_id, "userId": target_id},
+        {"guildId": _gid(guild_id), "userId": target_id},
         {"$inc": {"score": 1}}, upsert=True, return_document=ReturnDocument.AFTER)
     return True, doc["score"]
 
 
 async def top_rep(guild_id: int, limit: int = 10) -> list[dict]:
-    return await _db.reputation.find({"guildId": guild_id}) \
+    return await _db.reputation.find({"guildId": _gid(guild_id)}) \
         .sort("score", DESCENDING).to_list(limit)
 
 
@@ -234,13 +262,13 @@ ACHIEVEMENTS = {
 async def unlock_achievement(guild_id: int, user_id: int, key: str) -> bool:
     """Returns True if newly unlocked."""
     res = await _db.achievements.update_one(
-        {"guildId": guild_id, "userId": user_id, "keys": {"$ne": key}},
+        {"guildId": _gid(guild_id), "userId": user_id, "keys": {"$ne": key}},
         {"$addToSet": {"keys": key}})
     return res.modified_count > 0
 
 
 async def get_achievements(guild_id: int, user_id: int) -> list[str]:
-    doc = await _db.achievements.find_one({"guildId": guild_id, "userId": user_id})
+    doc = await _db.achievements.find_one({"guildId": _gid(guild_id), "userId": user_id})
     return doc["keys"] if doc else []
 
 
@@ -248,7 +276,7 @@ async def get_achievements(guild_id: int, user_id: int) -> list[str]:
 async def create_giveaway(guild_id: int, channel_id: int, message_id: int,
                           prize: str, host_id: int, ends_at, winners: int) -> Any:
     res = await _db.giveaways.insert_one({
-        "guildId": guild_id, "channelId": channel_id, "messageId": message_id,
+        "guildId": _gid(guild_id), "channelId": channel_id, "messageId": message_id,
         "prize": prize[:200], "hostId": host_id, "endsAt": ends_at,
         "winners": max(1, min(winners, 20)), "entries": [], "ended": False,
     })
@@ -287,7 +315,7 @@ async def add_suggestion(guild_id: int, user_id: int, text: str) -> int:
         {"_id": f"sugg:{guild_id}"}, {"$inc": {"seq": 1}},
         upsert=True, return_document=ReturnDocument.AFTER)
     await _db.suggestions.insert_one({
-        "guildId": guild_id, "suggId": seq["seq"], "userId": user_id,
+        "guildId": _gid(guild_id), "suggId": seq["seq"], "userId": user_id,
         "text": text[:500], "status": "Open", "up": 0, "down": 0, "createdAt": _now(),
     })
     return seq["seq"]
@@ -295,7 +323,7 @@ async def add_suggestion(guild_id: int, user_id: int, text: str) -> int:
 
 async def set_suggestion_status(guild_id: int, sugg_id: int, status: str) -> bool:
     res = await _db.suggestions.update_one(
-        {"guildId": guild_id, "suggId": sugg_id}, {"$set": {"status": status}})
+        {"guildId": _gid(guild_id), "suggId": sugg_id}, {"$set": {"status": status}})
     return res.modified_count > 0
 
 
@@ -303,15 +331,15 @@ async def vote_suggestion(guild_id: int, sugg_id: int, user_id: int, up: bool) -
     """One vote per user per suggestion. Returns (up_count, down_count)."""
     field = "votersUp" if up else "votersDown"
     other = "votersDown" if up else "votersUp"
-    doc = await _db.suggestions.find_one({"guildId": guild_id, "suggId": sugg_id})
+    doc = await _db.suggestions.find_one({"guildId": _gid(guild_id), "suggId": sugg_id})
     if not doc:
         return 0, 0
     if user_id in doc.get(field, []):
         return len(doc.get("votersUp", [])), len(doc.get("votersDown", []))
     await _db.suggestions.update_one(
-        {"guildId": guild_id, "suggId": sugg_id},
+        {"guildId": _gid(guild_id), "suggId": sugg_id},
         {"$addToSet": {field: user_id}, "$pull": {other: user_id}})
-    doc = await _db.suggestions.find_one({"guildId": guild_id, "suggId": sugg_id})
+    doc = await _db.suggestions.find_one({"guildId": _gid(guild_id), "suggId": sugg_id})
     return len(doc.get("votersUp", [])), len(doc.get("votersDown", []))
 
 
@@ -334,7 +362,7 @@ async def delete_reminder(reminder_id: Any) -> None:
 async def save_reaction_role(message_id: int, guild_id: int, role_id: int, label: str, emoji: str) -> None:
     await _db.reaction_roles.update_one(
         {"messageId": message_id},
-        {"$set": {"guildId": guild_id, "roleId": role_id, "label": label[:80], "emoji": emoji}},
+        {"$set": {"guildId": _gid(guild_id), "roleId": role_id, "label": label[:80], "emoji": emoji}},
         upsert=True)
 
 
@@ -345,13 +373,13 @@ async def get_reaction_role(message_id: int) -> dict | None:
 async def track_command(guild_id: int, command: str) -> None:
     day = _now().strftime("%Y-%m-%d")
     await _db.analytics.update_one(
-        {"guildId": guild_id, "day": day, "command": command[:40]},
+        {"guildId": _gid(guild_id), "day": day, "command": command[:40]},
         {"$inc": {"count": 1}}, upsert=True)
 
 
 async def analytics_summary(guild_id: int, days: int = 7) -> list[dict]:
     pipeline = [
-        {"$match": {"guildId": guild_id}},
+        {"$match": {"guildId": _gid(guild_id)}},
         {"$group": {"_id": "$command", "total": {"$sum": "$count"}}},
         {"$sort": {"total": DESCENDING}},
         {"$limit": 12},
@@ -361,12 +389,12 @@ async def analytics_summary(guild_id: int, days: int = 7) -> list[dict]:
 
 async def audit_config_change(guild_id: int, actor: str, summary: str) -> None:
     await _db.config_audit.insert_one({
-        "guildId": guild_id, "actor": actor[:60], "summary": summary[:300], "at": _now(),
+        "guildId": _gid(guild_id), "actor": actor[:60], "summary": summary[:300], "at": _now(),
     })
 
 
 async def get_config_audit(guild_id: int, limit: int = 15) -> list[dict]:
-    return await _db.config_audit.find({"guildId": guild_id}) \
+    return await _db.config_audit.find({"guildId": _gid(guild_id)}) \
         .sort("at", DESCENDING).to_list(limit)
 
 

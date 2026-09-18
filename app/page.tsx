@@ -7,7 +7,7 @@ import { NavBar } from '@/app/components/NavBar';
 import dynamic from 'next/dynamic';
 import { useScrollPosition, useScrollReveal, useMousePosition, useElementMouse, useCountUp } from '@/app/components/useScrollEffects';
 import { Icon } from '@/app/components/Icon';
-import { BookOpen, Clapperboard, Cloudy, Coins, Gamepad2, Heart, Mail, Pizza, Sparkles, Star } from 'lucide-react';
+import { BookOpen, Bot, Clapperboard, Cloudy, Coins, Gamepad2, Heart, Mail, Pizza, Sparkles, Star } from 'lucide-react';
 const LightBloom = dynamic(() => import('@/app/components/ui/LightBloom'), { ssr: false });
 const MaskedHeading = dynamic(() => import('@/app/components/ui/MaskedHeading'), { ssr: false });
 const AnimatedButton = dynamic(() => import('@/app/components/ui/AnimatedButton'), { ssr: false });
@@ -593,6 +593,54 @@ export default function Home() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════
+          DISCORD BOT SECTION
+          ═══════════════════════════════════════════════════════ */}
+      <section className="relative px-4 py-20 sm:px-8 overflow-hidden">
+        <div className="absolute inset-0 z-0">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] rounded-full"
+            style={{ background: 'radial-gradient(ellipse, rgba(88,101,242,0.12) 0%, transparent 70%)' }} />
+        </div>
+        <div className="mario-container relative z-10 text-center">
+          <Reveal direction="scale">
+            <div className="text-6xl sm:text-8xl mb-6"><Bot className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
+          </Reveal>
+          <Reveal delay={0.1}>
+            <h2 className="mario-title text-xl sm:text-3xl mb-4" style={{ color: '#5865F2' }}>
+              Muragoods Discord Bot
+            </h2>
+          </Reveal>
+          <Reveal delay={0.2}>
+            <p className="text-mario-text-muted text-sm sm:text-base max-w-xl mx-auto mb-2">
+              Music, moderation, tickets, leveling, giveaways and security — managed from one dashboard.
+            </p>
+            <p className="text-mario-text-muted/60 text-xs mb-8">
+              Discord will ask which server to install on, and only offers servers you can manage apps in.
+            </p>
+          </Reveal>
+          <Reveal delay={0.3}>
+            <div className="flex flex-wrap justify-center gap-4">
+              <a href="/api/auth/discord/install">
+                <AnimatedButton
+                  className="px-10 py-4 font-arcade text-sm"
+                  style={{ background: 'rgba(88,101,242,0.2)', borderColor: 'rgba(88,101,242,0.45)', color: '#8b93ff' }}
+                >
+                  + ADD MURAGOODS BOT
+                </AnimatedButton>
+              </a>
+              <a href="/dashboard">
+                <AnimatedButton
+                  className="px-10 py-4 font-arcade text-sm"
+                  style={{ background: 'rgba(255,214,10,0.15)', borderColor: 'rgba(255,214,10,0.3)', color: '#ffd60a' }}
+                >
+                  OPEN DASHBOARD
+                </AnimatedButton>
+              </a>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════
           FOOTER
           ═══════════════════════════════════════════════════════ */}
       <footer className="border-t border-white/5 py-12 text-center relative z-10">
@@ -603,6 +651,14 @@ export default function Home() {
           <p className="text-[10px] text-mario-text-muted/50">
             Made with <Heart color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> for hungry adventurers
           </p>
+          <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-5 font-arcade text-[8px]" style={{ letterSpacing: '0.1em' }}>
+            <a href="/api/auth/discord/install" style={{ color: '#8b93ff', textDecoration: 'none' }}>
+              + ADD MURAGOODS BOT
+            </a>
+            <a href="/dashboard" style={{ color: 'var(--mario-text-muted)', textDecoration: 'none' }}>
+              BOT DASHBOARD
+            </a>
+          </div>
         </Reveal>
       </footer>
     </main>

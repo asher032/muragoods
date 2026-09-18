@@ -16,8 +16,15 @@ export default function ServerSwitcher() {
     function onClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
     document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
   }, []);
 
   // If the stored guild is no longer manageable (bot kicked, perms revoked),
@@ -36,29 +43,22 @@ export default function ServerSwitcher() {
   if (!selected) return null;
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <div ref={ref} className="cc-server-switch">
+      {/* Icons are flex items sized by CSS (20px / 16px, both flex-shrink:0);
+          the name takes the flexible middle and truncates with an ellipsis. */}
       <button
-        className="cc-btn"
+        className="cc-btn cc-server-selector"
         onClick={() => { setOpen((o) => !o); setQuery(''); }}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <Server size={15} />
-        <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {selected.name}
-        </span>
-        <ChevronsUpDown size={14} style={{ color: 'var(--cc-text-faint)' }} />
+        <Server size={20} aria-hidden />
+        <span className="cc-server-name">{selected.name}</span>
+        <ChevronsUpDown size={16} className="cc-server-chevron" aria-hidden />
       </button>
 
       {open && (
-        <div
-          role="listbox"
-          className="cc-card"
-          style={{
-            position: 'absolute', top: 'calc(100% + 8px)', left: 0, width: 300, zIndex: 300,
-            padding: 8, background: '#131319', boxShadow: '0 16px 48px rgba(0,0,0,0.6)',
-          }}
-        >
+        <div role="listbox" className="cc-card cc-server-menu">
           <input
             className="cc-input"
             placeholder="Search servers…"
@@ -86,8 +86,10 @@ export default function ServerSwitcher() {
               }}
             >
               {g.icon ? (
+                // The session stores a resolved CDN URL, so use it as-is —
+                // concatenating a hash onto the CDN path produced a broken icon.
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={`https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=32`} alt="" width={24} height={24} style={{ borderRadius: 7 }} />
+                <img src={g.icon} alt="" width={24} height={24} style={{ borderRadius: 7 }} />
               ) : (
                 <div style={{ width: 24, height: 24, borderRadius: 7, background: 'var(--cc-accent-soft)', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700 }}>
                   {g.name.slice(0, 1).toUpperCase()}

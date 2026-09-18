@@ -4,7 +4,7 @@ import {
   createSession,
   exchangeCode,
   guildIconUrl,
-  setSessionCookie,
+  sessionCookie,
 } from '@/app/lib/discord-session';
 import { getRedirectUri } from '../route';
 
@@ -111,12 +111,15 @@ export async function GET(req: NextRequest) {
     selectedGuildId,
   });
 
-  await setSessionCookie(session.sessionId);
-
-  // Clean the one-time state cookie and go to the dashboard (never back to a
-  // login screen — the session cookie now proves authentication).
+  // Set the session cookie ON THIS RESPONSE. This is the redirect Discord's
+  // navigation actually follows, so there is no way for the cookie to be
+  // dropped between here and /dashboard — a dropped cookie is exactly what
+  // produces the "connected but still shows Connect with Discord" loop.
   const target = new URL(flow.next || '/dashboard', req.nextUrl.origin);
   const res = NextResponse.redirect(target);
+  const cookie = sessionCookie(session.sessionId);
+  res.cookies.set(cookie.name, cookie.value, cookie.options);
+  // One-time state is spent either way.
   res.cookies.set(OAUTH_STATE_COOKIE, '', { path: '/', maxAge: 0 });
   return res;
 }

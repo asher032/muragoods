@@ -1,0 +1,28 @@
+[Unit]
+Description=MuraGoods Discord Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/muragoods/discord-bot
+# Secrets live in /etc/murabot.env (root-owned, 600) — never in the repo.
+EnvironmentFile=/etc/murabot.env
+ExecStart=/home/ubuntu/muragoods/discord-bot/venv/bin/python -m bot.main
+# Process supervision: if the bot crashes, systemd restarts it with a small
+# backoff — the "crash -> supervisor -> restart -> gateway reconnect" loop.
+Restart=always
+RestartSec=5
+# Stop hammering Discord if the token is rejected: give up after 5 fast
+# failures inside 60s and let systemd's own start-limit back off.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+# Basic hardening.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target
