@@ -44,6 +44,35 @@ async def _get(path: str, params: dict[str, Any] | None = None, ttl: int = 60) -
     return None
 
 
+async def probe() -> str:
+    """Actively measure the site bridge and record the real status.
+
+    `site_bridge` used to be written ONLY as a side effect of a Murastream
+    command calling the site. On a dashboard nobody was using, no command ever
+    ran, so the key kept its "starting" default forever and read as a
+    permanently broken service. This performs a real authenticated request
+    with the same secret the real calls use.
+
+    The site's /api/discord route verifies the bridge secret BEFORE it
+    validates `action`, so a 400 proves reachability *and* a valid secret.
+    """
+    if not config.BRIDGE_SECRET:
+        http.set_status("site_bridge", "auth-missing")
+        return "auth-missing"
+    status, _ = await http.get_json(
+        f"{config.MURASTREAM_URL}/api/discord",
+        params={"action": "__healthcheck__"}, headers=_headers())
+    if status in (200, 400):
+        http.set_status("site_bridge", "online")
+    elif status in (401, 403):
+        http.set_status("site_bridge", "auth-missing")
+    elif status == 0:
+        http.set_status("site_bridge", "offline")
+    else:
+        http.set_status("site_bridge", "degraded")
+    return http.get_status().get("site_bridge", "unknown")
+
+
 async def _post(path: str, payload: dict[str, Any]) -> tuple[int, Any | None]:
     status, data = await http.post_json(f"{config.MURASTREAM_URL}{path}",
                                         payload, headers=_headers())

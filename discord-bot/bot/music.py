@@ -12,6 +12,7 @@ import discord
 import yt_dlp
 
 import config
+import net as http
 
 log = logging.getLogger("bot.music")
 
@@ -28,6 +29,34 @@ def _resolve_ffmpeg() -> str:
 
 
 FFMPEG_EXE = _resolve_ffmpeg()
+
+# Last real measurement of the decoder (None = never measured). Exposed through
+# /health so the dashboard never has to guess whether music can play.
+FFMPEG_OK: bool | None = None
+
+
+async def probe() -> bool:
+    """Measure whether FFmpeg actually executes on THIS runtime.
+
+    `music` used to be set to "ready" unconditionally from on_ready, so /health
+    advertised working music on a host whose decoder was missing. This runs the
+    real binary instead of asserting it. Recording the outcome is also what
+    lets the dashboard distinguish "no decoder" from "decoder present but
+    playback unproven".
+    """
+    global FFMPEG_OK
+    ok = False
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            FFMPEG_EXE, "-version",
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+        await asyncio.wait_for(proc.wait(), timeout=5)
+        ok = proc.returncode == 0
+    except Exception as exc:
+        log.warning("FFmpeg probe failed (%s): %s", FFMPEG_EXE, str(exc)[:160])
+    FFMPEG_OK = ok
+    http.set_status("music", "ready" if ok else "ffmpeg-missing")
+    return ok
 
 
 def get_ydl_opts() -> dict[str, Any]:
