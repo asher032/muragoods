@@ -73,6 +73,22 @@ def _db_name_from_uri(uri: str) -> str:
         return ""
 
 
+def _describe_bad_db(value: str | None) -> str:
+    """Explain an unusable MONGO_DB WITHOUT echoing the value.
+
+    This text is served to the public /health endpoint, and the value has been
+    a complete connection string in practice -- so echoing it published a
+    database password. Only the category is reported, never the content.
+    """
+    raw = (value or "").strip()
+    if not raw:
+        return "MONGO_DB is unset"
+    if "://" in raw or "@" in raw:
+        return ("MONGO_DB holds a connection string, not a database name; move it "
+                "to MONGO_URI and set MONGO_DB to a name such as murastream_bot")
+    return "MONGO_DB is not a usable database name"
+
+
 def resolve_db_name() -> tuple[str, str]:
     """Choose the database name, returning (name, source).
 
@@ -89,7 +105,7 @@ def resolve_db_name() -> tuple[str, str]:
     configured = (config.MONGO_DB or "").strip()
     if configured and not any(c in configured for c in _INVALID_DB_CHARS):
         return configured, "MONGO_DB"
-    bad = f"MONGO_DB={config.MONGO_DB!r} is not usable" if configured else "MONGO_DB is unset"
+    bad = _describe_bad_db(config.MONGO_DB)
     from_uri = _db_name_from_uri(config.MONGO_URI or "")
     if from_uri:
         return from_uri, f"MONGO_URI ({bad})"
@@ -188,7 +204,9 @@ async def _connect_inner() -> None:
     await _db.bot_errors.create_index([("createdAt", DESCENDING)])
     await _db.bot_errors.create_index("resolved")
     await _db.keepalive.create_index("updatedAt", expireAfterSeconds=0)
-    log.info("Connected to MongoDB (%s)", config.MONGO_DB)
+    # Log the RESOLVED name, never config.MONGO_DB: that variable has held a
+    # full connection string (password included) on a real deployment.
+    log.info("Connected to MongoDB (%s)", DB_NAME)
 
 
 async def close() -> None:
