@@ -53,6 +53,22 @@ DEFAULT_DB = "murastream_bot"
 # MongoDB rejects these in a database name; an empty name is equally unusable.
 _INVALID_DB_CHARS = ' /\\."$*<>:|?'
 
+# Numeric code from the driver for the last failure, when it has one. Reported
+# so 'OperationFailure' can be told apart as a bad password (18) or missing
+# rights (13) instead of one guess covering both.
+LAST_ERROR_CODE: int | None = None
+
+# Codes that identify the fault precisely enough to act on without guessing.
+_ERROR_CODES: dict[int, str] = {
+    18: ("Authentication failed: the cluster rejected the username or password in "
+         "MONGO_URI. Re-enter the connection string (check the user, the password and "
+         "any authSource parameter)."),
+    13: ("Authenticated, but this user is not authorized on that database. Grant the "
+         "Atlas user readWrite on it, or point MONGO_DB at a database it may use."),
+    8000: ("Authentication failed (Atlas reported a bad credentials error). "
+           "Re-check the username and password in MONGO_URI."),
+}
+
 # Which database name was actually selected, and why. Reported through
 # /health so the bot and the dashboard can be compared (the dashboard resolves
 # its name through mongoose, i.e. from the connection string).
@@ -135,8 +151,11 @@ def diagnostic() -> dict[str, Any]:
         return {"configured": True, "error_class": "NotConnected",
                 "hint": "No connection attempt has completed yet.", **where}
     return {"configured": True, "error_class": LAST_ERROR,
-            "hint": _ERROR_HINTS.get(LAST_ERROR,
-                                      "Connection failed; see service logs for the full traceback."),
+            "code": LAST_ERROR_CODE,
+            "hint": _ERROR_CODES.get(
+                LAST_ERROR_CODE,
+                _ERROR_HINTS.get(LAST_ERROR,
+                                 "Connection failed; see service logs for the full traceback.")),
             **where}
 
 
@@ -157,14 +176,28 @@ def _gid(guild_id: Any) -> str:
     return str(guild_id)
 
 
+def _error_code(exc: BaseException) -> int | None:
+    """The driver's numeric error code, when it has one.
+
+    `OperationFailure` covers both a rejected password (18) and an authorized
+    user being refused a database (13), which need opposite fixes. The code
+    separates them; the exception's `details` can carry request contents, so
+    only the number is ever reported.
+    """
+    code = getattr(exc, "code", None)
+    return code if isinstance(code, int) else None
+
+
 async def connect() -> None:
     """Connect, recording a credential-free reason if it fails."""
-    global LAST_ERROR
+    global LAST_ERROR, LAST_ERROR_CODE
     try:
         await _connect_inner()
         LAST_ERROR = None
+        LAST_ERROR_CODE = None
     except Exception as exc:
         LAST_ERROR = type(exc).__name__
+        LAST_ERROR_CODE = _error_code(exc)
         raise
 
 
