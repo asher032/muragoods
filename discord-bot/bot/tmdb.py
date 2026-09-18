@@ -49,6 +49,25 @@ async def _get(params: dict[str, Any]) -> Any | None:
                 fut.set_result(data)
 
 
+async def probe() -> str:
+    """Actively measure the site's TMDB proxy and record the real status.
+
+    Same defect class as the site bridge: `movies` was only written when a
+    command happened to fetch metadata, so on an idle bot it stayed at its
+    "starting" default. This bypasses the metadata cache on purpose — a cache
+    hit returns before any status is set, which would freeze the value.
+    """
+    status, _ = await http.get_json(
+        config.TMDB_PROXY, params={"action": "popular", "type": "movie"})
+    if status == 200:
+        http.set_status("movies", "online")
+    elif status == 0:
+        http.set_status("movies", "offline")
+    else:
+        http.set_status("movies", "degraded")
+    return http.get_status().get("movies", "unknown")
+
+
 def _results(data: Any) -> list[dict[str, Any]]:
     if isinstance(data, dict):
         results = data.get("results")

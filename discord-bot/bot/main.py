@@ -14,10 +14,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import discord
 from discord.ext import commands
 
+import bridge
 import config
 import database
 import embeds
 import net as http_mod
+import tmdb
 
 logging.basicConfig(
     level=logging.INFO,
@@ -58,13 +60,38 @@ def gateway_liveness(bot) -> tuple[bool, float | None, str | None]:
     If the ACK clock is unavailable (library drift), this falls back to the
     ready flag rather than failing closed — never invent an outage.
     """
+    def _ack_clock(socket) -> float | None:
+        """The heartbeat-ACK perf_counter for one websocket, or None.
+
+        Path verified against discord.py 2.7.1 source rather than assumed:
+        `_last_ack` is an instance attribute of KeepAliveHandler (set in its
+        __init__, refreshed in ack()), and the socket reaches it through
+        `DiscordWebSocket._keep_alive`. Two earlier guesses were both wrong and
+        failed silently, which is why /health kept reporting null:
+          * `ConnectionState.last_heartbeat` does not exist at all.
+          * `ShardInfo.ws` does not exist — its __slots__ are
+            ('_parent', 'id', 'shard_count'), so the socket is `_parent.ws`.
+            `bot.shards` also only exists on AutoShardedClient, so on this
+            non-sharded client the lookup raised on every single call.
+        """
+        keep_alive = getattr(socket, "_keep_alive", None)
+        ack = getattr(keep_alive, "_last_ack", None)
+        return ack if isinstance(ack, (int, float)) else None
+
     hb_age: float | None = None
     try:
-        acks = [
-            si.ws._last_ack
-            for si in bot.shards.values()
-            if getattr(si, "ws", None) is not None
-        ]
+        sockets = []
+        # Non-sharded client (what MuraBot runs as): the socket is on the bot.
+        direct = getattr(bot, "ws", None)
+        if direct is not None:
+            sockets.append(direct)
+        # AutoShardedClient, if this ever runs sharded: ShardInfo -> _parent.ws.
+        for si in (getattr(bot, "shards", None) or {}).values():
+            parent = getattr(si, "_parent", None)
+            socket = getattr(parent, "ws", None) or getattr(si, "ws", None)
+            if socket is not None:
+                sockets.append(socket)
+        acks = [a for a in (_ack_clock(s) for s in sockets) if a is not None]
         if acks:
             hb_age = max(time.perf_counter() - a for a in acks)
     except Exception:
@@ -203,12 +230,17 @@ class MuraBot(commands.Bot):
 
     async def on_ready(self) -> None:
         http_mod.set_status("discord", "online")
-        # "ready" = the music cog loaded, NOT that playback is proven. Reporting
-        # "online" here would be a claim, not a measurement. The real verdict --
-        # provider reachability, ffmpeg, resolver errors -- comes from
-        # GET /music/diagnose, which actually performs a resolve.
-        http_mod.set_status("music", "ready")
-        log.info("Music subsystem ready (playback not yet exercised; see /music/diagnose)")
+        # Measure the decoder instead of asserting it. `music` used to be set to
+        # "ready" here unconditionally, so /health advertised working music on a
+        # host whose FFmpeg was missing. Playback itself is still only proven by
+        # GET /music/diagnose, which performs a real resolve.
+        try:
+            import music as music_mod
+            ffmpeg_ok = await music_mod.probe()
+            log.info("Music decoder %s (%s); playback is only proven by /music/diagnose",
+                     "available" if ffmpeg_ok else "MISSING", music_mod.FFMPEG_EXE)
+        except Exception as exc:
+            log.warning("Music probe failed at startup: %s", str(exc)[:160])
         activity_name = config.BOT_ACTIVITY.strip() or "https://muragoods.vercel.app/"
         if "twitch.tv" in activity_name.lower():
             activity_name = "https://muragoods.vercel.app/"
@@ -274,6 +306,13 @@ async def _health_server() -> None:
             return False
         return request.headers.get("Authorization", "") == f"Bearer {secret}"
 
+    def _ffmpeg_state() -> bool | None:
+        try:
+            import music as music_mod
+            return music_mod.FFMPEG_OK
+        except Exception:
+            return None
+
     async def health(_request: web.Request) -> web.Response:
         statuses = http_mod.get_status()
         latency_ms = round(bot.latency * 1000) if bot.latency else 0
@@ -315,6 +354,10 @@ async def _health_server() -> None:
                 "stale_after_seconds": GATEWAY_STALE_AFTER,
             },
             "shard_count": shard_count,
+            # Real decoder measurement (None = not measured yet). The dashboard
+            # must be able to tell "no FFmpeg" from "decoder fine, playback
+            # unproven" instead of guessing from an aggregate flag.
+            "ffmpeg": _ffmpeg_state(),
         }, status=200 if ok else 503)
 
     def _track_dict(t) -> dict:
@@ -659,8 +702,11 @@ async def _health_server() -> None:
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    http_mod.set_status("music", "ready")
-    log.info("Music subsystem ready (playback not yet exercised; see /music/diagnose)")
+    try:
+        import music as music_mod
+        await music_mod.probe()
+    except Exception as exc:
+        log.warning("Music probe failed at startup: %s", str(exc)[:160])
     # Keep-alive: ping the site's health endpoint every 5 minutes so the
     # dashboard Health Monitor has real server-side data, and so the site
     # (which polls bot health too) sees a live bot. This is legitimate
@@ -678,6 +724,18 @@ async def _health_server() -> None:
                     f"site /api/dashboard/status → {resp_status}")
             except Exception:
                 pass
+            # Actively measure each subsystem instead of waiting for a command
+            # to touch it. These were previously written only as a side effect
+            # of a user command, so an idle bot reported them as "starting"
+            # forever and the dashboard showed a permanently broken service.
+            import music as music_mod
+            for name, probe in (("site_bridge", bridge.probe), ("movies", tmdb.probe),
+                                ("music", music_mod.probe)):
+                try:
+                    value = await probe()
+                    log.debug("probe %s -> %s", name, value)
+                except Exception as exc:
+                    log.warning("probe %s failed: %s", name, str(exc)[:160])
             await asyncio.sleep(300)
     asyncio.create_task(_keepalive_loop())
     while True:

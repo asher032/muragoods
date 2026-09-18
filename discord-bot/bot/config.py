@@ -35,7 +35,11 @@ TMDB_API_KEY = _get("TMDB_API_KEY")
 # The website's own TMDB proxy (server-side key) — used when no direct key.
 TMDB_PROXY = f"{MURASTREAM_URL}/api/murastream/tmdb"
 
-MONGO_URI = _get("MONGO_URI") or _get("DATABASE_URL")
+# Accept the common host-specific spellings. A var set as MONGODB_URI (or
+# MONGO_URL) previously read as empty, and the bot reported `database: offline`
+# with no indication that a *differently named* variable was the cause.
+MONGO_URI = (_get("MONGO_URI") or _get("MONGODB_URI")
+             or _get("MONGO_URL") or _get("DATABASE_URL"))
 MONGO_DB = _get("MONGO_DB", "murastream_bot")
 
 DEPLOY_WEBHOOK_URL = _get("DEPLOY_WEBHOOK_URL")
