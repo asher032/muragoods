@@ -4,22 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useGuild } from '@/app/lib/guild-context';
 import { useGuildConfig } from '@/app/lib/use-guild-config';
-import { MODULES } from '@/app/lib/discord-modules';
-
-const MODULE_ROUTES: Record<string, string> = {
-  music: '/dashboard/music',
-  moderation: '/dashboard/moderation',
-  security: '/dashboard/security',
-  leveling: '/dashboard/leveling',
-  economy: '/dashboard/economy',
-  fun: '/dashboard/fun',
-  tickets: '/dashboard/tickets/center',
-  giveaways: '/dashboard/giveaways',
-  suggestions: '/dashboard/suggestions',
-  reminders: '/dashboard/reminders',
-  reputation: '/dashboard/reputation',
-  murastream: '/dashboard/murastream',
-};
+import { MODULES, MODULE_ROUTES } from '@/app/lib/discord-modules';
 
 export default function ModulesPage() {
   const { token, selected } = useGuild();

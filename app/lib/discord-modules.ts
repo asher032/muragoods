@@ -32,6 +32,25 @@ export interface ModuleDef {
   fields: FieldDef[];
 }
 
+// Single owner for "which page configures which module". Previously this map
+// was duplicated inside the modules page only, so the overview page could not
+// link to a module's own configuration and rendered every module's fields
+// inline instead.
+export const MODULE_ROUTES: Record<string, string> = {
+  music: '/dashboard/music',
+  moderation: '/dashboard/moderation',
+  security: '/dashboard/security',
+  leveling: '/dashboard/leveling',
+  economy: '/dashboard/economy',
+  fun: '/dashboard/fun',
+  tickets: '/dashboard/tickets/center',
+  giveaways: '/dashboard/giveaways',
+  suggestions: '/dashboard/suggestions',
+  reminders: '/dashboard/reminders',
+  reputation: '/dashboard/reputation',
+  murastream: '/dashboard/murastream',
+};
+
 const m = (key: string, label: string, type: FieldType, def: Omit<FieldDef, 'key' | 'label' | 'type'>): FieldDef =>
   ({ key, label, type, ...def });
 

@@ -306,6 +306,12 @@ async def _health_server() -> None:
             return False
         return request.headers.get("Authorization", "") == f"Bearer {secret}"
 
+    def _db_detail() -> dict:
+        try:
+            return database.diagnostic()
+        except Exception:
+            return {"configured": None, "error_class": None, "hint": None}
+
     def _ffmpeg_state() -> bool | None:
         try:
             import music as music_mod
@@ -358,7 +364,38 @@ async def _health_server() -> None:
             # must be able to tell "no FFmpeg" from "decoder fine, playback
             # unproven" instead of guessing from an aggregate flag.
             "ffmpeg": _ffmpeg_state(),
+            # Why the database is offline, without credentials. `database:
+            # offline` alone cannot distinguish a missing variable from an
+            # access-list rejection, so it was unactionable.
+            "database_detail": _db_detail(),
         }, status=200 if ok else 503)
+
+    async def gateway_drop(request: web.Request) -> web.Response:
+        """Deliberately sever the gateway socket, so the offline/recovery path
+        can be observed for real instead of only against fakes.
+
+        Gated by the same bridge secret as every other write route. It closes
+        the websocket only — discord.py reconnects within the same process — so
+        this exercises the reconnect path rather than killing the bot.
+        """
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        ws = getattr(bot, "ws", None)
+        if ws is None:
+            return web.json_response({"ok": False, "error": "No gateway socket"}, status=409)
+        before = _gateway_reconnects + _reconnect_count
+        try:
+            await ws.close()
+        except Exception as exc:
+            return web.json_response({"ok": False, "error": type(exc).__name__}, status=500)
+        log.warning("SELF-TEST: gateway socket closed deliberately (real disconnect)")
+        return web.json_response({
+            "ok": True,
+            "requested": True,
+            "reconnect_count_before": before,
+            "note": "discord.py should auto-reconnect; poll /health for "
+                    "discord=reconnecting then online, with reconnect_count incremented",
+        })
 
     def _track_dict(t) -> dict:
         if t is None:
@@ -697,6 +734,7 @@ async def _health_server() -> None:
     app.router.add_post("/music/control/{guild_id:\\d+}", music_control)
     app.router.add_get("/mod/member/{guild_id:\\d+}/{user_id:\\d+}", member_lookup)
     app.router.add_post("/mod/action/{guild_id:\\d+}", mod_action)
+    app.router.add_post("/self-test/gateway-drop", gateway_drop)
     port = int(os.environ.get("PORT") or 8080) or 8080  # PORT=0 → default
     runner = web.AppRunner(app)
     await runner.setup()
