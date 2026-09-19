@@ -1,0 +1,40 @@
+# Optional Render deploy hook.
+#
+# Render's native GitHub integration already auto-deploys every push to main
+# via render.yaml (autoDeploy: true), so this workflow is only a fallback that
+# fires a Render "deploy hook" URL for people who want an explicit, auditable
+# deploy step. It runs only when the RENDER_DEPLOY_HOOK repo secret is set; a
+# Render deploy hook looks like:
+#   https://api.render.com/deploy/srv-xxxx?key=yyyy
+
+name: Render deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for Render deploy hook
+        id: hook
+        run: |
+          if [ -n "${{ secrets.RENDER_DEPLOY_HOOK }}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "RENDER_DEPLOY_HOOK secret not set — skipping (Render Git integration handles deploys)."
+          fi
+
+      - name: Trigger Render deploy hook
+        if: steps.hook.outputs.available == 'true'
+        run: |
+          curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}" \
+            -H "Content-Type: application/json" \
+            -d '{"clear_cache": false}'
