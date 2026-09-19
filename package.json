@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@opencode-ai/plugin": "1.18.31",
     "@types/bcryptjs": "^2.4.6",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
