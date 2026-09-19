@@ -95,13 +95,28 @@ def _describe_bad_db(value: str | None) -> str:
     This text is served to the public /health endpoint, and the value has been
     a complete connection string in practice -- so echoing it published a
     database password. Only the category is reported, never the content.
+
+    A MONGO_DB that looks like a full connection string (mongodb:// or
+    mongodb+srv://) is the most common misconfiguration: the operator pasted
+    the Atlas URI into the wrong variable. Detect it explicitly so the hint is
+    actionable rather than a generic "not a usable database name".
     """
     raw = (value or "").strip()
     if not raw:
         return "MONGO_DB is unset"
+    lowered = raw.lower()
+    if lowered.startswith("mongodb://") or lowered.startswith("mongodb+srv://"):
+        return (
+            "MONGO_DB holds a full connection string (starts with mongodb:// or "
+            "mongodb+srv://). Move it to MONGO_URI and set MONGO_DB to a database "
+            "name only, such as murastream_bot."
+        )
     if "://" in raw or "@" in raw:
-        return ("MONGO_DB holds a connection string, not a database name; move it "
-                "to MONGO_URI and set MONGO_DB to a name such as murastream_bot")
+        return (
+            "MONGO_DB looks like a connection string (contains :// or @). "
+            "Move it to MONGO_URI and set MONGO_DB to a database name only, "
+            "such as murastream_bot."
+        )
     return "MONGO_DB is not a usable database name"
 
 
@@ -581,15 +596,15 @@ async def vote_suggestion(guild_id: int, sugg_id: int, user_id: int, up: bool) -
     """One vote per user per suggestion. Returns (up_count, down_count)."""
     field = "votersUp" if up else "votersDown"
     other = "votersDown" if up else "votersUp"
+    # Atomic single-write vote: the update matches only when the user has NOT
+    # already voted on this side, so concurrent double-votes are impossible and
+    # flipping a vote moves it atomically (addToSet + pull in one shot).
+    await _db.suggestions.update_one(
+        {"guildId": _gid(guild_id), "suggId": sugg_id, field: {"$ne": user_id}},
+        {"$addToSet": {field: user_id}, "$pull": {other: user_id}})
     doc = await _db.suggestions.find_one({"guildId": _gid(guild_id), "suggId": sugg_id})
     if not doc:
         return 0, 0
-    if user_id in doc.get(field, []):
-        return len(doc.get("votersUp", [])), len(doc.get("votersDown", []))
-    await _db.suggestions.update_one(
-        {"guildId": _gid(guild_id), "suggId": sugg_id},
-        {"$addToSet": {field: user_id}, "$pull": {other: user_id}})
-    doc = await _db.suggestions.find_one({"guildId": _gid(guild_id), "suggId": sugg_id})
     return len(doc.get("votersUp", [])), len(doc.get("votersDown", []))
 
 
