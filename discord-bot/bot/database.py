@@ -333,13 +333,27 @@ async def close() -> None:
 
 
 # ── Guild config ─────────────────────────────────────────────────────────
+def _require_db():
+    """Return the database handle, or raise a clear error when offline.
+
+    Without this, a failed connect() surfaces later as a bare
+    `AttributeError: 'NoneType' object has no attribute 'guild_config'`,
+    which misdirects every investigation. Callers on hot paths
+    (e.g. get_guild_prefix on EVERY message) already fall back gracefully.
+    """
+    if _db is None:
+        raise ConnectionError(
+            f"database unavailable ({LAST_ERROR or 'not connected'})")
+    return _db
+
+
 async def get_guild_config(guild_id: int) -> dict[str, Any]:
-    doc = await _db.guild_config.find_one({"guildId": _gid(guild_id)})
+    doc = await _require_db().guild_config.find_one({"guildId": _gid(guild_id)})
     return doc or {"guildId": _gid(guild_id), "channels": {}, "automod": {"enabled": False}}
 
 
 async def set_guild_config(guild_id: int, update: dict[str, Any]) -> None:
-    await _db.guild_config.update_one(
+    await _require_db().guild_config.update_one(
         {"guildId": _gid(guild_id)}, {"$set": {**update, "updatedAt": _now()}}, upsert=True
     )
 
@@ -350,7 +364,7 @@ async def get_guild_prefix(guild_id: int) -> str | None:
     Reads the same document the dashboard writes, so a prefix changed on the
     website is the prefix the bot uses — with no per-guild crossover.
     """
-    doc = await _db.guild_config.find_one({"guildId": _gid(guild_id)}, {"prefix": 1})
+    doc = await _require_db().guild_config.find_one({"guildId": _gid(guild_id)}, {"prefix": 1})
     if not doc:
         return None
     prefix = doc.get("prefix")
