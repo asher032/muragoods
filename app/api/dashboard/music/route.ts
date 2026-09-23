@@ -49,9 +49,13 @@ export async function GET(req: NextRequest) {
     clearTimeout(timer);
     if (!resp.ok) {
       const detail = await resp.json().catch(() => null) as { error?: string } | null;
+      // Forward client/auth statuses verbatim — only genuine gateway faults
+      // (network/timeout/5xx) become 502. Collapsing a 401/403/404 into 502
+      // misattributes the fault to "bot offline".
+      const passthrough = [400, 401, 403, 404, 409];
       return NextResponse.json(
         { success: false, error: detail?.error || `Bot returned ${resp.status}` },
-        { status: resp.status === 404 ? 404 : 502 },
+        { status: passthrough.includes(resp.status) ? resp.status : 502 },
       );
     }
     const state = await resp.json();
@@ -104,9 +108,10 @@ export async function POST(req: NextRequest) {
     clearTimeout(timer);
     const data = await resp.json().catch(() => null) as { ok?: boolean; error?: string } | null;
     if (!resp.ok || !data?.ok) {
+      const passthrough = [400, 401, 403, 404, 409];
       return NextResponse.json(
         { success: false, error: data?.error || `Bot returned ${resp.status}` },
-        { status: resp.status === 409 ? 409 : 502 },
+        { status: passthrough.includes(resp.status) ? resp.status : 502 },
       );
     }
     return NextResponse.json({ success: true, result: data });

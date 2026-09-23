@@ -25,15 +25,17 @@ const BOT_HEALTH_URL = process.env.BOT_HEALTH_URL || 'https://murastream-bot-pf1
 // records the bot gateway's state. No synthetic user traffic, no analytics
 // manipulation, and no attempt to bypass hosting inactivity limits.
 export async function GET(req: NextRequest) {
-  // Vercel sends this on scheduled invocations; require it when set so the
-  // endpoint can't be abused as a public traffic generator.
+  // CRON_SECRET is mandatory: without it this endpoint would be an open,
+  // publicly-triggerable DB writer. Set it in Vercel env vars and in the
+  // vercel.json cron job headers — there is no unauthenticated mode.
   const expected = process.env.CRON_SECRET || '';
-  if (expected) {
-    const auth = req.headers.get('authorization') || '';
-    const provided = auth.replace(/^Bearer\s+/i, '');
-    if (provided !== expected) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
+  if (!expected) {
+    return NextResponse.json({ success: false, error: 'CRON_SECRET is not configured' }, { status: 503 });
+  }
+  const auth = req.headers.get('authorization') || '';
+  const provided = auth.replace(/^Bearer\s+/i, '');
+  if (provided !== expected) {
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
 
   const results: Record<string, unknown> = { ranAt: new Date().toISOString() };

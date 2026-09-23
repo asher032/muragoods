@@ -3,6 +3,18 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
+async function getManageableGuilds(accessToken: string): Promise<Set<string>> {
+  const MANAGE_GUILD = BigInt(0x20);
+  const ADMINISTRATOR = BigInt(0x8);
+  const resp = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: 'no-store',
+  });
+  if (!resp.ok) return new Set();
+  const guilds = (await resp.json()) as Array<{ id: string; permissions: string | number; owner: boolean }>;
+  return new Set(guilds.filter((g) => g.owner || (BigInt(g.permissions) & MANAGE_GUILD) !== BigInt(0) || (BigInt(g.permissions) & ADMINISTRATOR) !== BigInt(0)).map((g) => g.id));
+}
+
 // POST /api/dashboard/refresh — refresh Discord data (channels, roles, members)
 export async function POST(req: NextRequest) {
   const token = (await sessionToken());
@@ -12,6 +24,9 @@ export async function POST(req: NextRequest) {
   if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
   if (!botToken) return NextResponse.json({ success: false, error: 'Bot token not configured' }, { status: 503 });
   if (!guildId || !/^\d{5,25}$/.test(guildId)) return NextResponse.json({ success: false, error: 'Valid guildId required' }, { status: 400 });
+
+  const manageable = await getManageableGuilds(token);
+  if (!manageable.has(guildId)) return NextResponse.json({ success: false, error: 'You do not have permission to manage this server' }, { status: 403 });
 
   const DISCORD_API = 'https://discord.com/api/v10';
 

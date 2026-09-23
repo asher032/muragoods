@@ -557,6 +557,14 @@ class ModerationCog(commands.Cog):
 
     # ── Welcome + automod events ──────────────────────────────────────
     @commands.Cog.listener()
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
+        """Member metadata changed — roles / nickname / permissions-relevant state."""
+        if before.roles == after.roles:
+            return
+        await self._on_role_change(member=after)
+
+
+    @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         cfg = await database.get_guild_config(member.guild.id)
         welcome = cfg.get("welcome") or {}
@@ -596,6 +604,29 @@ class ModerationCog(commands.Cog):
             pass
 
     @commands.Cog.listener()
+    async def on_message_edit(self, before: discord.Message, after: discord.Message):
+        """Edited message — re-run the same automod checks."""
+        if not after.guild or after.author.bot:
+            return
+        if before.content == after.content:
+            return
+        await self._automod_check(after)
+
+
+    async def on_message_delete(self, message: discord.Message):
+        """Deleted message — log when a mod log channel is configured."""
+        if not message.guild:
+            return
+        await self._log_deleted_message(message)
+
+
+    async def on_bulk_message_delete(self, messages: list[discord.Message]):
+        """Bulk delete — log when a mod log channel is configured."""
+        if not messages or not messages[0].guild:
+            return
+        await self._log_deleted_message(messages[0], bulk=True, count=len(messages))
+
+
     async def on_message(self, message: discord.Message):
         if message.author.bot or not message.guild:
             return

@@ -41,13 +41,21 @@ class PrefixCog(commands.Cog, name="Prefix"):
             return
         channel = _music_guard(ctx)
         if not channel:
-            await ctx.send(embed=embeds.music("🎵 Music", "You need to join a voice channel first."))
+            await ctx.send(embed=embeds.music(
+                "🎧 Voice Channel Detection",
+                "You need to join a voice channel first — I play where **you** are."))
             return
-        perms = channel.permissions_for(ctx.guild.me)
-        if not perms.connect or not perms.speak:
+        try:
+            perm_check = music.check_voice_permissions(channel, ctx.guild.me)
+        except Exception:
+            perm_check = {"all_granted": False, "missing": ["connect", "speak"]}
+        if not perm_check.get("all_granted"):
+            missing = ", ".join(perm_check.get("missing") or ["Connect", "Speak"])
             await ctx.send(embed=embeds.embed(
-                "⚠️ Missing Permission",
-                "I need **Connect** and **Speak** in that voice channel.", embeds.WARN))
+                "🚫 Missing Permission",
+                f"The bot does not have the required voice-channel permissions "
+                f"(missing: **{missing}**). I need **View Channel**, **Connect** and **Speak**.",
+                embeds.WARN))
             return
         async with ctx.typing():
             track = await music.engine.resolve(query)
@@ -69,11 +77,20 @@ class PrefixCog(commands.Cog, name="Prefix"):
                     "➕ Queued", f"**{track.title}** — position **{position}**"))
                 return
             try:
-                await music.engine.play_now(player, track, channel)
-            except Exception:
-                log.exception("Prefix playback failed")
+                await music.engine.play_now(player, track, channel,
+                                            requested_title=query)
+            except music.PlaybackError as exc:
+                log.warning("Prefix playback classified fail code=%s stage=%s",
+                            exc.code, exc.stage)
                 await ctx.send(embed=embeds.embed(
-                    "⚠️ Playback Error", "The audio service couldn't start playback.", embeds.ERROR))
+                    exc.user_title, exc.user_message, embeds.ERROR))
+                return
+            except Exception as exc:
+                log.exception("Prefix playback failed")
+                code = music.classify_playback_exception(exc)
+                title, msg = music.PLAYBACK_USER_MESSAGES.get(
+                    code, music.PLAYBACK_USER_MESSAGES[music.UNKNOWN_PLAYBACK_ERROR])
+                await ctx.send(embed=embeds.embed(title, msg, embeds.ERROR))
                 return
             e = embeds.music("🎵 NOW PLAYING", f"**{track.title}**\n{track.uploader}")
             if track.thumbnail:

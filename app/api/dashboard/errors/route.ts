@@ -20,11 +20,19 @@ async function getManageableGuilds(accessToken: string): Promise<Map<string, { i
 }
 
 // ── Shared cluster access (bot writes here; dashboard reads) ────────────
+// One cached client per server instance: the previous per-request
+// `new MongoClient(uri).connect()` never called .close(), leaking a
+// connection on every Error Center poll.
+let cachedClient: Promise<MongoClient> | null = null;
 function client(): Promise<MongoClient> {
   // Same resolver as discord-config.ts so both sides see one database.
-  const uri = process.env.MONGO_URI || process.env.MONGODB_URI;
-  if (!uri) throw new Error('MONGO_URI or MONGODB_URI required');
-  return new MongoClient(uri).connect();
+  if (!cachedClient) {
+    const uri = process.env.MONGO_URI || process.env.MONGODB_URI;
+    if (!uri) throw new Error('MONGO_URI or MONGODB_URI required');
+    cachedClient = new MongoClient(uri).connect();
+    cachedClient.catch(() => { cachedClient = null; });
+  }
+  return cachedClient;
 }
 
 async function errorsCollection() {

@@ -45,6 +45,18 @@ async function safeCount(collectionName: string, query: Record<string, unknown>)
   }
 }
 
+async function getManageableGuilds(accessToken: string): Promise<Set<string>> {
+  const MANAGE_GUILD = BigInt(0x20);
+  const ADMINISTRATOR = BigInt(0x8);
+  const resp = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: 'no-store',
+  });
+  if (!resp.ok) return new Set();
+  const guilds = (await resp.json()) as Array<{ id: string; permissions: string | number; owner: boolean }>;
+  return new Set(guilds.filter((g) => g.owner || (BigInt(g.permissions) & MANAGE_GUILD) !== BigInt(0) || (BigInt(g.permissions) & ADMINISTRATOR) !== BigInt(0)).map((g) => g.id));
+}
+
 export async function GET(req: NextRequest) {
   const token = (await sessionToken());
   const guildId = req.nextUrl.searchParams.get('guildId');
@@ -52,6 +64,9 @@ export async function GET(req: NextRequest) {
 
   if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
   if (!guildId || !/^\d{5,25}$/.test(guildId)) return NextResponse.json({ success: false, error: 'Valid guildId required' }, { status: 400 });
+
+  const manageable = await getManageableGuilds(token);
+  if (!manageable.has(guildId)) return NextResponse.json({ success: false, error: 'You do not have permission to manage this server' }, { status: 403 });
 
   const rangeConfig = RANGE_MAP[range] || RANGE_MAP['7days'];
   const { start, end } = getDateRange(rangeConfig.days);

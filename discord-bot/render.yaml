@@ -29,8 +29,16 @@ services:
       - key: DISCORD_BRIDGE_SECRET
         sync: false
       - key: BOT_ACTIVITY
-        value: "https://muragoods.vercel.app/"
+        value: "MuraStream • /help"
       - key: BOT_STATUS
         value: "online"
       - key: BOT_ADMIN_IDS
         sync: false
+      - key: BOT_PREFIX
+        value: "mg!"
+      - key: YOUTUBE_PROXY
+        sync: false          # e.g. http://user:pass@host:port — lets yt-dlp bypass YouTube's datacenter-IP challenge
+      - key: YT_COOKIES_FILE
+        sync: false          # path to an exported Netscape cookie jar (alternative to YT_COOKIES)
+      - key: YT_COOKIES
+        sync: false          # inline cookie-jar contents (alternative to YT_COOKIES_FILE)

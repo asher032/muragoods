@@ -9,11 +9,15 @@ services:
     # Paid Render service keeps the Discord gateway process running 24/7.
     # The free plan sleeps and disconnects the bot from Discord.
     plan: starter
+    region: oregon
     rootDir: discord-bot
     buildCommand: pip install -r requirements.txt
     startCommand: python -m bot.main
     healthCheckPath: /health
     autoDeploy: true
+    # NOTE: keep this env set identical to discord-bot/render.yaml — whichever
+    # blueprint was last applied wins, and drift here is how production
+    # silently loses music auth (YOUTUBE_PROXY/YT_COOKIES) or TMDB.
     envVars:
       - key: DISCORD_TOKEN
         sync: false          # set in the Render dashboard (secret)
@@ -25,6 +29,8 @@ services:
         sync: false
       - key: MURASTREAM_URL
         value: "https://muragoods.vercel.app"
+      - key: TMDB_API_KEY
+        sync: false          # optional; the site proxy works without it
       - key: MONGO_URI
         sync: false          # MongoDB URI — password @ must be %40
       - key: MONGO_DB
@@ -37,3 +43,11 @@ services:
         value: "online"
       - key: BOT_ADMIN_IDS
         sync: false
+      - key: BOT_PREFIX
+        value: "mg!"
+      - key: YOUTUBE_PROXY
+        sync: false          # e.g. http://user:pass@host:port — lets yt-dlp bypass YouTube's datacenter-IP challenge
+      - key: YT_COOKIES_FILE
+        sync: false          # path to an exported Netscape cookie jar (alternative to YT_COOKIES)
+      - key: YT_COOKIES
+        sync: false          # inline cookie-jar contents (alternative to YT_COOKIES_FILE)

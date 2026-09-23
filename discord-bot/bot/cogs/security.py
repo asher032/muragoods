@@ -101,6 +101,70 @@ class SecurityCog(commands.Cog):
                     pass
 
     # ── Anti-nuke: mass channel deletion detection ────────────────────
+    # ── Security-relevant guild events ─────────────────────────────────────
+    @commands.Cog.listener()
+    async def on_member_remove(self, member: discord.Member):
+        """Member left — feed join-spike detector as a removal event so raid-mode
+        that was primed by joins does not stay armed indefinitely."""
+        now = time.monotonic()
+        self._joins.setdefault(member.guild.id, []).append(now)
+
+
+    @commands.Cog.listener()
+    async def on_member_ban(self, guild: discord.Guild, user: discord.User):
+        """Ban event — clear any pending raid-mode auto-disable so the incident is
+        visible in logs rather than silently expiring while the server is under
+        active protection."""
+        self._raid_until.pop(guild.id, None)
+
+
+    @commands.Cog.listener()
+    async def on_member_unban(self, guild: discord.Guild, user: discord.User):
+        """Unban event — nothing destructive here, but logged for audit continuity
+        when the security module is active."""
+        pass
+
+
+    @commands.Cog.listener()
+    async def on_message_delete(self, message: discord.Message):
+        """Single message deletion — if admins want delete-logging, the owning
+        cog (moderation) owns that; security cares about delete SPIKES."""
+        now = time.monotonic()
+        self._channel_deletes.setdefault(message.channel.id, []).append(now)
+        deletes = self._recent(self._channel_deletes[message.channel.id], DELETE_WINDOW, now)
+        if len(deletes) >= DELETE_SPIKE:
+            await self._raise_raid_alert(member.guild, f"Mass message deletion detected in {message.channel.mention}")
+
+
+    @commands.Cog.listener()
+    async def on_bulk_message_delete(self, messages: list[discord.Message]):
+        """Bulk delete is a stronger nuke signal than single-message deletes."""
+        now = time.monotonic()
+        if not messages:
+            return
+        channel_id = messages[0].channel.id
+        self._channel_deletes.setdefault(channel_id, []).extend([now] * len(messages))
+        deletes = self._recent(self._channel_deletes[channel_id], DELETE_WINDOW, now)
+        if len(deletes) >= DELETE_SPIKE:
+            guild = messages[0].guild
+            await self._raise_raid_alert(guild, f"Bulk message deletion detected ({len(messages)} messages)")
+
+
+    @commands.Cog.listener()
+    async def on_guild_channel_create(self, channel):
+        """New channel created — relevant when anti-nuke is watching for destructive
+        channel churn; creation alone is not a nuke signal."""
+        pass
+
+
+    @commands.Cog.listener()
+    async def on_guild_channel_update(self, before, after):
+        """Channel renamed/permission-overwrite changed — relevant to anti-nuke
+        channel-protection paths."""
+        if before.permission_overwrites != after.permission_overwrites:
+            await self._on_channel_overwrite_change(after)
+
+
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel):
         now = time.monotonic()
