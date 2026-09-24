@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useDeferredValue, useMemo, useState, type CSSProperties } from 'react';
 import { useGuild } from '@/app/lib/guild-context';
+import { DiscordChannelSelect, DiscordMemberSelect } from '../../components/selectors';
 import {
   CheckCircle2,
   ChevronLeft,
@@ -325,7 +326,6 @@ export default function TicketCenterPage() {
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const ticketsToday = useMemo(() => stats.ticketsPerDay.find((entry) => entry.date === today)?.count || 0, [stats.ticketsPerDay, today]);
-  const categories = useMemo(() => (resources?.channels || []).filter((channel) => channel.type === 4), [resources]);
   const members = useMemo(() => (resources?.members || []).filter((member) => member.id).sort((a, b) => a.name.localeCompare(b.name)), [resources]);
   const assignedLabel = (ticket: Ticket) => ticket.assignedStaff.length
     ? ticket.assignedStaff.map((staff) => staff.name).join(', ')
@@ -559,26 +559,29 @@ export default function TicketCenterPage() {
             </div>
 
             {modal.kind === 'assign' || modal.kind === 'unassign' ? (
-              <label style={{ display: 'block', marginBottom: 16 }}>
+              <div style={{ marginBottom: 16 }}>
                 <span style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 7 }}>{modal.kind === 'assign' ? 'Staff member' : 'Assigned staff member'}</span>
-                <select value={modal.value} onChange={(event) => setModal({ ...modal, value: event.target.value })} style={inputStyle}>
-                  <option value="">Select a member</option>
-                  {members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
-                </select>
-              </label>
+                <DiscordMemberSelect
+                  members={members}
+                  value={modal.value}
+                  onChange={(id) => setModal({ ...modal, value: id })}
+                />
+              </div>
             ) : modal.kind === 'rename' ? (
               <label style={{ display: 'block', marginBottom: 16 }}>
                 <span style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 7 }}>Channel name</span>
                 <input value={modal.value} onChange={(event) => setModal({ ...modal, value: event.target.value })} maxLength={100} style={inputStyle} />
               </label>
             ) : (
-              <label style={{ display: 'block', marginBottom: 16 }}>
+              <div style={{ marginBottom: 16 }}>
                 <span style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 7 }}>New category</span>
-                <select value={modal.value} onChange={(event) => setModal({ ...modal, value: event.target.value })} style={inputStyle}>
-                  <option value="">Select a category</option>
-                  {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-                </select>
-              </label>
+                <DiscordChannelSelect
+                  channels={(resources?.channels ?? []).map((c) => ({ ...c, parentName: null }))}
+                  value={modal.value}
+                  onChange={(id) => setModal({ ...modal, value: id })}
+                  kinds="category"
+                />
+              </div>
             )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>

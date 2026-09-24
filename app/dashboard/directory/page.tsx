@@ -101,14 +101,19 @@ export default function DirectoryPage() {
         <div className="cc-card" style={{ padding: '6px 0', overflowX: 'auto' }}>
           <table className="cc-table">
             <thead>
-              <tr><th>Display Name</th><th>Username</th><th>User ID</th></tr>
+              <tr><th>Display Name</th><th>Username</th><th>Details</th></tr>
             </thead>
             <tbody>
               {resources.members.map((m) => (
                 <tr key={m.id}>
                   <td>{m.name}</td>
                   <td style={{ color: 'var(--cc-text-dim)' }}>@{m.name.toLowerCase().replace(/\s+/g, '')}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--cc-text-dim)' }}>{m.id}</td>
+                  <td>
+                    <details style={{ fontSize: 12, color: 'var(--cc-text-dim)' }}>
+                      <summary style={{ cursor: 'pointer' }}>Developer details</summary>
+                      <span style={{ fontFamily: 'monospace', fontSize: 11.5 }}>User ID: {m.id}</span>
+                    </details>
+                  </td>
                 </tr>
               ))}
               {resources.members.length === 0 && (
@@ -123,13 +128,18 @@ export default function DirectoryPage() {
         <div className="cc-card" style={{ padding: '6px 0', overflowX: 'auto' }}>
           <table className="cc-table">
             <thead>
-              <tr><th>Role</th><th>Role ID</th></tr>
+              <tr><th>Role</th><th>Details</th></tr>
             </thead>
             <tbody>
               {resources.roles.map((r) => (
                 <tr key={r.id}>
                   <td>{r.name}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--cc-text-dim)' }}>{r.id}</td>
+                  <td>
+                    <details style={{ fontSize: 12, color: 'var(--cc-text-dim)' }}>
+                      <summary style={{ cursor: 'pointer' }}>Developer details</summary>
+                      <span style={{ fontFamily: 'monospace', fontSize: 11.5 }}>Role ID: {r.id}</span>
+                    </details>
+                  </td>
                 </tr>
               ))}
               {resources.roles.length === 0 && (
@@ -144,7 +154,7 @@ export default function DirectoryPage() {
         <div className="cc-card" style={{ padding: '6px 0', overflowX: 'auto' }}>
           <table className="cc-table">
             <thead>
-              <tr><th>Channel</th><th>Type</th><th>Channel ID</th></tr>
+              <tr><th>Channel</th><th>Type</th><th>Details</th></tr>
             </thead>
             <tbody>
               {resources.channels.map((c) => (
@@ -155,7 +165,12 @@ export default function DirectoryPage() {
                     </span>
                   </td>
                   <td><span className="cc-chip">{channelTypeLabel(c.type)}</span></td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--cc-text-dim)' }}>{c.id}</td>
+                  <td>
+                    <details style={{ fontSize: 12, color: 'var(--cc-text-dim)' }}>
+                      <summary style={{ cursor: 'pointer' }}>Developer details</summary>
+                      <span style={{ fontFamily: 'monospace', fontSize: 11.5 }}>Channel ID: {c.id}</span>
+                    </details>
+                  </td>
                 </tr>
               ))}
               {resources.channels.length === 0 && (
