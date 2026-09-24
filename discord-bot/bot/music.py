@@ -19,6 +19,37 @@ import net as http
 
 log = logging.getLogger("bot.music")
 
+# ── Bundled JavaScript runtime (yt-dlp's YouTube challenge solver) ────────
+# YouTube's signature / n-parameter challenges cannot be solved without an
+# external JavaScript runtime, and Deno is the only one yt-dlp enables by
+# itself. yt-dlp finds runtimes through PATH, so a runtime that exists but is
+# not on PATH is invisible — extraction then fails in a way that is
+# indistinguishable from an IP block ("Sign in to confirm you're not a bot").
+# The deploy downloads one into ./bin (scripts/install_deno.py); expose it
+# here, before anything resolves a track, instead of trusting the host PATH.
+_BUNDLED_BIN = Path(__file__).resolve().parent.parent / "bin"
+
+
+def _expose_bundled_runtime() -> list[str]:
+    """Prepend any bundled runtime directory to PATH; report what was added."""
+    directories: list[Path] = []
+    override = os.environ.get("YT_JS_RUNTIME_DIR", "").strip()
+    if override:
+        directories.append(Path(override))
+    directories.append(_BUNDLED_BIN)
+    added: list[str] = []
+    entries = os.environ.get("PATH", "").split(os.pathsep)
+    for directory in directories:
+        entry = str(directory)
+        if directory.is_dir() and entry not in entries:
+            os.environ["PATH"] = f"{entry}{os.pathsep}{os.environ.get('PATH', '')}"
+            entries.insert(0, entry)
+            added.append(entry)
+    return added
+
+
+BUNDLED_RUNTIME_DIRS = _expose_bundled_runtime()
+
 
 def _resolve_ffmpeg() -> str:
     found = shutil.which("ffmpeg")
@@ -334,6 +365,11 @@ def js_runtimes() -> dict[str, Any]:
         "available": {k: bool(v) for k, v in found.items()},
         "any": any(found.values()),
         "yt_dlp_ejs_installed": ejs,
+        # Where a build-time runtime would live, so "no runtime" names the
+        # directory that was searched instead of leaving it a mystery.
+        "bundled_dir": str(_BUNDLED_BIN),
+        "bundled_dir_exists": _BUNDLED_BIN.is_dir(),
+        "path_dirs_added": BUNDLED_RUNTIME_DIRS,
     }
 
 
