@@ -725,6 +725,20 @@ async def _health_server() -> None:
         except Exception:
             return {"available": {}, "any": None, "yt_dlp_ejs_installed": None}
 
+    def _voice_state() -> dict:
+        """Is discord.py's voice backend importable?
+
+        Voice support was split into a separate package (davey); without it
+        every voice connect raises and no track can play. Same reasoning as
+        the runtime probe: a missing dependency must be a measurement, not a
+        guess the user later meets as "Unknown Playback Error".
+        """
+        try:
+            import davey  # noqa: F401
+            return {"davey": True}
+        except Exception:
+            return {"davey": False}
+
     async def _discord_api_probe() -> tuple[bool, int | None]:
         """Unauthenticated Discord API reachability check (credential-free).
 
@@ -875,6 +889,9 @@ async def _health_server() -> None:
             # EJS solver scripts. Without a runtime, YouTube extraction fails in
             # a way that looks like an IP block — never guess, measure.
             "js_runtimes": _js_runtime_state(),
+            # discord.py's voice backend package. Its absence is a hard stop for
+            # every /play, so it belongs in the one endpoint the dashboard polls.
+            "voice_backend": _voice_state(),
             # Why the database is offline, without credentials. `database:
             # offline` alone cannot distinguish a missing variable from an
             # access-list rejection, so it was unactionable.
