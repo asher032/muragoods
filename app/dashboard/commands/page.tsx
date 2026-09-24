@@ -45,22 +45,23 @@ export default function CommandsPage() {
   const [fetchError, setFetchError] = useState('');
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || !selected) return;
     setLoading(true);
-    fetch('/api/dashboard/commands', { headers: { 'x-discord-token': token } })
+    fetch(`/api/dashboard/commands?guildId=${encodeURIComponent(selected.id)}`, { headers: { 'x-discord-token': token } })
       .then((r) => r.json())
       .then((data) => {
         if (data.success) {
           setCommands(data.commands || []);
           setStats(data.stats || { total: 0, working: 0, disabled: 0, errors: 0 });
           setAllExecutions(data.recentExecutions || []);
+          setFetchError('');
         } else {
           setFetchError(data.error || 'Failed to load commands');
         }
       })
       .catch(() => setFetchError('Network error'))
       .finally(() => setLoading(false));
-  }, [token]);
+  }, [token, selected]);
 
   const filteredCommands = useMemo(() => {
     let list = commands;

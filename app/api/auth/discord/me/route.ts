@@ -39,19 +39,24 @@ export async function GET() {
     }
   } catch { /* bot unreachable → offline, honestly */ }
 
-  // Does the bot sit in the selected guild? Ask the bot service per-guild.
+  // Does the bot sit in the selected guild? Verified against the bot's own
+  // authenticated connection (live gateway guild set), not assumed.
   let botInSelectedGuild: boolean | null = null;
-  if (session.selectedGuildId && bot.online) {
+  let botGuildIds: string[] | null = null;
+  if (bot.online) {
     try {
       const base = process.env.BOT_HEALTH_URL?.replace(/\/health$/, '') || 'https://murastream-bot-pf11.onrender.com';
       const resp = await fetch(`${base}/health`, { cache: 'no-store', signal: AbortSignal.timeout(5000) });
       if (resp.ok) {
-        // /health exposes guild count only; per-guild presence comes from the
-        // dashboard API which checks via the bot's guild endpoints. For the
-        // /me payload we mark null (= unknown) unless the bot reports it.
-        botInSelectedGuild = null;
+        const data = (await resp.json().catch(() => null)) as { guild_ids?: string[] } | null;
+        if (data && Array.isArray(data.guild_ids)) {
+          botGuildIds = data.guild_ids.map(String);
+          botInSelectedGuild = session.selectedGuildId
+            ? botGuildIds.includes(session.selectedGuildId)
+            : null;
+        }
       }
-    } catch { botInSelectedGuild = false; }
+    } catch { botInSelectedGuild = null; }
   }
 
   return NextResponse.json({
@@ -71,6 +76,7 @@ export async function GET() {
     })),
     selectedGuildId: session.selectedGuildId,
     botInSelectedGuild,
+    botGuildIds,
     bot,
     lastAuthAt: session.lastAuthAt.toISOString(),
     sessionExpiresAt: new Date(session.lastSeenAt.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),

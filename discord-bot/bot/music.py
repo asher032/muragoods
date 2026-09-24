@@ -36,6 +36,130 @@ FFMPEG_EXE = _resolve_ffmpeg()
 # Last real measurement of the decoder (None = never measured). Exposed through
 # /health so the dashboard never has to guess whether music can play.
 FFMPEG_OK: bool | None = None
+FFMPEG_VERSION: str | None = None
+FFMPEG_ERROR: str | None = None
+
+
+# ── Playback error taxonomy ──────────────────────────────────────────────
+# Every playback failure maps to exactly one of these codes. The cog layer
+# turns the code into a user-friendly message; the raw technical detail stays
+# in backend logs + the playback-log ring buffer. Never invent a new generic
+# message — classify instead.
+AUDIO_SOURCE_FAILED = "audio_source_failed"
+VOICE_CONNECTION_FAILED = "voice_connection_failed"
+FFMPEG_FAILED = "ffmpeg_failed"
+SOURCE_UNAVAILABLE = "source_unavailable"
+PLAYBACK_TIMEOUT = "playback_timeout"
+MISSING_PERMISSION = "missing_permission"
+QUEUE_CORRUPTED = "queue_corrupted"
+UNKNOWN_PLAYBACK_ERROR = "unknown_playback_error"
+
+PLAYBACK_USER_MESSAGES: dict[str, tuple[str, str]] = {
+    AUDIO_SOURCE_FAILED: (
+        "🎵 Audio Source Failed",
+        "The song was found, but the audio source could not be started. "
+        "Try another result or check the configured music source.",
+    ),
+    VOICE_CONNECTION_FAILED: (
+        "🔊 Voice Connection Failed",
+        "The bot could not connect to the voice channel. Make sure the bot can "
+        "View Channel, Connect, and Speak.",
+    ),
+    FFMPEG_FAILED: (
+        "🎚️ FFmpeg Failed",
+        "The audio processor could not start. Check that FFmpeg is installed "
+        "correctly and available to the bot.",
+    ),
+    SOURCE_UNAVAILABLE: (
+        "🌐 Source Unavailable",
+        "The selected audio source is currently unavailable. Try another result.",
+    ),
+    PLAYBACK_TIMEOUT: (
+        "⏱️ Playback Timeout",
+        "The audio source took too long to start. Please try again.",
+    ),
+    MISSING_PERMISSION: (
+        "🚫 Missing Permission",
+        "The bot does not have the required voice-channel permissions.",
+    ),
+    QUEUE_CORRUPTED: (
+        "📋 Queue Error",
+        "The music queue was in an unusable state and has been reset. "
+        "Please queue the song again.",
+    ),
+    UNKNOWN_PLAYBACK_ERROR: (
+        "❓ Unknown Playback Error",
+        "Playback could not be started. Check Music Diagnostics for the exact cause.",
+    ),
+}
+
+_SENSITIVE_MARKERS = (
+    "token", "cookie", "cookies", "api_key", "apikey", "secret",
+    "password", "passwd", "authorization", "bearer", "set-cookie",
+)
+
+
+def sanitize_for_log(text: str | None, *, limit: int = 500) -> str | None:
+    """Redact anything that looks like a credential before logging/display."""
+    if not text:
+        return text
+    low = text.lower()
+    for marker in _SENSITIVE_MARKERS:
+        if marker in low:
+            return "[redacted: possible credential]"
+    # Never leak full URLs with query credentials; keep host + path only.
+    if "://" in text and ("?" in text or "@" in text):
+        try:
+            head, _, tail = text.partition("://")
+            host_path = tail.split("?", 1)[0]
+            if "@" in host_path:
+                host_path = host_path.split("@", 1)[1]
+            return f"{head}://{host_path}"[:limit]
+        except Exception:
+            return text[:limit]
+    return text[:limit]
+
+
+class PlaybackError(Exception):
+    """A classified playback failure: machine-readable code + safe detail."""
+
+    def __init__(self, code: str, stage: str, detail: str = "",
+                 diagnostics: dict | None = None):
+        self.code = code
+        self.stage = stage
+        self.detail = detail
+        self.diagnostics = diagnostics or {}
+        title, user_msg = PLAYBACK_USER_MESSAGES.get(
+            code, PLAYBACK_USER_MESSAGES[UNKNOWN_PLAYBACK_ERROR])
+        self.user_title = title
+        self.user_message = user_msg
+        super().__init__(f"[{code}@{stage}] {detail}"[:500])
+
+
+def classify_playback_exception(exc: BaseException) -> str:
+    """Map any exception to a playback error code (never raises)."""
+    if isinstance(exc, PlaybackError):
+        return exc.code
+    if isinstance(exc, asyncio.TimeoutError):
+        return PLAYBACK_TIMEOUT
+    name = type(exc).__name__
+    msg = str(exc).lower()
+    if isinstance(exc, PermissionError) or "missing permission" in msg or "forbidden" in msg or "403" in msg:
+        return MISSING_PERMISSION
+    if "ffmpeg" in msg or "ffprobe" in msg or "executable" in msg or name in {"FileNotFoundError"} and "ffmpeg" in msg:
+        return FFMPEG_FAILED
+    if isinstance(exc, discord.ClientException):
+        text = str(exc).lower()
+        if "already playing" in text or "already connected" in text or "not connected" in text:
+            return VOICE_CONNECTION_FAILED
+        return VOICE_CONNECTION_FAILED
+    if "connect" in msg and ("voice" in msg or "channel" in msg or "handshake" in msg):
+        return VOICE_CONNECTION_FAILED
+    if "unavailable" in msg or "not available" in msg or "404" in msg or "410" in msg:
+        return SOURCE_UNAVAILABLE
+    if "no audio" in msg or "no stream" in msg or "no url" in msg or "could not resolve" in msg:
+        return AUDIO_SOURCE_FAILED
+    return UNKNOWN_PLAYBACK_ERROR
 
 
 async def probe() -> bool:
@@ -47,19 +171,120 @@ async def probe() -> bool:
     lets the dashboard distinguish "no decoder" from "decoder present but
     playback unproven".
     """
-    global FFMPEG_OK
+    global FFMPEG_OK, FFMPEG_VERSION, FFMPEG_ERROR
     ok = False
+    FFMPEG_VERSION = None
+    FFMPEG_ERROR = None
     try:
         proc = await asyncio.create_subprocess_exec(
             FFMPEG_EXE, "-version",
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
-        await asyncio.wait_for(proc.wait(), timeout=5)
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        try:
+            out, _ = await asyncio.wait_for(proc.communicate(), timeout=8)
+        except asyncio.TimeoutError:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            FFMPEG_ERROR = "ffmpeg -version timed out"
+            raise
         ok = proc.returncode == 0
+        if ok:
+            first = (out or b"").decode("utf-8", "replace").splitlines()
+            FFMPEG_VERSION = (first[0][:120] if first else "ffmpeg (version unknown)")
+        else:
+            FFMPEG_ERROR = f"ffmpeg exited with code {proc.returncode}"
+    except PlaybackError:
+        raise
+    except asyncio.TimeoutError:
+        log.warning("FFmpeg probe timed out (%s)", FFMPEG_EXE)
+        if not FFMPEG_ERROR:
+            FFMPEG_ERROR = "probe timed out"
+    except FileNotFoundError:
+        FFMPEG_ERROR = f"binary not found: {FFMPEG_EXE}"
+        log.warning("FFmpeg binary not found (%s)", FFMPEG_EXE)
     except Exception as exc:
+        FFMPEG_ERROR = sanitize_for_log(f"{type(exc).__name__}: {exc}", limit=200) or "probe failed"
         log.warning("FFmpeg probe failed (%s): %s", FFMPEG_EXE, str(exc)[:160])
     FFMPEG_OK = ok
     http.set_status("music", "ready" if ok else "ffmpeg-missing")
     return ok
+
+
+def ffmpeg_check() -> dict:
+    """Synchronous FFmpeg facts: exists, executable, accessible, last probe.
+
+    Never raises; safe to call from HTTP handlers.
+    """
+    exe = FFMPEG_EXE or "ffmpeg"
+    found = shutil.which(exe) or (exe if Path(exe).exists() else None)
+    exists = bool(found or (exe and Path(exe).exists()))
+    executable = bool(found and os.access(found, os.X_OK))
+    if exe and Path(exe).exists() and not shutil.which(exe):
+        try:
+            executable = os.access(exe, os.X_OK)
+            exists = True
+        except Exception:
+            pass
+    if FFMPEG_OK is True:
+        status = "ready"
+    elif FFMPEG_OK is False:
+        status = "missing" if (FFMPEG_ERROR or "").startswith("binary not found") else "failed"
+    else:
+        status = "unknown"
+    return {
+        "exe": exe,
+        "resolved": found,
+        "exists": exists,
+        "executable": executable,
+        "accessible": exists and (executable or FFMPEG_OK is True),
+        "probed_ok": FFMPEG_OK,
+        "version": FFMPEG_VERSION,
+        "error": FFMPEG_ERROR,
+        "status": status,
+    }
+
+
+def check_voice_permissions(channel, me) -> dict:
+    """Automatic voice permission check — no manual IDs required.
+
+    Returns per-permission granted flags plus an overall verdict.
+    Never raises: an undeterminable permission reads as missing, not granted.
+    """
+    result = {
+        "view_channel": None,
+        "connect": None,
+        "speak": None,
+        "all_granted": False,
+        "missing": [],
+        "channel_id": str(getattr(channel, "id", "") or ""),
+        "channel_name": getattr(channel, "name", "") or "",
+    }
+    try:
+        perms = channel.permissions_for(me)
+    except Exception as exc:
+        log.debug("permissions_for failed: %s", str(exc)[:120])
+        result["missing"] = ["view_channel", "connect", "speak"]
+        return result
+    try:
+        vc = bool(getattr(perms, "view_channel", getattr(perms, "view_channels", False)))
+    except Exception:
+        vc = False
+    try:
+        co = bool(getattr(perms, "connect", False))
+    except Exception:
+        co = False
+    try:
+        sp = bool(getattr(perms, "speak", False))
+    except Exception:
+        sp = False
+    result["view_channel"] = vc
+    result["connect"] = co
+    result["speak"] = sp
+    missing = [k for k, v in (("view_channel", vc), ("connect", co), ("speak", sp)) if not v]
+    result["missing"] = missing
+    result["all_granted"] = not missing
+    return result
 
 
 _COOKIE_TMP: str | None = None
@@ -187,6 +412,12 @@ def get_ydl_opts() -> dict[str, Any]:
         "fragment_retries": 5,
         "buffer": 65536,
         "geo_bypass": True,
+        # yt-dlp enables ONLY deno by default for JS challenge solving. The
+        # production host has node (no deno), so without this the n/signature
+        # challenge can never be solved and every YouTube request fails even
+        # with valid cookies. Enable all runtimes in upstream priority order;
+        # yt-dlp probes each and uses the highest-priority one present.
+        "js_runtimes": {"deno": {}, "node": {}, "quickjs": {}, "bun": {}},
     }
     if config.YT_PLAYER_CLIENT:
         opts["extractor_args"] = {"youtube": {"player_client": [
@@ -230,6 +461,10 @@ class Track:
 
 
 class GuildPlayer:
+    # Bounded voice reconnects: discord.py owns gateway reconnects, but a
+    # dropped VOICE socket needs an explicit, limited rejoin — never a loop.
+    MAX_VOICE_RECONNECTS = 3
+
     def __init__(self, guild_id: int):
         self.guild_id = guild_id
         self.queue: deque[Track] = deque()
@@ -246,6 +481,15 @@ class GuildPlayer:
         self._play_offset: float = 0.0
         self._paused_at: Optional[float] = None
         self._paused_elapsed: float = 0.0
+        # ── Connection-recovery bookkeeping (surfaced in diagnostics) ──
+        self.voice_channel_id: Optional[int] = None
+        self.voice_channel_name: Optional[str] = None
+        self.connection_state: str = "disconnected"  # disconnected|connecting|connected|reconnecting|failed
+        self.reconnect_attempts: int = 0
+        self.last_successful_connection: Optional[str] = None
+        self.last_error: Optional[str] = None
+        self.last_error_code: Optional[str] = None
+        self.player_state: str = "idle"  # idle|buffering|playing|paused|reconnecting|error
 
     def mark_paused(self) -> None:
         if self._paused_at is None and self._play_started:
@@ -299,15 +543,73 @@ class GuildPlayer:
         return None
 
     def clear(self) -> None:
-        self.queue.clear()
+        try:
+            self.queue.clear()
+        except Exception:
+            from collections import deque as _dq
+            self.queue = _dq()
         self.current = None
+        self.player_state = "idle"
 
     def is_connected(self) -> bool:
-        return self.voice is not None and self.voice.is_connected()
+        try:
+            return self.voice is not None and self.voice.is_connected()
+        except Exception:
+            return False
+
+    def note_connected(self, channel=None) -> None:
+        from datetime import datetime, timezone
+        self.connection_state = "connected"
+        self.reconnect_attempts = 0
+        self.last_successful_connection = datetime.now(timezone.utc).isoformat()
+        if channel is not None:
+            try:
+                self.voice_channel_id = getattr(channel, "id", None)
+                self.voice_channel_name = getattr(channel, "name", None)
+            except Exception:
+                pass
+
+    def note_disconnected(self, reason: str = "") -> None:
+        if self.connection_state == "connected":
+            self.connection_state = "disconnected"
+        if reason:
+            self.last_error = sanitize_for_log(reason, limit=300)
+
+    def note_reconnecting(self) -> bool:
+        """Enter reconnecting state; False when the retry budget is spent."""
+        if self.reconnect_attempts >= self.MAX_VOICE_RECONNECTS:
+            self.connection_state = "failed"
+            return False
+        self.reconnect_attempts += 1
+        self.connection_state = "reconnecting"
+        self.player_state = "reconnecting"
+        return True
+
+    def validate_queue(self) -> str | None:
+        """Repair a corrupted queue in place. Returns None when healthy,
+        otherwise a description of what was fixed (logged, never fatal)."""
+        try:
+            if not isinstance(self.queue, deque):
+                items = list(self.queue) if hasattr(self.queue, "__iter__") else []
+                self.queue = deque(t for t in items if t is not None)
+                return "queue container rebuilt"
+            before = len(self.queue)
+            self.queue = deque(t for t in self.queue
+                               if t is not None and getattr(t, "title", None))
+            if len(self.queue) != before:
+                return f"removed {before - len(self.queue)} invalid entries"
+            return None
+        except Exception as exc:
+            from collections import deque as _dq
+            self.queue = _dq()
+            self.current = None
+            self.player_state = "idle"
+            return f"queue reset after corruption: {type(exc).__name__}"
 
 
 class MusicEngine:
     def __init__(self):
+        from collections import deque as _dq
         self._players: dict[int, GuildPlayer] = {}
         self.bot_loop: Optional[asyncio.AbstractEventLoop] = None
         self._last_resolve_error: Optional[str] = None
@@ -317,6 +619,9 @@ class MusicEngine:
         # failure -- the primary provider was still refused.
         self._youtube_challenged: bool = False
         self._ydlp_version: str = "unknown"
+        # Ring buffer of staged playback diagnostics (newest last, max 50).
+        # Powers the dashboard's "what failed, why, what to fix" view.
+        self._playback_log: _dq = _dq(maxlen=50)
 
     def get_player(self, guild_id: int) -> GuildPlayer:
         if guild_id not in self._players:
@@ -453,38 +758,291 @@ class MusicEngine:
         """
         return self._youtube_challenged
 
+    # ── Playback diagnostics ──────────────────────────────────────────
+    def record_playback_attempt(self, diag: dict) -> None:
+        try:
+            self._playback_log.append(diag)
+        except Exception:
+            pass
+
+    def get_playback_log(self, limit: int = 20) -> list[dict]:
+        try:
+            items = list(self._playback_log)[-max(1, min(limit, 50)):]
+            return list(reversed(items))
+        except Exception:
+            return []
+
+    def get_last_playback_diagnostic(self) -> dict | None:
+        try:
+            return self._playback_log[-1] if self._playback_log else None
+        except Exception:
+            return None
+
+    def build_diagnostic(self, *, requested_title: str = "", track=None,
+                         player=None, voice_channel=None, perms: dict | None = None,
+                         ffmpeg: dict | None = None, stage: str = "",
+                         ok: bool = False, code: str | None = None,
+                         error_type: str | None = None,
+                         error_message: str | None = None,
+                         ffmpeg_exit: int | None = None,
+                         voice_status: str | None = None) -> dict:
+        from datetime import datetime, timezone
+        return {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "requested_title": (requested_title or "")[:200],
+            "resolved_title": (getattr(track, "title", "") or "")[:200],
+            "source_provider": (getattr(track, "source", "") or "")[:120],
+            "audio_url_present": bool(getattr(track, "stream_url", "") or getattr(track, "url", "")),
+            "audio_url_host": ((getattr(track, "stream_url", "") or "").split("/")[2]
+                               if (getattr(track, "stream_url", "") or "").count("/") > 2 else ""),
+            "ffmpeg": ffmpeg or ffmpeg_check(),
+            "ffmpeg_exit_code": ffmpeg_exit,
+            "voice_connection": voice_status or (player.connection_state if player else "unknown"),
+            "discord_voice_connected": bool(player and player.is_connected()),
+            "channel_id": str(getattr(voice_channel, "id", "") or getattr(player, "voice_channel_id", "") or ""),
+            "channel_name": getattr(voice_channel, "name", None) or getattr(player, "voice_channel_name", None),
+            "bot_permissions": perms,
+            "player_state": getattr(player, "player_state", None),
+            "queue_length": len(getattr(player, "queue", []) or []) if player else 0,
+            "has_current": bool(getattr(player, "current", None)),
+            "stage": stage,
+            "ok": ok,
+            "error_code": code,
+            "error_type": error_type,
+            "error_message": sanitize_for_log(error_message, limit=500),
+        }
+
+    def diagnostics_snapshot(self) -> dict:
+        """Aggregate audio-service / ffmpeg / voice / player health for the dashboard."""
+        ff = ffmpeg_check()
+        if ff["probed_ok"] is True:
+            audio_status: str = "working" if not self._youtube_challenged else "degraded"
+        elif ff["probed_ok"] is False:
+            audio_status = "unavailable"
+        else:
+            audio_status = "degraded"
+        last = self.get_last_playback_diagnostic()
+        return {
+            "audio_service": {
+                "status": audio_status,
+                "detail": ("YouTube challenged this host; fallback or cookies/proxy needed"
+                           if self._youtube_challenged else
+                           ("FFmpeg missing — playback cannot start" if ff["probed_ok"] is False
+                            else "provider resolve path operational")),
+                "youtube_challenged": self._youtube_challenged,
+                "last_error_kind": self._last_error_kind,
+                "last_resolve_error": sanitize_for_log(self._last_resolve_error, limit=300),
+                "ydlp_version": self._ydlp_version,
+                "cookies_configured": bool(cookies_path()),
+                "js_runtimes": js_runtimes(),
+            },
+            "ffmpeg": {
+                "status": ff["status"],
+                "exe": ff["exe"],
+                "version": ff["version"],
+                "exists": ff["exists"],
+                "executable": ff["executable"],
+                "error": ff["error"],
+            },
+            "players": {
+                str(gid): {
+                    "connection": p.connection_state,
+                    "player": p.player_state,
+                    "connected": p.is_connected(),
+                    "channel": p.voice_channel_name,
+                    "channel_id": p.voice_channel_id,
+                    "reconnect_attempts": p.reconnect_attempts,
+                    "last_success": p.last_successful_connection,
+                    "current": p.current.title[:120] if p.current else None,
+                    "queue": len(p.queue),
+                    "last_error_code": p.last_error_code,
+                    "last_error": sanitize_for_log(p.last_error, limit=300),
+                } for gid, p in self._players.items()
+            },
+            "last_playback": last,
+        }
+
     async def play_now(self, player: GuildPlayer, track: Track,
                        voice_channel: discord.VoiceChannel, announce=None,
-                       seek_to: float = 0.0) -> None:
-        if player.voice and (player.voice.is_playing() or player.voice.is_paused()):
-            player.playing = False
-            player.voice.stop()
-            await asyncio.sleep(0)
+                       seek_to: float = 0.0,
+                       requested_title: str = "") -> None:
+        """Full staged playback pipeline. Raises PlaybackError (classified).
+
+        Stages: queue-validate → metadata → audio-source → ffmpeg-precheck →
+        voice-permissions → voice-connect → ffmpeg-start → discord-send →
+        player-update. Each stage logs its own technical reason; the caller
+        maps PlaybackError.code to the user-friendly message.
+        """
+        from datetime import datetime, timezone
+        req_title = requested_title or getattr(track, "title", "") or ""
+        perms: dict | None = None
+        ff = ffmpeg_check()
+        diag_base = dict(requested_title=req_title)
+
+        def _fail(code: str, stage: str, detail: str, *,
+                  error_type: str | None = None, voice_status: str | None = None,
+                  ffmpeg_exit: int | None = None) -> PlaybackError:
+            safe = sanitize_for_log(detail, limit=500) or ""
+            diag = self.build_diagnostic(
+                requested_title=req_title, track=track, player=player,
+                voice_channel=voice_channel, perms=perms, ffmpeg=ff,
+                stage=stage, ok=False, code=code,
+                error_type=error_type or code, error_message=safe,
+                ffmpeg_exit=ffmpeg_exit,
+                voice_status=voice_status or player.connection_state)
+            self.record_playback_attempt(diag)
+            player.last_error = safe[:300]
+            player.last_error_code = code
+            player.player_state = "error"
+            log.warning("playback FAIL stage=%s code=%s guild=%s track=%r detail=%s",
+                        stage, code, player.guild_id,
+                        (getattr(track, "title", "") or "")[:80], safe[:300])
+            return PlaybackError(code, stage, safe, diag)
+
+        # Stage 1: queue integrity — a corrupt queue must never kill playback.
+        try:
+            repaired = player.validate_queue()
+            if repaired:
+                log.warning("playback queue repaired guild=%s: %s", player.guild_id, repaired)
+        except Exception as exc:
+            raise _fail(QUEUE_CORRUPTED, "queue-validate",
+                        f"queue unusable: {type(exc).__name__}: {exc}") from exc
+        if track is None or not getattr(track, "title", None):
+            raise _fail(QUEUE_CORRUPTED, "queue-validate", "current track missing")
+
+        # Stage 2: song metadata resolved?
+        if not getattr(track, "title", ""):
+            raise _fail(AUDIO_SOURCE_FAILED, "metadata",
+                        "song metadata missing title")
+
+        # Stage 3: audio source resolved?
+        stream_url = (getattr(track, "stream_url", "") or getattr(track, "url", "") or "")
+        if not stream_url:
+            raise _fail(AUDIO_SOURCE_FAILED, "audio-source",
+                        "resolved track has no audio/stream URL")
+        if is_preview_url(stream_url):
+            raise _fail(AUDIO_SOURCE_FAILED, "audio-source",
+                        "only a preview clip is available for this track")
+
+        # Stage 4: FFmpeg precheck — fail fast with the real cause.
+        if ff["probed_ok"] is False:
+            raise _fail(FFMPEG_FAILED, "ffmpeg-precheck",
+                        f"ffmpeg unavailable: {ff['error'] or ff['exe']}",
+                        error_type="FileNotFoundError" if ff["status"] == "missing" else "FFmpegNotFound")
+        if not ff["exists"]:
+            raise _fail(FFMPEG_FAILED, "ffmpeg-precheck",
+                        f"ffmpeg binary not found: {ff['exe']}")
+
+        # Stage 5: voice channel detection + automatic permission check.
+        if voice_channel is None:
+            raise _fail(MISSING_PERMISSION, "voice-detect",
+                        "no voice channel: user is not in a voice channel")
+        try:
+            guild = getattr(voice_channel, "guild", None)
+            me = getattr(guild, "me", None)
+            perms = check_voice_permissions(voice_channel, me)
+        except Exception as exc:
+            raise _fail(MISSING_PERMISSION, "voice-permissions",
+                        f"permission check failed: {type(exc).__name__}: {exc}") from exc
+        if not perms.get("all_granted"):
+            missing = ", ".join(perms.get("missing") or ["unknown"])
+            raise _fail(MISSING_PERMISSION, "voice-permissions",
+                        f"bot missing voice permissions: {missing}",
+                        error_type="MissingPermission")
+
+        # Stage 6: stop any current audio, then (re)connect voice.
+        try:
+            if player.voice and (player.voice.is_playing() or player.voice.is_paused()):
+                player.playing = False
+                player.voice.stop()
+                await asyncio.sleep(0)
+        except Exception as exc:
+            log.debug("stop-before-play failed (non-fatal): %s", str(exc)[:120])
+
         if not player.is_connected():
-            existing = voice_channel.guild.voice_client
-            if existing and existing.is_connected():
-                player.voice = existing
-                if existing.channel and existing.channel.id != voice_channel.id:
-                    try:
-                        await existing.move_to(voice_channel)
-                    except Exception:
-                        log.warning("Could not move to %s — playing from %s",
-                                    voice_channel.id, existing.channel.id)
-            else:
+            player.connection_state = "connecting"
+            player.player_state = "buffering"
+            existing = getattr(voice_channel.guild, "voice_client", None)
+            if existing is not None:
                 try:
-                    player.voice = await voice_channel.connect(self_deaf=True, timeout=20)
-                except (discord.ClientException, asyncio.TimeoutError) as exc:
+                    if existing.is_connected():
+                        player.voice = existing
+                        if existing.channel and existing.channel.id != voice_channel.id:
+                            try:
+                                await existing.move_to(voice_channel)
+                            except Exception as exc:
+                                log.warning("Could not move to %s — staying in %s: %s",
+                                            voice_channel.id,
+                                            getattr(existing.channel, "id", "?"),
+                                            str(exc)[:150])
+                        player.note_connected(player.voice.channel or voice_channel)
+                    else:
+                        player.voice = None
+                except Exception as exc:
+                    raise _fail(VOICE_CONNECTION_FAILED, "voice-connect",
+                                f"stale voice handle: {type(exc).__name__}: {exc}",
+                                error_type=type(exc).__name__) from exc
+            if not player.is_connected():
+                try:
+                    player.voice = await asyncio.wait_for(
+                        voice_channel.connect(self_deaf=True, timeout=20), timeout=25)
+                    player.note_connected(voice_channel)
+                except asyncio.TimeoutError as exc:
                     player.voice = None
-                    raise RuntimeError("Could not connect to the voice channel") from exc
+                    player.connection_state = "failed"
+                    raise _fail(PLAYBACK_TIMEOUT, "voice-connect",
+                                "voice handshake timed out (Discord did not answer in 25s)",
+                                error_type="TimeoutError") from exc
+                except discord.ClientException as exc:
+                    player.connection_state = "failed"
+                    raise _fail(VOICE_CONNECTION_FAILED, "voice-connect",
+                                f"Discord refused voice connect: {exc}",
+                                error_type="ClientException") from exc
+                except Exception as exc:
+                    player.connection_state = "failed"
+                    code = classify_playback_exception(exc)
+                    raise _fail(code, "voice-connect",
+                                f"{type(exc).__name__}: {exc}",
+                                error_type=type(exc).__name__) from exc
+        else:
+            # Already connected — verify we are in the right channel.
+            try:
+                if (player.voice.channel and
+                        player.voice.channel.id != voice_channel.id):
+                    await player.voice.move_to(voice_channel)
+                player.note_connected(player.voice.channel or voice_channel)
+            except Exception as exc:
+                log.warning("voice move failed (non-fatal): %s", str(exc)[:150])
         if not player.voice or not player.voice.is_connected():
-            raise RuntimeError("Voice connection was not established")
+            raise _fail(VOICE_CONNECTION_FAILED, "voice-connect",
+                        "voice connection was not established after connect")
+
+        # Stage 7: FFmpeg start — capture stderr-worthy failures explicitly.
         player.current = track
         player.playing = True
+        player.player_state = "buffering"
         opts = dict(FFMPEG_OPTS)
         if seek_to and seek_to > 0:
             opts["before_options"] = f"{opts['before_options']} -ss {int(seek_to)}"
-        src = discord.FFmpegPCMAudio(track.stream_url, **opts)
-        src = discord.PCMVolumeTransformer(src, volume=player.volume)
+        try:
+            src = discord.FFmpegPCMAudio(stream_url, **opts)
+        except FileNotFoundError as exc:
+            raise _fail(FFMPEG_FAILED, "ffmpeg-start",
+                        f"ffmpeg executable failed: {exc}",
+                        error_type="FileNotFoundError") from exc
+        except Exception as exc:
+            code = classify_playback_exception(exc)
+            raise _fail(code if code != UNKNOWN_PLAYBACK_ERROR else FFMPEG_FAILED,
+                        "ffmpeg-start", f"{type(exc).__name__}: {exc}",
+                        error_type=type(exc).__name__) from exc
+        try:
+            src = discord.PCMVolumeTransformer(src, volume=player.volume)
+        except Exception as exc:
+            raise _fail(FFMPEG_FAILED, "ffmpeg-start",
+                        f"volume transformer failed: {type(exc).__name__}: {exc}",
+                        error_type=type(exc).__name__) from exc
+
+        # Stage 8: send audio to Discord.
         player._play_started = time.monotonic()
         player._play_offset = float(seek_to or 0.0)
         player._paused_at = None
@@ -492,7 +1050,14 @@ class MusicEngine:
 
         def _after(err):
             if err:
-                log.warning("Player error: %s", err)
+                log.warning("Player error guild=%s: %s", player.guild_id,
+                            sanitize_for_log(str(err), limit=300))
+                try:
+                    from datetime import datetime as _dt, timezone as _tz
+                    player.last_error = sanitize_for_log(str(err), limit=300)
+                    player.player_state = "error"
+                except Exception:
+                    pass
             loop = self.bot_loop
             if loop is None or loop.is_closed():
                 log.error("Bot loop unavailable for track-end handling; queue halted")
@@ -500,13 +1065,43 @@ class MusicEngine:
             asyncio.run_coroutine_threadsafe(
                 self._on_track_end(player, announce, err), loop)
 
-        player.voice.play(src, after=_after)
+        try:
+            player.voice.play(src, after=_after)
+        except discord.ClientException as exc:
+            raise _fail(VOICE_CONNECTION_FAILED, "discord-send",
+                        f"Discord refused playback: {exc}",
+                        error_type="ClientException") from exc
+        except Exception as exc:
+            code = classify_playback_exception(exc)
+            raise _fail(code, "discord-send",
+                        f"{type(exc).__name__}: {exc}",
+                        error_type=type(exc).__name__) from exc
+
+        # Stage 9: player state updated — success.
+        player.player_state = "playing"
+        diag = self.build_diagnostic(
+            requested_title=req_title, track=track, player=player,
+            voice_channel=voice_channel, perms=perms, ffmpeg=ff,
+            stage="playing", ok=True)
+        self.record_playback_attempt(diag)
+        log.info("playback START guild=%s channel=%s track=%r source=%s",
+                 player.guild_id, getattr(voice_channel, "id", "?"),
+                 (track.title or "")[:80], (track.source or "")[:60])
 
     async def _on_track_end(self, player: GuildPlayer, announce=None, err=None) -> None:
+        """Advance the queue. Failed tracks are logged, skipped, and the next
+        valid track is tried — the service never crashes on one bad track."""
         try:
             if not player.playing:
                 return
+            # Track ended with an FFmpeg/player error: log, then treat the
+            # current track as failed and move on (with one re-resolve retry).
             if err and player.current:
+                failed_title = (player.current.title or "")[:80]
+                log.warning("track failed guild=%s title=%r err=%s — skipping",
+                            player.guild_id, failed_title,
+                            sanitize_for_log(str(err), limit=200))
+                player.player_state = "error"
                 source = player.current.url or player.current.stream_url
                 fresh = await self.resolve(source) if source else None
                 if fresh and player.voice and player.voice.channel:
@@ -514,9 +1109,44 @@ class MusicEngine:
                     try:
                         await self.play_now(player, fresh, player.voice.channel, announce)
                         return
+                    except PlaybackError as pe:
+                        log.warning("Re-resolve retry failed for %r: %s",
+                                    fresh.title[:60], pe.code)
                     except Exception:
                         log.warning("Re-resolve retry failed for %r", fresh.title[:60])
-            next_track = player.pop_next()
+                # Fall through to the next queued track (current is spent).
+                try:
+                    if player.current:
+                        player.history.append(player.current)
+                except Exception:
+                    pass
+                player.current = None
+            # Validate before popping — corruption resets to idle, not a crash.
+            repaired = player.validate_queue()
+            if repaired:
+                log.warning("queue repaired at track-end guild=%s: %s",
+                            player.guild_id, repaired)
+            # Skip any queued entries that lost their audio source.
+            next_track = None
+            skipped = 0
+            for _ in range(len(player.queue) + 1):
+                cand = player.pop_next()
+                if cand is None:
+                    break
+                if not (getattr(cand, "stream_url", "") or getattr(cand, "url", "")):
+                    skipped += 1
+                    log.warning("skipping queue entry without audio source: %r",
+                                (getattr(cand, "title", "") or "")[:60])
+                    try:
+                        player.history.append(cand)
+                    except Exception:
+                        pass
+                    continue
+                next_track = cand
+                break
+            if skipped and next_track is None:
+                log.info("all %d queued tracks unplayable guild=%s — idle",
+                         skipped, player.guild_id)
             if next_track is None and player.autoplay and player.current:
                 try:
                     related = await self._related(player.current)
@@ -527,14 +1157,100 @@ class MusicEngine:
             if next_track is None:
                 player.current = None
                 player.playing = False
+                player.player_state = "idle"
                 return
             if player.voice and player.voice.channel:
-                await self.play_now(player, next_track, player.voice.channel, announce)
+                try:
+                    await self.play_now(player, next_track, player.voice.channel, announce)
+                except PlaybackError as pe:
+                    # One bad next-track must not wedge the player: log it and
+                    # continue with whatever follows.
+                    log.warning("next-track failed guild=%s code=%s — trying following track",
+                                player.guild_id, pe.code)
+                    try:
+                        player.history.append(next_track)
+                    except Exception:
+                        pass
+                    player.current = None
+                    # Recurse once (bounded by queue length) to try the rest.
+                    if player.queue:
+                        await self._on_track_end(player, announce, None)
+                    else:
+                        player.playing = False
+                        player.player_state = "idle"
             else:
                 player.playing = False
+                player.player_state = "idle"
         except Exception:
             log.exception("Track-end handler failed")
             player.playing = False
+            try:
+                player.player_state = "idle"
+            except Exception:
+                pass
+
+    async def run_playback_test(self) -> dict:
+        """Controlled self-test for the [▶ Test Audio] button.
+
+        Checks each stage WITHOUT joining voice: gateway/loop, permissions are
+        per-guild (reported as NOT TESTED here), ffmpeg, audio source, and
+        whether a stream URL is actually producible. Returns staged PASS/FAIL.
+        """
+        stages: dict[str, str] = {}
+        detail: dict = {}
+        # 1. Discord gateway (bot loop alive?).
+        try:
+            loop_ok = self.bot_loop is not None and not self.bot_loop.is_closed()
+        except Exception:
+            loop_ok = False
+        stages["discord_gateway"] = "PASS" if loop_ok else "FAIL"
+        detail["discord_gateway"] = "event loop available" if loop_ok else "bot loop not ready"
+        # 2. Voice permissions — needs a real channel; report honestly.
+        stages["voice_permissions"] = "NOT TESTED"
+        detail["voice_permissions"] = "requires a guild voice channel — checked live on /play"
+        # 3. FFmpeg.
+        ff = ffmpeg_check()
+        if ff["probed_ok"] is True:
+            stages["ffmpeg"] = "PASS"
+        elif ff["probed_ok"] is False:
+            stages["ffmpeg"] = "FAIL"
+        else:
+            stages["ffmpeg"] = "NOT TESTED"
+        detail["ffmpeg"] = ff
+        # 4. Audio source — real resolve of a known track.
+        audio_ok = False
+        try:
+            track = await asyncio.wait_for(
+                self.resolve("Rick Astley Never Gonna Give You Up"), timeout=60)
+            if track and (track.stream_url or track.url):
+                if is_preview_url(track.stream_url):
+                    stages["audio_source"] = "FAIL"
+                    detail["audio_source"] = "fallback returned only a preview clip"
+                else:
+                    audio_ok = True
+                    stages["audio_source"] = "PASS"
+                    detail["audio_source"] = {
+                        "title": track.title[:120],
+                        "provider": track.source,
+                    }
+            else:
+                stages["audio_source"] = "FAIL"
+                detail["audio_source"] = sanitize_for_log(
+                    self.get_resolve_error(), limit=300) or "no result"
+        except asyncio.TimeoutError:
+            stages["audio_source"] = "FAIL"
+            detail["audio_source"] = "resolve timed out (likely YouTube challenge or no JS runtime)"
+        except Exception as exc:
+            stages["audio_source"] = "FAIL"
+            detail["audio_source"] = sanitize_for_log(f"{type(exc).__name__}: {exc}", limit=300)
+        # 5. Playback — only proven by a real voice join; never fake it.
+        stages["playback"] = "NOT TESTED" if audio_ok else "NOT TESTED"
+        detail["playback"] = ("audio source resolves; full playback proven by /play in voice"
+                              if audio_ok else "skipped: audio source failed")
+        detail["error_kind"] = self.get_error_kind()
+        detail["youtube_challenged"] = self.youtube_challenged()
+        ok = stages["ffmpeg"] == "PASS" and stages["audio_source"] == "PASS"
+        return {"ok": ok, "stages": stages, "detail": detail}
 
     async def _refresh_stream_url(self, data: dict[str, Any]) -> dict[str, Any]:
         webpage = data.get("webpage_url") or data.get("url")

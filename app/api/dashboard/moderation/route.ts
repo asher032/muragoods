@@ -63,8 +63,9 @@ export async function GET(req: NextRequest) {
     clearTimeout(timer);
     const data = await resp.json().catch(() => null) as { ok?: boolean; error?: string } | null;
     if (!resp.ok || !data?.ok) {
+      const passthrough = [400, 401, 403, 404, 409];
       return NextResponse.json({ success: false, error: data?.error || `Bot returned ${resp.status}` },
-        { status: resp.status === 404 ? 404 : 502 });
+        { status: passthrough.includes(resp.status) ? resp.status : 502 });
     }
     return NextResponse.json({ success: true, ...(data as Record<string, unknown>) });
   } catch (err) {

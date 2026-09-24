@@ -58,6 +58,9 @@ interface BotDetail {
   ffmpeg: boolean | null;
   guilds: number | null;
   databaseDetail: { configured: boolean | null; errorClass: string | null; hint: string | null } | null;
+  user: { username: string | null; avatarUrl: string | null; applicationId: string | number | null } | null;
+  connectionState: string | null;
+  lastApiCheck: { at: string | null; latencyMs: number | null; reachable: boolean | null } | null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -79,12 +82,32 @@ async function fetchBotDetail(timeoutMs: number): Promise<BotDetail | null> {
     const gateway = asRecord(body.gateway);
     const detail = asRecord(body.database_detail);
     const subsystems = asRecord(body.subsystems);
+    const user = asRecord(body.user);
+    const apiCheck = asRecord(body.last_api_check);
     return {
       ok: typeof body.ok === 'boolean' ? body.ok : null,
       latency: num(body.latency),
       uptimeSeconds: num(body.uptime_seconds),
       lastHeartbeat: typeof body.last_heartbeat === 'string' ? body.last_heartbeat : null,
       reconnectCount: num(body.reconnect_count),
+      user: user
+        ? {
+            username: typeof user.username === 'string' ? user.username : null,
+            avatarUrl: typeof user.avatar_url === 'string' ? user.avatar_url : null,
+            applicationId:
+              typeof user.application_id === 'string' || typeof user.application_id === 'number'
+                ? user.application_id
+                : null,
+          }
+        : null,
+      connectionState: typeof body.connection_state === 'string' ? body.connection_state : null,
+      lastApiCheck: apiCheck
+        ? {
+            at: typeof apiCheck.at === 'string' ? apiCheck.at : null,
+            latencyMs: num(apiCheck.latency_ms),
+            reachable: typeof apiCheck.reachable === 'boolean' ? apiCheck.reachable : null,
+          }
+        : null,
       gateway: gateway
         ? {
             alive: typeof gateway.alive === 'boolean' ? gateway.alive : null,

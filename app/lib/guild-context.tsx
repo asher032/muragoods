@@ -13,6 +13,29 @@ export interface DashGuild {
   name: string;
   icon: string | null;
   owner: boolean;
+  // Live detection facts (from /api/dashboard/servers). Null = unknown
+  // (bot unreachable / unverifiable) — never guessed.
+  botInstalled?: boolean | null;
+  botOnlineInGuild?: boolean | null;
+  botConnection?: 'online' | 'offline' | 'unknown';
+  channelCount?: number | null;
+  categoryCount?: number | null;
+  roleCount?: number | null;
+  memberCount?: number | null;
+  presenceCount?: number | null;
+  botPermissions?: string | null;
+  needsInvite?: boolean;
+  missingPermissions?: boolean;
+  inviteUrl?: string | null;
+}
+
+export interface ServersMeta {
+  botOnline: boolean | null;
+  botGuildCount: number | null;
+  userGuildCount: number;
+  manageableCount: number;
+  refreshedAt: string;
+  cached?: boolean;
 }
 
 export interface DashMe {
@@ -20,6 +43,8 @@ export interface DashMe {
   user?: { discordId: string; username: string; globalName: string; avatar: string | null; avatarUrl: string | null };
   guilds?: DashGuild[];
   selectedGuildId?: string | null;
+  botInSelectedGuild?: boolean | null;
+  botGuildIds?: string[] | null;
   bot?: { online: boolean; latency: number | null; guilds: number | null };
   lastAuthAt?: string;
   sessionExpiresAt?: string;
@@ -34,12 +59,20 @@ interface GuildContextType {
   selected: DashGuild | null;
   botOnline: boolean;
   botLatency: number | null;
+  botInSelectedGuild: boolean | null;
   loginUrl: string;          // server-built OAuth entry (never contains secrets)
   error: string;
   setError: (e: string) => void;
   setSelected: (g: DashGuild | null) => void;  // persists server-side
   refresh: () => Promise<void>;
   logout: () => Promise<void>;
+  // ── Live server detection (GET /api/dashboard/servers) ─────────────────
+  // Merges the user's live Discord authorization with the bot's live
+  // presence. Managing a server never implies the bot is installed there.
+  serversLoading: boolean;
+  serversError: string;
+  serversMeta: ServersMeta | null;
+  refreshServers: (force?: boolean) => Promise<void>;
   // ── Legacy compatibility ────────────────────────────────────────────────
   // Older dashboard pages gated on a client-held token. Credentials now live
   // ONLY in the HttpOnly session cookie, so `token` is reduced to an
@@ -61,6 +94,52 @@ export function GuildProvider({ children }: { children: ReactNode }) {
   const [botOnline, setBotOnline] = useState(false);
   const [botLatency, setBotLatency] = useState<number | null>(null);
   const [error, setError] = useState('');
+  // Live detection state.
+  const [serversLoading, setServersLoading] = useState(false);
+  const [serversError, setServersError] = useState('');
+  const [serversMeta, setServersMeta] = useState<ServersMeta | null>(null);
+
+  // Live server detection: user's Discord authorization × bot's presence,
+  // merged server-side. Auth snapshot from /me stays the fallback so the
+  // selector never goes empty when the bot service is unreachable.
+  const loadServers = useCallback(async (force = false) => {
+    setServersLoading(true);
+    setServersError('');
+    try {
+      const resp = await fetch(`/api/dashboard/servers${force ? '?refresh=1' : ''}`, { cache: 'no-store' });
+      const data = (await resp.json().catch(() => null)) as {
+        success?: boolean; servers?: DashGuild[]; meta?: ServersMeta; error?: string;
+      } | null;
+      if (!resp.ok || !data?.success || !Array.isArray(data.servers)) {
+        setServersError(data?.error || `Server detection failed (HTTP ${resp.status})`);
+        return;
+      }
+      setServersMeta(data.meta ?? null);
+      const live: DashGuild[] = data.servers;
+      setGuilds(live);
+      // Re-resolve the selection against the live list so names/icons and
+      // bot facts stay current; keep the /me selection id as the anchor.
+      setSelectedState((prev) => {
+        const anchor = prev?.id ?? null;
+        if (!anchor) return prev;
+        return live.find((g) => g.id === anchor) ?? prev;
+      });
+    } catch {
+      setServersError('Could not reach server detection');
+    } finally {
+      setServersLoading(false);
+    }
+  }, []);
+
+  const refreshServers = useCallback(async (force = false) => {
+    if (force) {
+      // POST clears the server cache first (Refresh Servers button).
+      try { await fetch('/api/dashboard/servers', { method: 'POST', cache: 'no-store' }); } catch { /* loadServers reports */ }
+      await loadServers(false);
+    } else {
+      await loadServers(false);
+    }
+  }, [loadServers]);
 
   const loadMe = useCallback(async () => {
     try {
@@ -69,12 +148,14 @@ export function GuildProvider({ children }: { children: ReactNode }) {
       setMe(data);
       setAuthenticated(Boolean(data.authenticated));
       if (data.authenticated && data.guilds) {
-        setGuilds(data.guilds);
+        // Live detection replaces the login-time snapshot when it answers;
+        // the snapshot keeps the UI usable until then.
+        setGuilds((prev) => (prev.length > 0 ? prev : data.guilds ?? []));
         if (data.selectedGuildId) {
           const sel = data.guilds.find((g) => g.id === data.selectedGuildId) || null;
-          setSelectedState(sel);
+          setSelectedState((prev) => prev ?? sel);
         } else {
-          setSelectedState(null);
+          setSelectedState((prev) => prev);
         }
       } else {
         setGuilds([]);
@@ -89,6 +170,11 @@ export function GuildProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => { void loadMe(); }, [loadMe]);
+
+  // After authentication, run live detection once (snapshot is the fallback).
+  useEffect(() => {
+    if (authenticated) void loadServers(false);
+  }, [authenticated, loadServers]);
 
   // Bot status pill — real data from the bot service via the site API.
   useEffect(() => {
@@ -140,6 +226,8 @@ export function GuildProvider({ children }: { children: ReactNode }) {
     setMe(null);
     setGuilds([]);
     setSelectedState(null);
+    setServersMeta(null);
+    setServersError('');
     window.location.href = '/dashboard';
   }, []);
 
@@ -149,11 +237,23 @@ export function GuildProvider({ children }: { children: ReactNode }) {
   // is authoritative, so this only nudges the app to re-read /me.
   const setTokenCompat = useCallback((_t: string | null) => { /* no-op */ }, []);
 
+  // Full refresh: session snapshot + live detection.
+  const refreshAll = useCallback(async () => {
+    await loadMe();
+    await loadServers(false);
+  }, [loadMe, loadServers]);
+
+  // Bot membership for the selected guild: live detection first, /me second.
+  const botInSelectedGuild: boolean | null =
+    selected?.botInstalled ?? me?.botInSelectedGuild ?? null;
+
   return (
     <GuildContext.Provider value={{
       authChecked, authenticated, me, user: me?.user ?? null,
-      guilds, selected, botOnline, botLatency, loginUrl, error, setError,
-      setSelected, refresh: loadMe, logout,
+      guilds, selected, botOnline, botLatency, botInSelectedGuild,
+      loginUrl, error, setError,
+      setSelected, refresh: refreshAll, logout,
+      serversLoading, serversError, serversMeta, refreshServers,
       token, setToken: setTokenCompat, setGuilds,
     }}>
       {children}

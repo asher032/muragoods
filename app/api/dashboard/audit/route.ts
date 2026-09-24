@@ -1,5 +1,6 @@
 import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
+import type { UpdateFilter, Document } from 'mongodb';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 
 export const dynamic = 'force-dynamic';
@@ -56,9 +57,15 @@ export async function POST(req: NextRequest) {
   };
 
   const collection = await discordConfigCollection();
+  // Capped like the dashboard-audit.ts path (100): an uncapped $push on the
+  // same guild_config doc lets one busy guild grow its document without bound.
+  const auditPush: { $push: { config_audit: { $each: typeof entry[]; $slice: number } }; $set: { updatedAt: Date } } = {
+    $push: { config_audit: { $each: [entry], $slice: -100 } },
+    $set: { updatedAt: new Date() },
+  };
   await collection.updateOne(
     { guildId },
-    { $push: { config_audit: entry } as any, $set: { updatedAt: new Date() } },
+    auditPush as unknown as UpdateFilter<Document>,
     { upsert: true },
   );
 

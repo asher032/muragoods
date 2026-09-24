@@ -24,6 +24,36 @@ interface MusicState {
   connected: boolean;
   state: 'playing' | 'paused' | 'idle';
   voiceChannel: string | null;
+  voiceChannelId?: string | null;
+  connectionState?: string;
+  playerState?: string;
+  reconnectAttempts?: number;
+  permissions?: {
+    view_channel: boolean | null;
+    connect: boolean | null;
+    speak: boolean | null;
+    all_granted: boolean;
+    missing: string[];
+    channel_name?: string;
+  } | null;
+  ffmpeg?: {
+    status: string;
+    version?: string | null;
+    error?: string | null;
+    exists?: boolean;
+    executable?: boolean;
+  } | null;
+  lastErrorCode?: string | null;
+  lastError?: string | null;
+  lastPlayback?: {
+    stage?: string;
+    ok?: boolean;
+    error_code?: string | null;
+    error_message?: string | null;
+    requested_title?: string;
+    resolved_title?: string;
+    timestamp?: string;
+  } | null;
   current: Track | null;
   position: number;
   volume: number;
@@ -33,6 +63,33 @@ interface MusicState {
   queue: Track[];
   queueLength: number;
   history: Track[];
+}
+
+interface Diagnostics {
+  gateway?: { alive?: boolean | null; heartbeat_age_seconds?: number | null };
+  audio_service?: {
+    status: string;
+    detail?: string;
+    youtube_challenged?: boolean;
+    last_error_kind?: string | null;
+    last_resolve_error?: string | null;
+    ydlp_version?: string;
+    cookies_configured?: boolean;
+  };
+  ffmpeg?: {
+    status: string;
+    version?: string | null;
+    error?: string | null;
+    exists?: boolean;
+    executable?: boolean;
+  };
+  last_playback?: MusicState['lastPlayback'];
+}
+
+interface TestAudioResult {
+  ok?: boolean;
+  stages?: Record<string, string>;
+  detail?: Record<string, unknown>;
 }
 
 type Feedback = 'like' | 'love' | 'dislike';
@@ -63,6 +120,10 @@ export default function MusicPage() {
   const [ffmpeg, setFfmpeg] = useState<boolean | null>(null);
   const [artFailed, setArtFailed] = useState(false);
   const [scrub, setScrub] = useState<number | null>(null);
+  const [diag, setDiag] = useState<Diagnostics | null>(null);
+  const [diagError, setDiagError] = useState('');
+  const [testResult, setTestResult] = useState<TestAudioResult | null>(null);
+  const [testing, setTesting] = useState(false);
 
   // Position is measured, not guessed: remember the player's position and the
   // wall-clock instant it was read, then advance from that baseline locally.
@@ -123,6 +184,51 @@ export default function MusicPage() {
       if (resp.ok) setFfmpeg(resp.data.bot?.ffmpeg ?? null);
     })();
   }, [token]);
+
+  // ⚙️ Music Diagnostics — real aggregate from the bot (audio service,
+  // FFmpeg, gateway, last playback failure). No secrets ever leave the bot.
+  const loadDiag = useCallback(async () => {
+    if (!token || !selected) return;
+    const resp = await apiFetch<{ success: boolean; diagnostics: Diagnostics; error?: string }>(
+      `/api/dashboard/music/diagnostics?guildId=${encodeURIComponent(selected.id)}`,
+      { token },
+    );
+    if (resp.ok && resp.data.success) {
+      setDiag(resp.data.diagnostics);
+      setDiagError('');
+    } else {
+      setDiag(null);
+      setDiagError(resp.ok
+        ? (resp.data as unknown as { error?: string }).error || 'Diagnostics unavailable'
+        : resp.error);
+    }
+  }, [token, selected]);
+
+  useEffect(() => {
+    loadDiag();
+    const poll = setInterval(loadDiag, 30000);
+    return () => clearInterval(poll);
+  }, [loadDiag]);
+
+  const runTestAudio = useCallback(async () => {
+    if (!token || !selected) return;
+    setTesting(true);
+    setTestResult(null);
+    const resp = await apiFetch<{ success: boolean; result: TestAudioResult; error?: string }>(
+      '/api/dashboard/music/test-audio',
+      { method: 'POST', token, body: { guildId: selected.id } },
+    );
+    if (resp.ok && resp.data.success) {
+      setTestResult(resp.data.result);
+      setError('');
+    } else {
+      setError(resp.ok
+        ? (resp.data as unknown as { error?: string }).error || 'Audio test failed with no reason given'
+        : resp.error);
+    }
+    setTesting(false);
+    await loadDiag();
+  }, [token, selected, loadDiag]);
 
   // The current track's feedback — real tallies, per user.
   useEffect(() => {
@@ -246,6 +352,158 @@ export default function MusicPage() {
           decoder is installed where the bot runs.
         </div>
       )}
+
+      {/* ── ⚙️ Music Diagnostics ── */}
+      <section className="cc-card" style={{ padding: '16px 20px', marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <div className="cc-section-label">⚙️ Music Diagnostics</div>
+            <div style={{ fontSize: 12.5, color: 'var(--cc-text-dim)', marginTop: 2 }}>
+              What failed, why it failed, and what needs to be fixed — measured on the bot host.
+            </div>
+          </div>
+          <button className="cc-btn cc-btn-primary" onClick={runTestAudio} disabled={testing}>
+            {testing ? 'Testing…' : '▶ Test Audio'}
+          </button>
+        </div>
+
+        {diagError && (
+          <div className="cc-alert cc-alert-error" style={{ marginTop: 12 }}>
+            <strong>Diagnostics unavailable.</strong> {diagError}
+          </div>
+        )}
+
+        {diag && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginTop: 14 }}>
+            <div>
+              <div className="cc-section-label">Audio Service</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginTop: 4 }}>
+                {diag.audio_service?.status === 'working' ? '🟢 Working'
+                  : diag.audio_service?.status === 'degraded' ? '🟡 Degraded'
+                  : diag.audio_service?.status === 'unavailable' ? '🔴 Unavailable'
+                  : '⚪ Unknown'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--cc-text-dim)', marginTop: 4 }}>
+                Checks whether the configured audio provider can resolve and provide playable audio.
+              </div>
+              {diag.audio_service?.detail && (
+                <div style={{ fontSize: 12, color: 'var(--cc-text-faint)', marginTop: 4 }}>{diag.audio_service.detail}</div>
+              )}
+              {diag.audio_service?.youtube_challenged && (
+                <div style={{ fontSize: 12, color: '#f0b429', marginTop: 4 }}>
+                  ⚠️ YouTube challenged this host — set <code>YT_COOKIES</code> or <code>YOUTUBE_PROXY</code>.
+                </div>
+              )}
+            </div>
+            <div>
+              <div className="cc-section-label">FFmpeg</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginTop: 4 }}>
+                {diag.ffmpeg?.status === 'ready' ? '🟢 Ready'
+                  : diag.ffmpeg?.status === 'missing' ? '🔴 Missing'
+                  : diag.ffmpeg?.status === 'failed' ? '🔴 Failed'
+                  : '⚪ Unknown'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--cc-text-dim)', marginTop: 4 }}>
+                Checks whether FFmpeg is installed, accessible, and capable of processing the selected audio stream.
+              </div>
+              {diag.ffmpeg?.version && (
+                <div style={{ fontSize: 11.5, color: 'var(--cc-text-faint)', marginTop: 4, fontFamily: 'monospace' }}>
+                  {diag.ffmpeg.version.slice(0, 80)}
+                </div>
+              )}
+              {diag.ffmpeg?.error && diag.ffmpeg.status !== 'ready' && (
+                <div style={{ fontSize: 12, color: '#ff6b6b', marginTop: 4 }}>{diag.ffmpeg.error}</div>
+              )}
+            </div>
+            <div>
+              <div className="cc-section-label">Discord Voice</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginTop: 4 }}>
+                {diag.gateway?.alive === true && connected ? '🟢 Connected'
+                  : state?.connectionState === 'reconnecting' || state?.connectionState === 'connecting' ? '🟡 Connecting'
+                  : '🔴 Disconnected'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--cc-text-dim)', marginTop: 4 }}>
+                Checks whether the bot can establish and maintain a Discord voice connection.
+              </div>
+              {state?.reconnectAttempts ? (
+                <div style={{ fontSize: 12, color: 'var(--cc-text-faint)', marginTop: 4 }}>
+                  Reconnects: {state.reconnectAttempts}
+                </div>
+              ) : null}
+            </div>
+            <div>
+              <div className="cc-section-label">Player</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginTop: 4 }}>
+                {state?.playerState === 'playing' ? '🟢 Playing'
+                  : state?.playerState === 'paused' ? '🟢 Paused'
+                  : state?.playerState === 'buffering' ? '🟡 Buffering'
+                  : state?.playerState === 'reconnecting' ? '🟡 Reconnecting'
+                  : state?.playerState === 'error' ? '🔴 Error'
+                  : '🟢 Idle'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--cc-text-dim)', marginTop: 4 }}>
+                Shows the current music player&apos;s operational state.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bot permissions — automatic check of the current voice channel */}
+        {state?.permissions && (
+          <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="cc-section-label">🔐 Bot Permissions{state.voiceChannel ? ` — ${state.voiceChannel}` : ''}</div>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 8, fontSize: 13 }}>
+              {(['view_channel', 'connect', 'speak'] as const).map((k) => (
+                <span key={k}>
+                  {state.permissions?.[k] ? '🟢' : '🔴'}{' '}
+                  {k === 'view_channel' ? 'View Channel' : k === 'connect' ? 'Connect' : 'Speak'}:{' '}
+                  {state.permissions?.[k] ? 'Granted' : 'Missing'}
+                </span>
+              ))}
+            </div>
+            {state.permissions && !state.permissions.all_granted && (
+              <div style={{ marginTop: 6, fontSize: 12.5, color: '#f0b429' }}>
+                ⚠️ The bot cannot play audio because {(state.permissions.missing || []).join(', ') || 'a permission'} is missing.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Last playback failure — what failed and why */}
+        {(state?.lastPlayback && !state.lastPlayback.ok) || (diag?.last_playback && !diag.last_playback.ok) ? (
+          <div className="cc-alert cc-alert-error" style={{ marginTop: 12, fontSize: 13 }}>
+            <strong>Last playback failure:</strong>{' '}
+            <code>{(state?.lastPlayback || diag?.last_playback)?.stage}</code>
+            {' → '}
+            <code>{(state?.lastPlayback || diag?.last_playback)?.error_code}</code>
+            {(state?.lastPlayback || diag?.last_playback)?.error_message && (
+              <div style={{ marginTop: 4 }}>{(state?.lastPlayback || diag?.last_playback)?.error_message}</div>
+            )}
+          </div>
+        ) : null}
+
+        {/* Test Audio staged results */}
+        {testResult?.stages && (
+          <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 10, background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.06)', fontFamily: 'monospace', fontSize: 12.5 }}>
+            {[
+              ['discord_gateway', 'Discord Gateway'],
+              ['voice_permissions', 'Voice Permissions'],
+              ['ffmpeg', 'FFmpeg'],
+              ['audio_source', 'Audio Source'],
+              ['playback', 'Playback'],
+            ].map(([key, label]) => {
+              const v = testResult.stages?.[key] || 'NOT TESTED';
+              const icon = v === 'PASS' ? '🟢' : v === 'FAIL' ? '🔴' : '⚪';
+              return (
+                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                  <span>{(label as string).padEnd(18)}</span>
+                  <span>{icon} {v}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {loading && !state && <p style={{ color: 'var(--cc-text-faint)' }}>Reading player state…</p>}
 

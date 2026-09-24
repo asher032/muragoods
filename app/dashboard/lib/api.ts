@@ -95,6 +95,52 @@ export interface GuildSummary {
   icon: string | null;
   owner: boolean;
   members: number | null;
+  botInstalled?: boolean | null;
+  botOnlineInGuild?: boolean | null;
+}
+
+// One server from the unified detection endpoint
+// (GET /api/dashboard/servers). The four membership sources are reported
+// independently — managing a server never implies the bot is installed.
+export interface DetectedServer {
+  id: string;
+  name: string;
+  icon: string | null;
+  owner: boolean;
+  inUserGuilds: boolean;
+  userCanManage: boolean;
+  userPermissions: string;
+  botInGateway: boolean | null;
+  botInRest: boolean | null;
+  botInstalled: boolean | null;
+  botOnlineInGuild: boolean | null;
+  botPermissions: string | null;
+  botIsAdmin: boolean | null;
+  channelCount: number | null;
+  categoryCount: number | null;
+  roleCount: number | null;
+  memberCount: number | null;
+  presenceCount: number | null;
+  botConnection: 'online' | 'offline' | 'unknown';
+  inviteUrl: string | null;
+  needsInvite: boolean;
+  missingPermissions: boolean;
+}
+
+export interface ServersMeta {
+  botOnline: boolean | null;
+  botGuildCount: number | null;
+  userGuildCount: number;
+  manageableCount: number;
+  refreshedAt: string;
+  cached?: boolean;
+}
+
+export interface ServersResponse {
+  success: boolean;
+  servers: DetectedServer[];
+  meta: ServersMeta;
+  error?: string;
 }
 
 export interface BotServiceHealth {
@@ -120,6 +166,9 @@ export interface BotDetail {
   ffmpeg: boolean | null;
   guilds: number | null;
   databaseDetail: { configured: boolean | null; errorClass: string | null; hint: string | null } | null;
+  user: { username: string | null; avatarUrl: string | null; applicationId: string | number | null } | null;
+  connectionState: string | null;
+  lastApiCheck: { at: string | null; latencyMs: number | null; reachable: boolean | null } | null;
 }
 
 export interface BotStatusResponse {
@@ -173,6 +222,21 @@ export interface ActivityEntry {
 export const dashboardApi = {
   guilds: (token: string) =>
     apiFetch<{ success: boolean; guilds: GuildSummary[] }>('/api/dashboard/guilds', { token }),
+
+  // Unified server detection (live user auth × live bot presence, verified
+  // server-side). forceRefresh=true bypasses the 45s cache (Refresh button).
+  servers: (forceRefresh = false) =>
+    apiFetch<ServersResponse>(`/api/dashboard/servers${forceRefresh ? '?refresh=1' : ''}`),
+
+  refreshServers: () =>
+    apiFetch<ServersResponse>('/api/dashboard/servers', { method: 'POST' }),
+
+  // Single-server verification. The guildId is re-verified server-side
+  // (user-manages + live bot check) — never trusted from the caller.
+  server: (guildId: string) =>
+    apiFetch<{ success: boolean; server: DetectedServer; meta: ServersMeta; error?: string }>(
+      `/api/dashboard/servers?guildId=${encodeURIComponent(guildId)}`,
+    ),
 
   config: (token: string, guildId: string) =>
     apiFetch<{ success: boolean; config: GuildConfigDoc; guild: { id: string; name: string; icon: string | null } }>(

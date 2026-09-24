@@ -11,7 +11,15 @@ const COOKIE_NAME = 'mura_session';
 const MAX_AGE_SEC = 30 * 24 * 60 * 60; // 30 days
 
 function sessionSecret(): string {
-  return process.env.AUTH_SECRET || process.env.MONGODB_URI || 'muragoods-dev-secret';
+  // AUTH_SECRET is mandatory. There is deliberately no fallback: deriving the
+  // HMAC key from MONGODB_URI (a value with different rotation/exposure
+  // characteristics) or a public static string makes every mura_session
+  // cookie forgeable. Throws so misconfiguration fails closed and loudly.
+  const secret = process.env.AUTH_SECRET || '';
+  if (!secret || secret.length < 16) {
+    throw new Error('AUTH_SECRET is not configured (set a 16+ character secret)');
+  }
+  return secret;
 }
 
 function sign(payload: string): string {
@@ -29,7 +37,13 @@ export function verifySessionToken(token: string | undefined): { email: string }
   if (dot <= 0) return null;
   const payload = token.slice(0, dot);
   const sig = token.slice(dot + 1);
-  const expected = sign(payload);
+  let expected: string;
+  try {
+    expected = sign(payload);
+  } catch {
+    // AUTH_SECRET missing/misconfigured — fail closed: no session validates.
+    return null;
+  }
   const a = Buffer.from(sig);
   const b = Buffer.from(expected);
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;

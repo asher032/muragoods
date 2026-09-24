@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useGuild } from '@/app/lib/guild-context';
-import { Bot, Menu } from 'lucide-react';
+import { Bot, Menu, RefreshCw, Search } from 'lucide-react';
 import Sidebar from './Sidebar';
 import ServerSwitcher from './ServerSwitcher';
 
@@ -20,9 +20,17 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const pathname = usePathname();
   const {
     authChecked, authenticated, guilds, selected, botOnline,
-    loginUrl, error, setSelected, logout,
+    botInSelectedGuild, loginUrl, error, setSelected, logout,
+    serversLoading, serversError, serversMeta, refreshServers,
   } = useGuild();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [chooserQuery, setChooserQuery] = useState('');
+
+  const chooserGuilds = useMemo(() => {
+    const q = chooserQuery.trim().toLowerCase();
+    if (!q) return guilds;
+    return guilds.filter((g) => g.name.toLowerCase().includes(q) || g.id.includes(q));
+  }, [guilds, chooserQuery]);
 
   // Reset an invalid selection when the guild list arrives without it.
   useEffect(() => {
@@ -117,36 +125,121 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             selection is remembered across visits.
           </p>
           {error && <div className="cc-alert cc-alert-error" role="alert" style={{ marginBottom: 14 }}>{error}</div>}
+          {serversError && <div className="cc-alert cc-alert-error" role="alert" style={{ marginBottom: 14 }}>{serversError}</div>}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <div style={{ position: 'relative', flex: 1 }}>
+              <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--cc-text-faint)' }} />
+              <input
+                className="cc-input"
+                placeholder="Search servers…"
+                value={chooserQuery}
+                onChange={(e) => setChooserQuery(e.target.value)}
+                style={{ paddingLeft: 30 }}
+              />
+            </div>
+            <button
+              className="cc-btn"
+              onClick={() => void refreshServers(true)}
+              disabled={serversLoading}
+              title="Re-detect servers from Discord and the bot"
+              style={{ whiteSpace: 'nowrap' }}
+            >
+              <RefreshCw size={14} />
+              {serversLoading ? 'Refreshing…' : 'Refresh Servers'}
+            </button>
+          </div>
+          {serversMeta && (
+            <p style={{ margin: '0 0 12px', fontSize: 11.5, color: 'var(--cc-text-faint)' }}>
+              {serversMeta.manageableCount} manageable · {serversMeta.botGuildCount ?? '?'} bot servers
+              {serversMeta.cached ? ' · cached' : ' · live'}
+            </p>
+          )}
           <div style={{ display: 'grid', gap: 8 }}>
-            {guilds.length === 0 && (
+            {guilds.length === 0 && !serversLoading && (
               <p style={{ color: 'var(--cc-text-faint)', fontSize: 13, margin: 0 }}>
                 You don&apos;t manage any servers yet. Add the MuraGoods bot to one of your
-                servers first, then sign out and back in to refresh this list.
+                servers first, then hit Refresh Servers.
               </p>
             )}
-            {guilds.map((g) => (
-              <button
-                key={g.id}
-                className="cc-btn"
-                style={{ justifyContent: 'flex-start', gap: 12, padding: '10px 14px' }}
-                onClick={() => setSelected(g)}
-              >
-                {g.icon ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={g.icon} alt="" width={28} height={28} style={{ borderRadius: 8 }} />
-                ) : (
-                  <span style={{
-                    width: 28, height: 28, borderRadius: 8, background: 'rgba(88,101,242,0.35)',
-                    display: 'grid', placeItems: 'center', fontSize: 13, color: '#fff',
-                  }}>
-                    {g.name.charAt(0).toUpperCase()}
+            {chooserGuilds.length === 0 && guilds.length > 0 && (
+              <p style={{ color: 'var(--cc-text-faint)', fontSize: 13, margin: 0 }}>
+                No servers match your search.
+              </p>
+            )}
+            {chooserGuilds.map((g) => (
+              <div key={g.id} className="cc-card" style={{ padding: '10px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {g.icon ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={g.icon} alt="" width={28} height={28} style={{ borderRadius: 8 }} />
+                  ) : (
+                    <span style={{
+                      width: 28, height: 28, borderRadius: 8, background: 'rgba(88,101,242,0.35)',
+                      display: 'grid', placeItems: 'center', fontSize: 13, color: '#fff',
+                    }}>
+                      {g.name.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: 'block', color: '#fff', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {g.name}
+                    </span>
+                    <span style={{ display: 'block', fontSize: 11, color: 'var(--cc-text-faint)' }}>
+                      {g.owner ? 'Owner' : 'Manager'}
+                      {typeof g.memberCount === 'number' ? ` · ${g.memberCount} members` : ''}
+                      {typeof g.channelCount === 'number' ? ` · ${g.channelCount} channels` : ''}
+                      {typeof g.roleCount === 'number' ? ` · ${g.roleCount} roles` : ''}
+                    </span>
                   </span>
+                  {g.botInstalled === true && g.botConnection === 'online' && (
+                    <span className="cc-status-pill cc-status-online" style={{ fontSize: 10.5 }}>
+                      <span className="cc-dot" /> Bot installed
+                    </span>
+                  )}
+                  {g.botInstalled === true && g.botConnection !== 'online' && (
+                    <span className="cc-status-pill cc-status-degraded" style={{ fontSize: 10.5 }}>
+                      <span className="cc-dot" /> Bot offline
+                    </span>
+                  )}
+                  {g.botInstalled === false && (
+                    <span className="cc-status-pill cc-status-offline" style={{ fontSize: 10.5 }}>
+                      <span className="cc-dot" /> Bot not installed
+                    </span>
+                  )}
+                  {g.botInstalled == null && (
+                    <span className="cc-status-pill" style={{ fontSize: 10.5 }}>
+                      <span className="cc-dot" /> Bot unknown
+                    </span>
+                  )}
+                </div>
+                {g.missingPermissions && (
+                  <div className="cc-alert cc-alert-error" style={{ marginTop: 8, fontSize: 12 }}>
+                    Missing permissions — the bot is installed but holds no useful grant. Re-invite it or fix its role.
+                  </div>
                 )}
-                <span style={{ color: '#fff', fontWeight: 600 }}>{g.name}</span>
-                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--cc-text-faint)' }}>
-                  {g.owner ? 'Owner' : 'Manager'}
-                </span>
-              </button>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <button
+                    className="cc-btn cc-btn-primary"
+                    style={{ flex: 1, justifyContent: 'center', fontSize: 12.5 }}
+                    onClick={() => setSelected(g)}
+                    disabled={g.botInstalled === false}
+                    title={g.botInstalled === false ? 'Invite the bot first' : `Manage ${g.name}`}
+                  >
+                    Manage server
+                  </button>
+                  {g.needsInvite && g.inviteUrl && (
+                    <a
+                      href={g.inviteUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="cc-btn"
+                      style={{ flex: 1, justifyContent: 'center', fontSize: 12.5 }}
+                    >
+                      Invite Bot
+                    </a>
+                  )}
+                </div>
+              </div>
             ))}
           </div>
           <button onClick={() => void logout()} className="cc-link" style={{ marginTop: 18, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12.5 }}>
@@ -192,6 +285,34 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           </div>
         </header>
         <main style={{ padding: '28px 28px 60px', maxWidth: 1360, margin: '0 auto' }}>
+          {/* Per-server bot state, verified server-side. Never assume the bot
+              is installed just because the user manages the server. */}
+          {selected && botInSelectedGuild === false && (
+            <div className="cc-alert cc-alert-error" role="alert" style={{ marginBottom: 16, fontSize: 13 }}>
+              <strong>Bot not installed on {selected.name}.</strong>{' '}
+              Invite it before changing settings — nothing here can apply until the bot joins.
+              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                {selected.inviteUrl ? (
+                  <a href={selected.inviteUrl} target="_blank" rel="noreferrer" className="cc-btn cc-btn-primary" style={{ fontSize: 12.5 }}>
+                    Invite Bot to {selected.name}
+                  </a>
+                ) : (
+                  <a href="/api/auth/discord/install" className="cc-btn cc-btn-primary" style={{ fontSize: 12.5 }}>
+                    Invite Bot
+                  </a>
+                )}
+                <button className="cc-btn" style={{ fontSize: 12.5 }} onClick={() => void refreshServers(true)} disabled={serversLoading}>
+                  <RefreshCw size={13} /> {serversLoading ? 'Checking…' : 'Recheck'}
+                </button>
+              </div>
+            </div>
+          )}
+          {selected?.missingPermissions && botInSelectedGuild !== false && (
+            <div className="cc-alert cc-alert-error" role="alert" style={{ marginBottom: 16, fontSize: 13 }}>
+              <strong>Missing permissions on {selected.name}.</strong>{' '}
+              The bot is installed but holds no useful grant. Re-invite it or fix its role.
+            </div>
+          )}
           {children}
         </main>
       </div>

@@ -51,6 +51,48 @@ function formatUptime(seconds: number | null): string {
   return `${m}m`;
 }
 
+const CONNECTION_META: Record<string, { label: string; dot: string; hint: string }> = {
+  online_connected: { label: 'Online & Connected', dot: '#3ddc84', hint: 'Gateway authenticated, heartbeats ACKed, Discord API reachable.' },
+  connecting: { label: 'Connecting', dot: '#f0b429', hint: 'Socket opening or reconnecting — not yet ready.' },
+  offline: { label: 'Offline', dot: '#ff6b6b', hint: 'Bot process closed or never started its gateway session.' },
+  invalid_token: { label: 'Invalid Token', dot: '#ff6b6b', hint: 'Discord rejected the token — check DISCORD_TOKEN on the bot host.' },
+  gateway_failed: { label: 'Gateway Connection Failed', dot: '#ff6b6b', hint: 'Was connected before; heartbeats stopped while Discord API stays reachable.' },
+  api_unavailable: { label: 'Discord API Unavailable', dot: '#ff6b6b', hint: 'Discord itself is not answering — explains a dead gateway.' },
+};
+
+function BotIdentity({ username, avatarUrl, applicationId, connectionState }: {
+  username: string | null;
+  avatarUrl: string | null;
+  applicationId: string | number | null;
+  connectionState: string | null;
+}) {
+  const meta = (connectionState && CONNECTION_META[connectionState]) || null;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 12, flexWrap: 'wrap' }}>
+      {avatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={avatarUrl} alt="" width={48} height={48} style={{ borderRadius: '50%', display: 'block' }} />
+      ) : (
+        <span style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🤖</span>
+      )}
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>{username ?? 'Unknown bot'}</div>
+        <div style={{ fontSize: 12, color: 'var(--cc-text-faint)' }}>
+          App ID: <span style={{ fontFamily: 'monospace' }}>{applicationId ?? '—'}</span>
+        </div>
+      </div>
+      <span
+        className="cc-status-pill"
+        title={meta?.hint || 'No live connection state — the bot is unreachable.'}
+        style={{ marginLeft: 'auto' }}
+      >
+        <span className="cc-dot" style={meta ? { background: meta.dot } : undefined} />
+        {meta ? `${meta.dot === '#3ddc84' ? '🟢' : meta.dot === '#f0b429' ? '🟡' : '🔴'} ${meta.label}` : '⚪ Unknown'}
+      </span>
+    </div>
+  );
+}
+
 export default function HealthPage() {
   const { token, selected } = useGuild();
   const [status, setStatus] = useState<BotStatusResponse | null>(null);
@@ -163,6 +205,14 @@ export default function HealthPage() {
       {/* ── Bot runtime — real measurements from the bot's own /health ── */}
       <div className="cc-card" style={{ padding: '16px 20px', marginBottom: 18 }}>
         <div className="cc-section-label">🤖 Bot runtime — measured, not inferred</div>
+        {status?.bot && (
+          <BotIdentity
+            username={status.bot.user?.username ?? null}
+            avatarUrl={status.bot.user?.avatarUrl ?? null}
+            applicationId={status.bot.user?.applicationId ?? null}
+            connectionState={status.bot.connectionState ?? null}
+          />
+        )}
         {!status ? (
           <p style={{ color: 'var(--cc-text-faint)', fontSize: 13, margin: '10px 0 0' }}>Waiting for the first check…</p>
         ) : !status.bot ? (
@@ -218,6 +268,25 @@ export default function HealthPage() {
                 <div className="cc-section-label">Latency</div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>
                   {status.bot.latency != null ? `${status.bot.latency}ms` : '—'}
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--cc-text-faint)' }}>
+                  gateway heartbeat round-trip
+                </div>
+              </div>
+              <div>
+                <div className="cc-section-label">Discord API</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>
+                  {status.bot.lastApiCheck?.reachable === true
+                    ? `🟢 Reachable${status.bot.lastApiCheck.latencyMs != null ? ` · ${status.bot.lastApiCheck.latencyMs}ms` : ''}`
+                    : status.bot.lastApiCheck?.reachable === false
+                      ? '🔴 Unavailable'
+                      : '⚪ Not checked'}
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--cc-text-faint)' }}>
+                  Last successful check:{' '}
+                  {status.bot.lastApiCheck?.at
+                    ? new Date(status.bot.lastApiCheck.at).toLocaleTimeString()
+                    : 'never'}
                 </div>
               </div>
               <div>

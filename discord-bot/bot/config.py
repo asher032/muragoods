@@ -24,7 +24,11 @@ BOT_PREFIX = _get("BOT_PREFIX", "mg!")             # default per-guild command p
 BOT_ACTIVITY = _get("BOT_ACTIVITY", "MuraStream • /help")
 
 # Comma-separated Discord user IDs allowed to use /requests admin actions.
-BOT_ADMIN_IDS = {u.strip() for u in _get("BOT_ADMIN_IDS").split(",") if u.strip()}
+# Stored as ints: every call site compares against interaction.user.id (int),
+# so keeping strings here silently disabled every admin exemption.
+BOT_ADMIN_IDS = {int(u) for u in
+                 (part.strip() for part in _get("BOT_ADMIN_IDS").split(","))
+                 if u.isdigit()}
 
 # ── MuraStream website ───────────────────────────────────────────────────
 MURASTREAM_URL = _get("MURASTREAM_URL", "https://muragoods.vercel.app").rstrip("/")

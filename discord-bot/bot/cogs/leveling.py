@@ -118,26 +118,24 @@ class LevelingCog(commands.Cog):
         from datetime import timedelta
         now = datetime.now(timezone.utc)
         cutoff = now - timedelta(hours=24)
-        # Try to grant only if the last claim is older than 24h.
-        doc = await database._db.economy.find_one_and_update(
+        # Ensure the member has an economy row (idempotent, never overwrites
+        # any existing balance). Backdated lastDaily lets brand-new users claim.
+        await database._db.economy.update_one(
+            {"guildId": interaction.guild.id, "userId": interaction.user.id},
+            {"$setOnInsert": {"balance": 100, "lastDaily": now - timedelta(days=2)}},
+            upsert=True)
+        # Atomically claim: the bump only applies when there is no lastDaily or
+        # it is older than 24h, so concurrent claims can't double-pay.
+        res = await database._db.economy.update_one(
             {"guildId": interaction.guild.id, "userId": interaction.user.id,
-             "lastDaily": {"$not": {"$gte": cutoff}}},
-            {"$inc": {"balance": 250}, "$set": {"lastDaily": now}},
-            upsert=True, return_document=True,
-        )
-        # Mongo returns datetimes as naive-UTC — normalize before comparing.
-        last = doc.get("lastDaily")
-        if isinstance(last, datetime) and last.tzinfo is None:
-            last = last.replace(tzinfo=timezone.utc)
-        if last is not None and (now - last) < timedelta(hours=250) and (now - last) >= timedelta(hours=23, minutes=59):
+             "$or": [{"lastDaily": None}, {"lastDaily": {"$lte": cutoff}}]},
+            {"$inc": {"balance": 250}, "$set": {"lastDaily": now}})
+        if res.modified_count:
             await interaction.followup.send(embed=embeds.ok(
                 "🎁 Daily claimed!", "+**250** coins — come back tomorrow."))
-        elif last is not None and (now - last) < timedelta(hours=23, minutes=59):
+        else:
             await interaction.followup.send(embed=embeds.embed(
                 "⏳ Already claimed", "Your daily coins reset every 24 hours.", embeds.WARN))
-        else:
-            await interaction.followup.send(embed=embeds.ok(
-                "🎁 Daily claimed!", "+**250** coins — come back tomorrow."))
 
     @app_commands.command(name="pay", description="Send coins to another member.")
     @app_commands.describe(user="Recipient", amount="How many coins")
@@ -154,9 +152,15 @@ class LevelingCog(commands.Cog):
         if not sender or sender.get("balance", 0) < amount:
             await interaction.followup.send("Insufficient funds.", ephemeral=True)
             return
-        await database._db.economy.update_one(
-            {"guildId": interaction.guild.id, "userId": interaction.user.id},
+        # Atomic guarded debit: only succeeds while the balance still covers
+        # the amount, so concurrent pays can't drive a negative balance.
+        res = await database._db.economy.update_one(
+            {"guildId": interaction.guild.id, "userId": interaction.user.id,
+             "balance": {"$gte": amount}},
             {"$inc": {"balance": -amount}})
+        if not res.modified_count:
+            await interaction.followup.send("Insufficient funds (spent it elsewhere).", ephemeral=True)
+            return
         await database._db.economy.update_one(
             {"guildId": interaction.guild.id, "userId": user.id},
             {"$inc": {"balance": amount}}, upsert=True)

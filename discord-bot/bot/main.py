@@ -5,7 +5,7 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # Make sibling modules importable regardless of how the bot is launched.
@@ -20,6 +20,7 @@ import database
 import embeds
 import net as http_mod
 import tmdb
+import threading
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,77 +37,52 @@ _reconnect_count = 0
 # OUTER login loop in main() re-runs, so it never observes discord.py's own
 # internal reconnects; `_gateway_reconnects` is driven by on_disconnect.
 _gateway_reconnects = 0
+# Whether the gateway has EVER become ready in this process. Distinguishes
+# "still starting / reconnecting" (never ready) from "was connected and lost
+# it" (gateway_failed) — the dashboard must not label a fresh boot as failed.
+_ever_ready = False
+# Set when Discord rejects the token. The process exits right after, but the
+# flag lets any still-serving /health answer invalid_token instead of offline.
+_login_failed = False
+# Last Discord API reachability probe (unauthenticated, credential-free).
+# Only overwritten on SUCCESS, so `at` is the last SUCCESSFUL check.
+_last_api_check: dict | None = None
 # Discord's heartbeat interval is ~41s, so 150s without a heartbeat ACK means
 # the socket is dead rather than merely idle. Generous on purpose: a brief
 # reconnect must not flip /health to a failing state and provoke a restart.
 GATEWAY_STALE_AFTER = 150.0
 
 
-def gateway_liveness(bot) -> tuple[bool, float | None, str | None]:
-    """Measure real gateway liveness from the socket's own heartbeat ACK clock.
+# ── Guild registry for event bookkeeping (no config decisions here) ──────
+# Owned by main.py. Cogs consult the DB themselves; this is only the shared
+# thread-safe bitset of guilds the bot is currently in, refreshed by gateway
+# events so the dashboard's perimeter endpoint can be cross-checked against the
+# process's own view without hitting Discord for every request.
+_guilds_lock = threading.Lock()
+_guild_ids: set[int] = set()
 
-    Returns ``(alive, heartbeat_age_seconds, last_heartbeat_iso)``.
 
-    Why the ACK clock and not a counter: ``ConnectionState.last_heartbeat`` does
-    not exist (verified absent on discord.py 2.7.1), so the previous lookup
-    returned null forever and ``discord`` stayed "online" even after the socket
-    died. ``DiscordWebSocket._last_ack`` is updated on every heartbeat ACK and
-    is not gated behind a client flag, so it is a genuine measurement.
+def _register_guild(guild: discord.Guild) -> None:
+    with _guilds_lock:
+        _guild_ids.add(guild.id)
 
-    ``on_socket_raw_receive`` is deliberately NOT used here: it only fires when
-    the client is built with ``enable_debug_events=True``, so depending on it
-    would freeze on a healthy bot and fabricate an outage.
 
-    If the ACK clock is unavailable (library drift), this falls back to the
-    ready flag rather than failing closed — never invent an outage.
-    """
-    def _ack_clock(socket) -> float | None:
-        """The heartbeat-ACK perf_counter for one websocket, or None.
+def _unregister_guild(guild_id: int) -> None:
+    with _guilds_lock:
+        _guild_ids.discard(guild_id)
 
-        Path verified against discord.py 2.7.1 source rather than assumed:
-        `_last_ack` is an instance attribute of KeepAliveHandler (set in its
-        __init__, refreshed in ack()), and the socket reaches it through
-        `DiscordWebSocket._keep_alive`. Two earlier guesses were both wrong and
-        failed silently, which is why /health kept reporting null:
-          * `ConnectionState.last_heartbeat` does not exist at all.
-          * `ShardInfo.ws` does not exist — its __slots__ are
-            ('_parent', 'id', 'shard_count'), so the socket is `_parent.ws`.
-            `bot.shards` also only exists on AutoShardedClient, so on this
-            non-sharded client the lookup raised on every single call.
-        """
-        keep_alive = getattr(socket, "_keep_alive", None)
-        ack = getattr(keep_alive, "_last_ack", None)
-        return ack if isinstance(ack, (int, float)) else None
 
-    hb_age: float | None = None
-    try:
-        sockets = []
-        # Non-sharded client (what MuraBot runs as): the socket is on the bot.
-        direct = getattr(bot, "ws", None)
-        if direct is not None:
-            sockets.append(direct)
-        # AutoShardedClient, if this ever runs sharded: ShardInfo -> _parent.ws.
-        for si in (getattr(bot, "shards", None) or {}).values():
-            parent = getattr(si, "_parent", None)
-            socket = getattr(parent, "ws", None) or getattr(si, "ws", None)
-            if socket is not None:
-                sockets.append(socket)
-        acks = [a for a in (_ack_clock(s) for s in sockets) if a is not None]
-        if acks:
-            hb_age = max(time.perf_counter() - a for a in acks)
-    except Exception:
-        hb_age = None
+def bot_guild_id_set() -> set[int]:
+    """Snapshot of guilds the bot believes it is currently in."""
+    with _guilds_lock:
+        return set(_guild_ids)
 
-    if hb_age is not None:
-        alive = hb_age < GATEWAY_STALE_AFTER
-        last_iso = datetime.fromtimestamp(time.time() - hb_age).isoformat()
-    else:
-        alive = bool(bot.is_ready())
-        last_iso = None
-    return alive, hb_age, last_iso
 
 # Flipped to False if Discord rejects the privileged-intent request; the bot
 # then restarts without them (automod message-scan + welcome events disabled).
+# NOTE: this block (intent flags, prefix resolver, MuraBot, instantiation)
+# lives ABOVE the @bot.event dispatcher on purpose — the decorators below
+# need a constructed bot at import time.
 _privileged_ok = True
 
 # ── Per-guild command prefix ─────────────────────────────────────────────
@@ -255,7 +231,7 @@ class MuraBot(commands.Bot):
                         config.BOT_STATUS.lower(), discord.Status.online))
         log.info("Logged in as %s (%s) - %d guilds", self.user, getattr(self.user, "id", "?"), len(self.guilds))
 
-    async def on_guild_join(self, guild: discord.Guild) -> None:
+    async def _sync_guild_commands(self, guild: discord.Guild) -> None:
         try:
             await self.tree.sync(guild=guild)
             log.info("Guild-synced commands for %s", guild.id)
@@ -264,6 +240,350 @@ class MuraBot(commands.Bot):
 
 
 bot = MuraBot()
+
+
+# ── Cross-cutting gateway events (bookkeeping + forward to cogs) ─────────
+# These live here, not in a cog, because they are the dispatcher the modules
+# rely on: each module already owns its own @Cog.listener hooks for the events
+# it cares about. Here we (a) keep the guild registry honest, (b) do the small
+# bits no module should own (deduplication metadata, cross-guild logging), and
+# (c) never make a config decision — that belongs in the owning cog.
+
+
+@bot.event
+async def on_ready():
+    """Rebuild the guild registry from the gateway state once the connection is up."""
+    global _ever_ready
+    _ever_ready = True
+    with _guilds_lock:
+        _guild_ids = {g.id for g in bot.guilds}
+    log.info("on_ready: guild registry rebuilt — %d guilds", len(_guild_ids))
+
+
+@bot.event
+async def on_connect():
+    """Gateway socket opened. Do not flip app-state here — on_resumed does that
+    once the session is fully re-authenticated."""
+    log.info("Gateway connected")
+
+
+@bot.event
+async def on_disconnect():
+    """Gateway socket closed. discord.py will reconnect by default."""
+    global _gateway_reconnects
+    _gateway_reconnects += 1
+    log.warning(
+        "Gateway disconnected (count=%d) — discord.py will auto-reconnect",
+        _gateway_reconnects,
+    )
+
+
+@bot.event
+async def on_resumed():
+    """Session re-authenticated/resumed (includes initial ready handshake)."""
+    with _guilds_lock:
+        _guild_ids = {g.id for g in bot.guilds}
+    log.info("Gateway session resumed — %d guilds in registry", len(_guild_ids))
+
+
+@bot.event
+async def on_guild_join(guild: discord.Guild):
+    _register_guild(guild)
+    log.info("on_guild_join: %s (%s) — %d guilds now", guild.name, guild.id, len(_guild_ids))
+
+
+@bot.event
+async def on_guild_leave(guild: discord.Guild):
+    _unregister_guild(guild.id)
+    log.info("on_guild_leave: %s (%s) — %d guilds remain", guild.name, guild.id, len(_guild_ids))
+
+
+@bot.event
+async def on_guild_available(guild: discord.Guild):
+    """Guild data refreshed from the gateway (e.g. after reconnect)."""
+    if guild.owner_id and not guild.id in _guild_ids:
+        _register_guild(guild)
+
+
+@bot.event
+async def on_guild_unavailable(guild: discord.Guild):
+    """Guild dropped from the cache (often transient after reconnect)."""
+    _unregister_guild(guild.id)
+
+
+@bot.event
+async def on_member_join(member: discord.Member):
+    """New member joined. Forward to every cog that opted in."""
+    for cog in bot.cogs.values():
+        if hasattr(cog, "on_member_join"):
+            try:
+                await cog.on_member_join(member)
+            except Exception:
+                log.exception("cog.on_member_join raised in %s", cog.qualified_name)
+
+
+@bot.event
+async def on_member_remove(member: discord.Member):
+    """Member left/banned/kicked. Forward to every cog that opted in."""
+    for cog in bot.cogs.values():
+        if hasattr(cog, "on_member_remove"):
+            try:
+                await cog.on_member_remove(member)
+            except Exception:
+                log.exception("cog.on_member_remove raised in %s", cog.qualified_name)
+
+
+@bot.event
+async def on_member_ban(guild: discord.Guild, user: discord.User):
+    """User banned. Forward to every cog that opted in."""
+    for cog in bot.cogs.values():
+        if hasattr(cog, "on_member_ban"):
+            try:
+                await cog.on_member_ban(guild, user)
+            except Exception:
+                log.exception("cog.on_member_ban raised in %s", cog.qualified_name)
+
+
+@bot.event
+async def on_member_unban(guild: discord.Guild, user: discord.User):
+    """User unbanned. Forward to every cog that opted in."""
+    for cog in bot.cogs.values():
+        if hasattr(cog, "on_member_unban"):
+            try:
+                await cog.on_member_unban(guild, user)
+            except Exception:
+                log.exception("cog.on_member_unban raised in %s", cog.qualified_name)
+
+
+@bot.event
+async def on_member_update(before: discord.Member, after: discord.Member):
+    """Member metadata changed: roles, nickname, pending, timed_out."""
+    if (before.roles != after.roles or before.nick != after.nick or before.pending != after.pending or
+            (hasattr(before, "timed_out_until") and before.timed_out_until != after.timed_out_until)):
+        for cog in bot.cogs.values():
+            if hasattr(cog, "on_member_update"):
+                try:
+                    await cog.on_member_update(before, after)
+                except Exception:
+                    log.exception("cog.on_member_update raised in %s", cog.qualified_name)
+
+
+@bot.event
+async def on_guild_channel_create(channel: discord.abc.GuildChannel):
+    for cog in bot.cogs.values():
+        if hasattr(cog, "on_guild_channel_create"):
+            try:
+                await cog.on_guild_channel_create(channel)
+            except Exception:
+                log.exception("cog.on_guild_channel_create raised in %s", cog.qualified_name)
+
+
+@bot.event
+async def on_guild_channel_update(before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
+    if (before.name != after.name or before.permission_overwrites != after.permission_overwrites or
+            before.category_id != after.category_id or before.topic != after.topic):
+        for cog in bot.cogs.values():
+            if hasattr(cog, "on_guild_channel_update"):
+                try:
+                    await cog.on_guild_channel_update(before, after)
+                except Exception:
+                    log.exception("cog.on_guild_channel_update raised in %s", cog.qualified_name)
+
+
+@bot.event
+async def on_guild_channel_delete(channel: discord.abc.GuildChannel):
+    for cog in bot.cogs.values():
+        if hasattr(cog, "on_guild_channel_delete"):
+            try:
+                await cog.on_guild_channel_delete(channel)
+            except Exception:
+                log.exception("cog.on_guild_channel_delete raised in %s", cog.qualified_name)
+
+
+@bot.event
+async def on_guild_role_create(role: discord.Role):
+    for cog in bot.cogs.values():
+        if hasattr(cog, "on_guild_role_create"):
+            try:
+                await cog.on_guild_role_create(role)
+            except Exception:
+                log.exception("cog.on_guild_role_create raised in %s", cog.qualified_name)
+
+
+@bot.event
+async def on_guild_role_update(before: discord.Role, after: discord.Role):
+    if (before.name != after.name or before.color != after.color or before.hoist != after.hoist or
+            before.permissions != after.permissions or before.position != after.position):
+        for cog in bot.cogs.values():
+            if hasattr(cog, "on_guild_role_update"):
+                try:
+                    await cog.on_guild_role_update(before, after)
+                except Exception:
+                    log.exception("cog.on_guild_role_update raised in %s", cog.qualified_name)
+
+
+@bot.event
+async def on_guild_role_delete(role: discord.Role):
+    for cog in bot.cogs.values():
+        if hasattr(cog, "on_guild_role_delete"):
+            try:
+                await cog.on_guild_role_delete(role)
+            except Exception:
+                log.exception("cog.on_guild_role_delete raised in %s", cog.qualified_name)
+
+
+@bot.event
+async def on_message_edit(before: discord.Message, after: discord.Message):
+    """A message was edited. Forward to every cog that opted in."""
+    if not after.guild or after.author.bot:
+        return
+    if before.content == after.content and before.embeds == after.embeds and before.attachments == after.attachments:
+        return
+    for cog in bot.cogs.values():
+        if hasattr(cog, "on_message_edit"):
+            try:
+                await cog.on_message_edit(before, after)
+            except Exception:
+                log.exception("cog.on_message_edit raised in %s", cog.qualified_name)
+
+
+@bot.event
+async def on_message_delete(message: discord.Message):
+    """A single message was deleted. Forward to every cog that opted in."""
+    if not message.guild or message.author.bot:
+        return
+    for cog in bot.cogs.values():
+        if hasattr(cog, "on_message_delete"):
+            try:
+                await cog.on_message_delete(message)
+            except Exception:
+                log.exception("cog.on_message_delete raised in %s", cog.qualified_name)
+
+
+@bot.event
+async def on_bulk_message_delete(messages: list[discord.Message]):
+    """Bulk delete. Forward to every cog that opted in."""
+    if not messages:
+        return
+    guild = messages[0].guild
+    if not guild:
+        return
+    for cog in bot.cogs.values():
+        if hasattr(cog, "on_bulk_message_delete"):
+            try:
+                await cog.on_bulk_message_delete(messages)
+            except Exception:
+                log.exception("cog.on_bulk_message_delete raised in %s", cog.qualified_name)
+
+
+@bot.event
+async def on_reaction_add(reaction: discord.Reaction, user: discord.User | discord.Member):
+    """Reaction added. Forward to every cog that opted in."""
+    if not user.guild or user.bot:
+        return
+    for cog in bot.cogs.values():
+        if hasattr(cog, "on_reaction_add"):
+            try:
+                await cog.on_reaction_add(reaction, user)
+            except Exception:
+                log.exception("cog.on_reaction_add raised in %s", cog.qualified_name)
+
+
+@bot.event
+async def on_reaction_remove(reaction: discord.Reaction, user: discord.User | discord.Member):
+    """Reaction removed. Forward to every cog that opted in."""
+    if not user.guild or user.bot:
+        return
+    for cog in bot.cogs.values():
+        if hasattr(cog, "on_reaction_remove"):
+            try:
+                await cog.on_reaction_remove(reaction, user)
+            except Exception:
+                log.exception("cog.on_reaction_remove raised in %s", cog.qualified_name)
+
+
+@bot.event
+async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+    """Voice join/move/leave/mute/deaf/afk. Forward to every cog that opted in."""
+    if (before.channel != after.channel or before.self_mute != after.self_mute or before.self_deaf != after.self_deaf or
+            before.afk != after.afk or before.self_stream != after.self_stream):
+        for cog in bot.cogs.values():
+            if hasattr(cog, "on_voice_state_update"):
+                try:
+                    await cog.on_voice_state_update(member, before, after)
+                except Exception:
+                    log.exception("cog.on_voice_state_update raised in %s", cog.qualified_name)
+
+
+def gateway_liveness(bot) -> tuple[bool, float | None, str | None]:
+    """Measure real gateway liveness from the socket's own heartbeat ACK clock.
+
+    Returns ``(alive, heartbeat_age_seconds, last_heartbeat_iso)``.
+
+    Why the ACK clock and not a counter: ``ConnectionState.last_heartbeat`` does
+    not exist (verified absent on discord.py 2.7.1), so the previous lookup
+    returned null forever and ``discord`` stayed "online" even after the socket
+    died. ``DiscordWebSocket._last_ack`` is updated on every heartbeat ACK and
+    is not gated behind a client flag, so it is a genuine measurement.
+
+    ``on_socket_raw_receive`` is deliberately NOT used here: it only fires when
+    the client is built with ``enable_debug_events=True``, so depending on it
+    would freeze on a healthy bot and fabricate an outage.
+
+    If the ACK clock is unavailable (library drift), this falls back to the
+    ready flag rather than failing closed — never invent an outage.
+    """
+    def _ack_clock(socket) -> float | None:
+        """The heartbeat-ACK perf_counter for one websocket, or None.
+
+        Path verified against discord.py 2.7.1 source rather than assumed:
+        `_last_ack` is an instance attribute of KeepAliveHandler (set in its
+        __init__, refreshed in ack()), and the socket reaches it through
+        `DiscordWebSocket._keep_alive`. Two earlier guesses were both wrong and
+        failed silently, which is why /health kept reporting null:
+          * `ConnectionState.last_heartbeat` does not exist at all.
+          * `ShardInfo.ws` does not exist — its __slots__ are
+            ('_parent', 'id', 'shard_count'), so the socket is `_parent.ws`.
+            `bot.shards` also only exists on AutoShardedClient, so on this
+            non-sharded client the lookup raised on every single call.
+        """
+        keep_alive = getattr(socket, "_keep_alive", None)
+        ack = getattr(keep_alive, "_last_ack", None)
+        return ack if isinstance(ack, (int, float)) else None
+
+    hb_age: float | None = None
+    try:
+        sockets = []
+        # Non-sharded client (what MuraBot runs as): the socket is on the bot.
+        direct = getattr(bot, "ws", None)
+        if direct is not None:
+            sockets.append(direct)
+        # AutoShardedClient, if this ever runs sharded: ShardInfo -> _parent.ws.
+        for si in (getattr(bot, "shards", None) or {}).values():
+            parent = getattr(si, "_parent", None)
+            socket = getattr(parent, "ws", None) or getattr(si, "ws", None)
+            if socket is not None:
+                sockets.append(socket)
+        acks = [a for a in (_ack_clock(s) for s in sockets) if a is not None]
+        if acks:
+            hb_age = max(time.perf_counter() - a for a in acks)
+    except Exception:
+        hb_age = None
+
+    if hb_age is not None:
+        alive = hb_age < GATEWAY_STALE_AFTER
+        last_iso = datetime.fromtimestamp(time.time() - hb_age).isoformat()
+    else:
+        alive = bool(bot.is_ready())
+        last_iso = None
+    return alive, hb_age, last_iso
+
+@bot.listen()
+async def on_guild_join(guild: discord.Guild):
+    """Re-sync slash commands for a guild the bot just joined. This is a thin
+    dispatcher: the heavy guild-joined bookkeeping (registry, logging) already
+    happens in the @bot.event handler above."""
+    await bot._sync_guild_commands(guild)
 
 
 def describe_error(error: Exception) -> tuple[str, str | None]:
@@ -399,6 +719,81 @@ async def _health_server() -> None:
         except Exception:
             return None
 
+    async def _discord_api_probe() -> tuple[bool, int | None]:
+        """Unauthenticated Discord API reachability check (credential-free).
+
+        GET /api/v10 without auth returns 401 when Discord is reachable — the
+        same signal the dashboard's own check uses. Returns
+        (reachable, latency_ms). On success the module-level last-success
+        cache is refreshed; failures never overwrite it, so `at` always means
+        the last SUCCESSFUL check.
+        """
+        global _last_api_check
+        import aiohttp
+        t0 = time.monotonic()
+        try:
+            timeout = aiohttp.ClientTimeout(total=3)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get("https://discord.com/api/v10") as resp:
+                    # 401 = reachable (rejected auth, not network). Any HTTP
+                    # response at all proves the API is up; 5xx still counts
+                    # as reachable-but-degraded rather than unavailable.
+                    await resp.read()
+            latency = round((time.monotonic() - t0) * 1000)
+            _last_api_check = {
+                "at": datetime.now(timezone.utc).isoformat(),
+                "latency_ms": latency,
+            }
+            return True, latency
+        except Exception:
+            return False, None
+
+    def _connection_state(gateway_alive: bool, api_reachable: bool | None) -> str:
+        """One honest connection state from real measurements — never from
+        mere token presence.
+
+        online_connected | connecting | offline | invalid_token |
+        gateway_failed | api_unavailable
+
+        Gateway heartbeat ACKs are the primary signal: a live gateway proves
+        Discord is reachable, so one failed 3s API probe never demotes a
+        connected bot (that would flap on every probe blip). The probe only
+        decides between gateway_failed (our connection) and api_unavailable
+        (Discord itself) once the gateway is actually dead.
+        """
+        if not config.DISCORD_TOKEN or _login_failed:
+            return "invalid_token"
+        if bot.is_closed():
+            return "offline"
+        ready = bool(bot.is_ready())
+        if gateway_alive and ready:
+            return "online_connected"
+        if api_reachable is False:
+            # Discord itself unreachable — explains a dead gateway.
+            return "api_unavailable"
+        if _ever_ready and not gateway_alive:
+            return "gateway_failed"
+        return "connecting"
+
+    def _bot_user() -> dict:
+        """Public bot identity for the dashboard. Never secrets: username,
+        avatar CDN URL and application ID are all public Discord data."""
+        try:
+            user = getattr(bot, "user", None)
+            if user is None:
+                return {"username": None, "avatar_url": None,
+                        "application_id": getattr(bot, "application_id", None)}
+            avatar = None
+            try:
+                avatar = user.display_avatar.url if user.display_avatar else None
+            except Exception:
+                avatar = None
+            return {"username": user.name,
+                    "avatar_url": avatar,
+                    "application_id": getattr(bot, "application_id", None)}
+        except Exception:
+            return {"username": None, "avatar_url": None, "application_id": None}
+
     async def health(_request: web.Request) -> web.Response:
         statuses = http_mod.get_status()
         latency_ms = round(bot.latency * 1000) if bot.latency else 0
@@ -413,7 +808,19 @@ async def _health_server() -> None:
         gateway_alive, hb_age, last_hb = gateway_liveness(bot)
         if not gateway_alive:
             statuses = {**statuses, "discord": "stale-no-gateway-ack"}
-        ok = not bot.is_closed() and bool(bot.is_ready()) and gateway_alive
+        # Real Discord API reachability (unauthenticated probe, 3s budget).
+        # Skipped only when there is no point: invalid token or closed bot.
+        closed = bot.is_closed()
+        check_api = bool(config.DISCORD_TOKEN) and not _login_failed and not closed
+        api_reachable, api_latency = await _discord_api_probe() if check_api else (None, None)
+        if check_api and not api_reachable:
+            statuses = {**statuses, "discord_api": "unavailable"}
+        connection_state = _connection_state(gateway_alive, api_reachable)
+        # Liveness stays gateway-based: a single failed 3s API probe must not
+        # flip the process unhealthy (and trigger a host restart) while
+        # heartbeats are being ACKed. A real Discord outage kills the gateway
+        # within the stale window and surfaces as api_unavailable anyway.
+        ok = not closed and bool(bot.is_ready()) and gateway_alive
         shard_count = len(bot.shards) if hasattr(bot, "shards") else 1
         bot_version = getattr(config, "BOT_VERSION", "1.0.0")
         # Make the privileged-intent state explicit: if message_content could
@@ -421,6 +828,7 @@ async def _health_server() -> None:
         # able to show that instead of pretending the bot is fully healthy.
         if not _privileged_ok:
             statuses = {**statuses, "prefix_commands": "disabled-no-message-content"}
+        last_api = _last_api_check or {}
         return web.json_response({
             "ok": ok,
             "guilds": len(bot.guilds),
@@ -430,10 +838,23 @@ async def _health_server() -> None:
             "guild_ids": [str(g.id) for g in bot.guilds],
             "subsystems": statuses,
             "bot_version": bot_version,
+            # Public identity (username, avatar CDN URL, application ID).
+            # Never secrets: no token, client secret, or credentials here.
+            "user": _bot_user(),
+            # One measured connection state — the dashboard renders this
+            # directly instead of inferring health from token presence.
+            "connection_state": connection_state,
             "latency": latency_ms,
             "uptime_seconds": round(uptime),
             "last_heartbeat": last_hb,
             "reconnect_count": _gateway_reconnects + _reconnect_count,
+            # Last SUCCESSFUL Discord API check (failures never overwrite it).
+            # `reachable` is this call's probe outcome (None = skipped).
+            "last_api_check": {
+                "at": last_api.get("at"),
+                "latency_ms": last_api.get("latency_ms"),
+                "reachable": api_reachable,
+            },
             "gateway": {
                 "alive": gateway_alive,
                 "heartbeat_age_seconds": round(hb_age, 1) if hb_age is not None else None,
@@ -545,11 +966,29 @@ async def _health_server() -> None:
             state = "paused"
         elif connected and (vc.is_playing() or p.playing):
             state = "playing"
+        # Automatic permission readout for the CURRENT voice channel (no IDs).
+        permissions = None
+        try:
+            ch = vc.channel if (connected and vc.channel) else None
+            if ch is not None:
+                permissions = music_mod.check_voice_permissions(ch, guild.me)
+        except Exception:
+            permissions = None
         return web.json_response({
             "ok": True,
             "connected": connected,
             "state": state,
             "voiceChannel": vc.channel.name if connected and vc.channel else None,
+            "voiceChannelId": str(vc.channel.id) if connected and vc.channel else None,
+            "connectionState": p.connection_state,
+            "playerState": p.player_state,
+            "reconnectAttempts": p.reconnect_attempts,
+            "lastSuccessfulConnection": p.last_successful_connection,
+            "permissions": permissions,
+            "ffmpeg": music_mod.ffmpeg_check(),
+            "lastErrorCode": p.last_error_code,
+            "lastError": music_mod.sanitize_for_log(p.last_error, limit=300),
+            "lastPlayback": music_mod.engine.get_last_playback_diagnostic(),
             "current": _track_dict(p.current),
             "position": round(p.position()) if p.current else 0,
             "volume": int(p.volume * 100),
@@ -904,9 +1343,60 @@ async def _health_server() -> None:
             out["remedy"] = _RESOLVE_REMEDIES.get(kind or "", _RESOLVE_REMEDY_DEFAULT)
         return web.json_response(out, status=200 if out["ok"] else 503)
 
+    async def music_diagnostics(request: web.Request) -> web.Response:
+        """⚙️ Music Diagnostics aggregate: audio service, FFmpeg, Discord
+        voice, per-guild players, last playback failure. No secrets."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        import music as music_mod
+        gateway_alive, hb_age, _ = gateway_liveness(bot)
+        snap = music_mod.engine.diagnostics_snapshot()
+        return web.json_response({
+            "ok": True,
+            "gateway": {"alive": gateway_alive,
+                        "heartbeat_age_seconds": round(hb_age, 1) if hb_age is not None else None},
+            "audio_service": snap["audio_service"],
+            "ffmpeg": snap["ffmpeg"],
+            "players": snap["players"],
+            "last_playback": snap["last_playback"],
+        })
+
+    async def music_playback_log(request: web.Request) -> web.Response:
+        """Recent staged playback attempts (newest first). Sanitized."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        import music as music_mod
+        try:
+            limit = max(1, min(int(request.rel_url.query.get("limit", "20")), 50))
+        except ValueError:
+            limit = 20
+        return web.json_response({
+            "ok": True,
+            "attempts": music_mod.engine.get_playback_log(limit),
+        })
+
+    async def music_test_audio(request: web.Request) -> web.Response:
+        """[ ▶ Test Audio ] — staged PASS/FAIL/NOT TESTED for the dashboard."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        import music as music_mod
+        gateway_alive, hb_age, _ = gateway_liveness(bot)
+        result = await music_mod.engine.run_playback_test()
+        stages = result.get("stages", {})
+        # The gateway measurement is real here, not inferred from the loop.
+        stages["discord_gateway"] = "PASS" if gateway_alive else "FAIL"
+        result["stages"] = stages
+        result["detail"] = {**(result.get("detail", {})),
+                            "gateway_heartbeat_age_seconds": hb_age}
+        return web.json_response(result, status=200 if result.get("ok") else 503)
+
     app = web.Application()
     app.router.add_get("/health", health)
     app.router.add_get("/music/diagnose", music_diagnose)
+    app.router.add_get("/music/diagnostics", music_diagnostics)
+    app.router.add_get("/music/playback-log", music_playback_log)
+    app.router.add_post("/music/test-audio", music_test_audio)
+    app.router.add_get("/music/test-audio", music_test_audio)
     app.router.add_post("/prefix/refresh", prefix_refresh)
     app.router.add_get("/music/state/{guild_id:\\d+}", music_state)
     app.router.add_post("/music/control/{guild_id:\\d+}", music_control)
@@ -974,6 +1464,12 @@ async def main() -> None:
             await bot.start(config.DISCORD_TOKEN)
             break  # clean shutdown
         except discord.LoginFailure:
+            global _login_failed
+            _login_failed = True
+            try:
+                http_mod.set_status("discord", "auth-failed-invalid-token")
+            except Exception:
+                pass
             log.error("Discord rejected the token — check DISCORD_TOKEN.")
             sys.exit(1)
         except discord.errors.PrivilegedIntentsRequired:

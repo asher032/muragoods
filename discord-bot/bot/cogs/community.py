@@ -307,9 +307,42 @@ class CommunityCog(commands.Cog):
 
     # ── Background loops ──────────────────────────────────────────────
     @commands.Cog.listener()
+    async def on_member_remove(self, member: discord.Member):
+        """Member left — used by welcome/leave symmetry and any future leave
+        notification the server configures."""
+        cfg = await database.get_guild_config(member.guild.id)
+        if not cfg.get("leaveMessage"):
+            return
+        channel_id = cfg.get("leaveChannelId") or (await database.get_guild_config(member.guild.id)).get("channels", {}).get("leave")
+        if not channel_id:
+            return
+        channel = member.guild.get_channel(int(channel_id))
+        if not isinstance(channel, discord.TextChannel):
+            return
+        try:
+            await channel.send(
+                embed=utils.base_embed(
+                    "👋 Left",
+                    f"{member.mention} ({member.display_name}) left {member.guild.name}."))
+        except discord.HTTPException:
+            pass
+
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        """Voice join/move/leave — placeholder hook for any future voice-channel
+        activity features. Owned by community so music/moderation don't each
+        invent their own voice bookkeeping."""
+        pass
+
+
+    @commands.Cog.listener()
     async def on_ready(self):
         if getattr(self, "_loops_started", False):
             return
+        # Re-arm periodic loops on every session resume as well as the first ready,
+        # because on_ready fires once per session, not once per process.
+        self._loops_started = True
         self._loops_started = True
         asyncio.create_task(self._giveaway_loop())
         asyncio.create_task(self._reminder_loop())
