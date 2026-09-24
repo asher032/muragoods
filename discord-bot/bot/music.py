@@ -83,6 +83,14 @@ SOURCE_UNAVAILABLE = "source_unavailable"
 PLAYBACK_TIMEOUT = "playback_timeout"
 MISSING_PERMISSION = "missing_permission"
 QUEUE_CORRUPTED = "queue_corrupted"
+# discord.py's voice backend was split into a separate package (davey). When it
+# is absent every voice connect raises a RuntimeError that names no subsystem
+# unless it is classified here — it used to fall through to the generic
+# "unknown playback error" and told the user nothing actionable.
+VOICE_LIBRARY_MISSING = "voice_library_missing"
+# YouTube is challenging this host's IP. The remedy is credentials (cookies or
+# a proxy), never a retry.
+YOUTUBE_CHALLENGED = "youtube_challenged"
 UNKNOWN_PLAYBACK_ERROR = "unknown_playback_error"
 
 PLAYBACK_USER_MESSAGES: dict[str, tuple[str, str]] = {
@@ -117,6 +125,18 @@ PLAYBACK_USER_MESSAGES: dict[str, tuple[str, str]] = {
         "📋 Queue Error",
         "The music queue was in an unusable state and has been reset. "
         "Please queue the song again.",
+    ),
+    VOICE_LIBRARY_MISSING: (
+        "🔊 Voice Support Missing",
+        "The bot cannot open a Discord voice connection because its voice "
+        "library (davey) is not installed. Reinstall the bot's requirements "
+        "and restart it — audio cannot play until then.",
+    ),
+    YOUTUBE_CHALLENGED: (
+        "🔒 YouTube Needs Verification",
+        "YouTube is challenging this server's IP address. Set YT_COOKIES or "
+        "YOUTUBE_PROXY in the bot's environment and restart it — retrying "
+        "cannot help.",
     ),
     UNKNOWN_PLAYBACK_ERROR: (
         "❓ Unknown Playback Error",
@@ -179,12 +199,28 @@ def classify_playback_exception(exc: BaseException) -> str:
         return MISSING_PERMISSION
     if "ffmpeg" in msg or "ffprobe" in msg or "executable" in msg or name in {"FileNotFoundError"} and "ffmpeg" in msg:
         return FFMPEG_FAILED
+    # A missing voice backend raises "RuntimeError: davey library needed in
+    # order to use voice". Classifying it matters three ways: it used to fall
+    # through to UNKNOWN_PLAYBACK_ERROR (the user saw a generic "check Music
+    # Diagnostics" for what is a missing dependency), and it must not be
+    # reported as a permissions problem either.
+    if "davey" in msg or ("library" in msg and "voice" in msg):
+        return VOICE_LIBRARY_MISSING
+    # The resolve path already recognises YouTube's bot challenge; carry that
+    # through so a playback-time failure names the real remedy (cookies or a
+    # proxy) instead of falling back to the generic error.
+    if is_bot_challenge(msg):
+        return YOUTUBE_CHALLENGED
     if isinstance(exc, discord.ClientException):
         text = str(exc).lower()
         if "already playing" in text or "already connected" in text or "not connected" in text:
             return VOICE_CONNECTION_FAILED
         return VOICE_CONNECTION_FAILED
     if "connect" in msg and ("voice" in msg or "channel" in msg or "handshake" in msg):
+        return VOICE_CONNECTION_FAILED
+    # discord.py's voice failures surface as RuntimeError; without this they
+    # were the main remaining source of "unknown playback error".
+    if isinstance(exc, RuntimeError) and "voice" in msg:
         return VOICE_CONNECTION_FAILED
     if "unavailable" in msg or "not available" in msg or "404" in msg or "410" in msg:
         return SOURCE_UNAVAILABLE
