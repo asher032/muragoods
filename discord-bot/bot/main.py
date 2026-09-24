@@ -184,53 +184,6 @@ class MuraBot(commands.Bot):
         except discord.HTTPException as exc:
             log.error("Command sync FAILED (will retry on next start): %s", str(exc)[:300])
 
-    # ── Gateway lifecycle → honest /health status ────────────────────────
-    # `discord` was set to "online" once in on_ready and never cleared, so
-    # /health claimed a live bot even after the socket died. These handlers
-    # supply the missing offline/reconnecting half.
-    async def on_connect(self) -> None:
-        http_mod.set_status("discord", "connecting")
-
-    async def on_disconnect(self) -> None:
-        global _gateway_reconnects
-        _gateway_reconnects += 1
-        http_mod.set_status("discord", "reconnecting")
-        log.warning(
-            "Gateway disconnected (count=%d) — discord.py will auto-reconnect",
-            _gateway_reconnects,
-        )
-
-    async def on_resumed(self) -> None:
-        http_mod.set_status("discord", "online")
-        log.info("Gateway session resumed")
-
-    async def on_ready(self) -> None:
-        http_mod.set_status("discord", "online")
-        # Measure the decoder instead of asserting it. `music` used to be set to
-        # "ready" here unconditionally, so /health advertised working music on a
-        # host whose FFmpeg was missing. Playback itself is still only proven by
-        # GET /music/diagnose, which performs a real resolve.
-        try:
-            import music as music_mod
-            ffmpeg_ok = await music_mod.probe()
-            log.info("Music decoder %s (%s); playback is only proven by /music/diagnose",
-                     "available" if ffmpeg_ok else "MISSING", music_mod.FFMPEG_EXE)
-        except Exception as exc:
-            log.warning("Music probe failed at startup: %s", str(exc)[:160])
-        activity_name = config.BOT_ACTIVITY.strip() or "https://muragoods.vercel.app/"
-        if "twitch.tv" in activity_name.lower():
-            activity_name = "https://muragoods.vercel.app/"
-        activity = discord.Activity(
-            type=discord.ActivityType.watching,
-            name=activity_name,
-        )
-        await self.change_presence(
-            activity=activity,
-            status={"online": discord.Status.online, "idle": discord.Status.idle,
-                    "dnd": discord.Status.do_not_disturb}.get(
-                        config.BOT_STATUS.lower(), discord.Status.online))
-        log.info("Logged in as %s (%s) - %d guilds", self.user, getattr(self.user, "id", "?"), len(self.guilds))
-
     async def _sync_guild_commands(self, guild: discord.Guild) -> None:
         try:
             await self.tree.sync(guild=guild)
@@ -250,20 +203,58 @@ bot = MuraBot()
 # (c) never make a config decision — that belongs in the owning cog.
 
 
+# ── Gateway lifecycle → honest /health status ────────────────────────────
+# These are the ONLY registrations for these events. The same handlers also
+# existed as `MuraBot` methods, but `@bot.event` does `setattr(bot, name, coro)
+# — so the instance attributes silently shadowed every one of them. The result
+# was a bot that reported `discord: "starting"` forever (on_ready never ran),
+# never set its presence, and lost the "Logged in as" startup line, while the
+# dashboard showed it as permanently starting up. App-state transitions live
+# here now, next to the registry work, with one handler per event.
+
+
 @bot.event
 async def on_ready():
-    """Rebuild the guild registry from the gateway state once the connection is up."""
+    """Rebuild the guild registry and settle app-state once the connection is up."""
     global _ever_ready
     _ever_ready = True
+    http_mod.set_status("discord", "online")
     with _guilds_lock:
         _guild_ids = {g.id for g in bot.guilds}
     log.info("on_ready: guild registry rebuilt — %d guilds", len(_guild_ids))
+    # Measure the decoder instead of asserting it. `music` used to be set to
+    # "ready" here unconditionally, so /health advertised working music on a
+    # host whose FFmpeg was missing. Playback itself is still only proven by
+    # GET /music/diagnose, which performs a real resolve.
+    try:
+        import music as music_mod
+        ffmpeg_ok = await music_mod.probe()
+        log.info("Music decoder %s (%s); playback is only proven by /music/diagnose",
+                 "available" if ffmpeg_ok else "MISSING", music_mod.FFMPEG_EXE)
+        log.info("yt-dlp JS runtimes: %s", music_mod.js_runtimes())
+    except Exception as exc:
+        log.warning("Music probe failed at startup: %s", str(exc)[:160])
+    activity_name = config.BOT_ACTIVITY.strip() or "https://muragoods.vercel.app/"
+    if "twitch.tv" in activity_name.lower():
+        activity_name = "https://muragoods.vercel.app/"
+    activity = discord.Activity(
+        type=discord.ActivityType.watching,
+        name=activity_name,
+    )
+    await bot.change_presence(
+        activity=activity,
+        status={"online": discord.Status.online, "idle": discord.Status.idle,
+                "dnd": discord.Status.do_not_disturb}.get(
+                    config.BOT_STATUS.lower(), discord.Status.online))
+    log.info("Logged in as %s (%s) - %d guilds",
+             bot.user, getattr(bot.user, "id", "?"), len(bot.guilds))
 
 
 @bot.event
 async def on_connect():
     """Gateway socket opened. Do not flip app-state here — on_resumed does that
     once the session is fully re-authenticated."""
+    http_mod.set_status("discord", "connecting")
     log.info("Gateway connected")
 
 
@@ -272,6 +263,7 @@ async def on_disconnect():
     """Gateway socket closed. discord.py will reconnect by default."""
     global _gateway_reconnects
     _gateway_reconnects += 1
+    http_mod.set_status("discord", "reconnecting")
     log.warning(
         "Gateway disconnected (count=%d) — discord.py will auto-reconnect",
         _gateway_reconnects,
@@ -281,6 +273,7 @@ async def on_disconnect():
 @bot.event
 async def on_resumed():
     """Session re-authenticated/resumed (includes initial ready handshake)."""
+    http_mod.set_status("discord", "online")
     with _guilds_lock:
         _guild_ids = {g.id for g in bot.guilds}
     log.info("Gateway session resumed — %d guilds in registry", len(_guild_ids))
@@ -719,6 +712,19 @@ async def _health_server() -> None:
         except Exception:
             return None
 
+    def _js_runtime_state() -> dict:
+        """Which JavaScript runtime yt-dlp can use for YouTube's challenges.
+
+        A missing runtime is the single most misleading music failure: the
+        extraction error reads like an IP block, so the dashboard could only
+        guess. Reporting it makes the cause a measurement.
+        """
+        try:
+            import music as music_mod
+            return music_mod.js_runtimes()
+        except Exception:
+            return {"available": {}, "any": None, "yt_dlp_ejs_installed": None}
+
     async def _discord_api_probe() -> tuple[bool, int | None]:
         """Unauthenticated Discord API reachability check (credential-free).
 
@@ -865,6 +871,10 @@ async def _health_server() -> None:
             # must be able to tell "no FFmpeg" from "decoder fine, playback
             # unproven" instead of guessing from an aggregate flag.
             "ffmpeg": _ffmpeg_state(),
+            # Real JavaScript-runtime discovery (deno/node/bun/quickjs) plus the
+            # EJS solver scripts. Without a runtime, YouTube extraction fails in
+            # a way that looks like an IP block — never guess, measure.
+            "js_runtimes": _js_runtime_state(),
             # Why the database is offline, without credentials. `database:
             # offline` alone cannot distinguish a missing variable from an
             # access-list rejection, so it was unactionable.

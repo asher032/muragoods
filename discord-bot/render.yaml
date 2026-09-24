@@ -5,7 +5,11 @@ services:
     plan: starter
     region: oregon
     rootDir: discord-bot
-    buildCommand: pip install -r requirements.txt
+    # The JavaScript runtime is not optional: yt-dlp cannot solve YouTube's
+    # signature / n-parameter challenge without one, and that failure reads
+    # exactly like an IP block. Downloaded into ./bin, which bot/music.py
+    # prepends to PATH at import so yt-dlp can actually find it.
+    buildCommand: pip install -r requirements.txt && python scripts/install_deno.py
     startCommand: python -m bot.main
     healthCheckPath: /health
     autoDeploy: true

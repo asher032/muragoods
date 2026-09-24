@@ -7,3 +7,7 @@ venv/
 *.log
 logs/
 data/*.sqlite3
+
+# JavaScript runtime downloaded at build time by scripts/install_deno.py.
+# Machine-specific ~90MB binary — never commit it.
+bin/

@@ -11,6 +11,12 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY bot/ ./bot/
+COPY scripts/ ./scripts/
+
+# yt-dlp needs a JavaScript runtime to solve YouTube's signature challenge;
+# without one playback fails in a way that looks like an IP block. Installs
+# into ./bin, which bot/music.py puts on PATH.
+RUN python scripts/install_deno.py
 
 # Non-root user
 RUN useradd -m botuser && chown -R botuser:botuser /app
