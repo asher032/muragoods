@@ -36,6 +36,10 @@ jobs:
       PORT: 3000
       # Throwaway DB inside the service container; the app connects on boot.
       MONGODB_URI: mongodb://localhost:27017/muragoods-ci
+      # Sessions are HMAC-signed and AUTH_SECRET is now mandatory (session.ts
+      # throws without it), so the integration suite signs in with a throwaway
+      # CI-only key. This is not a secret and is never used in production.
+      AUTH_SECRET: ci-only-session-signing-key-not-a-real-secret
 
     steps:
       - uses: actions/checkout@v4
