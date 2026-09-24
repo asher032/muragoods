@@ -412,6 +412,12 @@ def get_ydl_opts() -> dict[str, Any]:
         "fragment_retries": 5,
         "buffer": 65536,
         "geo_bypass": True,
+        # yt-dlp enables ONLY deno by default for JS challenge solving. The
+        # production host has node (no deno), so without this the n/signature
+        # challenge can never be solved and every YouTube request fails even
+        # with valid cookies. Enable all runtimes in upstream priority order;
+        # yt-dlp probes each and uses the highest-priority one present.
+        "js_runtimes": {"deno": {}, "node": {}, "quickjs": {}, "bun": {}},
     }
     if config.YT_PLAYER_CLIENT:
         opts["extractor_args"] = {"youtube": {"player_client": [
