@@ -164,6 +164,8 @@ export interface BotDetail {
   } | null;
   subsystems: Record<string, string>;
   ffmpeg: boolean | null;
+  opus: { loaded: boolean | null; status: string | null; lib: string | null } | null;
+  voiceBackend: { davey: boolean | null } | null;
   guilds: number | null;
   databaseDetail: { configured: boolean | null; errorClass: string | null; hint: string | null } | null;
   user: { username: string | null; avatarUrl: string | null; applicationId: string | number | null } | null;

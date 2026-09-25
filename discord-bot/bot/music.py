@@ -312,6 +312,35 @@ def ffmpeg_check() -> dict:
     }
 
 
+def opus_status() -> dict:
+    """Opus voice-codec readiness. Read-only introspection, never raises.
+
+    discord.py loads libopus lazily on the first voice connect, so
+    "not loaded yet" at rest is NORMAL and reported as unknown — never as
+    missing. Only "no library discoverable at all" is a real outage, and
+    even that is reported, not raised.
+    """
+    try:
+        import discord as _discord
+        loaded = bool(_discord.opus.is_loaded())
+        if loaded:
+            return {"loaded": True, "lib": None, "status": "ready"}
+        try:
+            from ctypes.util import find_library
+            lib = find_library("opus")
+        except Exception:
+            lib = None
+        if lib:
+            return {"loaded": False, "lib": lib,
+                    "status": "ready",
+                    "note": "libopus discoverable; discord.py loads it on first voice connect"}
+        return {"loaded": False, "lib": None, "status": "unknown",
+                "note": "libopus not yet loaded and none discoverable via find_library"}
+    except Exception as exc:
+        return {"loaded": False, "lib": None, "status": "unknown",
+                "error": f"{type(exc).__name__}"}
+
+
 def check_voice_permissions(channel, me) -> dict:
     """Automatic voice permission check — no manual IDs required.
 
@@ -916,6 +945,7 @@ class MusicEngine:
                 "executable": ff["executable"],
                 "error": ff["error"],
             },
+            "opus": opus_status(),
             "players": {
                 str(gid): {
                     "connection": p.connection_state,

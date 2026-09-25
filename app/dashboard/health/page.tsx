@@ -299,6 +299,36 @@ export default function HealthPage() {
                 </div>
               </div>
               <div>
+                <div className="cc-section-label">Opus codec</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>
+                  {status.bot.opus == null
+                    ? 'not measured'
+                    : status.bot.opus.status === 'ready'
+                      ? status.bot.opus.loaded ? 'ready (loaded)' : 'ready (loads on connect)'
+                      : 'unknown'}
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--cc-text-faint)' }}>
+                  loads lazily on first voice join — unknown at rest is normal
+                </div>
+              </div>
+              <div>
+                <div className="cc-section-label">Voice backend</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>
+                  {status.bot.voiceBackend == null
+                    ? 'not measured'
+                    : status.bot.voiceBackend.davey === true
+                      ? 'davey installed'
+                      : status.bot.voiceBackend.davey === false
+                        ? 'MISSING davey'
+                        : 'unknown'}
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--cc-text-faint)' }}>
+                  {status.bot.voiceBackend?.davey === false
+                    ? 'no track can play until the bot requirements are reinstalled'
+                    : 'discord.py voice protocol support'}
+                </div>
+              </div>
+              <div>
                 <div className="cc-section-label">Guilds</div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>{status.bot.guilds ?? '—'}</div>
               </div>
