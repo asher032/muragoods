@@ -20,8 +20,12 @@ The resolver must therefore:
 yt-dlp is stubbed, so this needs no network, no cookies and no real proxy.
 
 Usage:
-    python scripts/test_youtube_egress_fallback.py          # proxy configured
-    python scripts/test_youtube_egress_fallback.py no-proxy # host egress only
+    python scripts/test_youtube_egress_fallback.py          # proxy configured (hermetic)
+    python scripts/test_youtube_egress_fallback.py no-proxy # host egress only (hermetic)
+    python scripts/test_youtube_egress_fallback.py live     # real network, host diagnosis
+
+The first two modes stub yt-dlp, so they are safe in CI. `live` deliberately
+resolves for real and depends on YouTube reachability from this host.
 """
 
 import asyncio
@@ -42,10 +46,15 @@ sys.path.insert(0, str(BOT_DIR))
 MODE = sys.argv[1] if len(sys.argv) > 1 else "proxy"
 
 # config.py loads discord-bot/.env without overriding existing env vars, so
-# setting these before the import keeps this test hermetic.
-os.environ["YOUTUBE_PROXY"] = FAKE_PROXY if MODE == "proxy" else ""
-os.environ.pop("YT_COOKIES", None)
-os.environ.pop("YT_COOKIES_FILE", None)
+# pinning these before the import keeps the hermetic modes off the network.
+# "live" leaves the real environment alone on purpose.
+if MODE == "proxy":
+    os.environ["YOUTUBE_PROXY"] = FAKE_PROXY
+elif MODE != "live":
+    os.environ["YOUTUBE_PROXY"] = ""
+if MODE != "live":
+    os.environ.pop("YT_COOKIES", None)
+    os.environ.pop("YT_COOKIES_FILE", None)
 
 import music as music_mod  # noqa: E402  (import after the environment is fixed)
 
@@ -99,6 +108,11 @@ class StubYDL:
         }
 
 
+def install_stub() -> None:
+    """Replace yt-dlp with the fixture so no scenario touches the network."""
+    music_mod.yt_dlp.YoutubeDL = StubYDL
+
+
 def reset_proxy_bench() -> None:
     """Undo the cooldown so the next scenario starts with a usable proxy."""
     music_mod._egress_state["bench_until"] = 0.0
@@ -111,7 +125,7 @@ def egresses_since(mark: int) -> list[str]:
 
 async def scenario_challenged_proxy() -> None:
     print("scenario 1: proxy challenged -> direct egress answers")
-    music_mod.yt_dlp.YoutubeDL = StubYDL
+    install_stub()
     reset_proxy_bench()
     StubYDL.challenge = "proxy"
     StubYDL.seen.clear()
@@ -134,6 +148,7 @@ async def scenario_challenged_proxy() -> None:
 
 async def scenario_benched_proxy() -> None:
     print("scenario 2: benched proxy is not retried (no flapping)")
+    install_stub()
     StubYDL.challenge = "proxy"
     StubYDL.seen.clear()
     engine = music_mod.MusicEngine()
@@ -147,6 +162,7 @@ async def scenario_benched_proxy() -> None:
 
 async def scenario_both_challenged() -> None:
     print("scenario 3: both egresses challenged -> classified, bounded, no hang")
+    install_stub()
     reset_proxy_bench()
     StubYDL.challenge = "both"
     StubYDL.seen.clear()
@@ -167,6 +183,7 @@ async def scenario_both_challenged() -> None:
 
 async def scenario_no_proxy() -> None:
     print("scenario 4: no proxy configured -> host egress only")
+    install_stub()
     StubYDL.challenge = "none"
     StubYDL.seen.clear()
     StubYDL.calls.clear()
@@ -192,6 +209,18 @@ def challenge_markers() -> None:
           "ordinary removal is not classified as a challenge")
 
 
+async def scenario_live() -> None:
+    """Real resolve, real egress — for diagnosing a host, never for CI."""
+    print("scenario: live resolve (real network)")
+    engine = music_mod.MusicEngine()
+    track = await engine.resolve("Rick Astley Never Gonna Give You Up")
+    state = music_mod.proxy_state()
+    check(track is not None,
+          f"live resolve returned a track (egress={state['last_egress']}, proxy={state['status']})")
+    if track is None:
+        print(f"    classified: {engine.get_error_kind()!r} — {engine.get_resolve_error()}")
+
+
 async def main() -> int:
     print(f"YouTube egress fallback test (mode={MODE}, proxy={'configured' if MODE == 'proxy' else 'unset'})")
     challenge_markers()
@@ -199,6 +228,8 @@ async def main() -> int:
         await scenario_challenged_proxy()
         await scenario_benched_proxy()
         await scenario_both_challenged()
+    elif MODE == "live":
+        await scenario_live()
     else:
         await scenario_no_proxy()
     print()
