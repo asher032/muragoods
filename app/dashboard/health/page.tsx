@@ -304,11 +304,17 @@ export default function HealthPage() {
                   {status.bot.opus == null
                     ? 'not measured'
                     : status.bot.opus.status === 'ready'
-                      ? status.bot.opus.loaded ? 'ready (loaded)' : 'ready (loads on connect)'
-                      : 'unknown'}
+                      ? status.bot.opus.loaded ? 'ready (loaded)' : 'ready (verified by load)'
+                      : status.bot.opus.status === 'missing'
+                        ? 'MISSING'
+                        : status.bot.opus.status === 'load_failed'
+                          ? 'LOAD FAILED'
+                          : 'unknown'}
                 </div>
                 <div style={{ fontSize: 11.5, color: 'var(--cc-text-faint)' }}>
-                  loads lazily on first voice join — unknown at rest is normal
+                  {status.bot.opus?.status === 'missing' || status.bot.opus?.status === 'load_failed'
+                    ? 'voice audio cannot be encoded until the Opus library is fixed on the bot host'
+                    : 'verified by attempting the same load the voice stack performs'}
                 </div>
               </div>
               <div>

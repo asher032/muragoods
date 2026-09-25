@@ -22,7 +22,10 @@ the exact subsystem — never a faked 200.
 - **Port**: the web server binds `$PORT` (falls back to 8080); `0.0.0.0`. Never hardcoded.
 - **Build**: `pip install -r requirements.txt && python scripts/install_deno.py`; **start**: `python -m bot.main`.
 - **FFmpeg**: Render provides `/usr/bin/ffmpeg`; the bot also falls back to `imageio-ffmpeg`. Presence is *measured* (`ffmpeg -version`) at startup and reported — a missing decoder reads `MISSING`, never "ready".
-- **Node** (yt-dlp challenge solver): provided by the Render image; the bot enables all runtimes explicitly because yt-dlp defaults to deno-only.
+- **Node** (yt-dlp challenge solver): provided by the Render image; the bot enables all runtimes explicitly because yt-dlp defaults to deno-only. Status: **Node challenge solving = active**.
+- **Deno fallback**: the build runs `scripts/install_deno.py` into `discord-bot/bin`, but production reports `bundled_dir_exists: false`, so the Deno fallback is **unavailable/unverified**. Not a blocker (Node carries solving); do not break Node solving to force Deno.
+- **Opus voice codec**: discord.py loads libopus lazily on first voice join. `/health` and `/health/music` report `ready` (loaded or verified by load), `missing`, or `load_failed` — a missing codec fails voice for real and must be fixed on the host (Render image level), not in code.
+- **MongoDB Atlas network access**: Render uses dynamic egress IPs, so the Atlas project's Network Access list must contain `0.0.0.0/0` for the bot to connect at all. Tradeoff: IP allowlisting is effectively open — security rests on the connection-string credentials (strong password, least-privilege database user) and never committing them. Do not silently modify production access rules; any change is an explicit operator action.
 - **Env vars** (names only — values live in the Render dashboard, never the repo): `DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_PUBLIC_KEY`, `DISCORD_CLIENT_SECRET`, `MURASTREAM_URL`, `TMDB_API_KEY`, `MONGO_URI`, `MONGO_DB`, `DISCORD_BRIDGE_SECRET`, `BOT_STATUS`, `BOT_ACTIVITY`, `BOT_ADMIN_IDS`, `BOT_PREFIX`, `YOUTUBE_PROXY`, `YT_COOKIES` (inline jar contents — a file path is meaningless here), `YT_COOKIES_FILE` (local runs only).
 
 ## Monitoring

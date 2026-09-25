@@ -79,6 +79,11 @@ FFMPEG_ERROR: str | None = None
 AUDIO_SOURCE_FAILED = "audio_source_failed"
 VOICE_CONNECTION_FAILED = "voice_connection_failed"
 FFMPEG_FAILED = "ffmpeg_failed"
+FFMPEG_MISSING = "ffmpeg_missing"
+OPUS_MISSING = "opus_missing"
+OPUS_LOAD_FAILED = "opus_load_failed"
+AUDIO_PROCESS_FAILED = "audio_process_failed"
+EXPIRED_AUDIO_SOURCE = "expired_audio_source"
 SOURCE_UNAVAILABLE = "source_unavailable"
 PLAYBACK_TIMEOUT = "playback_timeout"
 MISSING_PERMISSION = "missing_permission"
@@ -108,6 +113,32 @@ PLAYBACK_USER_MESSAGES: dict[str, tuple[str, str]] = {
         "🎚️ FFmpeg Failed",
         "The audio processor could not start. Check that FFmpeg is installed "
         "correctly and available to the bot.",
+    ),
+    FFMPEG_MISSING: (
+        "🎚️ FFmpeg Unavailable",
+        "FFmpeg is unavailable on the music server, so no audio can be "
+        "produced. Install FFmpeg where the bot runs and restart it.",
+    ),
+    OPUS_MISSING: (
+        "🎙️ Opus Codec Missing",
+        "The Opus voice codec library was not found on the music server, so "
+        "Discord voice audio cannot be encoded. Install the Opus library "
+        "where the bot runs and restart it.",
+    ),
+    OPUS_LOAD_FAILED: (
+        "🎙️ Opus Codec Failed to Load",
+        "The Opus voice codec is present but could not be loaded. Check the "
+        "bot logs for the loader error and restart the bot.",
+    ),
+    AUDIO_PROCESS_FAILED: (
+        "🔇 Audio Process Exited",
+        "The audio process exited unexpectedly in the middle of playback. "
+        "Try again — if it keeps happening, check Music Diagnostics.",
+    ),
+    EXPIRED_AUDIO_SOURCE: (
+        "⌛ Audio Source Expired",
+        "The audio stream URL expired before playback started. Queue the "
+        "song again to fetch a fresh URL.",
     ),
     SOURCE_UNAVAILABLE: (
         "🌐 Source Unavailable",
@@ -195,8 +226,20 @@ def classify_playback_exception(exc: BaseException) -> str:
         return PLAYBACK_TIMEOUT
     name = type(exc).__name__
     msg = str(exc).lower()
+    if "timed out" in msg or "timeout" in msg or "timedout" in msg:
+        return PLAYBACK_TIMEOUT
+    # An expired googlevideo stream URL answers 403 — that is a stale URL, not
+    # a Discord permission problem. Must precede the Discord-403 rule below.
+    if "expired" in msg or ("403" in msg and ("googlevideo" in msg or "stream" in msg or "url" in msg)):
+        return EXPIRED_AUDIO_SOURCE
     if isinstance(exc, PermissionError) or "missing permission" in msg or "forbidden" in msg or "403" in msg:
         return MISSING_PERMISSION
+    # An FFmpeg process that DIED mid-playback is a different fault from one
+    # that never started (start failures are wrapped in an explicit
+    # PlaybackError with FFMPEG_FAILED/MISSING, so this rule only re-labels
+    # unwrapped process deaths). Must precede the generic ffmpeg rule.
+    if "exited" in msg or ("process" in msg and "exit" in msg):
+        return AUDIO_PROCESS_FAILED
     if "ffmpeg" in msg or "ffprobe" in msg or "executable" in msg or name in {"FileNotFoundError"} and "ffmpeg" in msg:
         return FFMPEG_FAILED
     # A missing voice backend raises "RuntimeError: davey library needed in
@@ -206,6 +249,18 @@ def classify_playback_exception(exc: BaseException) -> str:
     # reported as a permissions problem either.
     if "davey" in msg or ("library" in msg and "voice" in msg):
         return VOICE_LIBRARY_MISSING
+    # Opus codec failures must name the codec, not the voice connection.
+    # Load failures ("OpusNotLoaded", "could not load") precede the generic
+    # missing-library wording so each maps to its own code.
+    if "opus" in msg:
+        if ("not loaded" in msg or "opusnotloaded" in msg or "could not load" in msg
+                or "failed to load" in msg or "load" in msg):
+            return OPUS_LOAD_FAILED
+        if ("missing" in msg or "not found" in msg or "not installed" in msg
+                or "no opus" in msg or "could not find" in msg
+                or ("cannot open" in msg and "shared" in msg)):
+            return OPUS_MISSING
+        return OPUS_LOAD_FAILED
     # The resolve path already recognises YouTube's bot challenge; carry that
     # through so a playback-time failure names the real remedy (cookies or a
     # proxy) instead of falling back to the generic error.
@@ -313,29 +368,34 @@ def ffmpeg_check() -> dict:
 
 
 def opus_status() -> dict:
-    """Opus voice-codec readiness. Read-only introspection, never raises.
+    """Opus voice-codec readiness. Actually verifies usability, never raises.
 
-    discord.py loads libopus lazily on the first voice connect, so
-    "not loaded yet" at rest is NORMAL and reported as unknown — never as
-    missing. Only "no library discoverable at all" is a real outage, and
-    even that is reported, not raised.
+    discord.py loads libopus lazily on the first voice connect. When it is
+    not loaded yet, this performs the same load discord.py itself would do
+    (`discord.opus.load_opus()`) so the result is a verification, not a
+    guess: success means the voice stack can really use it. Outcomes:
+
+    - ready        — loaded (already, or verified by a load just now)
+    - missing      — the loader reports OpusNotLoaded: no usable library
+    - load_failed  — the load raised something else (see error)
+    - unknown      — introspection itself failed (never raises either way)
     """
     try:
         import discord as _discord
-        loaded = bool(_discord.opus.is_loaded())
-        if loaded:
+        if bool(_discord.opus.is_loaded()):
             return {"loaded": True, "lib": None, "status": "ready"}
         try:
-            from ctypes.util import find_library
-            lib = find_library("opus")
-        except Exception:
-            lib = None
-        if lib:
-            return {"loaded": False, "lib": lib,
-                    "status": "ready",
-                    "note": "libopus discoverable; discord.py loads it on first voice connect"}
-        return {"loaded": False, "lib": None, "status": "unknown",
-                "note": "libopus not yet loaded and none discoverable via find_library"}
+            _discord.opus.load_opus()
+        except Exception as load_exc:
+            name = type(load_exc).__name__
+            if name == "OpusNotLoaded" or "not loaded" in str(load_exc).lower():
+                return {"loaded": False, "lib": None, "status": "missing",
+                        "error": "OpusNotLoaded"}
+            return {"loaded": False, "lib": None, "status": "load_failed",
+                    "error": sanitize_for_log(f"{name}: {load_exc}", limit=200)}
+        loaded = bool(_discord.opus.is_loaded())
+        return {"loaded": loaded, "lib": None, "status": "ready" if loaded else "unknown",
+                "note": "verified by load" if loaded else "load returned without error but opus reports unloaded"}
     except Exception as exc:
         return {"loaded": False, "lib": None, "status": "unknown",
                 "error": f"{type(exc).__name__}"}
@@ -827,9 +887,14 @@ class MusicEngine:
                     return track
                 except Exception as exc:
                     last_exc = exc
-                    message = str(exc)[:500]
+                    raw_message = str(exc)[:500]
+                    # Challenge detection runs on the RAW text (the advisory
+                    # mentions --cookies, which sanitization would redact);
+                    # only the STORED copy is scrubbed so user-facing surfaces
+                    # and diagnostics can never leak credentials or long URLs.
+                    message = sanitize_for_log(raw_message, limit=500) or ""
                     self._last_resolve_error = message
-                    if is_bot_challenge(message):
+                    if is_bot_challenge(raw_message):
                         youtube_challenged = True
                         self._youtube_challenged = True
                         self._last_error_kind = "youtube_bot_challenge"
@@ -1027,12 +1092,15 @@ class MusicEngine:
                         "only a preview clip is available for this track")
 
         # Stage 4: FFmpeg precheck — fail fast with the real cause.
+        # A missing binary is FFMPEG_MISSING (install it); a present binary
+        # that fails to run is FFMPEG_FAILED (broken install). Different fixes.
         if ff["probed_ok"] is False:
-            raise _fail(FFMPEG_FAILED, "ffmpeg-precheck",
+            missing = ff["status"] == "missing" or "not found" in (ff["error"] or "").lower()
+            raise _fail(FFMPEG_MISSING if missing else FFMPEG_FAILED, "ffmpeg-precheck",
                         f"ffmpeg unavailable: {ff['error'] or ff['exe']}",
-                        error_type="FileNotFoundError" if ff["status"] == "missing" else "FFmpegNotFound")
+                        error_type="FileNotFoundError" if missing else "FFmpegNotFound")
         if not ff["exists"]:
-            raise _fail(FFMPEG_FAILED, "ffmpeg-precheck",
+            raise _fail(FFMPEG_MISSING, "ffmpeg-precheck",
                         f"ffmpeg binary not found: {ff['exe']}")
 
         # Stage 5: voice channel detection + automatic permission check.
