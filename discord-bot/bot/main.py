@@ -747,6 +747,14 @@ async def _health_server() -> None:
         except Exception:
             return {"loaded": False, "lib": None, "status": "unknown"}
 
+    def _bridge_detail() -> dict:
+        """Credential-free snapshot of the last site-bridge probe."""
+        try:
+            import bridge as bridge_mod
+            return bridge_mod.last_check()
+        except Exception:
+            return {"status": None, "reason": "unavailable"}
+
     async def _discord_api_probe() -> tuple[bool, int | None]:
         """Unauthenticated Discord API reachability check (credential-free).
 
@@ -903,6 +911,9 @@ async def _health_server() -> None:
             # discord.py's voice backend package. Its absence is a hard stop for
             # every /play, so it belongs in the one endpoint the dashboard polls.
             "voice_backend": _voice_state(),
+            # Last bridge probe: HTTP status + safe reason, so the dashboard
+            # can tell "authentication failed" from "endpoint unavailable".
+            "site_bridge_detail": _bridge_detail(),
             # Why the database is offline, without credentials. `database:
             # offline` alone cannot distinguish a missing variable from an
             # access-list rejection, so it was unactionable.
@@ -1421,6 +1432,16 @@ async def _health_server() -> None:
         players = snap.get("players", {}) if isinstance(snap, dict) else {}
         connected = sum(1 for p in players.values()
                         if isinstance(p, dict) and p.get("connected"))
+        # Honest voice-playback claim: VERIFIED only while a player is audibly
+        # engaged (state playing + voice connected) this boot. Anything else
+        # — including a green HTTP service — is NOT_LIVE_VERIFIED. Hearing
+        # actual Discord audio is the only proof; this endpoint never fakes it.
+        voice_playback = "NOT_LIVE_VERIFIED"
+        for p in players.values():
+            if (isinstance(p, dict) and p.get("player") == "playing"
+                    and p.get("connected")):
+                voice_playback = "VERIFIED"
+                break
         failed: list[str] = []
         if ff.get("probed_ok") is not True:
             failed.append("ffmpeg")
@@ -1445,6 +1466,7 @@ async def _health_server() -> None:
             "voice_backend": voice_backend,
             "connected_voice_clients": connected,
             "tracked_players": len(players),
+            "voice_playback": voice_playback,
         }
         if failed:
             body["error"] = f"Degraded subsystems: {', '.join(failed)}"

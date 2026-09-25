@@ -18,6 +18,22 @@ log = logging.getLogger("bot.bridge")
 _cache: dict[str, tuple[float, Any]] = {}
 _cache_lock = asyncio.Lock()
 
+# Last bridge probe outcome (credential-free): HTTP status and a coarse
+# reason. Lets /health distinguish "bridge authentication failed" (401/403)
+# from "bridge endpoint unavailable" (unreachable/5xx) instead of one
+# undifferentiated "degraded".
+LAST_CHECK: dict[str, Any] = {"status": None, "reason": "never probed"}
+
+
+def last_check() -> dict[str, Any]:
+    """Credential-free snapshot of the most recent bridge probe."""
+    return dict(LAST_CHECK)
+
+
+def _record(status: int | None, reason: str) -> None:
+    LAST_CHECK["status"] = status
+    LAST_CHECK["reason"] = reason
+
 
 def _headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {config.BRIDGE_SECRET}"}
@@ -58,18 +74,28 @@ async def probe() -> str:
     """
     if not config.BRIDGE_SECRET:
         http.set_status("site_bridge", "auth-missing")
+        _record(None, "no bridge secret configured on the bot host")
         return "auth-missing"
-    status, _ = await http.get_json(
-        f"{config.MURASTREAM_URL}/api/discord",
-        params={"action": "__healthcheck__"}, headers=_headers())
+    try:
+        status, _ = await http.get_json(
+            f"{config.MURASTREAM_URL}/api/discord",
+            params={"action": "__healthcheck__"}, headers=_headers())
+    except Exception as exc:
+        http.set_status("site_bridge", "offline")
+        _record(0, f"bridge endpoint unreachable: {type(exc).__name__}")
+        return "offline"
     if status in (200, 400):
         http.set_status("site_bridge", "online")
+        _record(status, "ok")
     elif status in (401, 403):
         http.set_status("site_bridge", "auth-missing")
+        _record(status, "bridge authentication failed: Vercel and Render DISCORD_BRIDGE_SECRET differ")
     elif status == 0:
         http.set_status("site_bridge", "offline")
+        _record(status, "bridge endpoint unreachable")
     else:
         http.set_status("site_bridge", "degraded")
+        _record(status, f"bridge endpoint error: HTTP {status} from the site (not an auth rejection)")
     return http.get_status().get("site_bridge", "unknown")
 
 
