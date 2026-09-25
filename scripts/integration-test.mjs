@@ -286,12 +286,15 @@ console.log('[3] watch party');
 // customer list. This guard fails if that shape ever comes back.
 console.log('[3b] leaderboard privacy');
 {
-  const res = await api('/api/leaderboard');
-  const body = res.body || {};
+  // Deliberately cookie-less: the helpers above carry this suite's session, and
+  // the threat model here is a stranger with no session at all.
+  const anonRes = await fetch(`${BASE}/api/leaderboard`);
+  const body = await anonRes.json().catch(() => null) || {};
   const rows = Array.isArray(body.data) ? body.data : [];
   const blob = JSON.stringify(body);
 
-  check('leaderboard responds 200 (public by design)', res.status === 200, `status ${res.status}`);
+  check('leaderboard responds 200 (public by design)', anonRes.status === 200,
+    `status ${anonRes.status}`);
   check('no row carries an `email` field', rows.every((r) => !('email' in r)));
   check('no identifier-shaped value anywhere in the payload', !blob.includes('@'));
   check('every row exposes an opaque playerKey',
@@ -299,6 +302,14 @@ console.log('[3b] leaderboard privacy');
   check('playerKeys are unique per row',
     new Set(rows.map((r) => r.playerKey)).size === rows.length);
   check('an anonymous request gets no `you`', !('you' in body));
+
+  // Signed in (this suite's own session), the caller learns only its own key.
+  const authed = await api('/api/leaderboard');
+  const you = authed.body?.you;
+  check('a session request receives `you`', typeof you === 'string' && you.length >= 16);
+  check('`you` never contains an identifier', typeof you === 'string' && !you.includes('@'));
+  check('`you` matches at most one row',
+    rows.filter((r) => r.playerKey === you).length <= 1);
 }
 
 // ─── 4. Cleanup (best effort) ───────────────────────────────────────
