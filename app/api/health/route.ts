@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { discordConfigCollection } from '@/app/lib/discord-config';
+import { probeDatabase } from '@/app/lib/db-health';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -7,25 +7,22 @@ export const runtime = 'nodejs';
 // GET /api/health — lightweight service health for uptime monitors,
 // Vercel cron keep-alive pings and the bot's keep-alive loop.
 // Returns 200 when core dependencies respond, 503 when degraded.
+//
+// `database` stays a simple online/offline flag (the dashboard maps it that
+// way) while `databaseDetail` carries a safe, classified reason
+// (READY / CONFIGURATION_ERROR / AUTHENTICATION_FAILED / ENDPOINT_UNAVAILABLE /
+// TIMEOUT / DATABASE_UNAVAILABLE) that never includes the connection string.
 export async function GET() {
-  const startedAt = Date.now();
-  let database = 'offline';
+  const health = await probeDatabase();
+  const ok = health.state === 'READY';
 
-  try {
-    const collection = await discordConfigCollection();
-    await collection.estimatedDocumentCount();
-    database = 'online';
-  } catch {
-    database = 'offline';
-  }
-
-  const ok = database === 'online';
   return NextResponse.json(
     {
       ok,
       service: 'muragoods-site',
-      database,
-      responseTimeMs: Date.now() - startedAt,
+      database: health.database,
+      databaseDetail: health.detail,
+      responseTimeMs: health.responseTimeMs,
       timestamp: new Date().toISOString(),
     },
     { status: ok ? 200 : 503 },
