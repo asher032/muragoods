@@ -29,7 +29,7 @@ const MODE = args.has('--staged') ? 'staged' : args.has('--all') ? 'all' : 'trac
  */
 const RULES = [
   { id: 'discord-bot-token', re: /\b[MNO][A-Za-z\d_-]{23,}\.[A-Za-z\d_-]{6}\.[A-Za-z\d_-]{27,}\b/ },
-  { id: 'mongodb-uri-with-credentials', re: /mongodb(\+srv)?:\/\/[^\s:@/]+:[^\s:@/]{6,}@/ },
+  { id: 'mongodb-uri-with-credentials', re: /mongodb(?:\+srv)?:\/\/[^\s:@/]+:[^\s:@/]{6,}@/ },
   { id: 'google-api-key', re: /\bAIza[0-9A-Za-z_-]{30,}\b/ },
   { id: 'openai-style-key', re: /\bsk-[A-Za-z0-9]{20,}\b/ },
   { id: 'github-token', re: /\bgh[pousr]_[A-Za-z0-9]{30,}\b/ },
@@ -41,8 +41,11 @@ const RULES = [
   { id: 'youtube-cookie-jar-line', re: /^\.youtube\.com\tTRUE\t/m },
   {
     id: 'assigned-literal-secret',
-    // KEY = "long opaque value" in any language, including JSON/YAML/.env.
-    re: /(SECRET|TOKEN|PASSWORD|PASSWD|API_?KEY|PRIVATE_?KEY|CLIENT_SECRET|BRIDGE_SECRET|COOKIES?)\s*[:=]\s*["']([A-Za-z0-9_\-./+=]{24,})["']/i,
+    // KEY = <long opaque value> in any language. Quotes are optional on
+    // purpose: a pasted .env line has none, and that is exactly the shape a
+    // rushed credential paste takes.
+    re: /(SECRET|TOKEN|PASSWORD|PASSWD|API_?KEY|PRIVATE_?KEY|CLIENT_SECRET|BRIDGE_SECRET|COOKIES?)\s*[:=]\s*["']?([A-Za-z0-9_\-./+=]{24,})["']?/i,
+    valueGroup: 2, // group 1 is the key name, group 2 is the value that leaked
   },
 ];
 
@@ -59,12 +62,19 @@ const ALLOWED = [
   /your[-_]/i,
   /<[^>]*>/, // <secret>, <REDACTED>, <hook-url>
   /redacted/i,
+  // "example" only in an obviously-placeholder key. A bare /example/i would
+  // silently allow a real credential on any host or password containing that
+  // word — see the control test below.
+  /\bexample[-_ ]?(key|secret|token|password|value|config)\b/i,
   /change[-_]?me/i,
   /^\*+$/,
   /^x+$/i,
   /process\.env/i,
   /os\.environ/i,
   /import\.meta\.env/i,
+  // Reserved/documentation hosts (RFC 2606/6761): credentials in a URL that
+  // cannot resolve are fixtures in tests, never a real leak.
+  /(\.invalid|\.test|\.example|example\.(com|org|net))([:/]|$)/i,
 ];
 
 const SKIP_PATH = [
@@ -113,7 +123,7 @@ for (const file of files) {
     for (const rule of RULES) {
       const match = line.match(rule.re);
       if (!match) continue;
-      const value = match[2] ?? match[1] ?? match[0];
+      const value = match[rule.valueGroup ?? 0] ?? match[0];
       if (isAllowed(value, line)) continue;
       findings.push({ file, line: index + 1, rule: rule.id, preview: mask(value) });
     }
