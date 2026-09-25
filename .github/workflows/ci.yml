@@ -54,6 +54,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Blocks credentials from ever reaching the repository (or its history):
+      # Discord/mongo/Google/GitHub/Slack/AWS/Stripe shapes, credentials in a
+      # URL, cookie-jar lines and long literals assigned to *SECRET*/*TOKEN*.
+      - name: Secret scan
+        run: node scripts/secret-scan.mjs
+
       - name: Typecheck
         run: npx tsc --noEmit
 
