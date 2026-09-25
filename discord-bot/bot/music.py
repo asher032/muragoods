@@ -384,17 +384,32 @@ def opus_status() -> dict:
         import discord as _discord
         if bool(_discord.opus.is_loaded()):
             return {"loaded": True, "lib": None, "status": "ready"}
+        # Verify the same way the voice stack does: discord.opus.load_opus()
+        # takes the library name (it has no zero-arg auto-discovery), so feed
+        # it ctypes' discovery result — exactly the documented public path.
+        # No name discoverable (common on Windows, where discord.py ships its
+        # own bundled DLL) is NOT proof of missing: report unknown and let
+        # the voice connect be the verifier.
         try:
-            _discord.opus.load_opus()
+            from ctypes.util import find_library
+            lib = find_library("opus")
+        except Exception:
+            lib = None
+        if not lib:
+            return {"loaded": False, "lib": None, "status": "unknown",
+                    "note": "opus not loaded and no library name discoverable; "
+                            "discord.py may still load its bundled copy on voice connect"}
+        try:
+            _discord.opus.load_opus(lib)
         except Exception as load_exc:
             name = type(load_exc).__name__
             if name == "OpusNotLoaded" or "not loaded" in str(load_exc).lower():
-                return {"loaded": False, "lib": None, "status": "missing",
+                return {"loaded": False, "lib": lib, "status": "missing",
                         "error": "OpusNotLoaded"}
-            return {"loaded": False, "lib": None, "status": "load_failed",
+            return {"loaded": False, "lib": lib, "status": "load_failed",
                     "error": sanitize_for_log(f"{name}: {load_exc}", limit=200)}
         loaded = bool(_discord.opus.is_loaded())
-        return {"loaded": loaded, "lib": None, "status": "ready" if loaded else "unknown",
+        return {"loaded": loaded, "lib": lib, "status": "ready" if loaded else "unknown",
                 "note": "verified by load" if loaded else "load returned without error but opus reports unloaded"}
     except Exception as exc:
         return {"loaded": False, "lib": None, "status": "unknown",
