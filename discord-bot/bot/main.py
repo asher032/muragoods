@@ -739,6 +739,14 @@ async def _health_server() -> None:
         except Exception:
             return {"davey": False}
 
+    def _opus_state() -> dict:
+        """Opus codec introspection for /health (never raises)."""
+        try:
+            import music as music_mod
+            return music_mod.opus_status()
+        except Exception:
+            return {"loaded": False, "lib": None, "status": "unknown"}
+
     async def _discord_api_probe() -> tuple[bool, int | None]:
         """Unauthenticated Discord API reachability check (credential-free).
 
@@ -885,6 +893,9 @@ async def _health_server() -> None:
             # must be able to tell "no FFmpeg" from "decoder fine, playback
             # unproven" instead of guessing from an aggregate flag.
             "ffmpeg": _ffmpeg_state(),
+            # Opus codec introspection (loaded lazily by discord.py on first
+            # voice connect — "unknown" at rest is normal, never an outage).
+            "opus": _opus_state(),
             # Real JavaScript-runtime discovery (deno/node/bun/quickjs) plus the
             # EJS solver scripts. Without a runtime, YouTube extraction fails in
             # a way that looks like an IP block — never guess, measure.
@@ -1388,6 +1399,58 @@ async def _health_server() -> None:
             "last_playback": snap["last_playback"],
         })
 
+    async def health_music(_request: web.Request) -> web.Response:
+        """Public music aggregate for monitors and the dashboard.
+
+        No auth (uptime monitors cannot authenticate) and no secrets: only
+        measured subsystem states, counts (never guild/channel IDs), and a
+        machine-readable failure reason when degraded. Anything down here is
+        a real measurement, never a guess.
+        """
+        import music as music_mod
+        gateway_alive, hb_age, _ = gateway_liveness(bot)
+        ff = music_mod.ffmpeg_check()
+        opus = music_mod.opus_status()
+        runtimes = music_mod.js_runtimes()
+        try:
+            import davey  # noqa: F401
+            voice_backend: dict = {"davey": True}
+        except Exception:
+            voice_backend = {"davey": False}
+        snap = music_mod.engine.diagnostics_snapshot()
+        players = snap.get("players", {}) if isinstance(snap, dict) else {}
+        connected = sum(1 for p in players.values()
+                        if isinstance(p, dict) and p.get("connected"))
+        failed: list[str] = []
+        if ff.get("probed_ok") is not True:
+            failed.append("ffmpeg")
+        if opus.get("status") not in ("ready", "unknown"):
+            failed.append("opus")
+        if not runtimes.get("any"):
+            failed.append("audio_extractor")
+        if voice_backend.get("davey") is not True:
+            failed.append("voice_backend")
+        if not gateway_alive:
+            failed.append("discord_voice")
+        status = "online" if not failed else "degraded"
+        latency_ms = round(bot.latency * 1000) if bot.latency else None
+        body: dict = {
+            "status": status,
+            "discord_voice": "ready" if gateway_alive else "unavailable",
+            "ffmpeg": ff.get("status"),
+            "audio_extractor": "ready" if runtimes.get("any") else "missing",
+            "opus": opus.get("status"),
+            "player": "ready" if status == "online" else "degraded",
+            "latency": latency_ms,
+            "voice_backend": voice_backend,
+            "connected_voice_clients": connected,
+            "tracked_players": len(players),
+        }
+        if failed:
+            body["error"] = f"Degraded subsystems: {', '.join(failed)}"
+            body["failing"] = failed
+        return web.json_response(body, status=200 if status == "online" else 503)
+
     async def music_playback_log(request: web.Request) -> web.Response:
         """Recent staged playback attempts (newest first). Sanitized."""
         if not _authorized(request):
@@ -1419,6 +1482,7 @@ async def _health_server() -> None:
 
     app = web.Application()
     app.router.add_get("/health", health)
+    app.router.add_get("/health/music", health_music)
     app.router.add_get("/music/diagnose", music_diagnose)
     app.router.add_get("/music/diagnostics", music_diagnostics)
     app.router.add_get("/music/playback-log", music_playback_log)

@@ -56,6 +56,8 @@ interface BotDetail {
   } | null;
   subsystems: Record<string, string>;
   ffmpeg: boolean | null;
+  opus: { loaded: boolean | null; status: string | null; lib: string | null } | null;
+  voiceBackend: { davey: boolean | null } | null;
   guilds: number | null;
   databaseDetail: { configured: boolean | null; errorClass: string | null; hint: string | null } | null;
   user: { username: string | null; avatarUrl: string | null; applicationId: string | number | null } | null;
@@ -84,6 +86,8 @@ async function fetchBotDetail(timeoutMs: number): Promise<BotDetail | null> {
     const subsystems = asRecord(body.subsystems);
     const user = asRecord(body.user);
     const apiCheck = asRecord(body.last_api_check);
+    const opus = asRecord(body.opus);
+    const voiceBackend = asRecord(body.voice_backend);
     return {
       ok: typeof body.ok === 'boolean' ? body.ok : null,
       latency: num(body.latency),
@@ -119,6 +123,16 @@ async function fetchBotDetail(timeoutMs: number): Promise<BotDetail | null> {
         Object.entries(subsystems ?? {}).map(([k, v]) => [k, String(v)]),
       ),
       ffmpeg: typeof body.ffmpeg === 'boolean' ? body.ffmpeg : null,
+      opus: opus
+        ? {
+            loaded: typeof opus.loaded === 'boolean' ? opus.loaded : null,
+            status: typeof opus.status === 'string' ? opus.status : null,
+            lib: typeof opus.lib === 'string' ? opus.lib : null,
+          }
+        : null,
+      voiceBackend: voiceBackend
+        ? { davey: typeof voiceBackend.davey === 'boolean' ? voiceBackend.davey : null }
+        : null,
       guilds: num(body.guilds),
       databaseDetail: detail
         ? {
