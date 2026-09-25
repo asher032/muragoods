@@ -9,7 +9,9 @@ import { Coins, Crown, MapPin, Medal, ShoppingCart, Trophy, Users } from 'lucide
 interface LeaderboardEntry {
   rank: number;
   name: string;
-  email: string;
+  // Opaque per-player key from the API. The account identifier behind it is
+  // never sent to the browser, so rows can only be compared, never read.
+  playerKey: string;
   totalSpent: number;
   orderCount: number;
   coinsEarned: number;
@@ -45,23 +47,18 @@ export default function LeaderboardPage() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [currentUser, setCurrentUser] = useState('');
+  const [you, setYou] = useState('');
 
   useEffect(() => {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      try {
-        const user = JSON.parse(userStr);
-        setCurrentUser(user.email || '');
-      } catch { /* empty */ }
-    }
-
     async function fetchLeaderboard() {
       try {
         const res = await fetch('/api/leaderboard');
         const result = await res.json();
         if (result.success && Array.isArray(result.data)) {
           setEntries(result.data);
+          // The server resolves the signed-in player's key from the session, so
+          // no account identifier is trusted from (or stored in) the browser.
+          setYou(typeof result.you === 'string' ? result.you : '');
         } else {
           setError('No leaderboard data available yet.');
         }
@@ -235,10 +232,10 @@ export default function LeaderboardPage() {
 
               {/* Rows */}
               {rest.map((entry, i) => {
-                const isYou = entry.email === currentUser;
+                const isYou = !!you && entry.playerKey === you;
                 return (
                   <div
-                    key={entry.email}
+                    key={entry.playerKey}
                     className={`grid grid-cols-[60px_1fr_80px_80px_80px] sm:grid-cols-[70px_1fr_100px_100px_100px] gap-2 p-4 border-b border-[rgba(242,240,228,0.08)] transition-colors hover:bg-[var(--charcoal-light)] slide-in ${
                       isYou ? 'bg-[rgba(212,175,55,0.08)] border-l-2 border-l-[var(--gold)]' : ''
                     }`}
@@ -290,8 +287,8 @@ export default function LeaderboardPage() {
           )}
 
           {/* ─── Your Rank (if logged in and not in top display) ── */}
-          {!loading && currentUser && entries.length > 0 && (() => {
-            const yourEntry = entries.find(e => e.email === currentUser);
+          {!loading && you && entries.length > 0 && (() => {
+            const yourEntry = entries.find(e => e.playerKey === you);
             if (!yourEntry || yourEntry.rank <= rest.length + 3) return null;
             return (
               <div className="mt-4 border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.08)] rounded-2xl p-4 flex items-center justify-between">
