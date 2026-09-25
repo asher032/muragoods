@@ -527,6 +527,17 @@ _BOT_CHALLENGE_MARKERS = (
     "confirm you\u2019re not a bot",
     "cookies for the authentication",
     "use --cookies",
+    "sign in to confirm",
+    # YouTube's other wordings when it refuses a flagged egress IP. Deliberately
+    # NOT keyed on a bare "HTTP Error 403/429": a 403 from a private or removed
+    # video carries the same status as a bot refusal, so the status code alone
+    # cannot tell them apart and would mislabel ordinary removals as challenges.
+    # These markers only match when the message says what actually happened.
+    "captcha",
+    "automated queries",
+    "bot detection",
+    "unusual traffic",
+    "too many requests",
 )
 
 
@@ -562,8 +573,13 @@ def is_preview_url(url: str | None) -> bool:
     return "preview" in host
 
 
-def get_ydl_opts() -> dict[str, Any]:
-    """Build yt-dlp options, including cookies/proxy when configured."""
+def get_ydl_opts(use_proxy: bool = True) -> dict[str, Any]:
+    """Build yt-dlp options, including cookies/proxy when configured.
+
+    `use_proxy=False` drops only the proxy — cookies, JS runtimes, format and
+    retry policy stay identical, which is what the direct-egress fallback needs
+    when YouTube refuses the proxy's IP.
+    """
     # NOTE: no pinned format and no pinned player_client by default.
     #
     # Both were pinned, and that was actively harmful. A selector of
@@ -598,13 +614,141 @@ def get_ydl_opts() -> dict[str, Any]:
     if config.YT_PLAYER_CLIENT:
         opts["extractor_args"] = {"youtube": {"player_client": [
             c.strip() for c in config.YT_PLAYER_CLIENT.split(",") if c.strip()]}}
-    proxy = config.YOUTUBE_PROXY
-    if proxy:
-        opts["proxy"] = proxy
+    if use_proxy:
+        proxy = config.YOUTUBE_PROXY
+        if proxy:
+            opts["proxy"] = proxy
     cookies = cookies_path()
     if cookies:
         opts["cookiefile"] = cookies
     return opts
+
+
+# ── YouTube egress (proxy) health ─────────────────────────────────────
+# A proxy only helps while YouTube still accepts its egress IP. Reachability is
+# NOT that test: the configured proxy answers HTTP 200 and YouTube can still
+# refuse every request through it with
+#   ERROR: [youtube] <id>: Sign in to confirm you're not a bot.
+# while the identical cookies + JS runtime resolve the same track directly.
+# So a challenge benches the proxy for a cooldown and playback continues on
+# this host's own egress instead of dying with it. Bounded by construction:
+# at most one direct plan per resolve, and no flapping back to a proxy that
+# just refused us. Reported through /health/music as credential-free state.
+PROXY_EGRESS_NOT_CONFIGURED = "not_configured"
+PROXY_EGRESS_READY = "ready"
+PROXY_EGRESS_CHALLENGED = "challenged"
+PROXY_EGRESS_BYPASSED = "bypassed"
+
+PROXY_CHALLENGE_COOLDOWN = 900.0  # seconds a challenged proxy stays benched
+
+_egress_state: dict[str, Any] = {
+    "status": PROXY_EGRESS_NOT_CONFIGURED,
+    "last_path": None,
+    "bench_until": 0.0,
+    "challenge_count": 0,
+    "bypass_count": 0,
+    "last_reason": None,
+}
+
+
+def proxy_configured() -> bool:
+    return bool(config.YOUTUBE_PROXY)
+
+
+def _proxy_benched() -> bool:
+    return _egress_state["bench_until"] > time.time()
+
+
+def record_proxy_challenged(reason: str | None = None) -> None:
+    """Bench a challenged proxy and remember why (never the proxy URL).
+
+    The reason is scrubbed on the way in: it reaches a public health endpoint,
+    and a driver error can quote the proxy URL with its credentials in it.
+    """
+    _egress_state["status"] = PROXY_EGRESS_CHALLENGED
+    _egress_state["bench_until"] = time.time() + PROXY_CHALLENGE_COOLDOWN
+    _egress_state["challenge_count"] = int(_egress_state["challenge_count"]) + 1
+    _egress_state["last_path"] = "proxy"
+    _egress_state["last_reason"] = sanitize_for_log(reason, limit=160)
+
+
+def record_egress_success(used_proxy: bool) -> None:
+    if used_proxy:
+        _egress_state["status"] = PROXY_EGRESS_READY
+        _egress_state["last_path"] = "proxy"
+        _egress_state["last_reason"] = None
+        return
+    _egress_state["last_path"] = "direct"
+    if not proxy_configured():
+        _egress_state["status"] = PROXY_EGRESS_NOT_CONFIGURED
+        return
+    _egress_state["bypass_count"] = int(_egress_state["bypass_count"]) + 1
+    _egress_state["status"] = (
+        PROXY_EGRESS_CHALLENGED if _proxy_benched() else PROXY_EGRESS_BYPASSED
+    )
+
+
+def _current_proxy_status() -> str:
+    if not proxy_configured():
+        return PROXY_EGRESS_NOT_CONFIGURED
+    if _proxy_benched():
+        return PROXY_EGRESS_CHALLENGED
+    return str(_egress_state["status"])
+
+
+def proxy_state() -> dict[str, Any]:
+    """Credential-free YouTube egress state for /health/music.
+
+    Reports configuration presence and outcome only — the proxy URL, its
+    username and its password must never appear in health output or logs.
+    """
+    remaining = int(_egress_state["bench_until"] - time.time())
+    return {
+        "configured": proxy_configured(),
+        "status": _current_proxy_status(),
+        "in_use": proxy_configured() and not _proxy_benched(),
+        "benched": _proxy_benched(),
+        "bench_seconds_remaining": max(0, remaining),
+        "last_egress": _egress_state["last_path"],
+        "challenge_count": _egress_state["challenge_count"],
+        "bypass_count": _egress_state["bypass_count"],
+        # Scrubbed again on the way out: this payload is public.
+        "last_reason": sanitize_for_log(_egress_state["last_reason"], limit=160),
+    }
+
+
+def build_strategies(
+    query: str, is_url: bool, use_proxy: bool, scope: str = "all"
+) -> list[tuple[str, dict[str, Any]]]:
+    """yt-dlp strategies for this query, with the proxy included or omitted.
+
+    `scope` separates YouTube strategies from the other providers so the caller
+    can order them: when YouTube refuses one egress, the same query is worth
+    retrying on the other egress *before* falling back to a different provider
+    (which may answer with something unrelated).
+
+    A URL must resolve to that URL: the search fallbacks would otherwise treat
+    the URL itself as a search string and hand back some other provider's best
+    guess at it.
+    """
+    base = get_ydl_opts(use_proxy=use_proxy)
+    if is_url:
+        return [("url", base)]
+    youtube = [
+        ("ytsearch", base),
+        ("ytsearch1", {**base, "default_search": None}),
+        ("ytsearch5", {**base, "default_search": None}),
+    ]
+    providers = [
+        ("scsearch", {**base, "default_search": None}),
+        ("bandcamp", {**base, "default_search": None}),
+        ("direct", {**base, "force_generic_extractor": True}),
+    ]
+    if scope == "youtube":
+        return youtube
+    if scope == "providers":
+        return providers
+    return youtube + providers
 
 
 FFMPEG_OPTS = {
@@ -824,24 +968,39 @@ class MusicEngine:
         # treat the URL itself as a search string and hand back some other
         # provider's best guess at it.
         is_url = bool(re.match(r"^https?://", query.strip(), re.I))
-        if is_url:
-            strategies = [("url", get_ydl_opts())]
-        else:
-            strategies = [
-                ("ytsearch", get_ydl_opts()),
-                ("ytsearch1", {**get_ydl_opts(), "default_search": None}),
-                ("ytsearch5", {**get_ydl_opts(), "default_search": None}),
-                ("scsearch", {**get_ydl_opts(), "default_search": None}),
-                ("bandcamp", {**get_ydl_opts(), "default_search": None}),
-                ("direct", {**get_ydl_opts(), "force_generic_extractor": True}),
-            ]
+        # Tagged egress plan: try the configured proxy first (unless it is
+        # benched for a previous challenge), then this host's own egress at most
+        # once. Each entry is (strategy name, yt-dlp opts, uses proxy).
+        try_proxy = bool(config.YOUTUBE_PROXY) and not _proxy_benched()
+        plans: list[tuple[str, dict[str, Any], bool]] = [
+            (*strategy, try_proxy)
+            for strategy in build_strategies(query, is_url, try_proxy, "youtube")
+        ]
+        if try_proxy:
+            # Same query, this host's own egress, tried immediately: it is the
+            # same track, just a different IP, so it beats a different provider.
+            plans.extend(
+                (*strategy, False)
+                for strategy in build_strategies(query, is_url, False, "youtube")
+            )
+        # Other providers last: they do not hit YouTube, so the challenge does
+        # not apply to them and they keep the pre-existing behaviour of being a
+        # fallback rather than the first answer.
+        plans.extend(
+            (*strategy, try_proxy)
+            for strategy in build_strategies(query, is_url, try_proxy, "providers")
+        )
         youtube_challenged = False
-        for strategy_name, strategy_opts in strategies:
-            if youtube_challenged and strategy_name.startswith("ytsearch"):
-                # The challenge is a property of this host's egress IP, so the
-                # sibling YouTube strategies will be refused identically. Not
-                # retrying them is the difference between ~10s and ~80s.
-                log.info("skipping %s: YouTube already challenged this host's IP", strategy_name)
+        challenged_egress: set[bool] = set()
+        for strategy_name, strategy_opts, strategy_uses_proxy in plans:
+            if strategy_uses_proxy in challenged_egress and strategy_name.startswith("ytsearch"):
+                # The challenge is a property of the egress IP, so the sibling
+                # YouTube strategies on that same egress are refused
+                # identically. Not retrying them is the difference between ~10s
+                # and ~80s.
+                log.info(
+                    "skipping %s: YouTube already challenged the %s egress",
+                    strategy_name, "proxy" if strategy_uses_proxy else "host")
                 continue
             search_query = query
             if strategy_name == "ytsearch1":
@@ -871,7 +1030,8 @@ class MusicEngine:
                         last_exc = ValueError(f"[{strategy_name}] No URL in result")
                         continue
                     if not data.get("url"):
-                        data = await self._refresh_stream_url(data)
+                        data = await self._refresh_stream_url(
+                            data, use_proxy=strategy_uses_proxy)
                     track = Track(data, requester=None)
                     if strategy_name in ("scsearch", "bandcamp"):
                         # Fallback providers may answer with something else
@@ -895,6 +1055,7 @@ class MusicEngine:
                                         strategy_name, track.title[:60], query[:80])
                             continue
                     log.info("resolve ok via %s: %s (attempt %d)", strategy_name, track.title[:60], attempt + 1)
+                    record_egress_success(strategy_uses_proxy)
                     self._last_resolve_error = None
                     # Succeeded: there is no failure to describe, whatever the
                     # primary provider did on the way here.
@@ -913,10 +1074,27 @@ class MusicEngine:
                         youtube_challenged = True
                         self._youtube_challenged = True
                         self._last_error_kind = "youtube_bot_challenge"
-                        log.warning(
-                            "YouTube bot-challenge on %s for %r — set YT_COOKIES (or "
-                            "YOUTUBE_PROXY) to authenticate; retrying cannot help",
-                            strategy_name, query[:80])
+                        challenged_egress.add(strategy_uses_proxy)
+                        if strategy_uses_proxy:
+                            # Reachability was never the question: bench the proxy
+                            # and let the direct plan below answer instead of
+                            # failing playback with it.
+                            record_proxy_challenged(message)
+                            has_direct_plan = any(
+                                not uses_proxy for _, _, uses_proxy in plans)
+                            log.warning(
+                                "YouTube bot-challenge on %s for %r via the configured "
+                                "proxy — %s",
+                                strategy_name, query[:80],
+                                "retrying on this host's own egress (cookies still apply)"
+                                if has_direct_plan else
+                                "set YT_COOKIES or replace the proxy; retrying cannot help")
+                        else:
+                            log.warning(
+                                "YouTube bot-challenge on %s for %r on this host's egress — "
+                                "set YT_COOKIES (or a proxy whose IP YouTube accepts) to "
+                                "authenticate; retrying cannot help",
+                                strategy_name, query[:80])
                         break
                     log.warning("yt-dlp %s attempt %d failed for %r: %s", strategy_name, attempt + 1, query[:100], exc)
                     if attempt < 1:
@@ -1437,13 +1615,17 @@ class MusicEngine:
         ok = stages["ffmpeg"] == "PASS" and stages["audio_source"] == "PASS"
         return {"ok": ok, "stages": stages, "detail": detail}
 
-    async def _refresh_stream_url(self, data: dict[str, Any]) -> dict[str, Any]:
+    async def _refresh_stream_url(
+        self, data: dict[str, Any], use_proxy: bool = True
+    ) -> dict[str, Any]:
         webpage = data.get("webpage_url") or data.get("url")
         if not webpage:
             return data
         try:
             loop = asyncio.get_running_loop()
-            with yt_dlp.YoutubeDL(get_ydl_opts()) as ydl:
+            # Refresh through the egress that produced the result, otherwise a
+            # challenged proxy re-breaks a track that resolved directly.
+            with yt_dlp.YoutubeDL(get_ydl_opts(use_proxy=use_proxy)) as ydl:
                 fresh = await loop.run_in_executor(
                     None, lambda: ydl.extract_info(webpage, download=False))
             if fresh and fresh.get("url"):

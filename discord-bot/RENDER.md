@@ -28,6 +28,13 @@ the exact subsystem — never a faked 200.
 - **MongoDB Atlas network access**: Render uses dynamic egress IPs, so the Atlas project's Network Access list must contain `0.0.0.0/0` for the bot to connect at all. Tradeoff: IP allowlisting is effectively open — security rests on the connection-string credentials (strong password, least-privilege database user) and never committing them. Do not silently modify production access rules; any change is an explicit operator action.
 - **Env vars** (names only — values live in the Render dashboard, never the repo): `DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_PUBLIC_KEY`, `DISCORD_CLIENT_SECRET`, `MURASTREAM_URL`, `TMDB_API_KEY`, `MONGO_URI`, `MONGO_DB`, `DISCORD_BRIDGE_SECRET`, `BOT_STATUS`, `BOT_ACTIVITY`, `BOT_ADMIN_IDS`, `BOT_PREFIX`, `YOUTUBE_PROXY`, `YT_COOKIES` (inline jar contents — a file path is meaningless here), `YT_COOKIES_FILE` (local runs only).
 
+## YouTube egress (proxy) — challenged ≠ broken
+
+- A configured `YOUTUBE_PROXY` is only used while YouTube still accepts its egress IP. Reachability is not that test: the proxy can answer HTTP 200 and YouTube can still refuse every request through it with `Sign in to confirm you're not a bot`.
+- On a challenge the resolver **benches the proxy** (15 minutes) and retries the same query once on the host's own egress, so a flagged proxy degrades music instead of killing it. The retry is bounded — at most one direct attempt per resolve, never a proxy → direct → proxy loop.
+- `/health` and `/health/music` report `youtube_egress`: `configured`, `status` (`ready` / `challenged` / `bypassed` / `not_configured`), `last_egress`, `benched`, `bench_seconds_remaining` and counters. It never carries the proxy URL or its credentials.
+- One-step diagnosis on the host: `python scripts/music_preflight.py` (add `--query <url-or-search>` to test another track). It resolves one track directly, through the proxy, and through the real resolver, then prints a PASS / CHALLENGED / FAILED table; exit code 0 means the direct path works.
+
 ## Monitoring
 
 - Preferred: an **external** uptime monitor (e.g. UptimeRobot) polling `GET /health` every **5–10 minutes**. Do not ping every few seconds.

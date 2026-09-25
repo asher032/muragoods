@@ -712,6 +712,19 @@ async def _health_server() -> None:
         except Exception:
             return None
 
+    def _youtube_egress_state() -> dict:
+        """Which egress path served the last YouTube resolve.
+
+        A proxy that answers but whose IP YouTube refuses reports HTTP 200, so
+        its presence says nothing about whether it works. This returns the
+        measured outcome instead — never the proxy URL or its credentials.
+        """
+        try:
+            import music as music_mod
+            return music_mod.proxy_state()
+        except Exception:
+            return {"configured": bool(config.YOUTUBE_PROXY), "status": "unknown"}
+
     def _js_runtime_state() -> dict:
         """Which JavaScript runtime yt-dlp can use for YouTube's challenges.
 
@@ -908,6 +921,8 @@ async def _health_server() -> None:
             # EJS solver scripts. Without a runtime, YouTube extraction fails in
             # a way that looks like an IP block — never guess, measure.
             "js_runtimes": _js_runtime_state(),
+            # YouTube egress (proxy) outcome — see _youtube_egress_state().
+            "youtube_egress": _youtube_egress_state(),
             # discord.py's voice backend package. Its absence is a hard stop for
             # every /play, so it belongs in the one endpoint the dashboard polls.
             "voice_backend": _voice_state(),
@@ -1340,6 +1355,10 @@ async def _health_server() -> None:
             # datacenter host. These three facts distinguish the possible
             # causes, so a failure is actionable instead of just "timed out".
             "proxy_configured": bool(config.YOUTUBE_PROXY),
+            # Presence is not health: this carries the outcome of the proxy
+            # (ready / challenged / bypassed) and which egress served the last
+            # resolve. Credential-free by construction.
+            "youtube_egress": music_mod.proxy_state(),
             "cookies_configured": bool(music_mod.cookies_path()),
             "js_runtimes": music_mod.js_runtimes(),
         }
@@ -1460,6 +1479,12 @@ async def _health_server() -> None:
             "discord_voice": "ready" if gateway_alive else "unavailable",
             "ffmpeg": ff.get("status"),
             "audio_extractor": "ready" if runtimes.get("any") else "missing",
+            # Which egress YouTube actually accepted. A configured proxy that
+            # answers HTTP 200 but is refused by YouTube looks identical to a
+            # healthy one without this, so health reports the measured outcome
+            # (configured/ready/challenged/bypassed + last egress) and never the
+            # proxy URL or its credentials.
+            "youtube_egress": music_mod.proxy_state(),
             "opus": opus.get("status"),
             "player": "ready" if status == "online" else "degraded",
             "latency": latency_ms,
