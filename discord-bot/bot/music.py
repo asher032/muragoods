@@ -1102,6 +1102,11 @@ class MusicEngine:
         from collections import deque as _dq
         self._players: dict[int, GuildPlayer] = {}
         self.bot_loop: Optional[asyncio.AbstractEventLoop] = None
+        # Optional async callable invoked after a track starts via natural
+        # advancement (queue/autoplay/re-resolve). The cog sets this to
+        # refresh the Discord now-playing message. Invoked best-effort: a
+        # failing handler must never break playback.
+        self.track_started_handler = None
         self._last_resolve_error: Optional[str] = None
         self._last_error_kind: Optional[str] = None
         # Whether YouTube challenged this host during the LAST resolve. Kept
@@ -1117,6 +1122,20 @@ class MusicEngine:
         if guild_id not in self._players:
             self._players[guild_id] = GuildPlayer(guild_id)
         return self._players[guild_id]
+
+    async def _emit_track_started(self, player: GuildPlayer) -> None:
+        """Notify the track-started hook (now-playing refresh). A deleted
+        message, missing channel or missing permissions inside the handler
+        is the handler's problem to swallow — playback continues regardless."""
+        handler = self.track_started_handler
+        if handler is None:
+            return
+        try:
+            result = handler(player)
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception:
+            log.debug("track_started_handler failed (non-fatal)")
 
     def remove_player(self, guild_id: int) -> None:
         self._players.pop(guild_id, None)
@@ -1798,6 +1817,7 @@ class MusicEngine:
                     fresh.requester = player.current.requester
                     try:
                         await self.play_now(player, fresh, player.voice.channel, announce)
+                        await self._emit_track_started(player)
                         return
                     except PlaybackError as pe:
                         log.warning("Re-resolve retry failed for %r: %s",
@@ -1866,6 +1886,7 @@ class MusicEngine:
             if player.voice and player.voice.channel:
                 try:
                     await self.play_now(player, next_track, player.voice.channel, announce)
+                    await self._emit_track_started(player)
                 except PlaybackError as pe:
                     # One bad next-track must not wedge the player: log it and
                     # continue with whatever follows.

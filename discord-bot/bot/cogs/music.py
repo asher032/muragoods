@@ -212,6 +212,20 @@ class MusicCog(commands.Cog):
         # The voice player thread needs the bot's event loop to schedule the
         # track-end callback; without this the queue can silently stall.
         music.engine.bot_loop = bot.loop
+        # Natural track advancement refreshes the channel now-playing message
+        # through the same helper the commands use. Best-effort by contract:
+        # the engine swallows handler failures so a message edit can never
+        # break playback.
+        music.engine.track_started_handler = self._on_engine_track_started
+
+    async def _on_engine_track_started(self, player: music.GuildPlayer) -> None:
+        try:
+            guild = self.bot.get_guild(player.guild_id)
+        except Exception:
+            return
+        if guild is None:
+            return
+        await refresh_now_playing(guild)
 
     @staticmethod
     def _voice_channel(interaction: discord.Interaction):

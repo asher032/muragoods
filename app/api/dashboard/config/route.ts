@@ -28,8 +28,66 @@ function hasManage(owner: boolean, perms: string | number): boolean {
   return (p & MANAGE_GUILD) !== BigInt(0) || (p & ADMINISTRATOR) !== BigInt(0);
 }
 
-function bad(message: string, status = 400) {
-  return NextResponse.json({ success: false, error: message }, { status });
+function bad(message: string, status = 400, code?: string) {
+  return NextResponse.json(
+    { success: false, error: message, ...(code ? { code } : {}) },
+    { status },
+  );
+}
+
+// Structured authorization outcomes — the dashboard renders a distinct state
+// per code instead of one generic "not allowed". A 403 never claims the bot
+// is missing when the real problem is the caller's permission, and PATCH
+// refuses to store settings for a server the bot is not installed on.
+type Authz =
+  | { ok: true; guild: DashGuild }
+  | { ok: false; status: number; code: string; error: string };
+
+async function authorize(token: string | null, guildId: string): Promise<Authz> {
+  if (!token) {
+    return { ok: false, status: 401, code: 'AUTH_REQUIRED', error: 'Sign in with Discord to continue' };
+  }
+  if (!guildId || !SNOWFLAKE.test(guildId)) {
+    return { ok: false, status: 400, code: 'INVALID_GUILD_ID', error: 'Valid guildId required' };
+  }
+  const resp = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
+    headers: { Authorization: `Bearer ${token}` },
+    next: { revalidate: 0 },
+  });
+  if (!resp.ok) {
+    return { ok: false, status: 401, code: 'AUTH_REQUIRED', error: 'Discord rejected the session — sign in again' };
+  }
+  const guilds = (await resp.json()) as DashGuild[];
+  const guild = guilds.find((g) => g.id === guildId);
+  if (!guild) {
+    return { ok: false, status: 403, code: 'NOT_GUILD_MEMBER', error: 'You are not a member of that server' };
+  }
+  if (!hasManage(guild.owner, guild.permissions)) {
+    return { ok: false, status: 403, code: 'INSUFFICIENT_GUILD_PERMISSION', error: 'You need Manage Server permission on that server' };
+  }
+  return { ok: true, guild };
+}
+
+function botToken(): string | null {
+  return process.env.DISCORD_BOT_TOKEN?.trim() || process.env.DISCORD_TOKEN?.trim() || null;
+}
+
+/** Is the bot installed on this guild (Discord API, bot token)? null = unknown. */
+async function botInstalled(guildId: string): Promise<boolean | null> {
+  const token = botToken();
+  if (!token) return null;
+  try {
+    const resp = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/@me`, {
+      headers: { Authorization: `Bot ${token}` },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
+    });
+    if (resp.status === 404 || resp.status === 403) return false;
+    if (!resp.ok) return null;
+    return true;
+  } catch {
+    return null;
+  }
 }
 
 // ── Server-side resource verification (§22) ──────────────────────────────
@@ -121,25 +179,12 @@ function friendlyField(section: string, field: string): string {
     .replace(/^./, (c) => c.toUpperCase());
 }
 
-async function getManageableGuilds(accessToken: string): Promise<Map<string, DashGuild>> {
-  const resp = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    next: { revalidate: 0 },
-  });
-  if (!resp.ok) return new Map();
-  const guilds = (await resp.json()) as DashGuild[];
-  return new Map(guilds.filter((g) => hasManage(g.owner, g.permissions)).map((g) => [g.id, g]));
-}
-
 export async function GET(req: NextRequest) {
   const token = (await sessionToken());
-  const guildId = req.nextUrl.searchParams.get('guildId');
-  if (!token) return bad('Discord token required', 401);
-  if (!guildId || !/^\d{5,25}$/.test(guildId)) return bad('Valid guildId required');
-
-  const manageable = await getManageableGuilds(token);
-  const guild = manageable.get(guildId);
-  if (!guild) return bad('You do not have permission to manage this server', 403);
+  const guildId = req.nextUrl.searchParams.get('guildId') || '';
+  const auth = await authorize(token, guildId);
+  if (!auth.ok) return bad(auth.error, auth.status, auth.code);
+  const guild = auth.guild;
 
   const collection = await discordConfigCollection();
   const config = await collection.findOne({ guildId }) || {
@@ -147,24 +192,34 @@ export async function GET(req: NextRequest) {
     guildName: guild.name,
     guildIcon: guild.icon || '',
   };
+  // Bot presence rides along (never blocks a read — settings remain
+  // viewable while the bot is away); null = could not be determined.
+  const installed = await botInstalled(guildId);
   return NextResponse.json({
     success: true,
     guild: { id: guild.id, name: guild.name, icon: guild.icon },
     config,
+    bot: { installed },
   });
 }
 
 export async function PATCH(req: NextRequest) {
   const token = (await sessionToken());
-  if (!token) return bad('Discord token required', 401);
+  if (!token) return bad('Discord token required', 401, 'AUTH_REQUIRED');
   const body = await req.json().catch(() => null);
   if (!body || typeof body !== 'object') return bad('Invalid JSON body');
   const guildId = String((body as Record<string, unknown>).guildId || '');
-  if (!guildId || !/^\d{5,25}$/.test(guildId)) return bad('Valid guildId required');
+  const auth = await authorize(token, guildId);
+  if (!auth.ok) return bad(auth.error, auth.status, auth.code);
+  const guild = auth.guild;
 
-  const manageable = await getManageableGuilds(token);
-  const guild = manageable.get(guildId);
-  if (!guild) return bad('You do not have permission to manage this server', 403);
+  // Storing settings for a server without the bot serves nothing and hides
+  // misconfiguration — refuse with the precise state, not a generic 403.
+  const installed = await botInstalled(guildId);
+  if (installed === false) {
+    return bad('The bot is not installed on this server. Invite it first — settings apply once it joins.',
+      404, 'BOT_NOT_INSTALLED');
+  }
 
   const patch = (body as Record<string, unknown>).config;
   if (!patch || typeof patch !== 'object') return bad('config object required');
