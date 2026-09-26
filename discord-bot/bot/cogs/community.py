@@ -378,6 +378,15 @@ class CommunityCog(commands.Cog):
         while not self.bot.is_closed():
             try:
                 for r in await database.due_reminders():
+                    # A reminder addressed to the bot itself (or a non-member
+                    # resolvable only as ClientUser) can never be delivered —
+                    # skip it instead of raising every 20s forever.
+                    try:
+                        bot_id = self.bot.user.id if self.bot.user else None
+                    except Exception:
+                        bot_id = None
+                    if bot_id is not None and r.get("userId") == bot_id:
+                        continue
                     user = self.bot.get_user(r["userId"])
                     channel = self.bot.get_channel(r["channelId"])
                     e = embeds.ok("⏰ Reminder", f"**{r['text'][:200]}**\n— set <t:{int(r['dueAt'].timestamp())}:R>")

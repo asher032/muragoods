@@ -780,6 +780,143 @@ class Track:
         return f"**{self.title}** — {self.uploader} `({mins}:{secs:02d})`"
 
 
+# ── Audio filters (FFmpeg -af presets, allowlisted) ─────────────────────
+# Only these names are accepted anywhere (engine, control endpoint, slash
+# commands). Anything else is rejected server-side — the -af string is never
+# built from user input, so there is no filter/option injection.
+FILTERS: dict[str, str] = {
+    "bassboost": "bass=g=10,dynaudnorm=f=150:g=7",
+    "nightcore": "aresample=48000,asetrate=48000*1.25,aresample=48000,atempo=1.25",
+    "vaporwave": "aresample=48000,asetrate=48000*0.8,aresample=48000,atempo=0.8",
+    "8d": "apulsator=hz=0.125",
+    "karaoke": "pan=stereo|c0=0.5*c0+0.5*c1|c1=0.5*c0+0.5*c1,highpass=f=120",
+    "tremolo": "tremolo=f=4:d=0.7",
+}
+
+# Autoplay safety: a resolver that keeps failing must not spin forever.
+AUTOPLAY_MAX_CHAIN = 50
+AUTOPLAY_MAX_CONSECUTIVE_FAILURES = 3
+
+# Per-guild music config cache (bot's own guild_config store, fed by the
+# dashboard through POST /music/config). Short TTL so saves apply quickly
+# without a Discord read on every hot path.
+_MUSIC_CONFIG_TTL = 60.0
+_music_config_cache: dict[int, tuple[float, dict]] = {}
+
+
+async def get_music_config(guild_id: int) -> dict:
+    """Guild music settings with defaults. Never raises — unknown guilds or
+    DB outages yield defaults, and the caller always gets a usable dict."""
+    now = time.monotonic()
+    try:
+        gid = int(guild_id)
+    except (TypeError, ValueError):
+        gid = 0
+    hit = _music_config_cache.get(gid)
+    if hit and now - hit[0] < _MUSIC_CONFIG_TTL:
+        return hit[1]
+    cfg: dict = {}
+    try:
+        import database as _db
+        doc = await _db.get_guild_config(gid)
+        if isinstance(doc, dict):
+            raw = doc.get("music")
+            if isinstance(raw, dict):
+                cfg = raw
+    except Exception:
+        cfg = {}
+    merged = {
+        "djRoleId": str(cfg.get("djRoleId") or ""),
+        "musicChannelId": str(cfg.get("musicChannelId") or ""),
+        "voiceChannelId": str(cfg.get("voiceChannelId") or ""),
+        "textChannelId": str(cfg.get("textChannelId") or ""),
+        "nowPlayingChannelId": str(cfg.get("nowPlayingChannelId") or ""),
+        "controlMode": cfg.get("controlMode") if cfg.get("controlMode") in (
+            "everyone", "dj", "moderators") else "everyone",
+        "defaultVolume": max(1, min(150, int(cfg.get("defaultVolume") or 50))),
+        "maxVolume": max(10, min(150, int(cfg.get("maxVolume") or 150))),
+        "defaultLoop": str(cfg.get("defaultLoop") or "off"),
+        "filters": [f for f in (cfg.get("filters") or []) if f in FILTERS][:3],
+        "twentyFourSeven": bool(cfg.get("twentyFourSeven", False)),
+        "autoPlay": bool(cfg.get("autoPlay", False)),
+        "autoLeave": bool(cfg.get("autoLeave", False)),
+        "enableNowPlaying": bool(cfg.get("enableNowPlaying", True)),
+    }
+    if merged["defaultLoop"] not in ("off", "track", "queue"):
+        merged["defaultLoop"] = "off"
+    _music_config_cache[gid] = (now, merged)
+    return merged
+
+
+def invalidate_music_config(guild_id: int | None = None) -> None:
+    """Drop cached guild music config (called on config push + prefix refresh)."""
+    try:
+        if guild_id is None:
+            _music_config_cache.clear()
+        else:
+            _music_config_cache.pop(int(guild_id), None)
+    except (TypeError, ValueError):
+        _music_config_cache.clear()
+
+
+def clamp_volume(level: int, server_max: int = 150) -> int:
+    """Volume bounds enforced in one place: 1..server_max, never above 150
+    (unsafe amplification that can damage the audio pipeline is refused)."""
+    try:
+        cap = max(10, min(150, int(server_max)))
+    except (TypeError, ValueError):
+        cap = 150
+    try:
+        return max(1, min(cap, int(level)))
+    except (TypeError, ValueError):
+        return 50
+
+
+# Actions any member may use even under DJ restrictions (discovery + queueing).
+DJ_OPEN_ACTIONS = frozenset({"play", "search", "queue_add"})
+
+
+def dj_allowed(member, guild, cfg: dict, action: str) -> tuple[bool, str]:
+    """Single DJ-policy source of truth for slash, prefix, button AND
+    dashboard-driven controls. Returns (allowed, reason). Never raises —
+    undeterminable identity denies restricted actions, never grants them.
+
+    controlMode: everyone → all pass; moderators → moderation perms pass;
+    dj → DJ-role holders pass. Guild owner + Manage Server always pass
+    (admin override)."""
+    try:
+        if action in DJ_OPEN_ACTIONS:
+            return True, ""
+        mode = cfg.get("controlMode", "everyone")
+        if mode == "everyone":
+            return True, ""
+        if member is None or guild is None:
+            return False, "Could not verify your server permissions."
+        if getattr(member, "id", None) == getattr(guild, "owner_id", None):
+            return True, ""
+        perms = getattr(member, "guild_permissions", None)
+        is_manager = bool(perms and (getattr(perms, "manage_guild", False)
+                                     or getattr(perms, "administrator", False)))
+        if is_manager:
+            return True, ""
+        if mode == "moderators":
+            mod_perms = bool(perms and (getattr(perms, "moderate_members", False)
+                                        or getattr(perms, "kick_members", False)
+                                        or getattr(perms, "ban_members", False)))
+            if mod_perms:
+                return True, ""
+            return False, "This server restricts music controls to moderators."
+        if mode == "dj":
+            dj_role_id = str(cfg.get("djRoleId") or "")
+            role_ids = {str(getattr(r, "id", "")) for r in (getattr(member, "roles", []) or [])}
+            if dj_role_id and dj_role_id in role_ids:
+                return True, ""
+            return False, "This server restricts music controls to the DJ role."
+        return True, ""
+    except Exception:
+        return False, "Could not verify your server permissions."
+
+
 class GuildPlayer:
     # Bounded voice reconnects: discord.py owns gateway reconnects, but a
     # dropped VOICE socket needs an explicit, limited rejoin — never a loop.
@@ -810,6 +947,14 @@ class GuildPlayer:
         self.last_error: Optional[str] = None
         self.last_error_code: Optional[str] = None
         self.player_state: str = "idle"  # idle|buffering|playing|paused|reconnecting|error
+        # ── Playback modifiers (runtime state; persisted config lives in
+        # guild_config.music and is mirrored here when applied) ──
+        self.filters: list[str] = []
+        self.stay_connected: bool = False  # 24/7 mode: hold the VC + rejoin
+        self.text_channel_id: Optional[int] = None
+        self._volume_touched: bool = False
+        self.autoplay_chain: int = 0
+        self.autoplay_failures: int = 0
 
     def mark_paused(self) -> None:
         if self._paused_at is None and self._play_started:
@@ -838,6 +983,9 @@ class GuildPlayer:
             if t.url and t.url == track.url:
                 return "duplicate"
         self.queue.append(track)
+        # Human-queued tracks reset the autoplay safety counters.
+        self.autoplay_chain = 0
+        self.autoplay_failures = 0
         return len(self.queue)
 
     def pop_next(self) -> Optional[Track]:
@@ -853,6 +1001,28 @@ class GuildPlayer:
         if self.queue_loop and self.current:
             return self.current
         return None
+
+    def move(self, from_pos: int, to_pos: int) -> bool:
+        """Reorder the queue (1-based positions, current track untouched).
+        Returns False for out-of-range positions. The mutation happens here,
+        in the player — callers never reorder a copy."""
+        n = len(self.queue)
+        if from_pos < 1 or from_pos > n or to_pos < 1 or to_pos > n:
+            return False
+        if from_pos == to_pos:
+            return True
+        items = list(self.queue)
+        track = items.pop(from_pos - 1)
+        items.insert(to_pos - 1, track)
+        self.queue.clear()
+        self.queue.extend(items)
+        return True
+
+    def play_next(self, track: Track) -> int:
+        """Insert a track at the front of the queue (plays next)."""
+        if track is not None and getattr(track, "title", None):
+            self.queue.appendleft(track)
+        return len(self.queue)
 
     def previous(self) -> Optional[Track]:
         if self.current:
@@ -932,6 +1102,11 @@ class MusicEngine:
         from collections import deque as _dq
         self._players: dict[int, GuildPlayer] = {}
         self.bot_loop: Optional[asyncio.AbstractEventLoop] = None
+        # Optional async callable invoked after a track starts via natural
+        # advancement (queue/autoplay/re-resolve). The cog sets this to
+        # refresh the Discord now-playing message. Invoked best-effort: a
+        # failing handler must never break playback.
+        self.track_started_handler = None
         self._last_resolve_error: Optional[str] = None
         self._last_error_kind: Optional[str] = None
         # Whether YouTube challenged this host during the LAST resolve. Kept
@@ -947,6 +1122,20 @@ class MusicEngine:
         if guild_id not in self._players:
             self._players[guild_id] = GuildPlayer(guild_id)
         return self._players[guild_id]
+
+    async def _emit_track_started(self, player: GuildPlayer) -> None:
+        """Notify the track-started hook (now-playing refresh). A deleted
+        message, missing channel or missing permissions inside the handler
+        is the handler's problem to swallow — playback continues regardless."""
+        handler = self.track_started_handler
+        if handler is None:
+            return
+        try:
+            result = handler(player)
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception:
+            log.debug("track_started_handler failed (non-fatal)")
 
     def remove_player(self, guild_id: int) -> None:
         self._players.pop(guild_id, None)
@@ -1308,6 +1497,47 @@ class MusicEngine:
             "cookies_configured": bool(cookies_path()),
         }
 
+    async def search_top(self, query: str, limit: int = 5) -> list[dict]:
+        """Metadata-only search (no audio extraction per row): title,
+        uploader, duration, thumbnail and page URL for the top results."""
+        import yt_dlp
+        query = (query or "").strip()[:200]
+        if len(query) < 2:
+            return []
+        opts = get_ydl_opts(use_proxy=True)
+        opts.update({"quiet": True, "no_warnings": True, "skip_download": True,
+                     "extract_flat": "in_playlist", "playlistend": max(1, min(limit, 10)),
+                     "default_search": "ytsearch"})
+        loop = asyncio.get_running_loop()
+
+        def _run():
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                return ydl.extract_info(f"ytsearch{max(1, min(limit, 10))}:{query}",
+                                        download=False)
+
+        try:
+            data = await asyncio.wait_for(loop.run_in_executor(None, _run), timeout=45)
+        except Exception:
+            return []
+        out = []
+        for e in ((data or {}).get("entries") or [])[:limit]:
+            if not e:
+                continue
+            vid = str(e.get("id") or "")
+            url = str(e.get("url") or e.get("webpage_url") or "")
+            if vid and not url.startswith("http"):
+                url = f"https://www.youtube.com/watch?v={vid}"
+            if not url:
+                continue
+            out.append({
+                "title": str(e.get("title") or "Unknown title")[:120],
+                "uploader": str(e.get("uploader") or e.get("channel") or "")[:80],
+                "duration": int(e.get("duration") or 0),
+                "thumbnail": str(e.get("thumbnail") or "")[:300],
+                "url": url[:300],
+            })
+        return out
+
     async def play_now(self, player: GuildPlayer, track: Track,
                        voice_channel: discord.VoiceChannel, announce=None,
                        seek_to: float = 0.0,
@@ -1346,6 +1576,22 @@ class MusicEngine:
             return PlaybackError(code, stage, safe, diag)
 
         # Stage 1: queue integrity — a corrupt queue must never kill playback.
+        # First play per player lifetime also absorbs persisted guild defaults
+        # (24/7 hold, default loop/autoplay, server volume are config, not
+        # code). Runtime toggles afterwards always win.
+        if not getattr(player, "_config_applied", False):
+            try:
+                defaults = await get_music_config(player.guild_id)
+                player.stay_connected = bool(defaults["twentyFourSeven"])
+                if defaults["defaultLoop"] == "track":
+                    player.loop, player.queue_loop = True, False
+                elif defaults["defaultLoop"] == "queue":
+                    player.loop, player.queue_loop = False, True
+                if defaults["autoPlay"]:
+                    player.autoplay = True
+                player._config_applied = True
+            except Exception:
+                pass
         try:
             repaired = player.validate_queue()
             if repaired:
@@ -1470,9 +1716,23 @@ class MusicEngine:
         player.current = track
         player.playing = True
         player.player_state = "buffering"
+        # Server default volume applies once per player lifetime; any explicit
+        # volume change after that wins (volume_touched).
+        if not player._volume_touched:
+            try:
+                cfg = await get_music_config(player.guild_id)
+                player.volume = clamp_volume(cfg["defaultVolume"], cfg["maxVolume"]) / 100
+            except Exception:
+                pass
         opts = dict(FFMPEG_OPTS)
         if seek_to and seek_to > 0:
             opts["before_options"] = f"{opts['before_options']} -ss {int(seek_to)}"
+        # Audio filters: allowlisted names only; the -af chain is assembled
+        # from the FILTERS map, never from user input.
+        active_filters = [f for f in (player.filters or []) if f in FILTERS]
+        if active_filters:
+            opts["options"] = (opts.get("options") or "") + " -af " + ",".join(
+                FILTERS[f] for f in active_filters)
         try:
             src = discord.FFmpegPCMAudio(stream_url, **opts)
         except FileNotFoundError as exc:
@@ -1557,6 +1817,7 @@ class MusicEngine:
                     fresh.requester = player.current.requester
                     try:
                         await self.play_now(player, fresh, player.voice.channel, announce)
+                        await self._emit_track_started(player)
                         return
                     except PlaybackError as pe:
                         log.warning("Re-resolve retry failed for %r: %s",
@@ -1597,12 +1858,26 @@ class MusicEngine:
                 log.info("all %d queued tracks unplayable guild=%s — idle",
                          skipped, player.guild_id)
             if next_track is None and player.autoplay and player.current:
-                try:
-                    related = await self._related(player.current)
-                    if related:
-                        next_track = related
-                except Exception:
-                    pass
+                # Bounded autoplay: a resolver that keeps failing (or an
+                # endless related-chain) must stop itself instead of spinning.
+                if player.autoplay_chain >= AUTOPLAY_MAX_CHAIN:
+                    log.warning("autoplay chain cap reached guild=%s — stopping",
+                                player.guild_id)
+                    player.autoplay = False
+                elif player.autoplay_failures >= AUTOPLAY_MAX_CONSECUTIVE_FAILURES:
+                    log.warning("autoplay failing repeatedly guild=%s — disabling",
+                                player.guild_id)
+                    player.autoplay = False
+                else:
+                    try:
+                        related = await self._related(player.current)
+                        if related:
+                            next_track = related
+                            player.autoplay_chain += 1
+                        else:
+                            player.autoplay_failures += 1
+                    except Exception:
+                        player.autoplay_failures += 1
             if next_track is None:
                 player.current = None
                 player.playing = False
@@ -1611,6 +1886,7 @@ class MusicEngine:
             if player.voice and player.voice.channel:
                 try:
                     await self.play_now(player, next_track, player.voice.channel, announce)
+                    await self._emit_track_started(player)
                 except PlaybackError as pe:
                     # One bad next-track must not wedge the player: log it and
                     # continue with whatever follows.

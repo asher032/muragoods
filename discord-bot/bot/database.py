@@ -373,6 +373,16 @@ async def get_guild_prefix(guild_id: int) -> str | None:
     return None
 
 
+async def set_guild_prefix(guild_id: int, prefix: str) -> None:
+    """Persist a dashboard-pushed prefix into the bot's own store."""
+    clean = str(prefix or "").strip()[:10]
+    if not clean:
+        return
+    await _require_db().guild_config.update_one(
+        {"guildId": _gid(guild_id)},
+        {"$set": {"prefix": clean, "updatedAt": _now()}}, upsert=True)
+
+
 # ── Warnings / moderation ────────────────────────────────────────────────
 async def add_warning(guild_id: int, user_id: int, moderator_id: int, reason: str) -> int:
     await _db.warnings.update_one(
