@@ -1,9 +1,13 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useGuild } from '@/app/lib/guild-context';
+import { useGuildConfig } from '@/app/lib/use-guild-config';
 import { apiFetch } from '../lib/api';
-import { DiscordMemberSelect, ResourceStatusBar, useGuildResources } from '../components/selectors';
+import {
+  DiscordChannelSelect, DiscordMemberSelect, DiscordRoleSelect,
+  ResourceStatusBar, kindsForKey, useGuildResources,
+} from '../components/selectors';
 
 interface MemberInfo {
   id: string;
@@ -17,21 +21,53 @@ interface MemberInfo {
   topRole: string;
 }
 
+interface WarningEntry { reason: string; moderatorId: string; at: string }
+interface CaseEntry { caseId: number; action: string; reason: string; moderatorId: string; createdAt: string }
+
 interface LookupResult {
   member: MemberInfo;
-  warnings: { reason: string; moderatorId: string; at: string }[];
-  cases: { caseId: number; action: string; reason: string; moderatorId: string; createdAt: string }[];
+  warnings: WarningEntry[];
+  cases: CaseEntry[];
 }
+
+interface OverviewStats {
+  byAction: Record<string, number>;
+  today: number;
+  week: number;
+  openCases: number;
+  warnings: number;
+  total: number;
+  bans: number;
+  activeTimeouts: number;
+  members: number | null;
+}
+
+interface BanEntry { id: string; username: string; displayName: string; avatar: string | null; reason: string }
+
+const TIMEOUT_PRESETS = [
+  { label: '60 seconds', minutes: 1 },
+  { label: '5 minutes', minutes: 5 },
+  { label: '10 minutes', minutes: 10 },
+  { label: '30 minutes', minutes: 30 },
+  { label: '1 hour', minutes: 60 },
+  { label: '6 hours', minutes: 360 },
+  { label: '12 hours', minutes: 720 },
+  { label: '1 day', minutes: 1440 },
+  { label: '7 days', minutes: 10080 },
+  { label: 'Custom…', minutes: -1 },
+];
 
 const ACTIONS = [
   { key: 'warn', label: '⚠️ Warn', primary: false },
-  { key: 'timeout', label: '🔇 Timeout 10m', primary: false },
+  { key: 'timeout', label: '🔇 Timeout', primary: false },
   { key: 'kick', label: '👢 Kick', primary: false },
   { key: 'ban', label: '🔨 Ban', primary: true },
+  { key: 'unban', label: '🔓 Unban', primary: false },
 ] as const;
 
 export default function ModerationPage() {
   const { token, selected } = useGuild();
+  const { config, save, saveState, update } = useGuildConfig();
   const [userId, setUserId] = useState('');
   const [result, setResult] = useState<LookupResult | null>(null);
   const [reason, setReason] = useState('');
@@ -39,6 +75,15 @@ export default function ModerationPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [timeoutMinutes, setTimeoutMinutes] = useState(10);
+  const [customMinutes, setCustomMinutes] = useState('30');
+  const [banDeleteDays, setBanDeleteDays] = useState(0);
+  const [unbanId, setUnbanId] = useState('');
+  const [bans, setBans] = useState<BanEntry[]>([]);
+  const [roleUserId, setRoleUserId] = useState('');
+  const [roleId, setRoleId] = useState('');
+  const [overview, setOverview] = useState<OverviewStats | null>(null);
+  const [overviewError, setOverviewError] = useState('');
   const { resources, loading: resLoading, error: resError, refresh: resRefresh } = useGuildResources(selected?.id ?? null);
 
   const lookupFor = useCallback(async (id: string) => {
@@ -50,7 +95,7 @@ export default function ModerationPage() {
     setError('');
     setNotice('');
     setResult(null);
-    const resp = await apiFetch<{ success: boolean; member: MemberInfo; warnings: LookupResult['warnings']; cases: LookupResult['cases'] }>(
+    const resp = await apiFetch<{ success: boolean; member: MemberInfo; warnings: WarningEntry[]; cases: CaseEntry[] }>(
       `/api/dashboard/moderation?guildId=${selected.id}&userId=${id}`,
       { token },
     );
@@ -62,34 +107,155 @@ export default function ModerationPage() {
     setBusy(false);
   }, [token, selected]);
 
+  const loadOverview = useCallback(async () => {
+    if (!token || !selected) return;
+    setOverviewError('');
+    const resp = await apiFetch<{ success: boolean; stats: OverviewStats; error?: string }>(
+      `/api/dashboard/moderation/tools?op=overview&guildId=${selected.id}`, { token });
+    if (resp.ok && resp.data.success) setOverview(resp.data.stats);
+    else setOverviewError(resp.ok ? resp.data.error || 'Could not load overview' : resp.error);
+  }, [token, selected]);
+
+  const loadBans = useCallback(async () => {
+    if (!token || !selected) return;
+    const resp = await apiFetch<{ success: boolean; bans: BanEntry[]; error?: string }>(
+      `/api/dashboard/moderation/tools?op=bans&guildId=${selected.id}`, { token });
+    if (resp.ok && resp.data.success) setBans(resp.data.bans);
+  }, [token, selected]);
+
+  useEffect(() => {
+    setResult(null);
+    setUserId('');
+    setOverview(null);
+    setBans([]);
+    void loadOverview();
+    void loadBans();
+  }, [selected?.id, loadOverview, loadBans]);
+
   const lookup = () => void lookupFor(userId);
+  const effectiveMinutes = timeoutMinutes === -1 ? Math.max(1, Math.min(40320, Number(customMinutes) || 30)) : timeoutMinutes;
 
   const act = async (action: string) => {
-    if (!token || !selected || !result) return;
+    if (!token || !selected) return;
+    const target = action === 'unban' ? unbanId : result?.member.id;
+    if (!target || !/^\d{5,25}$/.test(target)) {
+      setError(action === 'unban' ? 'Pick a banned user from the list first.' : 'Look up a member first.');
+      return;
+    }
     setBusy(true);
     setError('');
     const resp = await apiFetch<{ success: boolean; caseId?: number; error?: string }>('/api/dashboard/moderation', {
       method: 'POST',
       token,
       body: {
-        guildId: selected.id, userId: result.member.id, action,
-        reason: reason.trim() || 'No reason given (dashboard)', minutes: 10,
+        guildId: selected.id, userId: target, action,
+        reason: reason.trim() || 'No reason given (dashboard)',
+        minutes: effectiveMinutes, deleteMessageDays: banDeleteDays,
       },
     });
     if (resp.ok && resp.data.success) {
       setNotice(`✅ ${action.toUpperCase()} executed on Discord — case #${resp.data.caseId ?? '?'}`);
       setConfirming(null);
       setReason('');
-      // Re-pull fresh state from Discord/DB.
-      const refresh = await apiFetch<{ success: boolean; member: MemberInfo; warnings: LookupResult['warnings']; cases: LookupResult['cases'] }>(
-        `/api/dashboard/moderation?guildId=${selected.id}&userId=${result.member.id}`, { token });
-      if (refresh.ok && refresh.data.success) {
-        setResult({ member: refresh.data.member, warnings: refresh.data.warnings, cases: refresh.data.cases });
+      setUnbanId('');
+      void loadOverview();
+      void loadBans();
+      if (result && action !== 'unban') {
+        const refresh = await apiFetch<{ success: boolean; member: MemberInfo; warnings: WarningEntry[]; cases: CaseEntry[] }>(
+          `/api/dashboard/moderation?guildId=${selected.id}&userId=${result.member.id}`, { token });
+        if (refresh.ok && refresh.data.success) {
+          setResult({ member: refresh.data.member, warnings: refresh.data.warnings, cases: refresh.data.cases });
+        }
+      } else {
+        setResult(null);
+        setUserId('');
       }
     } else {
       setError(resp.ok ? (resp.data as unknown as { error?: string }).error || 'Action failed' : resp.error);
     }
     setBusy(false);
+  };
+
+  const removeWarning = async (index: number) => {
+    if (!token || !selected || !result) return;
+    setBusy(true);
+    setError('');
+    const resp = await apiFetch<{ success: boolean; error?: string }>('/api/dashboard/moderation/tools', {
+      method: 'DELETE',
+      token,
+      body: { guildId: selected.id, userId: result.member.id, index },
+    });
+    if (resp.ok && resp.data.success) {
+      setNotice(`✅ Warning #${index} removed.`);
+      void lookupFor(result.member.id);
+      void loadOverview();
+    } else {
+      setError(resp.ok ? (resp.data as unknown as { error?: string }).error || 'Could not remove warning' : resp.error);
+    }
+    setBusy(false);
+  };
+
+  const clearWarnings = async () => {
+    if (!token || !selected || !result) return;
+    setBusy(true);
+    setError('');
+    const resp = await apiFetch<{ success: boolean; error?: string }>('/api/dashboard/moderation/tools', {
+      method: 'POST',
+      token,
+      body: { op: 'clear-warnings', guildId: selected.id, userId: result.member.id },
+    });
+    if (resp.ok && resp.data.success) {
+      setNotice('✅ All warnings cleared.');
+      void lookupFor(result.member.id);
+      void loadOverview();
+    } else {
+      setError(resp.ok ? (resp.data as unknown as { error?: string }).error || 'Could not clear warnings' : resp.error);
+    }
+    setBusy(false);
+  };
+
+  const applyRole = async (op: 'add' | 'remove') => {
+    if (!token || !selected || !roleUserId || !roleId) {
+      setError('Pick a member and a role first.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    const resp = await apiFetch<{ success: boolean; caseId?: number; error?: string }>('/api/dashboard/moderation/tools', {
+      method: 'POST',
+      token,
+      body: { op: 'role', guildId: selected.id, userId: roleUserId, roleId, action: op },
+    });
+    if (resp.ok && resp.data.success) {
+      setNotice(`✅ Role ${op === 'add' ? 'added' : 'removed'} — case #${resp.data.caseId ?? '?'}`);
+      setRoleUserId('');
+      setRoleId('');
+      void loadOverview();
+    } else {
+      setError(resp.ok ? (resp.data as unknown as { error?: string }).error || 'Role change failed' : resp.error);
+    }
+    setBusy(false);
+  };
+
+  // ── Action policies (per-guild escalation + DM toggles) ──
+  const moderation = (config?.moderation ?? {}) as Record<string, unknown>;
+  const thresholds = (Array.isArray(moderation.warnThresholds) && (moderation.warnThresholds as unknown[]).length
+    ? (moderation.warnThresholds as Array<{ count: number; action: string; durationMinutes: number }>)
+    : [{ count: 3, action: 'timeout', durationMinutes: 60 }]);
+  const escalation = (Array.isArray(moderation.escalation) && (moderation.escalation as unknown[]).length
+    ? (moderation.escalation as string[]).slice(0, 5)
+    : ['warn', 'timeout', 'timeout', 'kick', 'ban']);
+  while (escalation.length < 5) escalation.push('warn');
+  const dm = (moderation.dmNotifications ?? {}) as Record<string, boolean>;
+  const setThreshold = (i: number, patch: Partial<{ count: number; action: string; durationMinutes: number }>) => {
+    update('moderation', 'warnThresholds', thresholds.map((t, j) => (j === i ? { ...t, ...patch } : t)));
+  };
+  const addThreshold = () => {
+    if (thresholds.length >= 5) return;
+    update('moderation', 'warnThresholds', [...thresholds, { count: (thresholds[thresholds.length - 1]?.count || 0) + 2, action: 'timeout', durationMinutes: 60 }]);
+  };
+  const removeThreshold = (i: number) => {
+    update('moderation', 'warnThresholds', thresholds.filter((_, j) => j !== i));
   };
 
   if (!token) {
@@ -99,8 +265,15 @@ export default function ModerationPage() {
     return <p style={{ color: 'var(--cc-text-faint)', fontSize: 14 }}>Select a server in the top bar.</p>;
   }
 
+  const stat = (label: string, value: string | number) => (
+    <div className="cc-card" style={{ padding: '12px 16px' }}>
+      <div className="cc-section-label">{label}</div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginTop: 2 }}>{value}</div>
+    </div>
+  );
+
   return (
-    <div style={{ maxWidth: 860 }}>
+    <div style={{ maxWidth: 960 }}>
       <p style={{ margin: 0, color: 'var(--cc-accent)', fontWeight: 700, letterSpacing: 2, fontSize: 11 }}>MURAGOODS</p>
       <h1 style={{ margin: '4px 0 4px', fontSize: 26, fontWeight: 800, color: '#fff' }}>🛡️ Moderation — {selected.name}</h1>
       <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--cc-text-dim)' }}>
@@ -108,7 +281,21 @@ export default function ModerationPage() {
         re-verified server-side at execution time — failures here are real failures.
       </p>
 
-      {/* Member lookup */}
+      {/* Overview */}
+      <div className="cc-section-label" style={{ marginBottom: 10 }}>Overview</div>
+      {overviewError && <div className="cc-alert cc-alert-error" role="alert" style={{ marginBottom: 12 }}>{overviewError}</div>}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 22 }}>
+        {stat('Members', overview?.members ?? '—')}
+        {stat('Warnings', overview?.warnings ?? '—')}
+        {stat('Active timeouts', overview && overview.activeTimeouts >= 0 ? overview.activeTimeouts : '—')}
+        {stat('Bans', overview && overview.bans >= 0 ? overview.bans : (overview?.byAction?.ban ?? '—'))}
+        {stat('Actions today', overview?.today ?? '—')}
+        {stat('Actions this week', overview?.week ?? '—')}
+        {stat('Open cases', overview?.openCases ?? '—')}
+      </div>
+
+      {/* Member lookup + actions */}
+      <div className="cc-section-label" style={{ marginBottom: 10 }}>Actions</div>
       <div className="cc-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
         <ResourceStatusBar loading={resLoading} error={resError} onRefresh={resRefresh} />
         <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>
@@ -167,53 +354,95 @@ export default function ModerationPage() {
             </div>
           </div>
 
-          {/* History */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12, marginBottom: 14 }}>
-            <div className="cc-card" style={{ padding: '14px 18px' }}>
+          {/* Warnings management */}
+          <div className="cc-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <strong style={{ color: '#fff', fontSize: 14 }}>⚠️ Warnings ({result.warnings.length})</strong>
-              {result.warnings.length === 0 ? (
-                <p style={{ margin: '8px 0 0', color: 'var(--cc-text-faint)', fontSize: 13 }}>Clean record.</p>
-              ) : (
-                <div style={{ marginTop: 8, display: 'grid', gap: 5 }}>
-                  {result.warnings.slice(0, 6).map((w, i) => (
-                    <div key={i} style={{ fontSize: 12.5, color: 'var(--cc-text-dim)' }}>
-                      • {w.reason} <span style={{ color: 'var(--cc-text-faint)' }}>— {new Date(w.at).toLocaleDateString()}</span>
-                    </div>
-                  ))}
-                </div>
+              {result.warnings.length > 0 && (
+                <button className="cc-link" onClick={clearWarnings} disabled={busy}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, marginLeft: 'auto' }}>
+                  Clear all
+                </button>
               )}
             </div>
-            <div className="cc-card" style={{ padding: '14px 18px' }}>
-              <strong style={{ color: '#fff', fontSize: 14 }}>📋 Cases ({result.cases.length})</strong>
-              {result.cases.length === 0 ? (
-                <p style={{ margin: '8px 0 0', color: 'var(--cc-text-faint)', fontSize: 13 }}>No cases yet.</p>
-              ) : (
-                <div style={{ marginTop: 8, display: 'grid', gap: 5 }}>
-                  {result.cases.slice(0, 6).map((c) => (
-                    <div key={c.caseId} style={{ fontSize: 12.5, color: 'var(--cc-text-dim)' }}>
-                      <strong style={{ color: '#fff' }}>#{c.caseId}</strong> {c.action.toUpperCase()} — {c.reason.slice(0, 50)}
-                      <span style={{ color: 'var(--cc-text-faint)' }}> · {new Date(c.createdAt).toLocaleDateString()}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            {result.warnings.length === 0 ? (
+              <p style={{ margin: 0, color: 'var(--cc-text-faint)', fontSize: 13 }}>Clean record.</p>
+            ) : (
+              <div style={{ display: 'grid', gap: 5 }}>
+                {result.warnings.map((w, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--cc-text-dim)' }}>
+                    <span style={{ flex: 1 }}>
+                      <strong style={{ color: '#fff' }}>#{i + 1}</strong> • {w.reason}{' '}
+                      <span style={{ color: 'var(--cc-text-faint)' }}>— {new Date(w.at).toLocaleDateString()}</span>
+                    </span>
+                    <button className="cc-link" onClick={() => removeWarning(i + 1)} disabled={busy}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12 }}>
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Cases */}
+          <div className="cc-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+            <strong style={{ color: '#fff', fontSize: 14 }}>📋 Cases ({result.cases.length})</strong>
+            {result.cases.length === 0 ? (
+              <p style={{ margin: '8px 0 0', color: 'var(--cc-text-faint)', fontSize: 13 }}>No cases yet.</p>
+            ) : (
+              <div style={{ marginTop: 8, display: 'grid', gap: 5 }}>
+                {result.cases.slice(0, 6).map((c) => (
+                  <div key={c.caseId} style={{ fontSize: 12.5, color: 'var(--cc-text-dim)' }}>
+                    <strong style={{ color: '#fff' }}>#{c.caseId}</strong> {c.action.toUpperCase()} — {c.reason.slice(0, 50)}
+                    <span style={{ color: 'var(--cc-text-faint)' }}> · {new Date(c.createdAt).toLocaleDateString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Action bar */}
-          <div className="cc-card" style={{ padding: '16px 20px' }}>
+          <div className="cc-card" style={{ padding: '16px 20px', marginBottom: 14 }}>
             <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>Reason (recorded on the case)</label>
             <input
               className="cc-input" style={{ width: '100%', marginBottom: 12 }}
               placeholder="Why is this action being taken?"
               value={reason} onChange={(e) => setReason(e.target.value)}
             />
+            {confirming === 'timeout' && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
+                <label style={{ fontSize: 12, color: 'var(--cc-text-dim)' }}>Duration</label>
+                <select className="cc-input" value={timeoutMinutes}
+                  onChange={(e) => setTimeoutMinutes(Number(e.target.value))} style={{ maxWidth: 220 }}>
+                  {TIMEOUT_PRESETS.map((p) => (
+                    <option key={p.label} value={p.minutes}>{p.label}</option>
+                  ))}
+                </select>
+                {timeoutMinutes === -1 && (
+                  <input className="cc-input" type="number" min={1} max={40320} value={customMinutes}
+                    onChange={(e) => setCustomMinutes(e.target.value)} placeholder="Minutes" style={{ maxWidth: 140 }} />
+                )}
+              </div>
+            )}
+            {confirming === 'ban' && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
+                <label style={{ fontSize: 12, color: 'var(--cc-text-dim)' }}>Delete message history</label>
+                <select className="cc-input" value={banDeleteDays}
+                  onChange={(e) => setBanDeleteDays(Number(e.target.value))} style={{ maxWidth: 220 }}>
+                  <option value={0}>None</option>
+                  <option value={1}>Last 1 day</option>
+                  <option value={7}>Last 7 days</option>
+                </select>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {ACTIONS.map((a) =>
+              {ACTIONS.filter((a) => a.key !== 'unban').map((a) =>
                 confirming === a.key ? (
                   <span key={a.key} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
                     <span style={{ fontSize: 12.5, color: 'var(--cc-text-dim)' }}>
-                      {a.key === 'ban' ? 'Ban' : a.key} <strong style={{ color: '#fff' }}>{result.member.displayName}</strong>?
+                      {a.key === 'ban' ? 'Ban' : a.key} <strong style={{ color: '#fff' }}>{result.member.displayName}</strong>
+                      {a.key === 'timeout' ? ` for ${TIMEOUT_PRESETS.find((p) => p.minutes === timeoutMinutes)?.label ?? `${effectiveMinutes} min`}` : ''}?
                     </span>
                     <button className="cc-btn" style={{ borderColor: 'rgba(248,113,113,0.5)', color: '#ff8a8a' }}
                             onClick={() => act(a.key)} disabled={busy}>
@@ -238,6 +467,171 @@ export default function ModerationPage() {
           </div>
         </>
       )}
+
+      {/* Unban from the live ban list — no IDs */}
+      <div className="cc-section-label" style={{ margin: '22px 0 10px' }}>Bans</div>
+      <div className="cc-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+        <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>
+          🔓 Unban — pick from the current ban list
+        </label>
+        {bans.length === 0 ? (
+          <p style={{ margin: 0, fontSize: 12.5, color: 'var(--cc-text-faint)' }}>No banned users right now.</p>
+        ) : (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <DiscordMemberSelect
+                members={bans.map((b) => ({ id: b.id, name: b.displayName, username: b.username, avatar: b.avatar }))}
+                value={unbanId}
+                onChange={(id) => setUnbanId(id)}
+                disabled={busy}
+              />
+            </div>
+            <button className="cc-btn cc-btn-primary" onClick={() => { setConfirming('unban'); }} disabled={busy || !unbanId}>
+              {busy ? 'Working…' : 'Unban'}
+            </button>
+            {confirming === 'unban' && unbanId && (
+              <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 12.5, color: 'var(--cc-text-dim)' }}>
+                Unban <strong style={{ color: '#fff' }}>{bans.find((b) => b.id === unbanId)?.displayName}</strong>?
+                <button className="cc-btn" style={{ borderColor: 'rgba(248,113,113,0.5)', color: '#ff8a8a' }}
+                        onClick={() => act('unban')} disabled={busy}>
+                  {busy ? 'Executing…' : 'Confirm'}
+                </button>
+                <button className="cc-btn" onClick={() => setConfirming(null)} disabled={busy}>Cancel</button>
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Role tools */}
+      <div className="cc-section-label" style={{ margin: '22px 0 10px' }}>Role tools</div>
+      <div className="cc-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+        <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>Member</label>
+            <DiscordMemberSelect
+              members={resources?.members ?? []}
+              value={roleUserId}
+              onChange={(id) => setRoleUserId(id)}
+              loading={resLoading}
+              disabled={busy}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>Role</label>
+            <DiscordRoleSelect
+              roles={resources?.roles ?? []}
+              value={roleId}
+              onChange={(id) => setRoleId(id)}
+              loading={resLoading}
+              disabled={busy}
+              botTopRolePosition={resources?.bot?.topRolePosition ?? null}
+              botIsAdmin={Boolean(resources?.bot?.guildPermissions && (BigInt(resources.bot.guildPermissions) & BigInt(8)) !== BigInt(0))}
+              requireManageable
+            />
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <button className="cc-btn" onClick={() => applyRole('add')} disabled={busy || !roleUserId || !roleId}>
+            {busy ? 'Working…' : 'Add role'}
+          </button>
+          <button className="cc-btn" onClick={() => applyRole('remove')} disabled={busy || !roleUserId || !roleId}>
+            {busy ? 'Working…' : 'Remove role'}
+          </button>
+        </div>
+      </div>
+
+      {/* Action policies */}
+      <div className="cc-section-label" style={{ margin: '22px 0 10px' }}>Action policies</div>
+      <div className="cc-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+        <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--cc-text-dim)' }}>
+          Warning escalation runs automatically when a member reaches a threshold. Changes save with the button below.
+        </p>
+        {thresholds.map((t, i) => (
+          <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12.5, color: 'var(--cc-text-dim)' }}>At</span>
+            <input className="cc-input" type="number" min={1} max={100} value={t.count}
+              onChange={(e) => setThreshold(i, { count: Math.max(1, Number(e.target.value) || 1) })}
+              style={{ maxWidth: 90 }} aria-label="Warning count" />
+            <span style={{ fontSize: 12.5, color: 'var(--cc-text-dim)' }}>warnings →</span>
+            <select className="cc-input" value={t.action}
+              onChange={(e) => setThreshold(i, { action: e.target.value })} style={{ maxWidth: 150 }} aria-label="Escalation action">
+              <option value="timeout">Timeout</option>
+              <option value="kick">Kick</option>
+              <option value="ban">Ban</option>
+            </select>
+            {t.action === 'timeout' && (
+              <input className="cc-input" type="number" min={1} max={40320} value={t.durationMinutes}
+                onChange={(e) => setThreshold(i, { durationMinutes: Math.max(1, Number(e.target.value) || 60) })}
+                style={{ maxWidth: 110 }} aria-label="Timeout minutes" />
+            )}
+            <button className="cc-link" onClick={() => removeThreshold(i)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12 }}>
+              Remove
+            </button>
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 12, marginTop: 4, flexWrap: 'wrap' }}>
+          <button className="cc-btn" onClick={addThreshold} disabled={thresholds.length >= 5} style={{ fontSize: 12.5 }}>
+            + Add threshold
+          </button>
+          <button className="cc-btn" onClick={() => update('moderation', 'warnThresholds', [{ count: 3, action: 'timeout', durationMinutes: 60 }])} style={{ fontSize: 12.5 }}>
+            Reset to default
+          </button>
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>
+            AutoMod escalation — action per repeat-offense strike (spam, links, invites, caps)
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {escalation.map((step, i) => (
+              <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {i > 0 && <span style={{ color: 'var(--cc-text-faint)' }}>→</span>}
+                <select className="cc-input" value={step} aria-label={`Strike ${i + 1} action`}
+                  onChange={(e) => {
+                    const next = [...escalation];
+                    next[i] = e.target.value;
+                    update('moderation', 'escalation', next);
+                  }}
+                  style={{ maxWidth: 130 }}>
+                  <option value="warn">Warn</option>
+                  <option value="timeout">Timeout 10m</option>
+                  <option value="kick">Kick</option>
+                  <option value="ban">Ban</option>
+                  <option value="off">Nothing</option>
+                </select>
+              </span>
+            ))}
+          </div>
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>DM notifications (member DMs, best-effort)</div>
+          {(['warn', 'timeout', 'kick', 'ban'] as const).map((k) => (
+            <label key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#fff', marginRight: 14 }}>
+              <input type="checkbox" checked={dm[k] !== false}
+                onChange={(e) => update('moderation', 'dmNotifications', { ...(dm as Record<string, boolean>), [k]: e.target.checked })} />
+              {k[0].toUpperCase() + k.slice(1)}
+            </label>
+          ))}
+        </div>
+        <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button className="cc-btn cc-btn-primary" onClick={() => void save()} disabled={saveState === 'saving'} style={{ fontSize: 12.5 }}>
+            {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? '✓ Saved' : saveState === 'error' ? '✕ Save failed' : 'Save policies'}
+          </button>
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>
+            Moderation log channel — where case embeds are posted
+          </label>
+          <DiscordChannelSelect
+            channels={resources?.channels ?? []}
+            value={String((moderation.logChannelId as string) || '')}
+            onChange={(id) => update('moderation', 'logChannelId', id)}
+            kinds={kindsForKey('logChannelId')}
+            loading={resLoading}
+          />
+        </div>
+      </div>
     </div>
   );
 }
