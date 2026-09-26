@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const token = (await sessionToken());
   if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
-  let body: { guildId?: string; action?: string; level?: number; position?: number; enabled?: boolean };
+  let body: { guildId?: string; action?: string; level?: number; position?: number; enabled?: boolean; from?: number; to?: number; filter?: string };
   try { body = await req.json(); } catch {
     return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 });
   }
@@ -80,8 +80,9 @@ export async function POST(req: NextRequest) {
   const action = String(body.action || '');
   if (!/^\d{5,25}$/.test(guildId)) return NextResponse.json({ success: false, error: 'Valid guildId required' }, { status: 400 });
   const allowed = [
-    'pause', 'resume', 'skip', 'stop', 'volume', 'loop', 'queueLoop',
-    'shuffle', 'remove', 'disconnect', 'seek', 'autoplay',
+    'pause', 'resume', 'skip', 'previous', 'stop', 'volume', 'loop', 'queueLoop',
+    'shuffle', 'remove', 'move', 'disconnect', 'seek', 'autoplay', 'filter', 'resetFilters',
+    'twentyFourSeven',
   ];
   if (!allowed.includes(action)) return NextResponse.json({ success: false, error: 'Unknown action' }, { status: 400 });
   if (!(await hasManage(token, guildId))) {
@@ -90,6 +91,20 @@ export async function POST(req: NextRequest) {
 
   const secret = process.env.DISCORD_BRIDGE_SECRET || '';
   if (!secret) return NextResponse.json({ success: false, error: 'Bridge not configured' }, { status: 503 });
+
+  // The caller's Discord ID, resolved server-side from their own OAuth
+  // identity — the bot enforces DJ policy against it. Never from the client.
+  let actorId = '';
+  try {
+    const meResp = await fetch('https://discord.com/api/v10/users/@me', {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+    if (meResp.ok) {
+      const me = await meResp.json() as { id?: string };
+      if (me.id) actorId = me.id;
+    }
+  } catch { /* DJ check then fails closed on restrictive servers */ }
 
   try {
     const controller = new AbortController();
@@ -102,6 +117,10 @@ export async function POST(req: NextRequest) {
         level: body.level,
         position: body.position,
         enabled: body.enabled,
+        from: body.from,
+        to: body.to,
+        filter: body.filter,
+        actorId,
       }),
       signal: controller.signal,
     });

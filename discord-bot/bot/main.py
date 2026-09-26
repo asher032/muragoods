@@ -1094,6 +1094,8 @@ async def _health_server() -> None:
             "loop": p.loop,
             "queueLoop": p.queue_loop,
             "autoplay": p.autoplay,
+            "filters": list(p.filters),
+            "twentyFourSeven": p.stay_connected,
             "queue": [_track_dict(t) for t in list(p.queue)[:20]],
             "queueLength": len(p.queue),
             "history": [_track_dict(t) for t in list(reversed(p.history))[:10]],
@@ -1109,14 +1111,32 @@ async def _health_server() -> None:
             return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
         action = str(body.get("action") or "")
         import music as music_mod
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            return web.json_response({"ok": False, "error": "Bot not in that guild"}, status=404)
         p = music_mod.engine.get_player(guild_id)
         vc = p.voice if (p.voice and p.voice.is_connected()) else None
+        music_cfg = await music_mod.get_music_config(guild_id)
 
         def need_voice() -> web.Response | None:
             if not vc:
                 return web.json_response(
                     {"ok": False, "error": "Bot is not connected to a voice channel"}, status=409)
             return None
+
+        # DJ policy, enforced here — never trusted from the frontend. The
+        # dashboard route forwards the caller's Discord ID (resolved
+        # server-side from their session); the bot checks roles itself.
+        if music_cfg.get("controlMode", "everyone") != "everyone":
+            actor_id = 0
+            try:
+                actor_id = int(body.get("actorId") or 0)
+            except (TypeError, ValueError):
+                actor_id = 0
+            member = guild.get_member(actor_id) if actor_id else None
+            allowed, reason = music_mod.dj_allowed(member, guild, music_cfg, action)
+            if not allowed:
+                return web.json_response({"ok": False, "error": reason or "Not allowed"}, status=403)
 
         try:
             if action == "pause":
@@ -1138,7 +1158,27 @@ async def _health_server() -> None:
                     return r
                 p.playing = True  # allow the track-end handler to advance
                 vc.stop()
+                try:
+                    from cogs.music import refresh_now_playing as _refresh_np
+                    await _refresh_np(guild)
+                except Exception:
+                    pass
                 return web.json_response({"ok": True})
+            if action == "previous":
+                if r := need_voice():
+                    return r
+                prev = p.previous()
+                if prev is None:
+                    return web.json_response({"ok": False, "error": "No history yet — play something first"}, status=409)
+                if not vc.channel:
+                    return web.json_response({"ok": False, "error": "Voice channel is no longer available"}, status=409)
+                await music_mod.engine.play_now(p, prev, vc.channel)
+                try:
+                    from cogs.music import refresh_now_playing as _refresh_np
+                    await _refresh_np(guild)
+                except Exception:
+                    pass
+                return web.json_response({"ok": True, "title": prev.title})
             if action == "stop":
                 if r := need_voice():
                     return r
@@ -1149,8 +1189,10 @@ async def _health_server() -> None:
             if action == "volume":
                 if r := need_voice():
                     return r
-                level = max(1, min(150, int(body.get("level") or 50)))
+                level = music_mod.clamp_volume(body.get("level") or 50, music_cfg.get("maxVolume", 150))
                 p.volume = level / 100
+                p._volume_touched = True
+                p._volume_touched = True
                 if isinstance(vc.source, discord.PCMVolumeTransformer):
                     vc.source.volume = p.volume
                 return web.json_response({"ok": True, "volume": level})
@@ -1174,6 +1216,36 @@ async def _health_server() -> None:
                 removed = p.queue[pos - 1]
                 del p.queue[pos - 1]
                 return web.json_response({"ok": True, "removed": removed.title})
+            if action == "move":
+                try:
+                    src = int(body.get("from") or 0)
+                    dst = int(body.get("to") or 0)
+                except (TypeError, ValueError):
+                    return web.json_response({"ok": False, "error": "Bad positions"}, status=400)
+                if not p.move(src, dst):
+                    return web.json_response({"ok": False, "error": "Bad positions"}, status=400)
+                return web.json_response({"ok": True, "queueLength": len(p.queue)})
+            if action == "filter":
+                name = str(body.get("filter") or "normal").lower()
+                if name in ("normal", "off", "none", ""):
+                    p.filters = []
+                elif name in music_mod.FILTERS:
+                    if name not in p.filters:
+                        p.filters.append(name)
+                    p.filters = p.filters[-3:]
+                else:
+                    return web.json_response(
+                        {"ok": False,
+                         "error": f"Unknown filter. Available: {', '.join(sorted(music_mod.FILTERS))}"},
+                        status=400)
+                return web.json_response({"ok": True, "filters": p.filters})
+            if action == "resetFilters":
+                p.filters = []
+                return web.json_response({"ok": True, "filters": []})
+            if action == "twentyFourSeven":
+                enabled = body.get("enabled")
+                p.stay_connected = bool(enabled) if enabled is not None else (not p.stay_connected)
+                return web.json_response({"ok": True, "twentyFourSeven": p.stay_connected})
             if action == "disconnect":
                 if vc:
                     p.clear()
@@ -1212,6 +1284,193 @@ async def _health_server() -> None:
         except Exception as exc:
             log.warning("music_control %s failed for guild %s: %s", action, guild_id, str(exc)[:150])
             return web.json_response({"ok": False, "error": str(exc)[:200]}, status=500)
+
+    async def music_search(request: web.Request) -> web.Response:
+        """Dashboard music search: top metadata results WITHOUT extracting
+        audio for every row. Returns title/uploader/duration/thumbnail/page
+        URL only; the chosen row is resolved on add/play."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+        query = str(body.get("query") or "").strip()[:200]
+        if len(query) < 2:
+            return web.json_response({"ok": False, "error": "Search for at least 2 characters"}, status=400)
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            return web.json_response({"ok": False, "error": "Bot not in that guild"}, status=404)
+        import music as music_mod
+        import yt_dlp
+        opts = music_mod.get_ydl_opts(use_proxy=True)
+        opts.update({"quiet": True, "no_warnings": True, "skip_download": True,
+                     "extract_flat": "in_playlist", "playlistend": 6,
+                     "default_search": "ytsearch5"})
+        loop = asyncio.get_running_loop()
+
+        def _run():
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                return ydl.extract_info(f"ytsearch5:{query}", download=False)
+
+        try:
+            data = await asyncio.wait_for(loop.run_in_executor(None, _run), timeout=45)
+        except asyncio.TimeoutError:
+            return web.json_response({"ok": False, "error": "Search timed out — try again"}, status=504)
+        except Exception as exc:
+            return web.json_response(
+                {"ok": False,
+                 "error": music_mod.sanitize_for_log(f"{type(exc).__name__}: {exc}", limit=200) or "Search failed"},
+                status=502)
+        entries = (data or {}).get("entries") or []
+        results = []
+        for e in entries[:5]:
+            if not e:
+                continue
+            vid = str(e.get("id") or "")
+            url = str(e.get("url") or e.get("webpage_url") or "")
+            if vid and not url.startswith("http"):
+                url = f"https://www.youtube.com/watch?v={vid}"
+            if not url:
+                continue
+            results.append({
+                "title": str(e.get("title") or "Unknown title")[:120],
+                "uploader": str(e.get("uploader") or e.get("channel") or "")[:80],
+                "duration": int(e.get("duration") or 0),
+                "thumbnail": str(e.get("thumbnail") or "")[:300],
+                "url": url[:300],
+            })
+        return web.json_response({"ok": True, "results": results})
+
+    async def music_queue_add(request: web.Request) -> web.Response:
+        """Resolve a search-result URL and enqueue it on the guild player.
+        Autostarts only when the bot is already in voice — otherwise 409 with
+        an honest message (join VC + /play first). Same engine as /play."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+        url = str(body.get("url") or "").strip()[:300]
+        front = bool(body.get("front", False))
+        if not url.startswith("http"):
+            return web.json_response({"ok": False, "error": "A result URL is required"}, status=400)
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            return web.json_response({"ok": False, "error": "Bot not in that guild"}, status=404)
+        import music as music_mod
+        music_cfg = await music_mod.get_music_config(guild_id)
+        try:
+            track = await asyncio.wait_for(
+                music_mod.engine.resolve(url), timeout=90)
+        except asyncio.TimeoutError:
+            return web.json_response({"ok": False, "error": "Resolving timed out — try again"}, status=504)
+        except Exception as exc:
+            return web.json_response(
+                {"ok": False,
+                 "error": music_mod.sanitize_for_log(f"{type(exc).__name__}: {exc}", limit=200) or "Resolve failed"},
+                status=502)
+        if track is None:
+            kind = music_mod.engine.get_error_kind()
+            detail = music_mod.engine.get_resolve_error() or "no playable match"
+            return web.json_response(
+                {"ok": False, "error": f"Could not resolve a playable track ({kind or 'no match'}): {detail[:200]}"},
+                status=422)
+        p = music_mod.engine.get_player(guild_id)
+        if len(p.queue) >= music_cfg["maxQueueSize"]:
+            return web.json_response(
+                {"ok": False, "error": f"Queue is full (max {music_cfg['maxQueueSize']})"}, status=409)
+        if front:
+            position = p.play_next(track)
+        else:
+            position = p.enqueue(track)
+        if position == "duplicate":
+            return web.json_response({"ok": False, "error": "That track is already queued"}, status=409)
+        vc = p.voice if (p.voice and p.voice.is_connected()) else None
+        started = False
+        if vc and vc.channel and not vc.is_playing() and not vc.is_paused():
+            try:
+                await music_mod.engine.play_now(p, track, vc.channel)
+                started = True
+            except music_mod.PlaybackError as pe:
+                return web.json_response({"ok": False, "error": pe.user_message}, status=502)
+            except Exception as exc:
+                code = music_mod.classify_playback_exception(exc)
+                title, msg = music_mod.PLAYBACK_USER_MESSAGES.get(
+                    code, music_mod.PLAYBACK_USER_MESSAGES[music_mod.UNKNOWN_PLAYBACK_ERROR])
+                return web.json_response({"ok": False, "error": f"{title}: {msg}"}, status=502)
+        if vc is None:
+            return web.json_response({
+                "ok": True, "queued": True, "started": False, "position": position,
+                "title": track.title,
+                "note": "Queued. The bot is not in voice — join a channel and run /play, or press play once connected.",
+            })
+        return web.json_response({"ok": True, "queued": True, "started": started,
+                                  "position": position, "title": track.title})
+
+    async def music_config_push(request: web.Request) -> web.Response:
+        """Dashboard → bot music settings sync. The dashboard is the editor;
+        the bot persists the validated music section into its own guild_config
+        (the store the player actually reads) and drops its config cache."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        import database as db
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+        raw = body.get("music")
+        if not isinstance(raw, dict):
+            return web.json_response({"ok": False, "error": "music object required"}, status=400)
+        import music as music_mod
+        clean: dict = {
+            "djRoleId": str(raw.get("djRoleId") or ""),
+            "musicChannelId": str(raw.get("musicChannelId") or ""),
+            "voiceChannelId": str(raw.get("voiceChannelId") or ""),
+            "textChannelId": str(raw.get("textChannelId") or ""),
+            "nowPlayingChannelId": str(raw.get("nowPlayingChannelId") or ""),
+            "controlMode": str(raw.get("controlMode") or "everyone"),
+            "defaultVolume": max(1, min(150, int(raw.get("defaultVolume") or 50))),
+            "maxVolume": max(10, min(150, int(raw.get("maxVolume") or 150))),
+            "defaultLoop": str(raw.get("defaultLoop") or "off"),
+            "filters": [f for f in (raw.get("filters") or []) if f in music_mod.FILTERS][:3],
+            "twentyFourSeven": bool(raw.get("twentyFourSeven", False)),
+            "autoPlay": bool(raw.get("autoPlay", False)),
+            "autoLeave": bool(raw.get("autoLeave", False)),
+        }
+        if clean["controlMode"] not in ("everyone", "dj", "moderators"):
+            clean["controlMode"] = "everyone"
+        if clean["defaultLoop"] not in ("off", "track", "queue"):
+            clean["defaultLoop"] = "off"
+        for key in ("djRoleId", "musicChannelId", "voiceChannelId", "textChannelId",
+                    "nowPlayingChannelId"):
+            if clean[key] and not clean[key].isdigit():
+                return web.json_response({"ok": False, "error": f"Invalid {key}"}, status=400)
+        try:
+            await db.set_guild_config(guild_id, {"music": clean})
+        except Exception as exc:
+            return web.json_response({"ok": False, "error": f"Could not save: {type(exc).__name__}"}, status=500)
+        music_mod.invalidate_music_config(guild_id)
+        # Mirror runtime flags onto the live player so saves apply instantly.
+        try:
+            p = music_mod.engine.get_player(guild_id)
+            p.stay_connected = clean["twentyFourSeven"]
+            if clean["filters"] != p.filters:
+                p.filters = list(clean["filters"])
+            if clean["defaultLoop"] == "track":
+                p.loop, p.queue_loop = True, False
+            elif clean["defaultLoop"] == "queue":
+                p.loop, p.queue_loop = False, True
+            elif clean["defaultLoop"] == "off":
+                p.loop, p.queue_loop = False, False
+            p.autoplay = clean["autoPlay"]
+        except Exception:
+            pass
+        return web.json_response({"ok": True})
 
     async def member_lookup(request: web.Request) -> web.Response:
         """Real member data + moderation history for the dashboard."""
@@ -1349,7 +1608,9 @@ async def _health_server() -> None:
             return web.json_response({"ok": False, "error": f"Discord API error {exc.status}"}, status=502)
 
     async def prefix_refresh(request: web.Request) -> web.Response:
-        """Dashboard tells us a guild's prefix changed — drop the cached value.
+        """Dashboard tells us a guild's prefix changed — store the pushed
+        value (the dashboard writes the site DB, which this process never
+        reads) and drop the cached value.
 
         Best-effort: if this never arrives the short TTL still picks the change
         up, so the prefix is never permanently stale.
@@ -1361,10 +1622,22 @@ async def _health_server() -> None:
         except Exception:
             return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
         guild_id = str(body.get("guildId") or "").strip()
+        prefix = str(body.get("prefix") or "").strip()[:10]
         if guild_id:
             _prefix_cache.pop(guild_id, None)
+            if prefix:
+                try:
+                    import database as db
+                    await db.set_guild_prefix(guild_id, prefix)
+                except Exception as exc:
+                    log.warning("Prefix store failed for guild %s: %s", guild_id, str(exc)[:150])
         else:
             _prefix_cache.clear()
+        try:
+            import music as music_mod
+            music_mod.invalidate_music_config(guild_id or None)
+        except Exception:
+            pass
         return web.json_response({"ok": True, "refreshed": guild_id or "all"})
 
     async def music_diagnose(request: web.Request) -> web.Response:
@@ -1598,6 +1871,9 @@ async def _health_server() -> None:
     app.router.add_post("/prefix/refresh", prefix_refresh)
     app.router.add_get("/music/state/{guild_id:\\d+}", music_state)
     app.router.add_post("/music/control/{guild_id:\\d+}", music_control)
+    app.router.add_post("/music/search/{guild_id:\\d+}", music_search)
+    app.router.add_post("/music/queue/{guild_id:\\d+}", music_queue_add)
+    app.router.add_post("/music/config/{guild_id:\\d+}", music_config_push)
     app.router.add_get("/mod/member/{guild_id:\\d+}/{user_id:\\d+}", member_lookup)
     app.router.add_post("/mod/action/{guild_id:\\d+}", mod_action)
     app.router.add_post("/self-test/gateway-drop", gateway_drop)

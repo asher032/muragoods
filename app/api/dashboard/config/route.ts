@@ -200,12 +200,33 @@ export async function PATCH(req: NextRequest) {
   }
   if (safe.music && typeof safe.music === 'object') {
     const m = safe.music;
+    const rawFilters = Array.isArray(m.filters) ? m.filters : [];
+    const FILTERS = ['bassboost', 'nightcore', 'vaporwave', '8d', 'karaoke', 'tremolo'];
     update.music = {
       djRoleId: String(m.djRoleId || '').slice(0, 25),
       musicChannelId: String(m.musicChannelId || '').slice(0, 25),
+      voiceChannelId: String(m.voiceChannelId || '').slice(0, 25),
+      textChannelId: String(m.textChannelId || '').slice(0, 25),
+      nowPlayingChannelId: String(m.nowPlayingChannelId || '').slice(0, 25),
+      commandsChannelId: String(m.commandsChannelId || '').slice(0, 25),
+      musicLogsChannelId: String(m.musicLogsChannelId || '').slice(0, 25),
+      djOnlyMode: Boolean(m.djOnlyMode),
+      voiceChannelRequired: m.voiceChannelRequired !== false,
+      enableNowPlayingEmbed: m.enableNowPlayingEmbed !== false,
+      enableQueueEmbed: m.enableQueueEmbed !== false,
+      enableMusicButtons: m.enableMusicButtons !== false,
       controlMode: ['everyone', 'dj', 'moderators'].includes(String(m.controlMode))
         ? String(m.controlMode) : 'everyone',
       defaultVolume: Math.max(1, Math.min(150, Number(m.defaultVolume) || 50)),
+      maxVolume: Math.max(10, Math.min(150, Number(m.maxVolume) || 150)),
+      maxQueueSize: Math.max(1, Math.min(500, Number(m.maxQueueSize) || 100)),
+      defaultLoop: ['off', 'track', 'queue'].includes(String(m.defaultLoop))
+        ? String(m.defaultLoop) : 'off',
+      filters: rawFilters.filter((f) => FILTERS.includes(String(f))).slice(0, 3),
+      twentyFourSeven: Boolean(m.twentyFourSeven),
+      autoPlay: Boolean(m.autoPlay),
+      autoLeave: Boolean(m.autoLeave),
+      enableNowPlaying: m.enableNowPlaying !== false,
     };
   }
   if (safe.moderation && typeof safe.moderation === 'object') {
@@ -308,6 +329,29 @@ export async function PATCH(req: NextRequest) {
   );
 
   await collection.updateOne({ guildId }, { $set: update }, { upsert: true });
+
+  // Push music settings to the bot host: the dashboard writes the SITE
+  // database, but the player reads the BOT's guild_config store. Without
+  // this push, DJ/volume/24/7 settings would silently never apply.
+  // Best-effort — the site save already succeeded, and the bot re-reads
+  // with a short TTL anyway.
+  if (update.music && typeof update.music === 'object') {
+    const secret = process.env.DISCORD_BRIDGE_SECRET || '';
+    const botBase = process.env.BOT_HEALTH_URL?.replace(/\/health$/, '') || 'https://murastream-bot-pf11.onrender.com';
+    if (secret) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 8000);
+        await fetch(`${botBase}/music/config/${guildId}`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ music: update.music }),
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+      } catch { /* bot offline — settings apply on next push/save */ }
+    }
+  }
 
   // Audit trail: who changed what (actor = Discord user from token).
   try {
