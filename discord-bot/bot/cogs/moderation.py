@@ -253,57 +253,10 @@ class ModerationCog(commands.Cog):
                                    f"Removed warning **#{index}** from {user.mention}." if ok
                                    else f"{user.mention} has no warning **#{index}**."))
 
-    async def _case_embed(self, guild_id: int, case_id: int):
-        doc = await database.get_case(guild_id, case_id)
-        if not doc:
-            return None
-        notes = doc.get("notes") or []
-        lines = [
-            f"**Action:** {doc.get('action', '?').upper()}",
-            f"**Target:** <@{doc.get('targetId')}>",
-            f"**Moderator:** <@{doc.get('moderatorId')}>",
-            f"**Reason:** {str(doc.get('reason') or '')[:300]}",
-        ]
-        if doc.get("duration"):
-            lines.append(f"**Duration:** {doc.get('duration')}")
-        lines.append(f"**Source:** {doc.get('source') or 'discord'}")
-        lines.append(f"**Status:** {doc.get('status') or 'active'}")
-        created = doc.get("createdAt")
-        if created:
-            lines.append(f"**Created:** {created if isinstance(created, str) else created.isoformat()}")
-        for n in notes[-5:]:
-            at = n.get("at")
-            lines.append(f"📝 {n.get('text', '')[:200]}"
-                         + (f" — {at if isinstance(at, str) else at.isoformat()}" if at else ""))
-        return utils.base_embed(f"📋 Case #{doc.get('caseId')}", "\n".join(lines))
-
-    @app_commands.command(name="case", description="Show a moderation case by number.")
-    @app_commands.describe(case_id="Case number")
-    async def case_cmd(self, interaction: discord.Interaction, case_id: int):
-        embed = await self._case_embed(interaction.guild.id, case_id)
-        if not embed:
-            await interaction.response.send_message(f"No case **#{case_id}** in this server.", ephemeral=True)
-            return
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    @app_commands.command(name="cases", description="Show recent moderation cases.")
-    @app_commands.describe(user="Optional: only this member's cases")
-    async def cases_cmd(self, interaction: discord.Interaction, user: discord.Member | None = None):
-        if user is not None and (isinstance(user, str) or not hasattr(user, "id")):
-            await interaction.response.send_message(
-                "That user couldn't be resolved — try the mention autocomplete.", ephemeral=True)
-            return
-        if user is None:
-            docs = await database.guild_cases(interaction.guild.id, limit=10)
-        else:
-            docs = await database.user_cases(interaction.guild.id, user.id, limit=10)
-        if not docs:
-            await interaction.response.send_message("No cases yet.", ephemeral=True)
-            return
-        lines = [f"**#{d.get('caseId')}** {str(d.get('action', '?')).upper()} — <@{d.get('targetId')}>"
-                 for d in docs]
-        await interaction.response.send_message(
-            embed=utils.base_embed("📋 Recent cases", "\n".join(lines)), ephemeral=True)
+    # NOTE: /case and /cases already exist in the community cog (moderation
+    # history lookup). They are intentionally NOT duplicated here — a second
+    # registration would kill this whole cog at load (CommandAlreadyRegistered)
+    # and Discord allows max 100 global slash commands per application.
 
     # ── Role tools ────────────────────────────────────────────────────
     @staticmethod
@@ -478,6 +431,10 @@ class ModerationCog(commands.Cog):
     # exact duplicates of /timeout and /untimeout, and Discord allows a
     # maximum of 100 global slash commands per application. Use /timeout and
     # /untimeout instead (the dashboard Timeout buttons are unchanged).
+    # NOTE: /mute and /unmute were removed as separate commands — they were
+    # exact duplicates of /timeout and /untimeout, and Discord allows a
+    # maximum of 100 global slash commands per application (exceeding it kills
+    # whole cogs at load). Use /timeout and /untimeout instead.
 
     # ── Explicit timeout names (aliases of mute/unmute) ─────────────
     @app_commands.command(name="timeout", description="Timeout a member (explicit name).")
@@ -599,12 +556,8 @@ class ModerationCog(commands.Cog):
             "🧹 Messages purged",
             f"**{len(deleted)}** messages removed in {interaction.channel.mention} by {interaction.user.mention}"))
 
-    @app_commands.command(name="purge", description="Delete recent messages (alias of /clear).")
-    @app_commands.describe(amount="How many (1–100)")
-    async def purge(self, interaction: discord.Interaction, amount: int):
-        # /clear is a plain Command attribute, not a bound method — call the
-        # callback directly (calling the Command object raises TypeError).
-        await self.clear.callback(self, interaction, amount)
+    # NOTE: /purge was removed — it was an exact alias of /clear, and Discord
+    # allows a maximum of 100 global slash commands per application.
 
     @app_commands.command(name="lock", description="Lock this channel (stop members sending).")
     async def lock(self, interaction: discord.Interaction):
@@ -726,30 +679,9 @@ class ModerationCog(commands.Cog):
         e.set_footer(text="Remove unneeded grants in Server Settings → Roles → Bot role")
         await interaction.followup.send(embed=e, ephemeral=True)
 
-    # ── Setup ─────────────────────────────────────────────────────────
-    @app_commands.command(name="setup", description="Configure bot channels (admins).")
-    @app_commands.describe(channel_type="Which channel to set", channel="The channel")
-    @app_commands.choices(channel_type=[
-        app_commands.Choice(name="Welcome channel", value="welcome"),
-        app_commands.Choice(name="Logs channel", value="logs"),
-        app_commands.Choice(name="Movie requests channel", value="requests"),
-        app_commands.Choice(name="Music commands channel", value="music"),
-    ])
-    async def setup(self, interaction: discord.Interaction,
-                    channel_type: app_commands.Choice[str], channel: discord.TextChannel):
-        if not interaction.user.guild_permissions.manage_guild:
-            await interaction.response.send_message("You need Manage Server permission.", ephemeral=True)
-            return
-        if isinstance(channel, str) or not hasattr(channel, "id"):
-            await interaction.response.send_message(
-                "That channel couldn't be resolved — try the autocomplete.", ephemeral=True)
-            return
-        cfg = await database.get_guild_config(interaction.guild.id)
-        channels = cfg.get("channels") or {}
-        channels[channel_type.value] = channel.id
-        await database.set_guild_config(interaction.guild.id, {"channels": channels})
-        await interaction.response.send_message(
-            embed=utils.base_embed("⚙️ Setup saved", f"{channel_type.name} → {channel.mention}"))
+    # NOTE: /setup was removed — channel configuration lives in the dashboard
+    # (ModuleSettings selectors), which validates and syncs it. Keeping a
+    # slash duplicate costs one of only 100 global command slots.
 
     # ── Welcome + automod events ──────────────────────────────────────
     @commands.Cog.listener()
