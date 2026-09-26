@@ -11,10 +11,13 @@ services:
     plan: starter
     region: oregon
     rootDir: discord-bot
-    # Must stay identical to discord-bot/render.yaml. Without a JavaScript
-    # runtime yt-dlp cannot solve YouTube's signature challenge and playback
-    # fails in a way that looks like an IP block.
-    buildCommand: pip install -r requirements.txt && python scripts/install_deno.py
+    # Must stay identical to discord-bot/render.yaml. Node.js (provided by the
+    # Render image) carries yt-dlp's signature-challenge solving, and the bot
+    # enables all runtimes explicitly — so no Deno download happens here.
+    # (scripts/install_deno.py remains available as an optional local
+    # fallback, but it must NOT block the production build: its ~100MB
+    # download repeatedly stalled the free builder and failed deploys.)
+    buildCommand: pip install -r requirements.txt
     startCommand: python -m bot.main
     healthCheckPath: /health
     autoDeploy: true

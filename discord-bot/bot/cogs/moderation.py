@@ -232,56 +232,10 @@ class ModerationCog(commands.Cog):
         await interaction.response.send_message(embed=utils.base_embed("✅ Unbanned", f"<@{user_id}> can rejoin."))
 
     # ── Mute / unmute ─────────────────────────────────────────────────
-    @app_commands.command(name="mute", description="Timeout a member.")
-    @app_commands.describe(user="Member to mute", minutes="Duration (default 10)")
-    async def mute(self, interaction: discord.Interaction, user: discord.Member, minutes: int = 10):
-        if not interaction.user.guild_permissions.moderate_members:
-            await interaction.response.send_message("You need Moderate Members permission.", ephemeral=True)
-            return
-        err = self._member_guard(interaction, user)
-        if err:
-            await interaction.response.send_message(err, ephemeral=True)
-            return
-        err = self._hierarchy_guard(interaction, user)
-        if err:
-            await interaction.response.send_message(err, ephemeral=True)
-            return
-        minutes = max(1, min(minutes, 40320))  # 28-day max
-        if user.top_role >= interaction.guild.me.top_role:
-            await interaction.response.send_message(
-                "I can't timeout someone with a role at or above mine.", ephemeral=True)
-            return
-        try:
-            await user.timeout(discord.utils.utcnow() + timedelta(minutes=minutes),
-                               reason=f"By {interaction.user}")
-        except discord.Forbidden:
-            await interaction.response.send_message("I lack permission to timeout that member.", ephemeral=True)
-            return
-        await self._case_and_log(interaction, user, "mute", f"Timed out by {interaction.user}", f"{minutes}m")
-        await self._dm_target(user, interaction.guild, "timeout", f"{minutes} minutes")
-        await interaction.response.send_message(
-            embed=utils.base_embed("🔇 Muted", f"{user.mention} for **{minutes}** minutes."))
-
-    @app_commands.command(name="unmute", description="Remove a member's timeout.")
-    async def unmute(self, interaction: discord.Interaction, user: discord.Member):
-        if not interaction.user.guild_permissions.moderate_members:
-            await interaction.response.send_message("You need Moderate Members permission.", ephemeral=True)
-            return
-        err = self._member_guard(interaction, user)
-        if err:
-            await interaction.response.send_message(err, ephemeral=True)
-            return
-        err = self._hierarchy_guard(interaction, user)
-        if err:
-            await interaction.response.send_message(err, ephemeral=True)
-            return
-        try:
-            await user.timeout(None, reason=f"By {interaction.user}")
-        except discord.Forbidden:
-            await interaction.response.send_message("I lack permission.", ephemeral=True)
-            return
-        await self._case_and_log(interaction, user, "unmute", f"Timeout removed by {interaction.user}")
-        await interaction.response.send_message(embed=utils.base_embed("🔊 Unmuted", f"{user.mention} can speak again."))
+    # NOTE: /mute and /unmute were removed as separate commands — they were
+    # exact duplicates of /timeout and /untimeout, and Discord allows a
+    # maximum of 100 global slash commands per application. Use /timeout and
+    # /untimeout instead (the dashboard Timeout buttons are unchanged).
 
     # ── Explicit timeout names (aliases of mute/unmute) ─────────────
     @app_commands.command(name="timeout", description="Timeout a member (explicit name).")
