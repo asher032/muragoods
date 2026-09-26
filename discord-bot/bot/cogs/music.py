@@ -773,28 +773,25 @@ class MusicCog(commands.Cog):
                          embeds.OK if result.get("ok") else embeds.WARN)
         await interaction.followup.send(embed=e, ephemeral=True)
 
-    @app_commands.command(name="searchmusic", description="Preview the top result for a search.")
+    @app_commands.command(name="searchmusic", description="Preview the top results for a search.")
     @app_commands.describe(query="What to search for")
     async def searchmusic(self, interaction: discord.Interaction, query: str):
         await interaction.response.defer()
-        track = await music.engine.resolve(query)
-        if not track:
-            err_detail = music.engine.get_resolve_error()
-            if err_detail:
-                await interaction.followup.send(embed=embeds.embed(
-                    "🔎 Track Not Found",
-                    f"yt-dlp: {err_detail}\nTry a different search or a direct URL.",
-                    embeds.WARN))
-            else:
-                await interaction.followup.send(embed=embeds.embed(
-                    "🔎 Track Not Found", "Try another search.", embeds.WARN))
+        # Metadata-only: never run full audio extraction for a preview.
+        # Playing a row runs the real resolve() path instead.
+        results = await music.engine.search_top(query, limit=5)
+        if not results:
+            await interaction.followup.send(embed=embeds.embed(
+                "🔎 Track Not Found", "Try another search.", embeds.WARN))
             return
-        e = embeds.music("🎵 Top result", f"**{track.title}**\n{track.uploader}")
-        if track.thumbnail:
-            e.set_thumbnail(url=track.thumbnail)
+        lines = []
+        for i, r in enumerate(results, 1):
+            dur = f" ({embeds.fmt_duration(r['duration'])})" if r.get("duration") else ""
+            lines.append(f"**{i}.** {r['title']}{dur}\n_{r.get('uploader', '')}_")
+        e = embeds.music("🎵 Top results", "\n\n".join(lines))
         view = discord.ui.View()
-        if track.url:
-            view.add_item(discord.ui.Button(label="🎧 Open track", url=track.url))
+        if results[0].get("url"):
+            view.add_item(discord.ui.Button(label="🎧 Open top track", url=results[0]["url"]))
         await interaction.followup.send(embed=e, view=view)
 
     @app_commands.command(name="skip", description="Skip the current song.")
