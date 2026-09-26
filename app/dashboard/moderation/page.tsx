@@ -7,7 +7,7 @@ import { apiFetch } from '../lib/api';
 import {
   DiscordChannelSelect, DiscordMemberSelect, DiscordRoleSelect,
   ResourceStatusBar, kindsForKey, statusMessage, useGuildMemberSearch,
-  useGuildResources, type SearchedMember,
+  useGuildResources, type GuildMember, type SearchedMember,
 } from '../components/selectors';
 
 interface MemberInfo {
@@ -66,22 +66,44 @@ const ACTIONS = [
 ] as const;
 
 // ── Backend member finder ──────────────────────────────────────────────
-// Guild-scoped server search (debounced 300ms, bounded, abort-safe): typing
-// "olin" queries ONLY the selected guild and shows avatar + display name +
-// username; the Discord user ID stays internal. Three states stay distinct:
-// searching… / no results / failed + retry — never a silent empty list.
+// Shows the whole guild roster immediately (bulk-loaded with the page — no
+// typing needed), and switches to guild-scoped server search once you type
+// 2+ characters (debounced 300ms, bounded, abort-safe). Either way only the
+// selected guild is ever queried and the Discord user ID stays internal.
+// Three states stay distinct: loading… / no results / failed + retry.
 function MemberFinder({
-  guildId, value, onChange, disabled,
+  guildId, value, onChange, disabled, bulk = [], bulkLoading = false,
 }: {
   guildId: string;
   value: string;
   onChange: (id: string, member?: SearchedMember) => void;
   disabled?: boolean;
+  bulk?: GuildMember[];
+  bulkLoading?: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<SearchedMember | null>(null);
-  const { results, searching, searchError, searchCode } = useGuildMemberSearch(guildId, open ? query : '');
+  const q = query.trim();
+  const useServerSearch = q.length >= 2;
+  const { results, searching, searchError, searchCode } = useGuildMemberSearch(guildId, open && useServerSearch ? q : '');
+
+  // Local view of the bulk roster (first 100, filtered as you type).
+  const bulkShown: SearchedMember[] = (() => {
+    const needle = q.toLowerCase();
+    const pool = needle
+      ? bulk.filter((m) =>
+          m.name.toLowerCase().includes(needle) ||
+          (m.username ?? '').toLowerCase().includes(needle) ||
+          m.id.includes(q))
+      : bulk;
+    return pool.slice(0, 100).map((m) => ({
+      id: m.id, username: m.username ?? m.name, displayName: m.name,
+      avatar: m.avatar ?? null, bot: Boolean(m.bot),
+    }));
+  })();
+
+  const shown = useServerSearch ? results : bulkShown;
 
   useEffect(() => {
     if (!value) setPicked(null);
@@ -110,20 +132,21 @@ function MemberFinder({
       </div>
       {open && (
         <div className="cc-card" style={{ position: 'absolute', zIndex: 120, top: 'calc(100% + 6px)', left: 0, right: 0, maxHeight: 280, overflowY: 'auto', padding: 8, background: '#15151d' }}>
-          {searching && <div style={{ padding: '10px 8px', fontSize: 12.5, color: 'var(--cc-text-faint)' }}>Searching members…</div>}
+          {(searching || (!useServerSearch && bulkLoading)) && <div style={{ padding: '10px 8px', fontSize: 12.5, color: 'var(--cc-text-faint)' }}>Loading members…</div>}
           {!searching && searchError && (
             <div style={{ padding: '10px 8px', fontSize: 12.5, color: '#ff8a8a' }}>
               <div><strong>⚠️ {statusMessage(searchCode, searchError).title}</strong></div>
               <div style={{ color: 'var(--cc-text-dim)', marginTop: 2 }}>{statusMessage(searchCode, searchError).hint}</div>
             </div>
           )}
-          {!searching && !searchError && query.trim().length >= 2 && results.length === 0 && (
-            <div style={{ padding: '10px 8px', fontSize: 12.5, color: 'var(--cc-text-faint)' }}>No members found.</div>
+          {!searching && !searchError && !bulkLoading && shown.length === 0 && (
+            <div style={{ padding: '10px 8px', fontSize: 12.5, color: 'var(--cc-text-faint)' }}>
+              {bulk.length === 0 && !useServerSearch
+                ? 'No members loaded yet — wait a moment or use Refresh above.'
+                : 'No members found.'}
+            </div>
           )}
-          {!searching && !searchError && query.trim().length < 2 && (
-            <div style={{ padding: '10px 8px', fontSize: 12.5, color: 'var(--cc-text-faint)' }}>Type at least 2 characters to search.</div>
-          )}
-          {results.map((m) => (
+          {shown.map((m) => (
             <button
               key={m.id}
               onClick={() => { setPicked(m); setOpen(false); onChange(m.id, m); }}
@@ -151,7 +174,7 @@ function MemberFinder({
               </span>
             </button>
           ))}
-          {results.length > 0 && (
+          {shown.length > 0 && (
             <button type="button" className="cc-link" onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, marginTop: 6 }}>
               Done
             </button>
@@ -452,6 +475,8 @@ export default function ModerationPage() {
               value={userId}
               onChange={(id) => { setUserId(id); if (id) void lookupFor(id); }}
               disabled={busy}
+              bulk={resources?.members ?? []}
+              bulkLoading={resLoading}
             />
           </div>
           <button className="cc-btn cc-btn-primary" onClick={lookup} disabled={busy || !userId}>
