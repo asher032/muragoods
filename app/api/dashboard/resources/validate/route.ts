@@ -1,4 +1,5 @@
 import { sessionToken } from '@/app/lib/require-session';
+import { requireGuildManage } from '@/app/lib/discord-guilds';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/dashboard/resources/validate — pre-save permission check.
@@ -14,7 +15,6 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const DISCORD_API = 'https://discord.com/api/v10';
-const MANAGE_GUILD = BigInt(0x20);
 const ADMINISTRATOR = BigInt(0x8);
 
 const PERM_BITS: Record<string, { bit: bigint; label: string }> = {
@@ -48,15 +48,15 @@ async function botGet(path: string, bToken: string): Promise<{ ok: boolean; stat
   }
 }
 
-function bad(message: string, status = 400) {
-  return NextResponse.json({ success: false, valid: false, message, checks: [] }, { status });
+function bad(message: string, status = 400, code?: string) {
+  return NextResponse.json({ success: false, valid: false, message, checks: [], ...(code ? { code } : {}) }, { status });
 }
 
 export async function POST(req: NextRequest) {
   const userToken = await sessionToken();
   const bToken = botToken();
-  if (!userToken) return bad('Sign in with Discord to continue', 401);
-  if (!bToken) return bad('Dashboard resource access is not configured (DISCORD_BOT_TOKEN).', 503);
+  if (!userToken) return bad('Sign in with Discord to continue', 401, 'AUTH_REQUIRED');
+  if (!bToken) return bad('Dashboard resource access is not configured (DISCORD_BOT_TOKEN).', 503, 'BOT_NOT_CONFIGURED');
 
   const body = (await req.json().catch(() => null)) as {
     guildId?: string; kind?: string; id?: string; require?: string[];
@@ -66,21 +66,16 @@ export async function POST(req: NextRequest) {
   const objectId = String(body?.id || '');
   const require = Array.isArray(body?.require) ? body.require.map(String).filter((r) => r in PERM_BITS) : [];
   if (!/^\d{5,25}$/.test(guildId) || !/^\d{5,25}$/.test(objectId)) {
-    return bad('Valid guildId and object id are required');
+    return bad('Valid guildId and object id are required', 400, 'INVALID_GUILD_ID');
   }
   if (!['channel', 'category', 'role', 'member'].includes(kind)) {
-    return bad('kind must be channel, category, role or member');
+    return bad('kind must be channel, category, role or member', 400, 'INVALID_OP');
   }
 
   // Caller must manage this guild right now — the id is never trusted.
-  const uresp = await fetch(`${DISCORD_API}/users/@me/guilds`, {
-    headers: { Authorization: `Bearer ${userToken}` }, cache: 'no-store',
-  }).catch(() => null);
-  if (!uresp || !uresp.ok) return bad('Could not verify your Discord authorization — sign in again', 401);
-  const uguilds = (await uresp.json().catch(() => [])) as Array<{ id: string; owner: boolean; permissions: string | number }>;
-  const ug = uguilds.find((g) => g.id === guildId);
-  const manages = ug && (ug.owner || (BigInt(ug.permissions) & MANAGE_GUILD) !== BigInt(0) || (BigInt(ug.permissions) & ADMINISTRATOR) !== BigInt(0));
-  if (!manages) return bad('You do not have permission to manage this server', 403);
+  // Distinct codes: dead token ≠ non-member ≠ unmanaged ≠ Discord outage.
+  const manage = await requireGuildManage(userToken, guildId);
+  if (!manage.ok) return bad(manage.error, manage.status, manage.code);
 
   // Bot presence + identity in this guild.
   const botMemberRes = await botGet(`/guilds/${guildId}/members/@me`, bToken);

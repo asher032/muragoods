@@ -1,17 +1,16 @@
 import { sessionToken } from '@/app/lib/require-session';
+import { requireGuildManage } from '@/app/lib/discord-guilds';
+import { botToken } from '@/app/lib/discord-bot';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-const MANAGE_GUILD = BigInt(0x20);
-const ADMINISTRATOR = BigInt(0x8);
 const DISCORD_API = 'https://discord.com/api/v10';
 
 // Channel types the dashboard can meaningfully offer. Threads are excluded:
 // they are transient children, not configuration targets.
 const SELECTABLE_CHANNEL_TYPES = [0, 2, 4, 5, 13, 15];
 
-type DiscordGuild = { id: string; owner: boolean; permissions: string | number };
 type DiscordChannel = {
   id: string; name: string; type: number; parent_id?: string | null;
   permission_overwrites?: Array<{ id: string; type: number; allow: string; deny: string }>;
@@ -23,29 +22,15 @@ type DiscordMember = {
 };
 type DiscordBotMember = { user: { id: string }; roles: string[] };
 
-function canManage(guild: DiscordGuild): boolean {
-  if (guild.owner) return true;
-  const permissions = BigInt(guild.permissions);
-  return (permissions & MANAGE_GUILD) !== BigInt(0) || (permissions & ADMINISTRATOR) !== BigInt(0);
-}
-
-function botToken(): string | null {
-  return process.env.DISCORD_BOT_TOKEN?.trim() || process.env.DISCORD_TOKEN?.trim() || null;
-}
-
-async function discordGet<T>(path: string, token: string, bot = false): Promise<T | null> {
-  const response = await fetch(`${DISCORD_API}${path}`, {
-    headers: { Authorization: `${bot ? 'Bot' : 'Bearer'} ${token}` },
+function botDiscordGet<T>(path: string, token: string): Promise<{ data: T | null; status: number }> {
+  return fetch(`${DISCORD_API}${path}`, {
+    headers: { Authorization: `Bot ${token}` },
     next: { revalidate: 0 },
-  });
-  if (!response.ok) return null;
-  return response.json() as Promise<T>;
-}
-
-async function manageableGuild(userToken: string, guildId: string): Promise<boolean> {
-  const userGuilds = await discordGet<DiscordGuild[]>('/users/@me/guilds', userToken);
-  const guild = userGuilds?.find((candidate) => candidate.id === guildId);
-  return Boolean(guild && canManage(guild));
+    signal: AbortSignal.timeout(10000),
+  }).then(async (response) => ({
+    data: response.ok ? (await response.json().catch(() => null) as T) : null,
+    status: response.status,
+  })).catch(() => ({ data: null, status: 0 }));
 }
 
 export async function GET(req: NextRequest) {
@@ -53,34 +38,57 @@ export async function GET(req: NextRequest) {
   const guildId = req.nextUrl.searchParams.get('guildId');
   const bToken = botToken();
   if (!userToken || !guildId || !/^\d{5,25}$/.test(guildId)) {
-    return NextResponse.json({ success: false, error: 'Discord token and valid guildId are required' }, { status: 400 });
+    return NextResponse.json({
+      success: false,
+      code: !userToken ? 'AUTH_REQUIRED' : 'INVALID_GUILD_ID',
+      error: !userToken ? 'Sign in with Discord to continue' : 'Valid guildId is required',
+    }, { status: !userToken ? 401 : 400 });
   }
   if (!bToken) {
     return NextResponse.json({
       success: false,
+      code: 'BOT_NOT_CONFIGURED',
       error: 'Dashboard resource access is not configured. Add DISCORD_BOT_TOKEN to the Vercel project.',
     }, { status: 503 });
   }
 
   // The guildId always comes from the selector, never trusted: the caller's
   // live Discord authorization must show MANAGE rights on this exact guild.
-  if (!(await manageableGuild(userToken, guildId))) {
-    return NextResponse.json({ success: false, error: 'You do not have permission to manage this server' }, { status: 403 });
+  // requireGuildManage keeps dead tokens (401), non-membership, missing
+  // permission and Discord outages as SEPARATE codes — a rate limit is never
+  // reported as "no permission".
+  const manage = await requireGuildManage(userToken, guildId);
+  if (!manage.ok) {
+    return NextResponse.json(
+      { success: false, code: manage.code, error: manage.error, retryable: manage.retryable, debug: manage.debug },
+      { status: manage.status },
+    );
   }
 
-  const [channels, roles, members, botMember, guild] = await Promise.all([
-    discordGet<DiscordChannel[]>(`/guilds/${guildId}/channels`, bToken, true),
-    discordGet<DiscordRole[]>(`/guilds/${guildId}/roles`, bToken, true),
-    discordGet<DiscordMember[]>(`/guilds/${guildId}/members?limit=1000`, bToken, true),
-    discordGet<DiscordBotMember>(`/guilds/${guildId}/members/@me`, bToken, true),
-    discordGet<{ id: string; name: string; approximate_member_count?: number }>(
-      `/guilds/${guildId}?with_counts=true`, bToken, true),
+  const [channelsRes, rolesRes, membersRes, botMemberRes, guildRes] = await Promise.all([
+    botDiscordGet<DiscordChannel[]>(`/guilds/${guildId}/channels`, bToken),
+    botDiscordGet<DiscordRole[]>(`/guilds/${guildId}/roles`, bToken),
+    botDiscordGet<DiscordMember[]>(`/guilds/${guildId}/members?limit=1000`, bToken),
+    botDiscordGet<DiscordBotMember>(`/guilds/${guildId}/members/@me`, bToken),
+    botDiscordGet<{ id: string; name: string; approximate_member_count?: number }>(
+      `/guilds/${guildId}?with_counts=true`, bToken),
   ]);
+  const channels = channelsRes.data;
+  const roles = rolesRes.data;
+  const members = membersRes.data;
+  const botMember = botMemberRes.data;
+  const guild = guildRes.data;
   if (!channels || !roles) {
+    const botGone = botMemberRes.status === 404;
     return NextResponse.json({
       success: false,
-      error: 'MuraBot cannot read this server. Check that it is still installed and has the required permissions.',
-    }, { status: 502 });
+      code: botGone ? 'BOT_NOT_INSTALLED' : 'DISCORD_API_ERROR',
+      error: botGone
+        ? 'MuraBot is not installed on this server — invite it first.'
+        : 'MuraBot cannot read this server right now. Check that it is still installed and retry.',
+      retryable: !botGone,
+      debug: { guildId, channelsStatus: channelsRes.status, rolesStatus: rolesRes.status, botStatus: botMemberRes.status },
+    }, { status: botGone ? 404 : 502 });
   }
 
   const roleById = new Map(roles.map((r) => [r.id, r]));
@@ -99,8 +107,8 @@ export async function GET(req: NextRequest) {
   // Guild-level bot permissions (approximate; per-channel overwrites are
   // resolved by the validate endpoint before saving).
   let botPermissions: string | null = null;
-  const guildPerms = await discordGet<{ permissions?: string }>(`/guilds/${guildId}`, bToken, true);
-  if (guildPerms?.permissions !== undefined) botPermissions = String(guildPerms.permissions);
+  const guildPerms = await botDiscordGet<{ permissions?: string }>(`/guilds/${guildId}`, bToken);
+  if (guildPerms.data?.permissions !== undefined) botPermissions = String(guildPerms.data.permissions);
 
   const categories = new Map(channels.filter((c) => c.type === 4).map((c) => [c.id, c.name]));
 

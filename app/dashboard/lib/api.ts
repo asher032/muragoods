@@ -8,7 +8,7 @@
 
 export type ApiResult<T> =
   | { ok: true; data: T }
-  | { ok: false; error: string; status: number; retryable: boolean };
+  | { ok: false; error: string; status: number; retryable: boolean; code?: string };
 
 const TIMEOUT_MS = 12_000;
 const MAX_ATTEMPTS = 4;
@@ -67,12 +67,13 @@ export async function apiFetch<T>(
       }
 
       lastStatus = resp.status;
-      const payload = (await resp.json().catch(() => null)) as { error?: string } | null;
+      const payload = (await resp.json().catch(() => null)) as { error?: string; code?: string } | null;
       lastError = payload?.error || `HTTP ${resp.status}`;
+      const failCode = typeof payload?.code === 'string' ? payload.code : undefined;
 
       // Permanent client errors: surface immediately, never retry.
       if (!isRetryable(resp.status)) {
-        return { ok: false, error: lastError, status: resp.status, retryable: false };
+        return { ok: false, error: lastError, status: resp.status, retryable: false, code: failCode };
       }
       // 429/5xx: fall through to retry.
     } catch (err) {
@@ -88,7 +89,6 @@ export async function apiFetch<T>(
 
   return { ok: false, error: lastError, status: lastStatus, retryable: true };
 }
-
 export interface GuildSummary {
   id: string;
   name: string;

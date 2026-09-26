@@ -6,7 +6,8 @@ import { useGuildConfig } from '@/app/lib/use-guild-config';
 import { apiFetch } from '../lib/api';
 import {
   DiscordChannelSelect, DiscordMemberSelect, DiscordRoleSelect,
-  ResourceStatusBar, kindsForKey, useGuildResources,
+  ResourceStatusBar, kindsForKey, statusMessage, useGuildMemberSearch,
+  useGuildResources, type SearchedMember,
 } from '../components/selectors';
 
 interface MemberInfo {
@@ -31,15 +32,14 @@ interface LookupResult {
 }
 
 interface OverviewStats {
-  byAction: Record<string, number>;
+  memberCount: number | null;
+  warnings: number;
+  activeTimeouts: number | null;
+  bans: number | null;
   today: number;
   week: number;
   openCases: number;
-  warnings: number;
-  total: number;
-  bans: number;
-  activeTimeouts: number;
-  members: number | null;
+  unknown: { bans: boolean; timeouts: boolean };
 }
 
 interface BanEntry { id: string; username: string; displayName: string; avatar: string | null; reason: string }
@@ -65,6 +65,103 @@ const ACTIONS = [
   { key: 'unban', label: '🔓 Unban', primary: false },
 ] as const;
 
+// ── Backend member finder ──────────────────────────────────────────────
+// Guild-scoped server search (debounced 300ms, bounded, abort-safe): typing
+// "olin" queries ONLY the selected guild and shows avatar + display name +
+// username; the Discord user ID stays internal. Three states stay distinct:
+// searching… / no results / failed + retry — never a silent empty list.
+function MemberFinder({
+  guildId, value, onChange, disabled,
+}: {
+  guildId: string;
+  value: string;
+  onChange: (id: string, member?: SearchedMember) => void;
+  disabled?: boolean;
+}) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<SearchedMember | null>(null);
+  const { results, searching, searchError, searchCode } = useGuildMemberSearch(guildId, open ? query : '');
+
+  useEffect(() => {
+    if (!value) setPicked(null);
+  }, [value, guildId]);
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <input
+            className="cc-input"
+            value={picked ? `${picked.displayName} (@${picked.username})` : query}
+            onChange={(e) => { setQuery(e.target.value); setPicked(null); onChange(''); setOpen(true); }}
+            onFocus={() => setOpen(true)}
+            placeholder="Search members…"
+            disabled={disabled}
+            style={{ width: '100%' }}
+            aria-label="Search members"
+          />
+        </div>
+        {picked && (
+          <button type="button" className="cc-btn" onClick={() => { setPicked(null); setQuery(''); onChange(''); }} aria-label="Clear member">
+            ✕
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="cc-card" style={{ position: 'absolute', zIndex: 120, top: 'calc(100% + 6px)', left: 0, right: 0, maxHeight: 280, overflowY: 'auto', padding: 8, background: '#15151d' }}>
+          {searching && <div style={{ padding: '10px 8px', fontSize: 12.5, color: 'var(--cc-text-faint)' }}>Searching members…</div>}
+          {!searching && searchError && (
+            <div style={{ padding: '10px 8px', fontSize: 12.5, color: '#ff8a8a' }}>
+              <div><strong>⚠️ {statusMessage(searchCode, searchError).title}</strong></div>
+              <div style={{ color: 'var(--cc-text-dim)', marginTop: 2 }}>{statusMessage(searchCode, searchError).hint}</div>
+            </div>
+          )}
+          {!searching && !searchError && query.trim().length >= 2 && results.length === 0 && (
+            <div style={{ padding: '10px 8px', fontSize: 12.5, color: 'var(--cc-text-faint)' }}>No members found.</div>
+          )}
+          {!searching && !searchError && query.trim().length < 2 && (
+            <div style={{ padding: '10px 8px', fontSize: 12.5, color: 'var(--cc-text-faint)' }}>Type at least 2 characters to search.</div>
+          )}
+          {results.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => { setPicked(m); setOpen(false); onChange(m.id, m); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 9, width: '100%',
+                padding: '8px 9px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                background: m.id === value ? 'var(--cc-accent-soft)' : 'transparent',
+                color: '#fff', fontSize: 13, textAlign: 'left',
+              }}
+            >
+              {m.avatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={m.avatar} alt="" width={24} height={24} style={{ borderRadius: 12, flexShrink: 0 }} />
+              ) : (
+                <span style={{ width: 24, height: 24, borderRadius: 12, background: 'var(--cc-accent-soft)', flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700 }}>
+                  {m.displayName.slice(0, 1).toUpperCase()}
+                </span>
+              )}
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {m.displayName}
+                  {m.bot && <span style={{ marginLeft: 6, fontSize: 9, background: 'rgba(88,101,242,0.4)', borderRadius: 4, padding: '1px 5px' }}>BOT</span>}
+                </span>
+                <span style={{ display: 'block', fontSize: 10.5, color: 'var(--cc-text-faint)' }}>@{m.username}</span>
+              </span>
+            </button>
+          ))}
+          {results.length > 0 && (
+            <button type="button" className="cc-link" onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, marginTop: 6 }}>
+              Done
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ModerationPage() {
   const { token, selected } = useGuild();
   const { config, save, saveState, update } = useGuildConfig();
@@ -84,7 +181,8 @@ export default function ModerationPage() {
   const [roleId, setRoleId] = useState('');
   const [overview, setOverview] = useState<OverviewStats | null>(null);
   const [overviewError, setOverviewError] = useState('');
-  const { resources, loading: resLoading, error: resError, refresh: resRefresh } = useGuildResources(selected?.id ?? null);
+  const [overviewCode, setOverviewCode] = useState('');
+  const { resources, loading: resLoading, error: resError, code: resCode, retryable: resRetryable, refresh: resRefresh } = useGuildResources(selected?.id ?? null);
 
   const lookupFor = useCallback(async (id: string) => {
     if (!token || !selected || !/^\d{5,25}$/.test(id)) {
@@ -110,10 +208,36 @@ export default function ModerationPage() {
   const loadOverview = useCallback(async () => {
     if (!token || !selected) return;
     setOverviewError('');
-    const resp = await apiFetch<{ success: boolean; stats: OverviewStats; error?: string }>(
-      `/api/dashboard/moderation/tools?op=overview&guildId=${selected.id}`, { token });
-    if (resp.ok && resp.data.success) setOverview(resp.data.stats);
-    else setOverviewError(resp.ok ? resp.data.error || 'Could not load overview' : resp.error);
+    setOverviewCode('');
+    const resp = await apiFetch<{
+      success: boolean; error?: string; code?: string;
+      guild?: { memberCount?: number | null };
+      moderation?: {
+        warnings?: number; activeTimeouts?: number | null; bans?: number | null;
+        actionsToday?: number; actionsThisWeek?: number; openCases?: number;
+      };
+      unknown?: { bans?: boolean; timeouts?: boolean };
+    }>(`/api/dashboard/guilds/${selected.id}/overview`, { token });
+    if (resp.ok && resp.data.success) {
+      const m = resp.data.moderation ?? {};
+      setOverview({
+        memberCount: typeof resp.data.guild?.memberCount === 'number' ? resp.data.guild.memberCount : null,
+        warnings: typeof m.warnings === 'number' ? m.warnings : 0,
+        activeTimeouts: typeof m.activeTimeouts === 'number' ? m.activeTimeouts : null,
+        bans: typeof m.bans === 'number' ? m.bans : null,
+        today: typeof m.actionsToday === 'number' ? m.actionsToday : 0,
+        week: typeof m.actionsThisWeek === 'number' ? m.actionsThisWeek : 0,
+        openCases: typeof m.openCases === 'number' ? m.openCases : 0,
+        unknown: {
+          bans: resp.data.unknown?.bans ?? m.bans == null,
+          timeouts: resp.data.unknown?.timeouts ?? m.activeTimeouts == null,
+        },
+      });
+    } else {
+      setOverview(null);
+      setOverviewError(resp.ok ? resp.data.error || 'Could not load overview' : resp.error);
+      setOverviewCode(resp.ok ? resp.data.code || '' : (resp as { code?: string }).code || '');
+    }
   }, [token, selected]);
 
   const loadBans = useCallback(async () => {
@@ -127,7 +251,14 @@ export default function ModerationPage() {
     setResult(null);
     setUserId('');
     setOverview(null);
+    setOverviewError('');
+    setOverviewCode('');
+    setError('');
+    setNotice('');
     setBans([]);
+    setRoleUserId('');
+    setRoleId('');
+    setUnbanId('');
     void loadOverview();
     void loadBans();
   }, [selected?.id, loadOverview, loadBans]);
@@ -265,10 +396,11 @@ export default function ModerationPage() {
     return <p style={{ color: 'var(--cc-text-faint)', fontSize: 14 }}>Select a server in the top bar.</p>;
   }
 
-  const stat = (label: string, value: string | number) => (
-    <div className="cc-card" style={{ padding: '12px 16px' }}>
+  const stat = (label: string, value: string | number, unavailable = false) => (
+    <div className="cc-card" style={{ padding: '12px 16px' }} title={unavailable ? 'Discord did not return this value (missing bot permission or unavailable intent data) — retry or check bot permissions' : undefined}>
       <div className="cc-section-label">{label}</div>
-      <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginTop: 2 }}>{value}</div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: unavailable ? 'var(--cc-text-faint)' : '#fff', marginTop: 2 }}>{value}</div>
+      {unavailable && <div style={{ fontSize: 10.5, color: 'var(--cc-text-faint)', marginTop: 2 }}>Unavailable</div>}
     </div>
   );
 
@@ -283,12 +415,24 @@ export default function ModerationPage() {
 
       {/* Overview */}
       <div className="cc-section-label" style={{ marginBottom: 10 }}>Overview</div>
-      {overviewError && <div className="cc-alert cc-alert-error" role="alert" style={{ marginBottom: 12 }}>{overviewError}</div>}
+      {overviewError && (
+        <div className="cc-alert cc-alert-error" role="alert" style={{ marginBottom: 12 }}>
+          <strong>⚠️ {statusMessage(overviewCode, overviewError).title}</strong>
+          <div style={{ marginTop: 4 }}>{statusMessage(overviewCode, overviewError).hint}</div>
+          <button className="cc-btn" style={{ marginTop: 8, fontSize: 12 }} onClick={() => void loadOverview()}>
+            Retry
+          </button>
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 22 }}>
-        {stat('Members', overview?.members ?? '—')}
+        {stat('Members', overview?.memberCount ?? '—')}
         {stat('Warnings', overview?.warnings ?? '—')}
-        {stat('Active timeouts', overview && overview.activeTimeouts >= 0 ? overview.activeTimeouts : '—')}
-        {stat('Bans', overview && overview.bans >= 0 ? overview.bans : (overview?.byAction?.ban ?? '—'))}
+        {overview?.unknown.timeouts
+          ? stat('Active timeouts', '—', true)
+          : stat('Active timeouts', overview?.activeTimeouts ?? '—')}
+        {overview?.unknown.bans
+          ? stat('Bans', '—', true)
+          : stat('Bans', overview?.bans ?? '—')}
         {stat('Actions today', overview?.today ?? '—')}
         {stat('Actions this week', overview?.week ?? '—')}
         {stat('Open cases', overview?.openCases ?? '—')}
@@ -297,17 +441,16 @@ export default function ModerationPage() {
       {/* Member lookup + actions */}
       <div className="cc-section-label" style={{ marginBottom: 10 }}>Actions</div>
       <div className="cc-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
-        <ResourceStatusBar loading={resLoading} error={resError} onRefresh={resRefresh} />
+        <ResourceStatusBar loading={resLoading} error={resError} code={resCode} retryable={resRetryable} onRefresh={resRefresh} />
         <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>
           👮 Member lookup — pick a member, no IDs needed
         </label>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div style={{ flex: 1, minWidth: 220 }}>
-            <DiscordMemberSelect
-              members={resources?.members ?? []}
+            <MemberFinder
+              guildId={selected.id}
               value={userId}
               onChange={(id) => { setUserId(id); if (id) void lookupFor(id); }}
-              loading={resLoading}
               disabled={busy}
             />
           </div>

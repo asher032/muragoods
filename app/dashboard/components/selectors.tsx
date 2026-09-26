@@ -107,22 +107,46 @@ function roleColorStyle(color: number): { background: string } {
 }
 
 // ── Data hook ──────────────────────────────────────────────────────────────
+// Guild-scoped bulk load for every selector on the page. Race-safe:
+//   - an AbortController cancels the in-flight request on guild switch /
+//     unmount / manual refresh, so Server A's response can never overwrite
+//     Server B (stale-response guard via monotonically increasing request id)
+//   - state is cleared synchronously on guild change before the new load
+// Errors carry the backend `code` so the UI maps each failure to its real
+// message (permission vs Discord outage vs bot offline) instead of one
+// generic "no permission" banner.
 export function useGuildResources(guildId: string | null) {
   const [resources, setResources] = useState<GuildResources | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [code, setCode] = useState('');
+  const [retryable, setRetryable] = useState(false);
+  const requestId = useRef(0);
+  const controllerRef = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
     if (!guildId) return;
+    const id = ++requestId.current;
+    controllerRef.current?.abort();
+    const controller = new AbortController();
+    controllerRef.current = controller;
     setLoading(true);
     setError('');
+    setCode('');
+    setRetryable(false);
     try {
-      const resp = await fetch(`/api/dashboard/resources?guildId=${encodeURIComponent(guildId)}`, { cache: 'no-store' });
+      const resp = await fetch(`/api/dashboard/resources?guildId=${encodeURIComponent(guildId)}`, {
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      if (id !== requestId.current) return; // stale: a newer load superseded us
       const data = (await resp.json().catch(() => null)) as
-        | (Partial<GuildResources> & { success?: boolean; error?: string })
+        | (Partial<GuildResources> & { success?: boolean; error?: string; code?: string; retryable?: boolean })
         | null;
       if (!resp.ok || !data?.success) {
         setError(data?.error || `Couldn't load server data (HTTP ${resp.status}).`);
+        setCode(typeof data?.code === 'string' ? data.code : '');
+        setRetryable(Boolean(data?.retryable) || resp.status === 429 || resp.status >= 500);
         return;
       }
       setResources({
@@ -132,19 +156,29 @@ export function useGuildResources(guildId: string | null) {
         members: data.members ?? [],
         bot: data.bot ?? null,
       });
-    } catch {
+    } catch (err) {
+      if (id !== requestId.current) return;
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       setError("Couldn't reach the server. Check your connection and retry.");
+      setCode('NETWORK_ERROR');
+      setRetryable(true);
     } finally {
-      setLoading(false);
+      if (id === requestId.current) setLoading(false);
     }
   }, [guildId]);
 
   useEffect(() => {
     setResources(null);
+    setError('');
+    setCode('');
+    setRetryable(false);
+    requestId.current += 1; // invalidate any in-flight load for the old guild
+    controllerRef.current?.abort();
     void load();
+    return () => { controllerRef.current?.abort(); };
   }, [load]);
 
-  return { resources, loading, error, refresh: load };
+  return { resources, loading, error, code, retryable, refresh: load };
 }
 
 export function channelName(channels: GuildChannel[], id: string): string | null {
@@ -157,6 +191,79 @@ export function roleName(roles: GuildRole[], id: string): string | null {
 
 export function memberName(members: GuildMember[], id: string): string | null {
   return members.find((m) => m.id === id)?.name ?? null;
+}
+
+export interface SearchedMember {
+  id: string;
+  username: string;
+  displayName: string;
+  avatar: string | null;
+  bot: boolean;
+}
+
+// ── Backend member search ────────────────────────────────────────────────
+// Guild-scoped, debounced internally (300ms), bounded server-side.
+// AbortController + request id: a guild switch or a newer keystroke cancels
+// the stale request so old results never overwrite the new server's list.
+// Query identity is (guildId, query) — never shared across guilds.
+export function useGuildMemberSearch(guildId: string | null, query: string, limit = 25) {
+  const [results, setResults] = useState<SearchedMember[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [searchCode, setSearchCode] = useState('');
+  const requestId = useRef(0);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (!guildId || q.length < 2) {
+      requestId.current += 1;
+      setResults([]);
+      setSearching(false);
+      setSearchError('');
+      setSearchCode('');
+      return;
+    }
+    const id = ++requestId.current;
+    const controller = new AbortController();
+    setSearching(true);
+    setSearchError('');
+    setSearchCode('');
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const resp = await fetch(
+            `/api/discord/guilds/${encodeURIComponent(guildId)}/members?search=${encodeURIComponent(q)}&limit=${limit}`,
+            { cache: 'no-store', signal: controller.signal },
+          );
+          if (id !== requestId.current) return;
+          const data = (await resp.json().catch(() => null)) as {
+            success?: boolean; members?: SearchedMember[]; error?: string; code?: string;
+          } | null;
+          if (!resp.ok || !data?.success) {
+            setResults([]);
+            setSearchError(data?.error || `Member search failed (HTTP ${resp.status}).`);
+            setSearchCode(typeof data?.code === 'string' ? data.code : '');
+          } else {
+            setResults(Array.isArray(data.members) ? data.members : []);
+          }
+        } catch (err) {
+          if (id !== requestId.current) return;
+          if (err instanceof DOMException && err.name === 'AbortError') return;
+          setResults([]);
+          setSearchError("Couldn't reach member search. Retry.");
+          setSearchCode('NETWORK_ERROR');
+        } finally {
+          if (id === requestId.current) setSearching(false);
+        }
+      })();
+    }, 300);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [guildId, query, limit]);
+
+  return { results, searching, searchError, searchCode };
 }
 
 // ── Shared dropdown shell ──────────────────────────────────────────────────
@@ -686,29 +793,83 @@ export function DiscordPermissionStatus({
 }
 
 // ── Friendly error + refresh bar ───────────────────────────────────────────
+// The headline ALWAYS matches the backend `code` — a Discord outage, an
+// offline bot, a database failure and a genuine permission gap each get
+// their own message. Nothing here ever claims "no permission" unless the
+// backend actually returned NOT_GUILD_MEMBER / INSUFFICIENT_GUILD_PERMISSION.
+export function statusMessage(code: string, detail: string): { title: string; hint: string } {
+  switch (code) {
+    case 'AUTH_REQUIRED':
+      return {
+        title: 'Your Discord sign-in expired.',
+        hint: detail || 'Sign in with Discord again, then retry.',
+      };
+    case 'NOT_GUILD_MEMBER':
+      return {
+        title: "You're not a member of this server.",
+        hint: detail || 'Join the server in Discord, then refresh the server list.',
+      };
+    case 'INSUFFICIENT_GUILD_PERMISSION':
+      return {
+        title: "You don't have permission to manage this server.",
+        hint: detail || 'Ask a server admin for Manage Server permission.',
+      };
+    case 'BOT_NOT_INSTALLED':
+      return {
+        title: 'MuraBot is not installed on this server.',
+        hint: detail || 'Invite the bot first — pick the server in the top bar.',
+      };
+    case 'BOT_OFFLINE':
+      return {
+        title: 'Muragoods is currently offline.',
+        hint: detail || 'Your server configuration can still be viewed, but live bot actions may be unavailable. Retry in a moment.',
+      };
+    case 'DISCORD_API_ERROR':
+    case 'MEMBER_FETCH_FAILED':
+    case 'ROLE_FETCH_FAILED':
+    case 'CHANNEL_FETCH_FAILED':
+      return {
+        title: "Discord server data couldn't be loaded.",
+        hint: detail || 'Discord is temporarily unavailable. Try again.',
+      };
+    case 'MODERATION_DATA_FAILED':
+    case 'DATABASE_ERROR':
+      return {
+        title: "Moderation data couldn't be loaded.",
+        hint: detail || 'The Discord server is available, but the moderation database could not be reached.',
+      };
+    default:
+      return {
+        title: "Couldn't load server data.",
+        hint: detail || 'Retry — if this persists, check the diagnostics endpoint output.',
+      };
+  }
+}
+
 export function ResourceStatusBar({
-  loading, error, onRefresh, lastLabel,
+  loading, error, onRefresh, lastLabel, code = '', retryable = true,
 }: {
   loading: boolean;
   error: string;
   onRefresh: () => void;
   lastLabel?: string;
+  code?: string;
+  retryable?: boolean;
 }) {
   if (loading) {
     return <p style={{ margin: '0 0 10px', fontSize: 12.5, color: 'var(--cc-text-faint)' }}>Loading server data…</p>;
   }
   if (error) {
+    const mapped = statusMessage(code, error);
     return (
       <div className="cc-alert cc-alert-error" role="alert" style={{ marginBottom: 12, fontSize: 12.5 }}>
-        <strong>⚠️ Couldn&apos;t load server data.</strong>
-        <div style={{ marginTop: 4 }}>{error}</div>
-        <div style={{ marginTop: 4, color: 'var(--cc-text-dim)' }}>
-          Possible reasons: the bot is offline, the Discord connection was interrupted,
-          or the bot doesn&apos;t have the required permissions.
-        </div>
-        <button className="cc-btn" style={{ marginTop: 8, fontSize: 12 }} onClick={onRefresh}>
-          <RefreshCw size={13} /> Retry
-        </button>
+        <strong>⚠️ {mapped.title}</strong>
+        <div style={{ marginTop: 4 }}>{mapped.hint}</div>
+        {retryable && (
+          <button className="cc-btn" style={{ marginTop: 8, fontSize: 12 }} onClick={onRefresh}>
+            <RefreshCw size={13} /> Retry
+          </button>
+        )}
       </div>
     );
   }
