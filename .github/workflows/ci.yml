@@ -111,3 +111,10 @@ jobs:
       # 10 s (ValueError: cannot convert float NaN to integer).
       - name: Gateway latency NaN guard
         run: python discord-bot/scripts/test_gateway_latency_nan.py
+
+      # Discord allows max 100 global slash commands; discord.py raises at cog
+      # load once the 101st registers, silently killing a whole cog (we lost
+      # leveling this way). Duplicate names across cogs do the same. Fail here,
+      # in CI, instead of in production.
+      - name: Slash command budget (max 100, no duplicates)
+        run: python discord-bot/scripts/test_slash_command_budget.py
