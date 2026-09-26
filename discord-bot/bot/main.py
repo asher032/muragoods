@@ -1554,7 +1554,7 @@ async def _health_server() -> None:
                 if r := hierarchy_blocked():
                     return r
                 count = await db.add_warning(guild_id, target_id, 0, reason)
-                case_id = await db.add_case(guild_id, target_id, 0, "warn", reason)
+                case_id = await db.add_case(guild_id, target_id, 0, "warn", reason, source="dashboard")
                 if member:
                     try:
                         await member.send(embed=discord.Embed(
@@ -1569,7 +1569,8 @@ async def _health_server() -> None:
                     return web.json_response({"ok": False, "error": "I lack Moderate Members permission"}, status=403)
                 await member.timeout(discord.utils.utcnow() + timedelta(minutes=minutes),
                                      reason=f"Dashboard: {reason[:150]}")
-                case_id = await db.add_case(guild_id, target_id, 0, "timeout", reason, f"{minutes}m")
+                case_id = await db.add_case(guild_id, target_id, 0, "timeout", reason, f"{minutes}m",
+                                              source="dashboard")
                 await db.log_action(guild_id, 0, target_id, "timeout", f"{reason[:200]} (dashboard: {actor_label})")
                 return web.json_response({"ok": True, "caseId": case_id})
             if action == "kick":
@@ -1578,7 +1579,7 @@ async def _health_server() -> None:
                 if not me.guild_permissions.kick_members:
                     return web.json_response({"ok": False, "error": "I lack Kick Members permission"}, status=403)
                 await member.kick(reason=f"Dashboard ({actor_label}): {reason[:150]}")
-                case_id = await db.add_case(guild_id, target_id, 0, "kick", reason)
+                case_id = await db.add_case(guild_id, target_id, 0, "kick", reason, source="dashboard")
                 await db.log_action(guild_id, 0, target_id, "kick", f"{reason[:200]} (dashboard: {actor_label})")
                 return web.json_response({"ok": True, "caseId": case_id})
             if action == "ban":
@@ -1586,9 +1587,15 @@ async def _health_server() -> None:
                     return r
                 if not me.guild_permissions.ban_members:
                     return web.json_response({"ok": False, "error": "I lack Ban Members permission"}, status=403)
+                try:
+                    delete_days = max(0, min(int(body.get("deleteMessageDays") or 0), 7))
+                except (TypeError, ValueError):
+                    delete_days = 0
                 await guild.ban(discord.Object(id=target_id), reason=f"Dashboard ({actor_label}): {reason[:150]}",
-                                delete_message_days=0)
-                case_id = await db.add_case(guild_id, target_id, 0, "ban", reason)
+                                delete_message_days=delete_days)
+                case_id = await db.add_case(guild_id, target_id, 0, "ban", reason,
+                                            f"delete {delete_days}d" if delete_days else "",
+                                            source="dashboard")
                 await db.log_action(guild_id, 0, target_id, "ban", f"{reason[:200]} (dashboard: {actor_label})")
                 return web.json_response({"ok": True, "caseId": case_id})
             if action == "unban":
@@ -1599,13 +1606,222 @@ async def _health_server() -> None:
                 except discord.NotFound:
                     return web.json_response({"ok": False, "error": "User is not banned"}, status=404)
                 await guild.unban(banned.user, reason=f"Dashboard ({actor_label})")
-                case_id = await db.add_case(guild_id, target_id, 0, "unban", reason)
+                case_id = await db.add_case(guild_id, target_id, 0, "unban", reason, source="dashboard")
                 return web.json_response({"ok": True, "caseId": case_id})
             return web.json_response({"ok": False, "error": f"Unknown action: {action}"}, status=400)
         except discord.Forbidden:
             return web.json_response({"ok": False, "error": "Discord rejected the action (Forbidden)"}, status=403)
         except discord.HTTPException as exc:
             return web.json_response({"ok": False, "error": f"Discord API error {exc.status}"}, status=502)
+
+    async def mod_cases(request: web.Request) -> web.Response:
+        """Dashboard case management, backed by the SAME bot case store the
+        slash commands write — never a parallel history."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        import database as db
+        if request.method == "GET":
+            q = request.rel_url.query
+            try:
+                cases = await db.guild_cases(
+                    guild_id,
+                    action=(q.get("action") or "")[:20],
+                    source=(q.get("source") or "")[:20],
+                    status=(q.get("status") or "")[:20],
+                    search=(q.get("search") or "")[:25],
+                    limit=max(1, min(int(q.get("limit") or 100), 200)),
+                    before=int(q.get("before") or 0))
+            except ValueError:
+                return web.json_response({"ok": False, "error": "Invalid query"}, status=400)
+            return web.json_response({"ok": True, "cases": [_json_case(c) for c in cases]})
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+        target_id = int(body.get("targetId") or 0)
+        action = str(body.get("action") or "note")[:30]
+        reason = str(body.get("reason") or "")[:500]
+        if not target_id:
+            return web.json_response({"ok": False, "error": "Valid targetId required"}, status=400)
+        case_id = await db.add_case(guild_id, target_id, 0, action, reason,
+                                    str(body.get("duration") or "")[:30], source="dashboard")
+        return web.json_response({"ok": True, "caseId": case_id})
+
+    def _json_case(c: dict) -> dict:
+        def iso(v):
+            return v.isoformat() if hasattr(v, "isoformat") else str(v) if v is not None else None
+        return {
+            "caseId": c.get("caseId"), "action": c.get("action"),
+            "targetId": str(c.get("targetId") or ""),
+            "moderatorId": str(c.get("moderatorId") or ""),
+            "reason": c.get("reason") or "", "duration": c.get("duration") or "",
+            "notes": [{"text": n.get("text", ""), "at": iso(n.get("at"))}
+                      for n in (c.get("notes") or [])],
+            "source": c.get("source") or "discord",
+            "status": c.get("status") or "active",
+            "createdAt": iso(c.get("createdAt")), "updatedAt": iso(c.get("updatedAt")),
+        }
+
+    async def mod_case(request: web.Request) -> web.Response:
+        """Edit one case: append a note, edit the reason, close/reopen."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        case_id = int(request.match_info["case_id"])
+        import database as db
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+        if not await db.get_case(guild_id, case_id):
+            return web.json_response({"ok": False, "error": "Case not found"}, status=404)
+        note = str(body.get("note") or "")[:300]
+        if note and not await db.add_case_note(guild_id, case_id, note):
+            return web.json_response({"ok": False, "error": "Could not add note"}, status=500)
+        reason = body.get("reason")
+        status = body.get("status")
+        if reason is not None or status is not None:
+            ok = await db.update_case(
+                guild_id, case_id,
+                reason=str(reason)[:500] if reason is not None else None,
+                status=str(status) if status is not None else None)
+            if not ok:
+                return web.json_response({"ok": False, "error": "Invalid update"}, status=400)
+        doc = await db.get_case(guild_id, case_id)
+        return web.json_response({"ok": True, "case": _json_case(doc or {})})
+
+    async def mod_bans(request: web.Request) -> web.Response:
+        """Current ban list for the dashboard unban selector — names, never
+        a manual ID field."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            return web.json_response({"ok": False, "error": "Bot not in that guild"}, status=404)
+        try:
+            bans = [entry async for entry in guild.bans(limit=200)]
+        except discord.Forbidden:
+            return web.json_response({"ok": False, "error": "I lack Ban Members permission"}, status=403)
+        except discord.HTTPException as exc:
+            return web.json_response({"ok": False, "error": f"Discord API error {exc.status}"}, status=502)
+        return web.json_response({"ok": True, "bans": [
+            {"id": str(e.user.id), "username": e.user.name,
+             "displayName": getattr(e.user, "display_name", e.user.name),
+             "avatar": e.user.display_avatar.url if e.user.display_avatar else None,
+             "reason": (e.reason or "")[:200]}
+            for e in bans]})
+
+    async def mod_role(request: web.Request) -> web.Response:
+        """Dashboard role add/remove with full hierarchy enforcement."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        import database as db
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+        action = str(body.get("action") or "")
+        try:
+            target_id = int(body.get("userId") or 0)
+            role_id = int(body.get("roleId") or 0)
+        except (TypeError, ValueError):
+            return web.json_response({"ok": False, "error": "Valid userId and roleId required"}, status=400)
+        if action not in ("add", "remove"):
+            return web.json_response({"ok": False, "error": "action must be add or remove"}, status=400)
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            return web.json_response({"ok": False, "error": "Bot not in that guild"}, status=404)
+        if not guild.me.guild_permissions.manage_roles:
+            return web.json_response({"ok": False, "error": "I lack Manage Roles permission"}, status=403)
+        role = guild.get_role(role_id)
+        if role is None:
+            return web.json_response({"ok": False, "error": "Role not found in this server"}, status=404)
+        if role.id == guild.id:
+            return web.json_response({"ok": False, "error": "The @everyone role can't be managed"}, status=400)
+        if role.managed:
+            return web.json_response({"ok": False, "error": f"@{role.name} is managed by an integration"}, status=400)
+        if role >= guild.me.top_role:
+            return web.json_response({
+                "ok": False,
+                "error": (f"I can't manage @{role.name} — it is at or above my highest role. "
+                          f"Fix: Server Settings → Roles → drag my role higher.")}, status=409)
+        member = guild.get_member(target_id)
+        if member is None:
+            return web.json_response({"ok": False, "error": "Member not found in this server"}, status=404)
+        if member.id == guild.owner_id:
+            return web.json_response({"ok": False, "error": "I can't change the server owner's roles"}, status=400)
+        if member.id == guild.me.id:
+            return web.json_response({"ok": False, "error": "I can't change my own roles this way"}, status=400)
+        try:
+            if action == "add":
+                await member.add_roles(role, reason="Dashboard role tool")
+            else:
+                await member.remove_roles(role, reason="Dashboard role tool")
+        except discord.Forbidden:
+            return web.json_response({"ok": False, "error": "Discord rejected the role change"}, status=403)
+        except discord.HTTPException as exc:
+            return web.json_response({"ok": False, "error": f"Discord API error {exc.status}"}, status=502)
+        case_id = await db.add_case(guild_id, target_id, 0, f"role_{action}",
+                                    f"{role.name} ({role.id})", source="dashboard")
+        return web.json_response({"ok": True, "caseId": case_id})
+
+    async def mod_overview(request: web.Request) -> web.Response:
+        """Moderation overview stats + live Discord counts for one guild."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        import database as db
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            return web.json_response({"ok": False, "error": "Bot not in that guild"}, status=404)
+        stats = await db.guild_mod_stats(guild_id)
+        bans = 0
+        timeouts = 0
+        try:
+            bans = len([entry async for entry in guild.bans(limit=200)])
+        except (discord.Forbidden, discord.HTTPException):
+            bans = -1  # unknown: no permission to list bans
+        try:
+            async for member in guild.fetch_members(limit=1000):
+                try:
+                    if member.is_timed_out():
+                        timeouts += 1
+                except Exception:
+                    pass
+        except (discord.Forbidden, discord.HTTPException):
+            timeouts = -1
+        stats["bans"] = bans
+        stats["activeTimeouts"] = timeouts
+        stats["members"] = guild.member_count
+        return web.json_response({"ok": True, "stats": stats})
+
+    async def mod_warnings(request: web.Request) -> web.Response:
+        """Remove one warning (DELETE) for dashboard warnings management."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        user_id = int(request.match_info["user_id"])
+        import database as db
+        if request.method == "DELETE":
+            try:
+                body = await request.json()
+            except Exception:
+                body = {}
+            try:
+                index = int((body or {}).get("index") or 0)
+            except (TypeError, ValueError):
+                return web.json_response({"ok": False, "error": "Valid warning index required"}, status=400)
+            ok = await db.remove_warning(guild_id, user_id, index)
+            if not ok:
+                return web.json_response({"ok": False, "error": "Warning not found"}, status=404)
+            return web.json_response({"ok": True, "removed": index})
+        if request.method == "POST":
+            ok = await db.clear_warnings(guild_id, user_id)
+            return web.json_response({"ok": True, "cleared": ok})
+        return web.json_response({"ok": False, "error": "Method not allowed"}, status=405)
 
     async def prefix_refresh(request: web.Request) -> web.Response:
         """Dashboard tells us a guild's prefix changed — store the pushed
@@ -1876,6 +2092,14 @@ async def _health_server() -> None:
     app.router.add_post("/music/config/{guild_id:\\d+}", music_config_push)
     app.router.add_get("/mod/member/{guild_id:\\d+}/{user_id:\\d+}", member_lookup)
     app.router.add_post("/mod/action/{guild_id:\\d+}", mod_action)
+    app.router.add_get("/mod/cases/{guild_id:\\d+}", mod_cases)
+    app.router.add_post("/mod/cases/{guild_id:\\d+}", mod_cases)
+    app.router.add_post("/mod/case/{guild_id:\\d+}/{case_id:\\d+}", mod_case)
+    app.router.add_get("/mod/bans/{guild_id:\\d+}", mod_bans)
+    app.router.add_post("/mod/role/{guild_id:\\d+}", mod_role)
+    app.router.add_get("/mod/overview/{guild_id:\\d+}", mod_overview)
+    app.router.add_delete("/mod/warnings/{guild_id:\\d+}/{user_id:\\d+}", mod_warnings)
+    app.router.add_post("/mod/warnings/{guild_id:\\d+}/{user_id:\\d+}", mod_warnings)
     app.router.add_post("/self-test/gateway-drop", gateway_drop)
     port = int(os.environ.get("PORT") or 8080) or 8080  # PORT=0 → default
     runner = web.AppRunner(app)

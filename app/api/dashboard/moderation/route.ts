@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const token = (await sessionToken());
   if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
-  let body: { guildId?: string; userId?: string; action?: string; reason?: string; minutes?: number };
+  let body: { guildId?: string; userId?: string; action?: string; reason?: string; minutes?: number; deleteMessageDays?: number };
   try { body = await req.json(); } catch {
     return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 });
   }
@@ -106,7 +106,9 @@ export async function POST(req: NextRequest) {
       headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action, userId, reason: body.reason || 'Dashboard action',
-        minutes: body.minutes, actor,
+        minutes: body.minutes,
+        deleteMessageDays: Math.max(0, Math.min(7, Number(body.deleteMessageDays) || 0)),
+        actor,
       }),
       signal: controller.signal,
     });

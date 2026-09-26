@@ -239,6 +239,8 @@ async def _ensure_indexes() -> list[str]:
         ("media_requests.guildId_votes", ""),
         ("command_cooldowns.expiresAt", "ttl"),
         ("cases.guildId_caseId", ""),
+        ("cases.guildId_createdAt", ""),
+        ("cases.guildId_targetId", ""),
         ("giveaways.guildId_endsAt", ""),
         ("suggestions.guildId_createdAt", ""),
         ("reminders.dueAt", ""),
@@ -260,6 +262,8 @@ async def _ensure_indexes() -> list[str]:
         "media_requests.guildId_votes": [("guildId", DESCENDING), ("votes", DESCENDING)],
         "command_cooldowns.expiresAt": [("expiresAt", ASCENDING)],
         "cases.guildId_caseId": [("guildId", DESCENDING), ("caseId", DESCENDING)],
+        "cases.guildId_createdAt": [("guildId", DESCENDING), ("createdAt", DESCENDING)],
+        "cases.guildId_targetId": [("guildId", DESCENDING), ("targetId", DESCENDING)],
         "giveaways.guildId_endsAt": [("guildId", DESCENDING), ("endsAt", ASCENDING)],
         "suggestions.guildId_createdAt": [("guildId", DESCENDING), ("createdAt", DESCENDING)],
         "reminders.dueAt": [("dueAt", ASCENDING)],
@@ -488,12 +492,21 @@ async def next_case_id(guild_id: int) -> int:
 
 
 async def add_case(guild_id: int, target_id: int, moderator_id: int,
-                   action: str, reason: str, duration: str = "") -> int:
+                   action: str, reason: str, duration: str = "",
+                   source: str = "discord") -> int:
+    """Record a moderation case. `source` is one of discord|dashboard|automod|
+    system — callers must say where the action originated so the dashboard
+    and bot never show disconnected histories for the same guild."""
+    if source not in ("discord", "dashboard", "automod", "system"):
+        source = "discord"
     case_id = await next_case_id(guild_id)
+    # IDs stored as strings: Mongo $regex (used by dashboard search) only
+    # matches string fields, so int IDs would silently break case search.
     await _db.cases.insert_one({
-        "guildId": _gid(guild_id), "caseId": case_id, "targetId": target_id,
-        "moderatorId": moderator_id, "action": action, "reason": reason[:500],
-        "duration": duration, "notes": [], "createdAt": _now(),
+        "guildId": _gid(guild_id), "caseId": case_id, "targetId": str(target_id),
+        "moderatorId": str(moderator_id), "action": action, "reason": reason[:500],
+        "duration": duration, "notes": [], "source": source, "status": "active",
+        "createdAt": _now(), "updatedAt": _now(),
     })
     return case_id
 
@@ -503,15 +516,107 @@ async def get_case(guild_id: int, case_id: int) -> dict | None:
 
 
 async def user_cases(guild_id: int, target_id: int, limit: int = 10) -> list[dict]:
-    return await _db.cases.find({"guildId": _gid(guild_id), "targetId": target_id}) \
+    return await _db.cases.find({"guildId": _gid(guild_id), "targetId": str(target_id)}) \
         .sort("caseId", DESCENDING).to_list(limit)
 
 
 async def add_case_note(guild_id: int, case_id: int, note: str) -> bool:
     res = await _db.cases.update_one(
         {"guildId": _gid(guild_id), "caseId": case_id},
-        {"$push": {"notes": {"text": note[:300], "at": _now()}}})
+        {"$push": {"notes": {"text": note[:300], "at": _now()}},
+         "$set": {"updatedAt": _now()}})
     return res.modified_count > 0
+
+
+async def update_case(guild_id: int, case_id: int, *,
+                      reason: str | None = None,
+                      status: str | None = None) -> bool:
+    """Edit a case's reason or open/close it. Every change bumps updatedAt;
+    the original record is never rewritten silently — notes carry history."""
+    update: dict = {"updatedAt": _now()}
+    if reason is not None:
+        update["reason"] = reason[:500]
+    if status is not None:
+        if status not in ("active", "closed"):
+            return False
+        update["status"] = status
+    res = await _db.cases.update_one(
+        {"guildId": _gid(guild_id), "caseId": case_id}, {"$set": update})
+    return res.modified_count > 0
+
+
+async def remove_warning(guild_id: int, user_id: int, index: int) -> bool:
+    """Remove a single warning by 1-based position. Returns False when the
+    position does not exist."""
+    if index < 1:
+        return False
+    doc = await _db.warnings.find_one({"guildId": _gid(guild_id), "userId": user_id})
+    if not doc or not doc.get("entries"):
+        return False
+    entries = doc["entries"]
+    if index > len(entries):
+        return False
+    removed = entries.pop(index - 1)
+    await _db.warnings.update_one(
+        {"guildId": _gid(guild_id), "userId": user_id},
+        {"$set": {"entries": entries}})
+    return removed is not None
+
+
+async def guild_cases(guild_id: int, *, action: str = "", source: str = "",
+                      status: str = "", search: str = "", limit: int = 100,
+                      before: int = 0) -> list[dict]:
+    """Guild-scoped case list for the dashboard. Filters are exact matches;
+    search matches target/moderator IDs as substrings. Always scoped by
+    guildId first — cross-guild reads are impossible by construction."""
+    query: dict = {"guildId": _gid(guild_id)}
+    if action:
+        query["action"] = action
+    if source:
+        query["source"] = source
+    if status:
+        query["status"] = status
+    if before > 0:
+        query["caseId"] = {"$lt": before}
+    if search:
+        s = str(search)[:25]
+        ors: list[dict] = [{"targetId": {"$regex": s}},
+                           {"moderatorId": {"$regex": s}}]
+        # Older cases stored int IDs (regex never matches ints) — also try
+        # numeric equality so history written before the string normalization
+        # stays searchable.
+        if s.isdigit():
+            ors.extend([{"targetId": int(s)}, {"moderatorId": int(s)}])
+        query["$or"] = ors
+    return await _db.cases.find(query).sort("caseId", DESCENDING).to_list(limit)
+
+
+async def guild_mod_stats(guild_id: int) -> dict:
+    """Counts for the moderation overview: totals by action, today/week
+    windows, open cases, warning entries. Single collection, guild-scoped."""
+    gid = _gid(guild_id)
+    now = _now()
+    day_ago = now - timedelta(hours=24)
+    week_ago = now - timedelta(days=7)
+    by_action = {}
+    async for row in _db.cases.aggregate([
+        {"$match": {"guildId": gid}},
+        {"$group": {"_id": "$action", "count": {"$sum": 1}}},
+    ]):
+        by_action[str(row["_id"])] = int(row["count"])
+    today = await _db.cases.count_documents({"guildId": gid, "createdAt": {"$gte": day_ago}})
+    week = await _db.cases.count_documents({"guildId": gid, "createdAt": {"$gte": week_ago}})
+    open_cases = await _db.cases.count_documents({"guildId": gid, "status": "active"})
+    warn_docs = await _db.warnings.find({"guildId": gid}, {"entries": 1}).to_list(5000)
+    warnings = sum(len(d.get("entries") or []) for d in warn_docs)
+    return {
+        "byAction": by_action,
+        "today": today,
+        "week": week,
+        "openCases": open_cases,
+        "warnings": warnings,
+        "total": sum(by_action.values()),
+    }
 
 
 # ── Reputation / achievements ────────────────────────────────────────

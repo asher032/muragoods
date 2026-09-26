@@ -95,13 +95,96 @@ class ModerationCog(commands.Cog):
         return case_id
 
     async def _dm_target(self, user, guild: discord.Guild, action: str, reason: str) -> None:
-        """Best-effort DM notification. Closed DMs must never fail the action."""
+        """Best-effort DM notification. Closed DMs must never fail the action.
+        Per-guild DM toggles (moderation.dmNotifications) decide which actions
+        notify; unset means notify."""
+        try:
+            cfg = await database.get_guild_config(guild.id)
+            dm_cfg = ((cfg.get("moderation") or {}).get("dmNotifications")) or {}
+            key = {"warning": "warn", "timeout": "timeout", "kick": "kick", "ban": "ban"}.get(action, action)
+            if dm_cfg.get(key, True) is False:
+                return
+        except Exception:
+            pass
         try:
             await user.send(embed=utils.base_embed(
                 f"✉️ You received a {action} in {guild.name}",
                 f"Reason: {reason[:300]}\nIf you believe this is a mistake, contact the staff."))
         except (discord.Forbidden, discord.HTTPException):
             pass
+
+    @staticmethod
+    def _warn_thresholds(cfg: dict) -> list[dict]:
+        """Per-guild warning escalation ladder. Each entry: {count, action,
+        durationMinutes}. Defaults preserve the historical 3 → 60m timeout."""
+        raw = ((cfg.get("moderation") or {}).get("warnThresholds")) or []
+        cleaned: list[dict] = []
+        for entry in raw:
+            if not isinstance(entry, dict):
+                continue
+            try:
+                count = int(entry.get("count", 0))
+            except (TypeError, ValueError):
+                continue
+            action = str(entry.get("action") or "timeout").lower()
+            if count < 1 or action not in ("timeout", "kick", "ban"):
+                continue
+            try:
+                duration = max(1, min(int(entry.get("durationMinutes", 60)), 40320))
+            except (TypeError, ValueError):
+                duration = 60
+            cleaned.append({"count": count, "action": action, "durationMinutes": duration})
+        cleaned.sort(key=lambda e: e["count"])
+        return cleaned or [{"count": 3, "action": "timeout", "durationMinutes": 60}]
+
+    async def _apply_warn_thresholds(self, interaction: discord.Interaction,
+                                     user: discord.Member, count: int) -> None:
+        """Run every newly-reached escalation step. Hierarchy re-checked per
+        step; a blocked step aborts louder steps without failing the warn."""
+        cfg = await database.get_guild_config(interaction.guild.id)
+        bot_top = interaction.guild.me.top_role
+        for step in self._warn_thresholds(cfg):
+            if step["count"] != count:
+                continue
+            if user.top_role >= bot_top:
+                await interaction.followup.send(
+                    embed=utils.base_embed("⚠️ Escalation blocked",
+                                           f"{user.mention} reached {count} warnings, but their role "
+                                           f"is at or above mine — move my role higher to enforce it."))
+                return
+            try:
+                if step["action"] == "timeout":
+                    await user.timeout(
+                        discord.utils.utcnow() + timedelta(minutes=step["durationMinutes"]),
+                        reason=f"{count} warnings (guild escalation policy)")
+                    await database.add_case(
+                        interaction.guild.id, user.id, interaction.user.id, "timeout",
+                        f"Escalation: {count} warnings", f"{step['durationMinutes']}m", source="system")
+                    await interaction.followup.send(
+                        embed=utils.base_embed("🛡️ Escalation",
+                                               f"{user.mention} reached {count} warnings — timed out "
+                                               f"for {step['durationMinutes']} minutes."))
+                elif step["action"] == "kick":
+                    await user.kick(reason=f"{count} warnings (guild escalation policy)")
+                    await database.add_case(
+                        interaction.guild.id, user.id, interaction.user.id, "kick",
+                        f"Escalation: {count} warnings", source="system")
+                    await interaction.followup.send(
+                        embed=utils.base_embed("🛡️ Escalation",
+                                               f"{user.mention} reached {count} warnings — kicked."))
+                elif step["action"] == "ban":
+                    await user.ban(reason=f"{count} warnings (guild escalation policy)",
+                                   delete_message_days=0)
+                    await database.add_case(
+                        interaction.guild.id, user.id, interaction.user.id, "ban",
+                        f"Escalation: {count} warnings", source="system")
+                    await interaction.followup.send(
+                        embed=utils.base_embed("🛡️ Escalation",
+                                               f"{user.mention} reached {count} warnings — banned."))
+            except discord.Forbidden:
+                await interaction.followup.send(
+                    embed=utils.base_embed("⚠️ Escalation failed",
+                                           "I lack permission to carry out the escalation step."))
 
     # ── Warnings ──────────────────────────────────────────────────────
     @app_commands.command(name="warn", description="Warn a member.")
@@ -124,16 +207,7 @@ class ModerationCog(commands.Cog):
         await interaction.response.send_message(
             embed=utils.base_embed("⚠️ Warning issued",
                                    f"{user.mention} — warning **#{count}**\nReason: {reason}"))
-        if count >= 3:
-            try:
-                await user.timeout(discord.utils.utcnow() + timedelta(minutes=60),
-                                   reason="3 warnings (automod escalation)")
-                await interaction.followup.send(
-                    embed=utils.base_embed("🛡️ Escalation", f"{user.mention} reached 3 warnings — muted for 1 hour."))
-            except discord.Forbidden:
-                await interaction.followup.send(
-                    embed=utils.base_embed("⚠️ Escalation failed",
-                                           "I lack permission to timeout this member."))
+        await self._apply_warn_thresholds(interaction, user, count)
 
     @app_commands.command(name="warnings", description="Show a member's warnings.")
     async def warnings(self, interaction: discord.Interaction, user: discord.Member):
@@ -163,6 +237,162 @@ class ModerationCog(commands.Cog):
             embed=utils.base_embed("🧹 Warnings cleared" if ok else "ℹ️ Nothing to clear",
                                    f"{user.mention}'s record is now clean." if ok else f"{user.mention} had no warnings."))
 
+    @app_commands.command(name="removewarning", description="Remove one warning by its number.")
+    @app_commands.describe(user="Member", index="Warning number (see /warnings)")
+    async def removewarning(self, interaction: discord.Interaction, user: discord.Member, index: int):
+        if not self._is_mod(interaction):
+            await interaction.response.send_message("Moderators only.", ephemeral=True)
+            return
+        if isinstance(user, str) or not hasattr(user, "id"):
+            await interaction.response.send_message(
+                "That user couldn't be resolved — try the mention autocomplete.", ephemeral=True)
+            return
+        ok = await database.remove_warning(interaction.guild.id, user.id, index)
+        await interaction.response.send_message(
+            embed=utils.base_embed("🧹 Warning removed" if ok else "ℹ️ Nothing removed",
+                                   f"Removed warning **#{index}** from {user.mention}." if ok
+                                   else f"{user.mention} has no warning **#{index}**."))
+
+    async def _case_embed(self, guild_id: int, case_id: int):
+        doc = await database.get_case(guild_id, case_id)
+        if not doc:
+            return None
+        notes = doc.get("notes") or []
+        lines = [
+            f"**Action:** {doc.get('action', '?').upper()}",
+            f"**Target:** <@{doc.get('targetId')}>",
+            f"**Moderator:** <@{doc.get('moderatorId')}>",
+            f"**Reason:** {str(doc.get('reason') or '')[:300]}",
+        ]
+        if doc.get("duration"):
+            lines.append(f"**Duration:** {doc.get('duration')}")
+        lines.append(f"**Source:** {doc.get('source') or 'discord'}")
+        lines.append(f"**Status:** {doc.get('status') or 'active'}")
+        created = doc.get("createdAt")
+        if created:
+            lines.append(f"**Created:** {created if isinstance(created, str) else created.isoformat()}")
+        for n in notes[-5:]:
+            at = n.get("at")
+            lines.append(f"📝 {n.get('text', '')[:200]}"
+                         + (f" — {at if isinstance(at, str) else at.isoformat()}" if at else ""))
+        return utils.base_embed(f"📋 Case #{doc.get('caseId')}", "\n".join(lines))
+
+    @app_commands.command(name="case", description="Show a moderation case by number.")
+    @app_commands.describe(case_id="Case number")
+    async def case_cmd(self, interaction: discord.Interaction, case_id: int):
+        embed = await self._case_embed(interaction.guild.id, case_id)
+        if not embed:
+            await interaction.response.send_message(f"No case **#{case_id}** in this server.", ephemeral=True)
+            return
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(name="cases", description="Show recent moderation cases.")
+    @app_commands.describe(user="Optional: only this member's cases")
+    async def cases_cmd(self, interaction: discord.Interaction, user: discord.Member | None = None):
+        if user is not None and (isinstance(user, str) or not hasattr(user, "id")):
+            await interaction.response.send_message(
+                "That user couldn't be resolved — try the mention autocomplete.", ephemeral=True)
+            return
+        if user is None:
+            docs = await database.guild_cases(interaction.guild.id, limit=10)
+        else:
+            docs = await database.user_cases(interaction.guild.id, user.id, limit=10)
+        if not docs:
+            await interaction.response.send_message("No cases yet.", ephemeral=True)
+            return
+        lines = [f"**#{d.get('caseId')}** {str(d.get('action', '?')).upper()} — <@{d.get('targetId')}>"
+                 for d in docs]
+        await interaction.response.send_message(
+            embed=utils.base_embed("📋 Recent cases", "\n".join(lines)), ephemeral=True)
+
+    # ── Role tools ────────────────────────────────────────────────────
+    @staticmethod
+    def _role_guard(interaction: discord.Interaction, role) -> str | None:
+        """Roles the bot may manage: real role, not @everyone, not managed,
+        strictly below the bot's top role (and below the moderator's, unless
+        they own the server)."""
+        if not isinstance(role, discord.Role):
+            return "That role couldn't be resolved — try the autocomplete."
+        if role.id == interaction.guild.id:
+            return "The @everyone role can't be managed."
+        if role.managed:
+            return f"**@{role.name}** is managed by an integration and can't be assigned manually."
+        me_top = interaction.guild.me.top_role
+        if role >= me_top:
+            return (f"I can't manage **@{role.name}** — it is at or above my highest role "
+                    f"**{me_top.name}**. Fix: Server Settings → Roles → drag my role higher.")
+        if interaction.user.id != interaction.guild.owner_id:
+            mod_top = interaction.user.top_role if isinstance(interaction.user, discord.Member) else None
+            if mod_top is not None and role >= mod_top:
+                return (f"You can't manage **@{role.name}** — it is at or above your highest role.")
+        return None
+
+    @app_commands.command(name="role", description="Add, remove, or inspect a role.")
+    @app_commands.describe(action="add, remove, or info", user="Member (add/remove)",
+                           role="Role to manage or inspect")
+    @app_commands.choices(action=[
+        app_commands.Choice(name="add", value="add"),
+        app_commands.Choice(name="remove", value="remove"),
+        app_commands.Choice(name="info", value="info"),
+    ])
+    async def role_cmd(self, interaction: discord.Interaction,
+                       action: app_commands.Choice[str], role: discord.Role,
+                       user: discord.Member | None = None):
+        if not interaction.user.guild_permissions.manage_roles:
+            await interaction.response.send_message("You need Manage Roles permission.", ephemeral=True)
+            return
+        err = self._role_guard(interaction, role)
+        if err:
+            await interaction.response.send_message(err, ephemeral=True)
+            return
+        if action.value == "info":
+            members = len(role.members)
+            await interaction.response.send_message(embed=utils.base_embed(
+                f"🎭 @{role.name}",
+                f"**Position:** {role.position}\n**Members:** {members}\n"
+                f"**Color:** {role.color}\n**Managed:** {'yes (integration)' if role.managed else 'no'}"),
+                ephemeral=True)
+            return
+        if user is None or isinstance(user, str) or not hasattr(user, "id"):
+            await interaction.response.send_message(
+                "Pick a member for add/remove — try the mention autocomplete.", ephemeral=True)
+            return
+        if user.id == interaction.guild.owner_id:
+            await interaction.response.send_message("You can't change the server owner's roles.", ephemeral=True)
+            return
+        try:
+            if action.value == "add":
+                await user.add_roles(role, reason=f"By {interaction.user}")
+            else:
+                await user.remove_roles(role, reason=f"By {interaction.user}")
+        except discord.Forbidden:
+            await interaction.response.send_message("I lack permission to change that role.", ephemeral=True)
+            return
+        await database.add_case(interaction.guild.id, user.id, interaction.user.id,
+                                f"role_{action.value}",
+                                f"{role.name} ({role.id})", source="discord")
+        await interaction.response.send_message(
+            embed=utils.base_embed("🎭 Role updated",
+                                   f"**@{role.name}** {'added to' if action.value == 'add' else 'removed from'} {user.mention}."))
+
+    async def _unban_choices(self, interaction: discord.Interaction,
+                             current: str) -> list[app_commands.Choice[str]]:
+        """Autocomplete banned users by name — no manual ID entry needed."""
+        try:
+            bans = [entry async for entry in interaction.guild.bans(limit=100)]
+        except (discord.Forbidden, discord.HTTPException):
+            return []
+        q = (current or "").lower()
+        out = []
+        for entry in bans:
+            label = f"{entry.user.display_name} (@{entry.user.name})"
+            if q and q not in label.lower():
+                continue
+            out.append(app_commands.Choice(name=label[:100], value=str(entry.user.id)))
+            if len(out) >= 25:
+                break
+        return out
+
     # ── Kick / ban ────────────────────────────────────────────────────
     @app_commands.command(name="kick", description="Kick a member.")
     async def kick(self, interaction: discord.Interaction, user: discord.Member, reason: str = "No reason given"):
@@ -190,7 +420,15 @@ class ModerationCog(commands.Cog):
         await interaction.response.send_message(embed=utils.base_embed("👢 Kicked", f"{user.mention} — {reason}"))
 
     @app_commands.command(name="ban", description="Ban a member.")
-    async def ban(self, interaction: discord.Interaction, user: discord.Member, reason: str = "No reason given"):
+    @app_commands.describe(user="Member to ban", reason="Why?",
+                           delete_messages="Delete their recent messages")
+    @app_commands.choices(delete_messages=[
+        app_commands.Choice(name="None", value=0),
+        app_commands.Choice(name="Last 1 day", value=1),
+        app_commands.Choice(name="Last 7 days", value=7),
+    ])
+    async def ban(self, interaction: discord.Interaction, user: discord.Member,
+                  reason: str = "No reason given", delete_messages: int = 0):
         if not interaction.user.guild_permissions.ban_members:
             await interaction.response.send_message("You need Ban Members permission.", ephemeral=True)
             return
@@ -206,15 +444,19 @@ class ModerationCog(commands.Cog):
             await interaction.response.send_message(err, ephemeral=True)
             return
         try:
-            await user.ban(reason=f"By {interaction.user}: {reason[:200]}", delete_message_days=0)
+            await user.ban(reason=f"By {interaction.user}: {reason[:200]}",
+                           delete_message_days=max(0, min(int(delete_messages), 7)))
         except discord.Forbidden:
             await interaction.response.send_message("I lack permission to ban that member.", ephemeral=True)
             return
         await self._case_and_log(interaction, user, "ban", reason)
         await self._dm_target(user, interaction.guild, "ban", reason)
-        await interaction.response.send_message(embed=utils.base_embed("🔨 Banned", f"{user.mention} — {reason}"))
+        suffix = f" (last {delete_messages}d of messages deleted)" if delete_messages else ""
+        await interaction.response.send_message(embed=utils.base_embed("🔨 Banned", f"{user.mention} — {reason}{suffix}"))
 
-    @app_commands.command(name="unban", description="Unban a user by ID.")
+    @app_commands.command(name="unban", description="Unban a user (pick from the ban list).")
+    @app_commands.describe(user_id="Banned user — start typing to search")
+    @app_commands.autocomplete(user_id=_unban_choices)
     async def unban(self, interaction: discord.Interaction, user_id: str):
         if not interaction.user.guild_permissions.ban_members:
             await interaction.response.send_message("You need Ban Members permission.", ephemeral=True)
@@ -643,10 +885,19 @@ class ModerationCog(commands.Cog):
                 from datetime import timedelta as _td
                 await member.timeout(discord.utils.utcnow() + _td(minutes=10),
                                      reason=f"Automod: repeated {violations[0]}")
+                await database.add_case(message.guild.id, member.id, 0, "timeout",
+                                        f"Automod: repeated {violations[0]} (strike {strikes})",
+                                        "10m", source="automod")
             elif member and step == "kick" and strikes >= 4:
                 await member.kick(reason=f"Automod: repeated {violations[0]}")
+                await database.add_case(message.guild.id, member.id, 0, "kick",
+                                        f"Automod: repeated {violations[0]} (strike {strikes})",
+                                        source="automod")
             elif member and step == "ban" and strikes >= 5:
                 await member.ban(reason=f"Automod: repeated {violations[0]}", delete_message_days=0)
+                await database.add_case(message.guild.id, member.id, 0, "ban",
+                                        f"Automod: repeated {violations[0]} (strike {strikes})",
+                                        source="automod")
         except discord.Forbidden:
             pass
         except discord.HTTPException:

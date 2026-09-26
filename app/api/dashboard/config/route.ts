@@ -286,6 +286,19 @@ export async function PATCH(req: NextRequest) {
   }
   if (safe.moderation && typeof safe.moderation === 'object') {
     const m = safe.moderation;
+    const rawThresholds = Array.isArray(m.warnThresholds) ? m.warnThresholds : [];
+    const warnThresholds = rawThresholds.slice(0, 5)
+      .map((t) => {
+        const r = (t && typeof t === 'object' ? t : {}) as Record<string, unknown>;
+        const count = Math.max(1, Math.min(100, Number(r.count) || 0));
+        const action = ['timeout', 'kick', 'ban'].includes(String(r.action)) ? String(r.action) : 'timeout';
+        const durationMinutes = Math.max(1, Math.min(40320, Number(r.durationMinutes) || 60));
+        return count ? { count, action, durationMinutes } : null;
+      })
+      .filter((t): t is { count: number; action: string; durationMinutes: number } => t !== null)
+      .sort((a, b) => a.count - b.count);
+    const dm = (m.dmNotifications && typeof m.dmNotifications === 'object'
+      ? m.dmNotifications : {}) as Record<string, unknown>;
     update.moderation = {
       modRoleId: String(m.modRoleId || '').slice(0, 25),
       logChannelId: String(m.logChannelId || '').slice(0, 25),
@@ -299,6 +312,13 @@ export async function PATCH(req: NextRequest) {
       escalation: Array.isArray(m.escalation)
         ? m.escalation.slice(0, 5).map((s) => String(s).slice(0, 20))
         : ['warn', 'timeout', 'timeout', 'kick', 'ban'],
+      warnThresholds: warnThresholds.length ? warnThresholds : [{ count: 3, action: 'timeout', durationMinutes: 60 }],
+      dmNotifications: {
+        warn: dm.warn !== false,
+        timeout: dm.timeout !== false,
+        kick: dm.kick !== false,
+        ban: dm.ban !== false,
+      },
     };
   }
   if (safe.welcome && typeof safe.welcome === 'object') {
