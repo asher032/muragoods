@@ -390,6 +390,14 @@ export async function PATCH(req: NextRequest) {
     const now = new Date().toISOString();
 
     if (action === 'assign') {
+      // The assignee must actually be on this server — the selector only
+      // offers members, but a forged request must not grant channel access
+      // to an arbitrary user ID.
+      const member = await discordRequest(`/guilds/${guildId}/members/${assigneeId}`, {
+        headers: { Authorization: `Bot ${botToken}` },
+        next: { revalidate: 0 },
+      });
+      if (!member) throw httpError('Staff member is not on this server', 404);
       await putPermissionOverwrite(channelId, assigneeId, 1, STAFF_ALLOW, BigInt(0));
       updated = assignedTicket(ticket, assigneeId);
     } else if (action === 'claim') {
