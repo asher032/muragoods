@@ -825,6 +825,34 @@ async def _health_server() -> None:
             return "gateway_failed"
         return "connecting"
 
+    def _gateway_state(gateway_alive: bool, api_reachable: bool | None) -> str:
+        """Canonical Gateway state for health consumers.
+
+        ONLINE | CONNECTING | RECONNECTING | OFFLINE | TOKEN_INVALID |
+        GATEWAY_ERROR — derived from the same live measurements as
+        _connection_state (heartbeat ACKs, readiness, reconnect tracking),
+        never from the process merely being alive. Kept alongside the legacy
+        lowercase connection_state until all dashboard clients migrate.
+        """
+        if not config.DISCORD_TOKEN or _login_failed:
+            return "TOKEN_INVALID"
+        if bot.is_closed():
+            return "OFFLINE"
+        ready = bool(bot.is_ready())
+        if gateway_alive and ready:
+            return "ONLINE"
+        discord_status = ""
+        try:
+            discord_status = str(http_mod.get_status().get("discord", "") or "")
+        except Exception:
+            discord_status = ""
+        if discord_status == "reconnecting" or (
+                _ever_ready and not gateway_alive and _gateway_reconnects > 0):
+            return "RECONNECTING"
+        if _ever_ready and not gateway_alive:
+            return "GATEWAY_ERROR"
+        return "CONNECTING"
+
     def _bot_user() -> dict:
         """Public bot identity for the dashboard. Never secrets: username,
         avatar CDN URL and application ID are all public Discord data."""
@@ -898,6 +926,8 @@ async def _health_server() -> None:
             # One measured connection state — the dashboard renders this
             # directly instead of inferring health from token presence.
             "connection_state": connection_state,
+            # Canonical enum for newer dashboard clients; legacy key kept.
+            "gateway_state": _gateway_state(gateway_alive, api_reachable),
             "latency": latency_ms,
             "uptime_seconds": round(uptime),
             "last_heartbeat": last_hb,
@@ -1532,6 +1562,30 @@ async def _health_server() -> None:
                             "gateway_heartbeat_age_seconds": hb_age}
         return web.json_response(result, status=200 if result.get("ok") else 503)
 
+    async def music_preflight(request: web.Request) -> web.Response:
+        """Egress preflight for the dashboard: resolve one track on every
+        egress path (direct / proxy / engine) without shell access to the
+        host. Bridge-secret auth; credential-free payload (the shared engine
+        core never emits proxy URLs, cookies or paths). Overall timeout so a
+        wedged extractor cannot hold the request open: TIMEOUT is a reported
+        path state, never a hung connection."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        import music as music_mod
+        query = (request.rel_url.query.get("q") or "").strip()[:200]
+        try:
+            result = await asyncio.wait_for(
+                music_mod.engine.preflight(query or None), timeout=180)
+        except asyncio.TimeoutError:
+            return web.json_response({
+                "ok": False,
+                "track": query or music_mod.MusicEngine.PREFLIGHT_TRACK,
+                "paths": {"direct": {"state": "TIMEOUT", "note": "preflight exceeded 180s"}},
+                "proxy_configured": music_mod.proxy_configured(),
+                "cookies_configured": bool(music_mod.cookies_path()),
+            }, status=503)
+        return web.json_response(result, status=200 if result.get("ok") else 503)
+
     app = web.Application()
     app.router.add_get("/health", health)
     app.router.add_get("/health/music", health_music)
@@ -1540,6 +1594,7 @@ async def _health_server() -> None:
     app.router.add_get("/music/playback-log", music_playback_log)
     app.router.add_post("/music/test-audio", music_test_audio)
     app.router.add_get("/music/test-audio", music_test_audio)
+    app.router.add_get("/music/preflight", music_preflight)
     app.router.add_post("/prefix/refresh", prefix_refresh)
     app.router.add_get("/music/state/{guild_id:\\d+}", music_state)
     app.router.add_post("/music/control/{guild_id:\\d+}", music_control)

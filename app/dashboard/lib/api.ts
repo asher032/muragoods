@@ -170,6 +170,7 @@ export interface BotDetail {
   databaseDetail: { configured: boolean | null; errorClass: string | null; hint: string | null } | null;
   user: { username: string | null; avatarUrl: string | null; applicationId: string | number | null } | null;
   connectionState: string | null;
+  gatewayState?: string | null;
   lastApiCheck: { at: string | null; latencyMs: number | null; reachable: boolean | null } | null;
 }
 

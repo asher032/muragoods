@@ -62,6 +62,7 @@ interface BotDetail {
   databaseDetail: { configured: boolean | null; errorClass: string | null; hint: string | null } | null;
   user: { username: string | null; avatarUrl: string | null; applicationId: string | number | null } | null;
   connectionState: string | null;
+  gatewayState: string | null;
   lastApiCheck: { at: string | null; latencyMs: number | null; reachable: boolean | null } | null;
 }
 
@@ -105,6 +106,7 @@ async function fetchBotDetail(timeoutMs: number): Promise<BotDetail | null> {
           }
         : null,
       connectionState: typeof body.connection_state === 'string' ? body.connection_state : null,
+      gatewayState: typeof body.gateway_state === 'string' ? body.gateway_state : null,
       lastApiCheck: apiCheck
         ? {
             at: typeof apiCheck.at === 'string' ? apiCheck.at : null,

@@ -52,6 +52,15 @@ function formatUptime(seconds: number | null): string {
 }
 
 const CONNECTION_META: Record<string, { label: string; dot: string; hint: string }> = {
+  // Canonical Gateway enum (preferred): measured from heartbeat ACKs,
+  // readiness and reconnect tracking — never from the process being alive.
+  ONLINE: { label: 'Online', dot: '#3ddc84', hint: 'Gateway authenticated, heartbeats ACKed, bot ready.' },
+  CONNECTING: { label: 'Connecting', dot: '#f0b429', hint: 'Socket opening — not yet ready, never previously connected.' },
+  RECONNECTING: { label: 'Reconnecting', dot: '#f0b429', hint: 'Was connected; the gateway dropped and discord.py is re-establishing it.' },
+  OFFLINE: { label: 'Offline', dot: '#ff6b6b', hint: 'Bot process closed or never started its gateway session.' },
+  TOKEN_INVALID: { label: 'Token Invalid', dot: '#ff6b6b', hint: 'Discord rejected the token — check DISCORD_TOKEN on the bot host.' },
+  GATEWAY_ERROR: { label: 'Gateway Error', dot: '#ff6b6b', hint: 'Previously connected, but heartbeats stopped. See last API check below.' },
+  // Legacy lowercase states (older bot payloads) — kept as fallback.
   online_connected: { label: 'Online & Connected', dot: '#3ddc84', hint: 'Gateway authenticated, heartbeats ACKed, Discord API reachable.' },
   connecting: { label: 'Connecting', dot: '#f0b429', hint: 'Socket opening or reconnecting — not yet ready.' },
   offline: { label: 'Offline', dot: '#ff6b6b', hint: 'Bot process closed or never started its gateway session.' },
@@ -60,13 +69,15 @@ const CONNECTION_META: Record<string, { label: string; dot: string; hint: string
   api_unavailable: { label: 'Discord API Unavailable', dot: '#ff6b6b', hint: 'Discord itself is not answering — explains a dead gateway.' },
 };
 
-function BotIdentity({ username, avatarUrl, applicationId, connectionState }: {
+function BotIdentity({ username, avatarUrl, applicationId, connectionState, gatewayState }: {
   username: string | null;
   avatarUrl: string | null;
   applicationId: string | number | null;
   connectionState: string | null;
+  gatewayState?: string | null;
 }) {
-  const meta = (connectionState && CONNECTION_META[connectionState]) || null;
+  const meta = ((gatewayState && CONNECTION_META[gatewayState])
+    || (connectionState && CONNECTION_META[connectionState])) || null;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 12, flexWrap: 'wrap' }}>
       {avatarUrl ? (
@@ -211,6 +222,7 @@ export default function HealthPage() {
             avatarUrl={status.bot.user?.avatarUrl ?? null}
             applicationId={status.bot.user?.applicationId ?? null}
             connectionState={status.bot.connectionState ?? null}
+            gatewayState={status.bot.gatewayState ?? null}
           />
         )}
         {!status ? (
