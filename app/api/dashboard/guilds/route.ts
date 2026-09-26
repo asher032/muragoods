@@ -1,4 +1,5 @@
 import { sessionToken } from '@/app/lib/require-session';
+import { hasManageBits } from '@/app/lib/discord-guilds';
 import { NextRequest, NextResponse } from 'next/server';
 
 // List Discord servers the authenticated user can manage (Manage Server or
@@ -6,9 +7,6 @@ import { NextRequest, NextResponse } from 'next/server';
 // Discord access token from the OAuth session.
 
 export const dynamic = 'force-dynamic';
-
-const MANAGE_GUILD = BigInt(0x20);
-const ADMINISTRATOR = BigInt(0x8);
 
 interface DashGuild {
   id: string;
@@ -20,9 +18,7 @@ interface DashGuild {
 }
 
 function hasManage(owner: boolean, perms: string | number): boolean {
-  if (owner) return true;
-  const p = BigInt(perms);
-  return (p & MANAGE_GUILD) !== BigInt(0) || (p & ADMINISTRATOR) !== BigInt(0);
+  return hasManageBits(owner, perms);
 }
 
 /** Live bot guild set from the bot's own gateway connection. null = unknown. */

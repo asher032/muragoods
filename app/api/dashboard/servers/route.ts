@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/app/lib/require-session';
+import { verifyBotInGuild, botToken, fetchBotMember } from '@/app/lib/discord-bot';
 
 // ── Unified server/guild detection ─────────────────────────────────────────
 // GET /api/dashboard/servers[?refresh=1][?guildId=ID]
@@ -35,12 +36,6 @@ const ADMINISTRATOR = BigInt(0x8);
 
 // Least-privilege install URL for the running bot (no secret inside).
 const BOT_PERMISSIONS = '271698944';
-
-function botToken(): string | null {
-  return process.env.DISCORD_BOT_TOKEN?.trim()
-    || process.env.DISCORD_TOKEN?.trim()
-    || null;
-}
 
 function botBase(): string {
   return process.env.BOT_HEALTH_URL?.replace(/\/health$/, '')
@@ -149,23 +144,24 @@ async function botRestGuildIds(token: string): Promise<Set<string> | null> {
 }
 
 async function verifyGuildWithBot(
-  bToken: string,
   guildId: string,
   gatewayIds: Set<string> | null,
 ): Promise<Partial<DetectedServer>> {
-  // Authoritative check: the bot token resolves ITSELF as a member of this
-  // exact guild. 404/403 → not installed. Anything else → unknown, not false.
-  const member = await fetchJson(
-    `https://discord.com/api/v10/guilds/${guildId}/member/@me`,
-    { Authorization: `Bot ${bToken}` },
-  );
-  if (!member.ok) {
-    if (member.status === 404 || member.status === 403) {
-      return { botInstalled: false, botOnlineInGuild: gatewayIds ? gatewayIds.has(guildId) && false : false, botConnection: 'offline' };
-    }
+  // Authoritative check via the shared tri-state helper: ONLY a real 404
+  // means "not installed". A rejected credential, rate limit, or challenged
+  // network returns 'unknown' — never a false invite loop.
+  const presence = await verifyBotInGuild(guildId);
+  if (presence === 'absent') {
+    return { botInstalled: false, botOnlineInGuild: false, botConnection: 'offline' };
+  }
+  if (presence === 'unknown') {
     return { botInstalled: null, botOnlineInGuild: gatewayIds ? gatewayIds.has(guildId) : null, botConnection: gatewayIds ? (gatewayIds.has(guildId) ? 'online' : 'offline') : 'unknown' };
   }
-  const m = member.data as { permissions?: string | number } | null;
+  // Installed: resolve the bot's own member doc for permissions. A missing
+  // doc here (transient blip right after the 200 above) degrades to nulls,
+  // never to a false verdict — presence is already established.
+  const token = botToken();
+  const m = await fetchBotMember(guildId);
   const perms = m && m.permissions !== undefined ? String(m.permissions) : null;
   let isAdmin: boolean | null = null;
   if (perms !== null) {
@@ -174,10 +170,11 @@ async function verifyGuildWithBot(
 
   // Enrichment: guild object (member counts), channels, roles — all via the
   // bot token so counts reflect what the BOT can actually see.
+  const headers: Record<string, string> = token ? { Authorization: `Bot ${token}` } : {};
   const [guildRes, channelsRes, rolesRes] = await Promise.all([
-    fetchJson(`https://discord.com/api/v10/guilds/${guildId}?with_counts=true`, { Authorization: `Bot ${bToken}` }),
-    fetchJson(`https://discord.com/api/v10/guilds/${guildId}/channels`, { Authorization: `Bot ${bToken}` }),
-    fetchJson(`https://discord.com/api/v10/guilds/${guildId}/roles`, { Authorization: `Bot ${bToken}` }),
+    fetchJson(`https://discord.com/api/v10/guilds/${guildId}?with_counts=true`, headers),
+    fetchJson(`https://discord.com/api/v10/guilds/${guildId}/channels`, headers),
+    fetchJson(`https://discord.com/api/v10/guilds/${guildId}/roles`, headers),
   ]);
 
   let memberCount: number | null = null;
@@ -266,8 +263,11 @@ async function detectServers(accessToken: string): Promise<{
         needsInvite: false,
         missingPermissions: false,
       };
-      if (!bToken) return { ...base, needsInvite: true };
-      const verified = await verifyGuildWithBot(bToken, g.id, gateway.ids);
+      // Without a configured bot token nothing can be verified — report
+      // unknown (never a false "not installed"). needsInvite stays false;
+      // only a real 404 earns it (see merged.needsInvite below).
+      if (!bToken) return { ...base, needsInvite: false };
+      const verified = await verifyGuildWithBot(g.id, gateway.ids);
       const merged: DetectedServer = { ...base, ...verified, id: base.id, name: base.name, icon: base.icon, owner: base.owner };
       // Preserve the OAuth member count when the bot cannot see the guild.
       if (merged.memberCount === null) merged.memberCount = base.memberCount;
