@@ -163,7 +163,13 @@ export default function ErrorsPage() {
             {expanded === e.id && (
               <div style={{ marginTop: 12, borderTop: '1px solid var(--cc-border)', paddingTop: 12 }}>
                 <p style={{ margin: 0, fontSize: 12, color: 'var(--cc-text-dim)' }}>
-                  Guild: {e.guildId || '—'} • Source: {e.source}
+                  Source: {e.source}
+                  {e.guildId && (
+                    <details style={{ marginTop: 4 }}>
+                      <summary style={{ cursor: 'pointer' }}>Developer details</summary>
+                      <span style={{ fontFamily: 'monospace', fontSize: 11.5 }}>Guild ID: {e.guildId}</span>
+                    </details>
+                  )}
                 </p>
                 {e.detail && (
                   <pre style={{

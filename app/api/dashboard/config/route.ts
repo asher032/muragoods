@@ -32,6 +32,95 @@ function bad(message: string, status = 400) {
   return NextResponse.json({ success: false, error: message }, { status });
 }
 
+// ── Server-side resource verification (§22) ──────────────────────────────
+// The dashboard validates selections client-side before saving, but a forged
+// PATCH must not store another guild's (or a nonexistent) channel/role.
+// Every snowflake-valued *Id field is re-verified against the Discord API
+// with the bot token: existence, same-guild belonging, and — for roles —
+// hierarchy (the bot must actually be able to manage the role). Friendly
+// field names in errors; raw IDs never echoed.
+const SNOWFLAKE = /^\d{5,25}$/;
+
+interface BotCheck {
+  channels: Map<string, { guild_id?: string; type?: number; name?: string }>;
+  roles: Map<string, { name: string; managed: boolean; position: number }>;
+  botRoleIds: string[];
+  botIsAdmin: boolean;
+  botTopPosition: number;
+}
+
+async function loadBotCheck(guildId: string, botToken: string): Promise<BotCheck | null> {
+  try {
+    const [channelsRes, rolesRes, memberRes] = await Promise.all([
+      fetch(`https://discord.com/api/v10/guilds/${guildId}/channels`, {
+        headers: { Authorization: `Bot ${botToken}` }, cache: 'no-store',
+      }),
+      fetch(`https://discord.com/api/v10/guilds/${guildId}/roles`, {
+        headers: { Authorization: `Bot ${botToken}` }, cache: 'no-store',
+      }),
+      fetch(`https://discord.com/api/v10/guilds/${guildId}/members/@me`, {
+        headers: { Authorization: `Bot ${botToken}` }, cache: 'no-store',
+      }),
+    ]);
+    if (!channelsRes.ok || !rolesRes.ok || !memberRes.ok) return null;
+    const channels = (await channelsRes.json()) as Array<{ id: string; guild_id?: string; type?: number; name?: string }>;
+    const roles = (await rolesRes.json()) as Array<{ id: string; name: string; managed: boolean; position: number; permissions: string }>;
+    const member = (await memberRes.json()) as { roles: string[] };
+    const roleById = new Map(roles.map((r) => [r.id, r]));
+    const botRoleIds: string[] = Array.isArray(member.roles) ? member.roles : [];
+    let botIsAdmin = false;
+    let botTopPosition = 0;
+    for (const rid of botRoleIds) {
+      const r = roleById.get(rid);
+      if (!r) continue;
+      try {
+        if ((BigInt(r.permissions) & BigInt(0x8)) !== BigInt(0)) botIsAdmin = true;
+      } catch { /* ignore */ }
+      if (r.position > botTopPosition) botTopPosition = r.position;
+    }
+    return {
+      channels: new Map(channels.map((c) => [c.id, c])),
+      roles: new Map(roles.map((r) => [r.id, r])),
+      botRoleIds,
+      botIsAdmin,
+      botTopPosition,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function memberInGuild(guildId: string, userId: string, botToken: string): Promise<boolean> {
+  try {
+    const resp = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`, {
+      headers: { Authorization: `Bot ${botToken}` }, cache: 'no-store',
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+function collectIdFields(update: Record<string, unknown>): Array<{ section: string; field: string; value: string }> {
+  const out: Array<{ section: string; field: string; value: string }> = [];
+  for (const [section, val] of Object.entries(update)) {
+    if (!val || typeof val !== 'object' || Array.isArray(val)) continue;
+    for (const [field, fval] of Object.entries(val as Record<string, unknown>)) {
+      if (/(Channel|Category|Role|Member|User)Id$/.test(field) && typeof fval === 'string' && SNOWFLAKE.test(fval)) {
+        out.push({ section, field, value: fval });
+      }
+    }
+  }
+  return out;
+}
+
+function friendlyField(section: string, field: string): string {
+  return field
+    .replace(/Id$/, '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/^./, (c) => c.toUpperCase());
+}
+
 async function getManageableGuilds(accessToken: string): Promise<Map<string, DashGuild>> {
   const resp = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -161,6 +250,54 @@ export async function PATCH(req: NextRequest) {
   }
 
   const collection = await discordConfigCollection();
+
+  // Server-side resource verification: every selected channel/category/role
+  // must exist in THIS guild and be usable by the bot — a forged guildId or
+  // a foreign ID is rejected here, never stored.
+  const botToken = process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN || '';
+  const idFields = collectIdFields(update as Record<string, unknown>);
+  if (idFields.length > 0) {
+    if (!botToken) {
+      return bad('The bot cannot verify these server settings right now (bot token not configured). Try again later.', 503);
+    }
+    const check = await loadBotCheck(guildId, botToken);
+    if (!check) {
+      return bad('The bot cannot read this server right now. Check that it is still installed, then try again.', 502);
+    }
+    for (const { field, value } of idFields) {
+      const label = friendlyField('', field);
+      if (/ChannelId$/.test(field)) {
+        const ch = check.channels.get(value);
+        if (!ch || ch.guild_id !== guildId) {
+          return bad(`${label} is no longer available on this server. Pick another channel.`);
+        }
+      } else if (/CategoryId$/.test(field)) {
+        const ch = check.channels.get(value);
+        if (!ch || ch.guild_id !== guildId || ch.type !== 4) {
+          return bad(`${label} is no longer a category on this server. Pick another category.`);
+        }
+      } else if (/RoleId$/.test(field)) {
+        const role = check.roles.get(value);
+        if (!role || value === guildId) {
+          return bad(`${label} is no longer available on this server. Pick another role.`);
+        }
+        if (role.managed) {
+          return bad(`${role.name} is managed by an integration and cannot be used here.`);
+        }
+        if (!check.botIsAdmin && check.botTopPosition <= role.position) {
+          return bad(
+            `This role can't be managed by the bot — move the bot's role above ${role.name} in Discord's Server Settings → Roles, then save again.`,
+            403,
+          );
+        }
+      } else {
+        // MemberId / UserId
+        if (!(await memberInGuild(guildId, value, botToken))) {
+          return bad(`${label} is no longer on this server. Pick another member.`);
+        }
+      }
+    }
+  }
 
   // Diff before writing so the audit trail records real before/after values.
   const existing = await collection.findOne({ guildId });

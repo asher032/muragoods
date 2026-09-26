@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 import { useGuild } from '@/app/lib/guild-context';
 import { apiFetch } from '../lib/api';
+import { DiscordMemberSelect, ResourceStatusBar, useGuildResources } from '../components/selectors';
 
 interface MemberInfo {
   id: string;
@@ -38,10 +39,11 @@ export default function ModerationPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const { resources, loading: resLoading, error: resError, refresh: resRefresh } = useGuildResources(selected?.id ?? null);
 
-  const lookup = async () => {
-    if (!token || !selected || !/^\d{5,25}$/.test(userId.trim())) {
-      setError('Enter a valid member ID (right-click member → Copy ID).');
+  const lookupFor = useCallback(async (id: string) => {
+    if (!token || !selected || !/^\d{5,25}$/.test(id)) {
+      setError('Pick a member from the list — IDs are handled automatically.');
       return;
     }
     setBusy(true);
@@ -49,7 +51,7 @@ export default function ModerationPage() {
     setNotice('');
     setResult(null);
     const resp = await apiFetch<{ success: boolean; member: MemberInfo; warnings: LookupResult['warnings']; cases: LookupResult['cases'] }>(
-      `/api/dashboard/moderation?guildId=${selected.id}&userId=${userId.trim()}`,
+      `/api/dashboard/moderation?guildId=${selected.id}&userId=${id}`,
       { token },
     );
     if (resp.ok && resp.data.success) {
@@ -58,7 +60,9 @@ export default function ModerationPage() {
       setError(resp.ok ? (resp.data as unknown as { error?: string }).error || 'Lookup failed' : resp.error);
     }
     setBusy(false);
-  };
+  }, [token, selected]);
+
+  const lookup = () => void lookupFor(userId);
 
   const act = async (action: string) => {
     if (!token || !selected || !result) return;
@@ -106,22 +110,24 @@ export default function ModerationPage() {
 
       {/* Member lookup */}
       <div className="cc-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+        <ResourceStatusBar loading={resLoading} error={resError} onRefresh={resRefresh} />
         <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>
-          👮 Member lookup — Discord user ID
+          👮 Member lookup — pick a member, no IDs needed
         </label>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input
-            className="cc-input" style={{ flex: 1, minWidth: 220 }} placeholder="e.g. 123456789012345678"
-            value={userId} onChange={(e) => setUserId(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') void lookup(); }}
-          />
-          <button className="cc-btn cc-btn-primary" onClick={lookup} disabled={busy}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <DiscordMemberSelect
+              members={resources?.members ?? []}
+              value={userId}
+              onChange={(id) => { setUserId(id); if (id) void lookupFor(id); }}
+              loading={resLoading}
+              disabled={busy}
+            />
+          </div>
+          <button className="cc-btn cc-btn-primary" onClick={lookup} disabled={busy || !userId}>
             {busy ? 'Working…' : 'Look up'}
           </button>
         </div>
-        <p style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--cc-text-faint)' }}>
-          Tip: enable Developer Mode in Discord, then right-click a member → Copy User ID.
-        </p>
       </div>
 
       {error && <div className="cc-alert cc-alert-error" role="alert" style={{ marginBottom: 14 }}>{error}</div>}
