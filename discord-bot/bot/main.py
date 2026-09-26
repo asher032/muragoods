@@ -147,6 +147,10 @@ class MuraBot(commands.Bot):
             "cogs.watchtogether",
             "cogs.music",
             "cogs.moderation",
+            "cogs.modgroup",
+            "cogs.notes",
+            "cogs.purge",
+            "cogs.lockdown",
             "cogs.security",
             "cogs.community",
             "cogs.muragoods",
@@ -1480,9 +1484,10 @@ async def _health_server() -> None:
         })
 
     async def mod_action(request: web.Request) -> web.Response:
-        """Dashboard-initiated moderation: re-checks EVERYTHING server-side.
-        Never trusts the frontend — hierarchy, bot perms, target resolution
-        and Discord API result are all evaluated here."""
+        """Dashboard-initiated moderation: routes through the SAME modservice
+        functions as the Discord slash commands. Never trusts the frontend —
+        hierarchy, bot perms, target resolution and Discord API result are all
+        evaluated in the shared service."""
         if not _authorized(request):
             return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
         guild_id = int(request.match_info["guild_id"])
@@ -1494,94 +1499,80 @@ async def _health_server() -> None:
         target_id = int(body.get("userId") or 0)
         reason = str(body.get("reason") or "Dashboard action")[:300]
         minutes = max(1, min(int(body.get("minutes") or 10), 40320))
-        actor_label = str(body.get("actor") or "Dashboard moderator")[:60]
-
-        guild = bot.get_guild(guild_id)
-        if not guild:
-            return web.json_response({"ok": False, "error": "Bot not in that guild"}, status=404)
-        me = guild.me
-        member = guild.get_member(target_id)
-        if action != "unban" and not member:
-            return web.json_response({"ok": False, "error": "Member not found in this server"}, status=404)
-        if member and member.id == me.id:
-            return web.json_response({"ok": False, "error": "I can't moderate myself"}, status=400)
-        if member and member.id == guild.owner_id:
-            return web.json_response({"ok": False, "error": "I can't moderate the server owner"}, status=400)
-
-        def hierarchy_blocked() -> web.Response | None:
-            if member and member.top_role >= me.top_role:
-                return web.json_response({
-                    "ok": False,
-                    "error": ("I cannot moderate this member because their highest role is "
-                              "equal to or higher than mine. Fix: Server Settings → Roles → "
-                              f"drag my role above {member.top_role.name}.")}, status=409)
-            return None
+        duration_raw = body.get("duration") or body.get("minutes") or 10
+        delete_days = max(0, min(int(body.get("deleteMessageDays") or 0), 7))
 
         import database as db
+        import modservice as svc
+
+        def _out(res: dict) -> web.Response:
+            if res.get("ok"):
+                payload = {"ok": True}
+                for key in ("caseId", "warningCount", "dmSent", "rolesRestored",
+                            "expiresInMinutes", "deleted", "scanned"):
+                    if key in res:
+                        payload[key] = res[key]
+                return web.json_response(payload)
+            code = str(res.get("code") or "BOT_ERROR")
+            status = {"TARGET_NOT_FOUND": 404, "BOT_NOT_IN_GUILD": 404,
+                      "BOT_MISSING_PERMISSION": 403, "ROLE_HIERARCHY_ERROR": 409,
+                      "TARGET_NOT_ACTIONABLE": 400, "INVALID_INPUT": 400,
+                      "MUTEROLE_NOT_CONFIGURED": 409, "DATABASE_ERROR": 502,
+                      "DISCORD_API_ERROR": 502}.get(code, 502)
+            return web.json_response(
+                {"ok": False, "code": code, "error": res.get("error") or "Action failed"},
+                status=status)
+
+        if not target_id and action != "cleanup":
+            return web.json_response({"ok": False, "code": "INVALID_INPUT",
+                                      "error": "Valid userId required"}, status=400)
         try:
             if action == "warn":
-                if r := hierarchy_blocked():
-                    return r
-                count = await db.add_warning(guild_id, target_id, 0, reason)
-                case_id = await db.add_case(guild_id, target_id, 0, "warn", reason, source="dashboard")
-                if member:
-                    try:
-                        await member.send(embed=discord.Embed(
-                            title=f"⚠️ Warning — {guild.name}", description=reason[:300]))
-                    except (discord.Forbidden, discord.HTTPException):
-                        pass
-                return web.json_response({"ok": True, "caseId": case_id, "warningCount": count})
-            if action == "timeout":
-                if r := hierarchy_blocked():
-                    return r
-                if not me.guild_permissions.moderate_members:
-                    return web.json_response({"ok": False, "error": "I lack Moderate Members permission"}, status=403)
-                await member.timeout(discord.utils.utcnow() + timedelta(minutes=minutes),
-                                     reason=f"Dashboard: {reason[:150]}")
-                case_id = await db.add_case(guild_id, target_id, 0, "timeout", reason, f"{minutes}m",
-                                              source="dashboard")
-                await db.log_action(guild_id, 0, target_id, "timeout", f"{reason[:200]} (dashboard: {actor_label})")
-                return web.json_response({"ok": True, "caseId": case_id})
+                return _out(await svc.warn_member(bot, db, guild_id, target_id, reason, 0, "dashboard"))
+            if action in ("timeout", "mute"):
+                # Dashboard timeout buttons send minutes; duration strings also accepted.
+                mins = minutes
+                if action == "mute" and isinstance(duration_raw, str):
+                    parsed = svc.parse_duration_minutes(duration_raw, default=-1)
+                    mins = parsed if parsed and parsed > 0 else None
+                if action == "mute":
+                    return _out(await svc.mute_member(bot, db, guild_id, target_id, reason, mins, 0, "dashboard"))
+                return _out(await svc.timeout_member(bot, db, guild_id, target_id, mins, reason, 0, "dashboard"))
+            if action == "hardmute":
+                mins = None
+                if isinstance(duration_raw, str):
+                    parsed = svc.parse_duration_minutes(duration_raw, default=-1)
+                    mins = parsed if parsed and parsed > 0 else None
+                elif isinstance(duration_raw, (int, float)):
+                    mins = max(1, min(int(duration_raw), 40320))
+                return _out(await svc.hardmute_member(bot, db, guild_id, target_id, reason, mins, 0, "dashboard"))
+            if action == "unmute":
+                return _out(await svc.unmute_member(bot, db, guild_id, target_id, reason, 0, "dashboard"))
+            if action in ("untimeout", "removetimeout"):
+                return _out(await svc.remove_timeout(bot, db, guild_id, target_id, reason, 0, "dashboard"))
             if action == "kick":
-                if r := hierarchy_blocked():
-                    return r
-                if not me.guild_permissions.kick_members:
-                    return web.json_response({"ok": False, "error": "I lack Kick Members permission"}, status=403)
-                await member.kick(reason=f"Dashboard ({actor_label}): {reason[:150]}")
-                case_id = await db.add_case(guild_id, target_id, 0, "kick", reason, source="dashboard")
-                await db.log_action(guild_id, 0, target_id, "kick", f"{reason[:200]} (dashboard: {actor_label})")
-                return web.json_response({"ok": True, "caseId": case_id})
+                return _out(await svc.kick_member(bot, db, guild_id, target_id, reason, 0, "dashboard"))
             if action == "ban":
-                if r := hierarchy_blocked():
-                    return r
-                if not me.guild_permissions.ban_members:
-                    return web.json_response({"ok": False, "error": "I lack Ban Members permission"}, status=403)
-                try:
-                    delete_days = max(0, min(int(body.get("deleteMessageDays") or 0), 7))
-                except (TypeError, ValueError):
-                    delete_days = 0
-                await guild.ban(discord.Object(id=target_id), reason=f"Dashboard ({actor_label}): {reason[:150]}",
-                                delete_message_days=delete_days)
-                case_id = await db.add_case(guild_id, target_id, 0, "ban", reason,
-                                            f"delete {delete_days}d" if delete_days else "",
-                                            source="dashboard")
-                await db.log_action(guild_id, 0, target_id, "ban", f"{reason[:200]} (dashboard: {actor_label})")
-                return web.json_response({"ok": True, "caseId": case_id})
+                return _out(await svc.ban_member(bot, db, guild_id, target_id, reason, delete_days, 0, "dashboard"))
+            if action == "softban":
+                return _out(await svc.softban_member(bot, db, guild_id, target_id, reason, delete_days, 0, "dashboard"))
+            if action == "tempban":
+                mins = minutes
+                if isinstance(duration_raw, str):
+                    parsed = svc.parse_duration_minutes(duration_raw, default=-1)
+                    mins = parsed if parsed and parsed > 0 else minutes
+                return _out(await svc.tempban_member(bot, db, guild_id, target_id, reason,
+                                                     delete_days, mins, 0, "dashboard"))
             if action == "unban":
-                if not me.guild_permissions.ban_members:
-                    return web.json_response({"ok": False, "error": "I lack Ban Members permission"}, status=403)
-                try:
-                    banned = await guild.fetch_ban(discord.Object(id=target_id))
-                except discord.NotFound:
-                    return web.json_response({"ok": False, "error": "User is not banned"}, status=404)
-                await guild.unban(banned.user, reason=f"Dashboard ({actor_label})")
-                case_id = await db.add_case(guild_id, target_id, 0, "unban", reason, source="dashboard")
-                return web.json_response({"ok": True, "caseId": case_id})
-            return web.json_response({"ok": False, "error": f"Unknown action: {action}"}, status=400)
+                return _out(await svc.unban_member(bot, db, guild_id, target_id, reason, 0, "dashboard"))
+            return web.json_response({"ok": False, "code": "INVALID_INPUT",
+                                      "error": f"Unknown action: {action}"}, status=400)
         except discord.Forbidden:
-            return web.json_response({"ok": False, "error": "Discord rejected the action (Forbidden)"}, status=403)
+            return web.json_response({"ok": False, "code": "BOT_MISSING_PERMISSION",
+                                      "error": "Discord rejected the action (Forbidden)"}, status=403)
         except discord.HTTPException as exc:
-            return web.json_response({"ok": False, "error": f"Discord API error {exc.status}"}, status=502)
+            return web.json_response({"ok": False, "code": "DISCORD_API_ERROR",
+                                      "error": f"Discord API error {exc.status}"}, status=502)
 
     async def mod_cases(request: web.Request) -> web.Response:
         """Dashboard case management, backed by the SAME bot case store the
@@ -1791,6 +1782,137 @@ async def _health_server() -> None:
             ok = await db.clear_warnings(guild_id, user_id)
             return web.json_response({"ok": True, "cleared": ok})
         return web.json_response({"ok": False, "error": "Method not allowed"}, status=405)
+
+    def _svc_out(res: dict) -> web.Response:
+        """modservice result → bridge JSON. Codes pass through so the
+        dashboard can map BOT_MISSING_PERMISSION / ROLE_HIERARCHY_ERROR /
+        TARGET_NOT_FOUND / MUTEROLE_NOT_CONFIGURED instead of guessing."""
+        if res.get("ok"):
+            payload = {"ok": True}
+            for key in ("caseId", "warningCount", "dmSent", "noteId", "notes",
+                        "cleared", "removed", "locked", "skipped", "restored",
+                        "channelId", "deleted", "scanned", "rolesRestored",
+                        "expiresInMinutes", "warnings"):
+                if key in res:
+                    payload[key] = res[key]
+            return web.json_response(payload)
+        code = str(res.get("code") or "BOT_ERROR")
+        status = {"TARGET_NOT_FOUND": 404, "BOT_NOT_IN_GUILD": 404,
+                  "BOT_MISSING_PERMISSION": 403, "ROLE_HIERARCHY_ERROR": 409,
+                  "TARGET_NOT_ACTIONABLE": 400, "INVALID_INPUT": 400,
+                  "MUTEROLE_NOT_CONFIGURED": 409, "DATABASE_ERROR": 502,
+                  "DISCORD_API_ERROR": 502}.get(code, 502)
+        return web.json_response(
+            {"ok": False, "code": code, "error": res.get("error") or "Action failed"},
+            status=status)
+
+    async def mod_notes(request: web.Request) -> web.Response:
+        """Staff notebook — the SAME store the /notes commands use.
+        POST /mod/notes/{gid} {userId, text} · GET /mod/notes/{gid}/{uid} ·
+        DELETE /mod/note/{gid}/{note_id} · POST /mod/notes-clear/{gid} {userId}."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        import database as db
+        import modservice as svc
+        path = request.path
+        try:
+            if request.method == "POST" and path.endswith("/notes-clear"):
+                guild_id = int(request.match_info["guild_id"])
+                body = await request.json()
+                return _svc_out(await svc.clear_notes(
+                    db, guild_id, int(body.get("userId") or 0)))
+            if request.method == "DELETE":
+                guild_id = int(request.match_info["guild_id"])
+                return _svc_out(await svc.remove_note(
+                    db, guild_id, int(request.match_info["note_id"])))
+            if request.method == "GET":
+                guild_id = int(request.match_info["guild_id"])
+                return _svc_out(await svc.view_notes(
+                    db, guild_id, int(request.match_info["user_id"])))
+            guild_id = int(request.match_info["guild_id"])
+            body = await request.json()
+            return _svc_out(await svc.set_note(
+                db, guild_id, int(body.get("userId") or 0),
+                str(body.get("text") or body.get("note") or ""),
+                int(body.get("moderatorId") or 0)))
+        except (TypeError, ValueError):
+            return web.json_response({"ok": False, "code": "INVALID_INPUT",
+                                      "error": "Valid ids required"}, status=400)
+        except Exception as exc:
+            return web.json_response({"ok": False, "code": "DATABASE_ERROR",
+                                      "error": type(exc).__name__}, status=502)
+
+    async def mod_lockdown(request: web.Request) -> web.Response:
+        """Channel/server lockdown — the SAME service the /lockdown commands
+        use. POST /mod/lockdown/{gid} {scope, channelId?, duration?, reason?, unlock?}."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        import database as db
+        import modservice as svc
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "code": "INVALID_INPUT",
+                                      "error": "Invalid JSON"}, status=400)
+        scope = str(body.get("scope") or "channel")
+        reason = str(body.get("reason") or "Dashboard lockdown")[:300]
+        duration_raw = body.get("duration") or body.get("durationMinutes")
+        minutes = None
+        if duration_raw not in (None, ""):
+            minutes = svc.parse_duration_minutes(duration_raw, default=-1)
+            if minutes is None or minutes < 0:
+                return web.json_response({"ok": False, "code": "INVALID_INPUT",
+                                          "error": "Duration not understood — try 30m, 2h, 1d."},
+                                         status=400)
+        try:
+            if scope == "server":
+                if body.get("unlock"):
+                    return _svc_out(await svc.unlock_server(bot, db, guild_id, reason, 0, "dashboard"))
+                return _svc_out(await svc.lockdown_server(
+                    bot, db, guild_id, reason, minutes, 0, "dashboard"))
+            channel_id = int(body.get("channelId") or 0)
+            if not channel_id:
+                return web.json_response({"ok": False, "code": "INVALID_INPUT",
+                                          "error": "Valid channelId required"}, status=400)
+            if body.get("unlock"):
+                return _svc_out(await svc.unlock_channel(
+                    bot, db, guild_id, channel_id, reason, 0, "dashboard"))
+            return _svc_out(await svc.lockdown_channel(
+                bot, db, guild_id, channel_id, reason, minutes, 0, "dashboard"))
+        except Exception as exc:
+            return web.json_response({"ok": False, "code": "DISCORD_API_ERROR",
+                                      "error": type(exc).__name__}, status=502)
+
+    async def mod_purge(request: web.Request) -> web.Response:
+        """Filtered purge — the SAME service the /purge commands use.
+        POST /mod/purge/{gid} {channelId, kind, count, userId?, text?}."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        import database as db
+        import modservice as svc
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "code": "INVALID_INPUT",
+                                      "error": "Invalid JSON"}, status=400)
+        try:
+            channel_id = int(body.get("channelId") or 0)
+            kind = str(body.get("kind") or "all").lower()
+            count = max(1, min(int(body.get("count") or 20), 100))
+            user_id = int(body.get("userId") or 0) or None
+            text = str(body.get("text") or "")[:200]
+            include_pinned = bool(body.get("includePinned"))
+        except (TypeError, ValueError):
+            return web.json_response({"ok": False, "code": "INVALID_INPUT",
+                                      "error": "Valid channelId and count required"}, status=400)
+        if not channel_id:
+            return web.json_response({"ok": False, "code": "INVALID_INPUT",
+                                      "error": "Valid channelId required"}, status=400)
+        res = await svc.purge_messages(bot, db, guild_id, channel_id, kind, count,
+                                       user_id, text, include_pinned, 0, "dashboard")
+        return _svc_out(res)
 
     async def prefix_refresh(request: web.Request) -> web.Response:
         """Dashboard tells us a guild's prefix changed — store the pushed
@@ -2069,6 +2191,12 @@ async def _health_server() -> None:
     app.router.add_get("/mod/overview/{guild_id:\\d+}", mod_overview)
     app.router.add_delete("/mod/warnings/{guild_id:\\d+}/{user_id:\\d+}", mod_warnings)
     app.router.add_post("/mod/warnings/{guild_id:\\d+}/{user_id:\\d+}", mod_warnings)
+    app.router.add_post("/mod/notes/{guild_id:\\d+}", mod_notes)
+    app.router.add_get("/mod/notes/{guild_id:\\d+}/{user_id:\\d+}", mod_notes)
+    app.router.add_delete("/mod/note/{guild_id:\\d+}/{note_id:\\d+}", mod_notes)
+    app.router.add_post("/mod/notes-clear/{guild_id:\\d+}", mod_notes)
+    app.router.add_post("/mod/lockdown/{guild_id:\\d+}", mod_lockdown)
+    app.router.add_post("/mod/purge/{guild_id:\\d+}", mod_purge)
     app.router.add_post("/self-test/gateway-drop", gateway_drop)
     port = int(os.environ.get("PORT") or 8080) or 8080  # PORT=0 → default
     runner = web.AppRunner(app)
@@ -2110,7 +2238,24 @@ async def _health_server() -> None:
                 except Exception as exc:
                     log.warning("probe %s failed: %s", name, str(exc)[:160])
             await asyncio.sleep(300)
+
+    async def _mod_schedule_loop() -> None:
+        """Expiry dispatcher for tempbans, timed mutes/hardmutes and timed
+        lockdowns. Rows live in Mongo, so a restart never loses a pending
+        expiry — the loop simply picks up whatever is due."""
+        await bot.wait_until_ready()
+        while not bot.is_closed():
+            try:
+                import modservice as svc
+                res = await svc.run_due(bot, database)
+                if res.get("due"):
+                    log.info("Scheduled moderation: %s/%s processed",
+                             res.get("processed"), res.get("due"))
+            except Exception as exc:
+                log.warning("Scheduled moderation sweep failed: %s", type(exc).__name__)
+            await asyncio.sleep(60)
     asyncio.create_task(_keepalive_loop())
+    asyncio.create_task(_mod_schedule_loop())
     while True:
         await asyncio.sleep(3600)
 

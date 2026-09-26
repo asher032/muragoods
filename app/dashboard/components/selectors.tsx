@@ -819,13 +819,51 @@ export function statusMessage(code: string, detail: string): { title: string; hi
         title: 'MuraBot is not installed on this server.',
         hint: detail || 'Invite the bot first — pick the server in the top bar.',
       };
+    case 'BOT_NOT_CONFIGURED':
+    case 'BRIDGE_NOT_CONFIGURED':
+      return {
+        title: 'The bot bridge is not configured.',
+        hint: detail || 'The server operator needs to configure the bot connection first.',
+      };
+    case 'BOT_MISSING_PERMISSION':
+    case 'BOT_FORBIDDEN':
+      return {
+        title: 'Murabot is missing a Discord permission.',
+        hint: detail || 'Give the bot the required permission in Server Settings → Roles, then retry.',
+      };
+    case 'ROLE_HIERARCHY_ERROR':
+    case 'BOT_CONFLICT':
+      return {
+        title: "Murabot's role must be higher than the target.",
+        hint: detail || 'Drag the bot role above the target in Server Settings → Roles.',
+      };
+    case 'TARGET_NOT_FOUND':
+    case 'MEMBER_FETCH_FAILED':
+      return {
+        title: 'That member is not on this server.',
+        hint: detail || 'They may have left — pick someone else.',
+      };
+    case 'TARGET_NOT_ACTIONABLE':
+      return {
+        title: 'That target cannot be moderated.',
+        hint: detail || 'The owner, the bot and yourself are always protected.',
+      };
+    case 'MUTEROLE_NOT_CONFIGURED':
+      return {
+        title: 'No Muterole is configured.',
+        hint: detail || 'Set one in Moderation → Action policies first.',
+      };
+    case 'BOT_NOT_IN_GUILD':
+      return {
+        title: 'Murabot is not in this server.',
+        hint: detail || 'Invite it first, then retry.',
+      };
     case 'BOT_OFFLINE':
       return {
         title: 'Muragoods is currently offline.',
         hint: detail || 'Your server configuration can still be viewed, but live bot actions may be unavailable. Retry in a moment.',
       };
     case 'DISCORD_API_ERROR':
-    case 'MEMBER_FETCH_FAILED':
     case 'ROLE_FETCH_FAILED':
     case 'CHANNEL_FETCH_FAILED':
       return {

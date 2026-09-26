@@ -56,10 +56,15 @@ function botError(res: Response | null, data: Record<string, unknown> | null, fa
   if (!res) return bad('Bot unreachable — is it online?', 502, 'BOT_OFFLINE');
   const passthrough = [400, 401, 403, 404, 409];
   const status = passthrough.includes(res.status) ? res.status : 502;
-  const code = res.status === 404 ? 'BOT_NOT_IN_GUILD'
-    : res.status === 403 ? 'BOT_FORBIDDEN'
-    : res.status === 409 ? 'BOT_CONFLICT'
-    : status === 502 ? 'BOT_ERROR' : 'BOT_ERROR';
+  // The bridge returns machine codes (BOT_MISSING_PERMISSION,
+  // ROLE_HIERARCHY_ERROR, …) — pass them through so the UI maps the real
+  // failure instead of guessing from the HTTP status.
+  const bridgeCode = typeof data?.code === 'string' && data.code ? data.code : null;
+  const code = bridgeCode
+    || (res.status === 404 ? 'BOT_NOT_IN_GUILD'
+      : res.status === 403 ? 'BOT_FORBIDDEN'
+      : res.status === 409 ? 'BOT_CONFLICT'
+      : 'BOT_ERROR');
   const message = typeof data?.error === 'string' && data.error ? data.error : `${fallback} (Bot returned ${res.status})`;
   return bad(message, status, code);
 }

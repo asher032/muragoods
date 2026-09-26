@@ -253,6 +253,10 @@ async def _ensure_indexes() -> list[str]:
         ("keepalive.updatedAt", "ttl"),
         ("music_feedback.guildId_userId_trackKey", "unique"),
         ("music_feedback.guildId_trackKey_feedback", ""),
+        ("user_notes.guildId_userId", ""),
+        ("user_notes.guildId_noteId", "unique"),
+        ("scheduled_actions.status_runAt", ""),
+        ("lockdown_state.guildId_scope", ""),
     ]
     keys: dict[str, list] = {
         "guild_config.guildId": [("guildId", ASCENDING)],
@@ -278,6 +282,10 @@ async def _ensure_indexes() -> list[str]:
             ("guildId", ASCENDING), ("userId", ASCENDING), ("trackKey", ASCENDING)],
         "music_feedback.guildId_trackKey_feedback": [
             ("guildId", ASCENDING), ("trackKey", ASCENDING), ("feedback", ASCENDING)],
+        "user_notes.guildId_userId": [("guildId", DESCENDING), ("userId", DESCENDING)],
+        "user_notes.guildId_noteId": [("guildId", DESCENDING), ("noteId", DESCENDING)],
+        "scheduled_actions.status_runAt": [("status", ASCENDING), ("runAt", ASCENDING)],
+        "lockdown_state.guildId_scope": [("guildId", DESCENDING), ("scope", ASCENDING)],
     }
     failures: list[str] = []
     for label, kind in specs:
@@ -844,3 +852,123 @@ async def check_cooldown(key: str, seconds: int) -> int:
         {"key": key}, {"$set": {"expiresAt": now + timedelta(seconds=seconds)}}, upsert=True
     )
     return 0
+
+
+# ── Mute role ─────────────────────────────────────────────────────────
+async def get_mute_role_id(guild_id: int) -> int | None:
+    """The guild's configured Muterole (moderation.muteRoleId), or None.
+
+    Mute/hardmute/unmute are role-based and REQUIRE this to exist — the
+    service returns MUTEROLE_NOT_CONFIGURED (never a permission error) when
+    it is missing. The dashboard sets it through the normal config save."""
+    try:
+        cfg = await get_guild_config(guild_id)
+        raw = ((cfg.get("moderation") or {}).get("muteRoleId") or "")
+        rid = int(str(raw).strip())
+        return rid if rid > 0 else None
+    except (TypeError, ValueError):
+        return None
+    except Exception:
+        return None
+
+
+async def set_mute_role_id(guild_id: int, role_id: int | None) -> None:
+    cfg = await get_guild_config(guild_id)
+    moderation = dict(cfg.get("moderation") or {})
+    if role_id:
+        moderation["muteRoleId"] = str(int(role_id))
+    else:
+        moderation.pop("muteRoleId", None)
+    await set_guild_config(guild_id, {"moderation": moderation})
+
+
+# ── User notes ────────────────────────────────────────────────────────
+async def _next_note_id(guild_id: int) -> int:
+    seq = await _require_db().counters.find_one_and_update(
+        {"_id": f"notes:{guild_id}"}, {"$inc": {"seq": 1}},
+        upsert=True, return_document=ReturnDocument.AFTER)
+    return seq["seq"]
+
+
+async def add_user_note(guild_id: int, user_id: int, moderator_id: int, text: str) -> int:
+    """Staff-only notebook entry for a user. Guild-scoped; noteIds are unique
+    per guild. Works for users who already left (no Discord lookup)."""
+    note_id = await _next_note_id(guild_id)
+    await _require_db().user_notes.insert_one({
+        "guildId": _gid(guild_id), "noteId": note_id, "userId": str(user_id),
+        "moderatorId": str(moderator_id), "text": str(text or "")[:1000],
+        "createdAt": _now(),
+    })
+    return note_id
+
+
+async def get_user_notes(guild_id: int, user_id: int, limit: int = 50) -> list[dict]:
+    cur = _require_db().user_notes.find(
+        {"guildId": _gid(guild_id), "userId": str(user_id)}).sort("noteId", ASCENDING).limit(limit)
+    return await cur.to_list(limit)
+
+
+async def remove_user_note(guild_id: int, note_id: int) -> bool:
+    """Guild ownership is enforced in the query — a note from another guild
+    can never be touched through this path."""
+    res = await _require_db().user_notes.delete_one(
+        {"guildId": _gid(guild_id), "noteId": int(note_id)})
+    return res.deleted_count > 0
+
+
+async def clear_user_notes(guild_id: int, user_id: int) -> int:
+    res = await _require_db().user_notes.delete_many(
+        {"guildId": _gid(guild_id), "userId": str(user_id)})
+    return res.deleted_count
+
+
+# ── Scheduled moderation (survives restarts) ──────────────────────────
+async def schedule_action(guild_id: int, action: str, user_id: int,
+                          run_at: datetime, payload: dict | None = None) -> str:
+    """Persist a future action (unban / unmute / restore_roles /
+    unlock_channel / unlock_server). The dispatcher picks up due rows, so a
+    restart never loses a pending expiry."""
+    res = await _require_db().scheduled_actions.insert_one({
+        "guildId": _gid(guild_id), "action": action, "userId": str(user_id),
+        "runAt": run_at, "payload": payload or {}, "status": "pending",
+        "createdAt": _now(),
+    })
+    return str(res.inserted_id)
+
+
+async def due_scheduled_actions(now: datetime | None = None) -> list[dict]:
+    cur = _require_db().scheduled_actions.find(
+        {"status": "pending", "runAt": {"$lte": now or _now()}}).sort("runAt", ASCENDING).limit(50)
+    return await cur.to_list(50)
+
+
+async def complete_scheduled_action(doc_id: Any, result: str) -> None:
+    from bson import ObjectId
+    try:
+        oid = doc_id if isinstance(doc_id, ObjectId) else ObjectId(str(doc_id))
+    except Exception:
+        return
+    await _require_db().scheduled_actions.update_one(
+        {"_id": oid},
+        {"$set": {"status": "done", "result": str(result)[:200], "completedAt": _now()}})
+
+
+# ── Lockdown state (restore exactly what WE changed) ──────────────────
+async def save_lockdown_state(guild_id: int, scope: str, channel_id: int | None,
+                              previous: dict) -> None:
+    """Remember the pre-lockdown overwrite so unlock restores it instead of
+    blindly clearing whatever an admin set meanwhile."""
+    await _require_db().lockdown_state.update_one(
+        {"guildId": _gid(guild_id), "scope": scope,
+         "channelId": str(channel_id or "")},
+        {"$set": {"previous": previous, "lockedAt": _now()}}, upsert=True)
+
+
+async def get_lockdown_state(guild_id: int, scope: str, channel_id: int | None = None) -> dict | None:
+    return await _require_db().lockdown_state.find_one(
+        {"guildId": _gid(guild_id), "scope": scope, "channelId": str(channel_id or "")})
+
+
+async def clear_lockdown_state(guild_id: int, scope: str, channel_id: int | None = None) -> None:
+    await _require_db().lockdown_state.delete_one(
+        {"guildId": _gid(guild_id), "scope": scope, "channelId": str(channel_id or "")})

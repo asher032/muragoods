@@ -59,11 +59,30 @@ const TIMEOUT_PRESETS = [
 
 const ACTIONS = [
   { key: 'warn', label: '⚠️ Warn', primary: false },
-  { key: 'timeout', label: '🔇 Timeout', primary: false },
+  { key: 'mute', label: '🔇 Mute', primary: false },
+  { key: 'hardmute', label: '⛓️ Hard Mute', primary: false },
+  { key: 'unmute', label: '🔊 Unmute', primary: false },
+  { key: 'timeout', label: '⏳ Timeout', primary: false },
+  { key: 'removetimeout', label: '⏲️ Remove Timeout', primary: false },
   { key: 'kick', label: '👢 Kick', primary: false },
+  { key: 'softban', label: '🧹 Softban', primary: false },
+  { key: 'tempban', label: '⏳ Tempban', primary: false },
   { key: 'ban', label: '🔨 Ban', primary: true },
   { key: 'unban', label: '🔓 Unban', primary: false },
 ] as const;
+
+const ACTION_BLURBS: Record<string, string> = {
+  warn: 'Record a warning (DM sent, best-effort).',
+  mute: 'Apply the configured Muterole. Empty duration = indefinite.',
+  hardmute: 'Apply Muterole AND strip other roles (restored on unmute).',
+  unmute: 'Remove the Muterole and restore stripped roles.',
+  timeout: 'Discord-native timeout.',
+  removetimeout: 'Lift an active timeout.',
+  kick: 'Remove the member (can rejoin).',
+  softban: 'Ban + instant unban to clear message history.',
+  tempban: 'Ban with automatic unban when the duration expires.',
+  ban: 'Ban the member. Works even if they already left.',
+};
 
 // ── Backend member finder ──────────────────────────────────────────────
 // Shows the whole guild roster immediately (bulk-loaded with the page — no
@@ -200,8 +219,28 @@ export default function ModerationPage() {
   const [banDeleteDays, setBanDeleteDays] = useState(0);
   const [unbanId, setUnbanId] = useState('');
   const [bans, setBans] = useState<BanEntry[]>([]);
+  // Duration text for mute/hardmute/tempban (empty = indefinite for mutes).
+  const [durationText, setDurationText] = useState('10m');
   const [roleUserId, setRoleUserId] = useState('');
   const [roleId, setRoleId] = useState('');
+  // ── User notes ──
+  const [noteMemberId, setNoteMemberId] = useState('');
+  const [noteText, setNoteText] = useState('');
+  const [notes, setNotes] = useState<Array<{ noteId: number; text: string; moderatorId: string; createdAt: string }>>([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  // ── Lockdown ──
+  const [lockScope, setLockScope] = useState<'channel' | 'server'>('channel');
+  const [lockChannelId, setLockChannelId] = useState('');
+  const [lockDuration, setLockDuration] = useState('');
+  const [lockReason, setLockReason] = useState('');
+  const [locking, setLocking] = useState(false);
+  // ── Purge ──
+  const [purgeChannelId, setPurgeChannelId] = useState('');
+  const [purgeKind, setPurgeKind] = useState('all');
+  const [purgeCount, setPurgeCount] = useState(20);
+  const [purgeUserId, setPurgeUserId] = useState('');
+  const [purgeText, setPurgeText] = useState('');
+  const [purgeConfirm, setPurgeConfirm] = useState(false);
   const [overview, setOverview] = useState<OverviewStats | null>(null);
   const [overviewError, setOverviewError] = useState('');
   const [overviewCode, setOverviewCode] = useState('');
@@ -282,12 +321,30 @@ export default function ModerationPage() {
     setRoleUserId('');
     setRoleId('');
     setUnbanId('');
+    setConfirming(null);
+    setReason('');
+    setDurationText('10m');
+    setNoteMemberId('');
+    setNoteText('');
+    setNotes([]);
+    setLockChannelId('');
+    setLockDuration('');
+    setLockReason('');
+    setPurgeChannelId('');
+    setPurgeUserId('');
+    setPurgeText('');
+    setPurgeConfirm(false);
     void loadOverview();
     void loadBans();
   }, [selected?.id, loadOverview, loadBans]);
 
   const lookup = () => void lookupFor(userId);
   const effectiveMinutes = timeoutMinutes === -1 ? Math.max(1, Math.min(40320, Number(customMinutes) || 30)) : timeoutMinutes;
+
+  const showActionError = (code: string | undefined, fallback: string) => {
+    const mapped = statusMessage(code || '', fallback);
+    setError(`${mapped.title} ${mapped.hint}`);
+  };
 
   const act = async (action: string) => {
     if (!token || !selected) return;
@@ -296,19 +353,34 @@ export default function ModerationPage() {
       setError(action === 'unban' ? 'Pick a banned user from the list first.' : 'Look up a member first.');
       return;
     }
+    if ((action === 'mute' || action === 'hardmute' || action === 'tempban') && durationText.trim()) {
+      if (!/^\s*\d+\s*[mhdw]?\s*$/i.test(durationText)) {
+        setError('Duration not understood — try 10m, 1h, 7d (empty = indefinite for mutes).');
+        return;
+      }
+    }
+    if (action === 'tempban' && !durationText.trim()) {
+      setError('Tempban needs a duration — try 1h, 7d.');
+      return;
+    }
     setBusy(true);
     setError('');
-    const resp = await apiFetch<{ success: boolean; caseId?: number; error?: string }>('/api/dashboard/moderation', {
+    const resp = await apiFetch<{ success: boolean; caseId?: number; warningCount?: number; dmSent?: boolean; error?: string; code?: string }>('/api/dashboard/moderation', {
       method: 'POST',
       token,
       body: {
         guildId: selected.id, userId: target, action,
         reason: reason.trim() || 'No reason given (dashboard)',
-        minutes: effectiveMinutes, deleteMessageDays: banDeleteDays,
+        minutes: action === 'timeout' ? effectiveMinutes : action === 'tempban' ? undefined : effectiveMinutes,
+        duration: (action === 'mute' || action === 'hardmute' || action === 'tempban') ? durationText.trim() : undefined,
+        deleteMessageDays: banDeleteDays,
       },
     });
     if (resp.ok && resp.data.success) {
-      setNotice(`✅ ${action.toUpperCase()} executed on Discord — case #${resp.data.caseId ?? '?'}`);
+      const extras: string[] = [];
+      if (resp.data.warningCount) extras.push(`warning #${resp.data.warningCount}`);
+      if (resp.data.dmSent === false) extras.push('DM not delivered');
+      setNotice(`✅ ${action.toUpperCase()} executed on Discord — case #${resp.data.caseId ?? '?'}${extras.length ? ` (${extras.join(', ')})` : ''}`);
       setConfirming(null);
       setReason('');
       setUnbanId('');
@@ -325,7 +397,8 @@ export default function ModerationPage() {
         setUserId('');
       }
     } else {
-      setError(resp.ok ? (resp.data as unknown as { error?: string }).error || 'Action failed' : resp.error);
+      showActionError(resp.ok ? resp.data.code : (resp as { code?: string }).code,
+        resp.ok ? (resp.data as unknown as { error?: string }).error || 'Action failed' : resp.error);
     }
     setBusy(false);
   };
@@ -364,6 +437,151 @@ export default function ModerationPage() {
       void loadOverview();
     } else {
       setError(resp.ok ? (resp.data as unknown as { error?: string }).error || 'Could not clear warnings' : resp.error);
+    }
+    setBusy(false);
+  };
+
+  // ── User notes (same store as /notes commands) ──
+  const loadNotes = useCallback(async (memberId: string) => {
+    if (!token || !selected || !/^\d{5,25}$/.test(memberId)) {
+      setNotes([]);
+      return;
+    }
+    setNotesLoading(true);
+    const resp = await apiFetch<{ success: boolean; notes: Array<{ noteId: number; text: string; moderatorId: string; createdAt: string }>; error?: string; code?: string }>(
+      `/api/dashboard/moderation/notes?guildId=${selected.id}&userId=${memberId}`, { token });
+    if (resp.ok && resp.data.success) setNotes(resp.data.notes);
+    else {
+      setNotes([]);
+      showActionError(resp.ok ? resp.data.code : (resp as { code?: string }).code,
+        resp.ok ? resp.data.error || 'Could not load notes' : resp.error);
+    }
+    setNotesLoading(false);
+  }, [token, selected]);
+
+  const addNote = async () => {
+    if (!token || !selected || !noteMemberId || !noteText.trim()) {
+      setError('Pick a member and write the note first.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    const resp = await apiFetch<{ success: boolean; noteId?: number; error?: string; code?: string }>('/api/dashboard/moderation/notes', {
+      method: 'POST', token, body: { guildId: selected.id, userId: noteMemberId, text: noteText.trim() },
+    });
+    if (resp.ok && resp.data.success) {
+      setNotice(`✅ Note #${resp.data.noteId} saved.`);
+      setNoteText('');
+      void loadNotes(noteMemberId);
+    } else {
+      showActionError(resp.ok ? resp.data.code : (resp as { code?: string }).code,
+        resp.ok ? resp.data.error || 'Could not save note' : resp.error);
+    }
+    setBusy(false);
+  };
+
+  const removeNote = async (noteId: number) => {
+    if (!token || !selected) return;
+    setBusy(true);
+    setError('');
+    const resp = await apiFetch<{ success: boolean; error?: string; code?: string }>('/api/dashboard/moderation/notes', {
+      method: 'DELETE', token, body: { guildId: selected.id, noteId },
+    });
+    if (resp.ok && resp.data.success) {
+      setNotice(`✅ Note #${noteId} removed.`);
+      void loadNotes(noteMemberId);
+    } else {
+      showActionError(resp.ok ? resp.data.code : (resp as { code?: string }).code,
+        resp.ok ? resp.data.error || 'Could not remove note' : resp.error);
+    }
+    setBusy(false);
+  };
+
+  const clearNotes = async () => {
+    if (!token || !selected || !noteMemberId) return;
+    setBusy(true);
+    setError('');
+    const resp = await apiFetch<{ success: boolean; cleared?: number; error?: string; code?: string }>('/api/dashboard/moderation/notes', {
+      method: 'DELETE', token, body: { guildId: selected.id, userId: noteMemberId, all: true },
+    });
+    if (resp.ok && resp.data.success) {
+      setNotice(`✅ Cleared ${resp.data.cleared ?? 0} notes.`);
+      void loadNotes(noteMemberId);
+    } else {
+      showActionError(resp.ok ? resp.data.code : (resp as { code?: string }).code,
+        resp.ok ? resp.data.error || 'Could not clear notes' : resp.error);
+    }
+    setBusy(false);
+  };
+
+  // ── Lockdown (same service as /lockdown commands) ──
+  const runLockdown = async (unlock: boolean) => {
+    if (!token || !selected) return;
+    if (lockScope === 'channel' && !lockChannelId) {
+      setError('Pick a channel first.');
+      return;
+    }
+    if (lockDuration.trim() && !/^\s*\d+\s*[mhdw]?\s*$/i.test(lockDuration)) {
+      setError('Duration not understood — try 30m, 2h, 1d (empty = stay locked).');
+      return;
+    }
+    setLocking(true);
+    setError('');
+    const resp = await apiFetch<{
+      success: boolean; caseId?: number; locked?: string[]; restored?: string[]; error?: string; code?: string;
+    }>('/api/dashboard/moderation/lockdown', {
+      method: 'POST', token,
+      body: {
+        guildId: selected.id, scope: lockScope, channelId: lockChannelId || undefined,
+        duration: lockDuration.trim() || undefined, reason: lockReason.trim() || 'Dashboard lockdown',
+        unlock,
+      },
+    });
+    if (resp.ok && resp.data.success) {
+      const what = unlock
+        ? `restored ${resp.data.restored?.length ?? 0} channels`
+        : lockScope === 'server' ? `locked ${resp.data.locked?.length ?? 0} channels` : 'channel locked';
+      setNotice(`✅ ${unlock ? 'Unlocked' : 'Locked'} — ${what} (case #${resp.data.caseId ?? '?'})`);
+      setLockReason('');
+    } else {
+      showActionError(resp.ok ? resp.data.code : (resp as { code?: string }).code,
+        resp.ok ? resp.data.error || 'Lockdown failed' : resp.error);
+    }
+    setLocking(false);
+  };
+
+  // ── Purge (same service as /purge commands) ──
+  const runPurge = async () => {
+    if (!token || !selected) return;
+    if (!purgeChannelId) {
+      setError('Pick a channel first.');
+      return;
+    }
+    if (purgeKind === 'user' && !purgeUserId) {
+      setError('Pick a member for user purge.');
+      return;
+    }
+    if (purgeKind === 'contains' && !purgeText.trim()) {
+      setError('Search text is required for contains purge.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    const resp = await apiFetch<{ success: boolean; caseId?: number; deleted?: number; scanned?: number; error?: string; code?: string }>(
+      '/api/dashboard/moderation/purge', {
+        method: 'POST', token,
+        body: {
+          guildId: selected.id, channelId: purgeChannelId, kind: purgeKind,
+          count: purgeCount, userId: purgeUserId || undefined, text: purgeText,
+          includePinned: false,
+        },
+      });
+    if (resp.ok && resp.data.success) {
+      setNotice(`✅ Purged ${resp.data.deleted ?? 0} ${purgeKind} messages (scanned ${resp.data.scanned ?? 0}) — case #${resp.data.caseId ?? '?'}`);
+      setPurgeConfirm(false);
+    } else {
+      showActionError(resp.ok ? resp.data.code : (resp as { code?: string }).code,
+        resp.ok ? resp.data.error || 'Purge failed' : resp.error);
     }
     setBusy(false);
   };
@@ -593,7 +811,7 @@ export default function ModerationPage() {
                 )}
               </div>
             )}
-            {confirming === 'ban' && (
+            {confirming === 'ban' || confirming === 'softban' ? (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
                 <label style={{ fontSize: 12, color: 'var(--cc-text-dim)' }}>Delete message history</label>
                 <select className="cc-input" value={banDeleteDays}
@@ -603,14 +821,28 @@ export default function ModerationPage() {
                   <option value={7}>Last 7 days</option>
                 </select>
               </div>
-            )}
+            ) : null}
+            {confirming === 'mute' || confirming === 'hardmute' || confirming === 'tempban' ? (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
+                <label style={{ fontSize: 12, color: 'var(--cc-text-dim)' }}>Duration</label>
+                <input className="cc-input" value={durationText}
+                  onChange={(e) => setDurationText(e.target.value)}
+                  placeholder={confirming === 'tempban' ? '1h (required)' : '10m, 1h, 7d (empty = indefinite)'}
+                  style={{ maxWidth: 260 }} />
+              </div>
+            ) : null}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {ACTIONS.filter((a) => a.key !== 'unban').map((a) =>
                 confirming === a.key ? (
-                  <span key={a.key} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                  <span key={a.key} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 12.5, color: 'var(--cc-text-dim)' }}>
-                      {a.key === 'ban' ? 'Ban' : a.key} <strong style={{ color: '#fff' }}>{result.member.displayName}</strong>
-                      {a.key === 'timeout' ? ` for ${TIMEOUT_PRESETS.find((p) => p.minutes === timeoutMinutes)?.label ?? `${effectiveMinutes} min`}` : ''}?
+                      {a.label} <strong style={{ color: '#fff' }}>{result.member.displayName}</strong>
+                      {a.key === 'timeout' ? ` for ${TIMEOUT_PRESETS.find((p) => p.minutes === timeoutMinutes)?.label ?? `${effectiveMinutes} min`}` : ''}
+                      {(a.key === 'mute' || a.key === 'hardmute') && durationText.trim() ? ` for ${durationText.trim()}` : ''}
+                      {a.key === 'tempban' ? ` for ${durationText.trim()}` : ''}?
+                      <span style={{ display: 'block', fontSize: 11.5, color: 'var(--cc-text-faint)', width: '100%' }}>
+                        {ACTION_BLURBS[a.key]}
+                      </span>
                     </span>
                     <button className="cc-btn" style={{ borderColor: 'rgba(248,113,113,0.5)', color: '#ff8a8a' }}
                             onClick={() => act(a.key)} disabled={busy}>
@@ -709,6 +941,179 @@ export default function ModerationPage() {
         </div>
       </div>
 
+      {/* User notes */}
+      <div className="cc-section-label" style={{ margin: '22px 0 10px' }}>User notes</div>
+      <div className="cc-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+        <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>
+          📝 Staff notebook — same notes as /notes commands (Manage Server)
+        </label>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start', marginBottom: 10 }}>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <DiscordMemberSelect
+              members={resources?.members ?? []}
+              value={noteMemberId}
+              onChange={(id) => { setNoteMemberId(id); if (id) void loadNotes(id); }}
+              loading={resLoading}
+              disabled={busy}
+            />
+          </div>
+          <button className="cc-btn" onClick={() => { if (noteMemberId) void loadNotes(noteMemberId); }} disabled={busy || !noteMemberId}>
+            {notesLoading ? 'Loading…' : 'View notes'}
+          </button>
+        </div>
+        {notes.length > 0 && (
+          <div style={{ display: 'grid', gap: 5, marginBottom: 10 }}>
+            {notes.map((n) => (
+              <div key={n.noteId} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--cc-text-dim)' }}>
+                <span style={{ flex: 1 }}>
+                  <strong style={{ color: '#fff' }}>#{n.noteId}</strong> • {n.text}{' '}
+                  <span style={{ color: 'var(--cc-text-faint)' }}>— {new Date(n.createdAt).toLocaleDateString()}</span>
+                </span>
+                <button className="cc-link" onClick={() => removeNote(n.noteId)} disabled={busy}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12 }}>
+                  Delete
+                </button>
+              </div>
+            ))}
+            <div>
+              <button className="cc-link" onClick={clearNotes} disabled={busy}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12 }}>
+                Clear all notes for this member
+              </button>
+            </div>
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <input className="cc-input" style={{ flex: 1, minWidth: 220 }}
+            placeholder="Write a staff note…"
+            value={noteText} onChange={(e) => setNoteText(e.target.value)} />
+          <button className="cc-btn cc-btn-primary" onClick={addNote} disabled={busy || !noteMemberId || !noteText.trim()}>
+            {busy ? 'Saving…' : 'Save Note'}
+          </button>
+        </div>
+      </div>
+
+      {/* Lockdown */}
+      <div className="cc-section-label" style={{ margin: '22px 0 10px' }}>Lockdown</div>
+      <div className="cc-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+        <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>
+          🔒 Deny Send Messages for @everyone — same service as /lockdown commands (Manage Channels)
+        </label>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          {(['channel', 'server'] as const).map((s) => (
+            <button key={s} type="button" className={`cc-btn ${lockScope === s ? 'cc-btn-primary' : ''}`}
+              onClick={() => setLockScope(s)} style={{ fontSize: 12.5 }}>
+              {s === 'channel' ? 'Channel' : 'Server'}
+            </button>
+          ))}
+        </div>
+        {lockScope === 'channel' && (
+          <div style={{ marginBottom: 10 }}>
+            <DiscordChannelSelect
+              channels={resources?.channels ?? []}
+              value={lockChannelId}
+              onChange={(id) => setLockChannelId(id)}
+              kinds="text"
+              loading={resLoading}
+            />
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 4 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>Duration</label>
+            <input className="cc-input" value={lockDuration}
+              onChange={(e) => setLockDuration(e.target.value)}
+              placeholder="Permanent" style={{ maxWidth: 160 }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>Reason</label>
+            <input className="cc-input" style={{ width: '100%' }}
+              placeholder="Why is this locked?"
+              value={lockReason} onChange={(e) => setLockReason(e.target.value)} />
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+          <button className="cc-btn cc-btn-primary" onClick={() => runLockdown(false)} disabled={locking || (lockScope === 'channel' && !lockChannelId)}>
+            {locking ? 'Working…' : lockScope === 'channel' ? 'Lock Channel' : 'Lock Server'}
+          </button>
+          <button className="cc-btn" onClick={() => runLockdown(true)} disabled={locking || (lockScope === 'channel' && !lockChannelId)}>
+            {locking ? 'Working…' : lockScope === 'channel' ? 'Unlock Channel' : 'Unlock Server'}
+          </button>
+        </div>
+        <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--cc-text-faint)' }}>
+          Unlock restores exactly what the lock changed — never unrelated administrator edits.
+        </p>
+      </div>
+
+      {/* Purge */}
+      <div className="cc-section-label" style={{ margin: '22px 0 10px' }}>Purge</div>
+      <div className="cc-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+        <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>
+          🧹 Filtered deletion — same service as /purge commands (Manage Server). Purge ignores pinned messages.
+        </label>
+        <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginBottom: 10 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>Channel</label>
+            <DiscordChannelSelect
+              channels={resources?.channels ?? []}
+              value={purgeChannelId}
+              onChange={(id) => setPurgeChannelId(id)}
+              kinds="text"
+              loading={resLoading}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>Kind</label>
+            <select className="cc-input" style={{ width: '100%' }} value={purgeKind}
+              onChange={(e) => { setPurgeKind(e.target.value); setPurgeConfirm(false); }}>
+              {['all', 'bot', 'human', 'user', 'contains', 'embeds', 'emoji', 'files', 'images', 'links', 'mentions'].map((k) => (
+                <option key={k} value={k}>{k[0].toUpperCase() + k.slice(1)}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>Amount (1–100)</label>
+            <input className="cc-input" style={{ width: '100%' }} type="number" min={1} max={100}
+              value={purgeCount} onChange={(e) => setPurgeCount(Math.max(1, Math.min(100, Number(e.target.value) || 20)))} />
+          </div>
+        </div>
+        {purgeKind === 'user' && (
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>Member</label>
+            <DiscordMemberSelect
+              members={resources?.members ?? []}
+              value={purgeUserId}
+              onChange={(id) => setPurgeUserId(id)}
+              loading={resLoading}
+              disabled={busy}
+            />
+          </div>
+        )}
+        {purgeKind === 'contains' && (
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>Search text</label>
+            <input className="cc-input" style={{ width: '100%' }}
+              placeholder="Messages containing…"
+              value={purgeText} onChange={(e) => setPurgeText(e.target.value)} />
+          </div>
+        )}
+        {!purgeConfirm ? (
+          <button className="cc-btn cc-btn-primary" style={{ borderColor: 'rgba(248,113,113,0.5)' }}
+            onClick={() => setPurgeConfirm(true)} disabled={busy || !purgeChannelId}>
+            Purge {purgeKind}…
+          </button>
+        ) : (
+          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 12.5, color: 'var(--cc-text-dim)' }}>
+            ⚠ This will remove {purgeKind} messages from the selected channel. Continue?
+            <button className="cc-btn" style={{ borderColor: 'rgba(248,113,113,0.5)', color: '#ff8a8a' }}
+              onClick={runPurge} disabled={busy}>
+              {busy ? 'Purging…' : 'Confirm Purge'}
+            </button>
+            <button className="cc-btn" onClick={() => setPurgeConfirm(false)} disabled={busy}>Cancel</button>
+          </span>
+        )}
+      </div>
+
       {/* Action policies */}
       <div className="cc-section-label" style={{ margin: '22px 0 10px' }}>Action policies</div>
       <div className="cc-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
@@ -786,6 +1191,22 @@ export default function ModerationPage() {
           <button className="cc-btn cc-btn-primary" onClick={() => void save()} disabled={saveState === 'saving'} style={{ fontSize: 12.5 }}>
             {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? '✓ Saved' : saveState === 'error' ? '✕ Save failed' : 'Save policies'}
           </button>
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>
+            🔇 Muterole — required for Mute / Hard Mute / Unmute (Manage Roles on Discord)
+          </label>
+          <DiscordRoleSelect
+            roles={resources?.roles ?? []}
+            value={String((moderation.muteRoleId as string) || '')}
+            onChange={(id) => update('moderation', 'muteRoleId', id)}
+            loading={resLoading}
+          />
+          {!moderation.muteRoleId && (
+            <p style={{ margin: '6px 0 0', fontSize: 11.5, color: '#ff8a8a' }}>
+              No Muterole set — mute commands will report MUTEROLE_NOT_CONFIGURED, never a permission error.
+            </p>
+          )}
         </div>
         <div style={{ marginTop: 14 }}>
           <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>
