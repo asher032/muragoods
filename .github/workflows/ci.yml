@@ -105,3 +105,9 @@ jobs:
 
       - name: YouTube egress fallback (no proxy)
         run: python discord-bot/scripts/test_youtube_egress_fallback.py no-proxy
+
+      # Guards the root cause of the pf11 outage: bot.latency is NaN before
+      # the gateway connects, and the old truthy guard crashed /health every
+      # 10 s (ValueError: cannot convert float NaN to integer).
+      - name: Gateway latency NaN guard
+        run: python discord-bot/scripts/test_gateway_latency_nan.py
