@@ -1222,6 +1222,92 @@ class MusicEngine:
             "last_playback": last,
         }
 
+    # ── Egress preflight (shared by the CLI script and /music/preflight) ──
+    # Resolves one stable track through every egress path this host can use,
+    # so the dashboard can test direct/proxy/engine without shell access.
+    # States: PASS | CHALLENGED | FAILED | NOT RUN | TIMEOUT. The payload is
+    # credential-free by construction: booleans, titles and scrubbed error
+    # class names only — never the proxy URL, cookies or cookie paths.
+    PREFLIGHT_TRACK = "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
+    PREFLIGHT_PATH_TIMEOUT = 60.0
+
+    def _classify_extract_error(self, exc: BaseException) -> tuple[str, str]:
+        text = str(exc)
+        if is_bot_challenge(text):
+            return "CHALLENGED", "YouTube refused this egress (bot check)"
+        safe = sanitize_for_log(f"{type(exc).__name__}: {text}", limit=160) or "failed"
+        return "FAILED", safe
+
+    async def _extract_once(self, query: str, use_proxy: bool) -> tuple[str, str]:
+        """One blocking yt-dlp extraction in a worker thread (never the loop)."""
+        import yt_dlp
+        opts = get_ydl_opts(use_proxy=use_proxy)
+        opts.update({"quiet": True, "no_warnings": True, "skip_download": True})
+        loop = asyncio.get_running_loop()
+
+        def _run():
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                return ydl.extract_info(query, download=False)
+
+        try:
+            info = await asyncio.wait_for(
+                loop.run_in_executor(None, _run),
+                timeout=self.PREFLIGHT_PATH_TIMEOUT)
+        except asyncio.TimeoutError:
+            return "TIMEOUT", f"no result in {int(self.PREFLIGHT_PATH_TIMEOUT)}s"
+        except Exception as exc:
+            return self._classify_extract_error(exc)
+        if not info:
+            return "FAILED", "yt-dlp returned no info"
+        title = str(info.get("title") or "")[:60]
+        return "PASS", f"{title} ({info.get('ext')}, acodec={info.get('acodec')})"
+
+    async def preflight(self, query: str | None = None) -> dict[str, Any]:
+        """Resolve one track on every egress path. Shared core: the CLI
+        script and the /music/preflight endpoint both call this, so shell
+        and dashboard can never disagree about what was tested."""
+        track_query = (query or "").strip() or self.PREFLIGHT_TRACK
+        paths: dict[str, dict[str, str]] = {}
+        paths["direct"] = dict(zip(
+            ("state", "note"),
+            await self._extract_once(track_query, use_proxy=False)))
+        if proxy_configured():
+            paths["proxy"] = dict(zip(
+                ("state", "note"),
+                await self._extract_once(track_query, use_proxy=True)))
+        else:
+            paths["proxy"] = {"state": "NOT RUN",
+                              "note": "YOUTUBE_PROXY is not configured"}
+        try:
+            track = await asyncio.wait_for(
+                self.resolve(track_query), timeout=2 * self.PREFLIGHT_PATH_TIMEOUT)
+        except asyncio.TimeoutError:
+            paths["engine"] = {"state": "TIMEOUT", "note": "resolver timed out"}
+            track = None
+        except Exception as exc:
+            paths["engine"] = {"state": "FAILED",
+                               "note": sanitize_for_log(
+                                   f"{type(exc).__name__}: {exc}", limit=160) or "failed"}
+            track = None
+        else:
+            if track is None:
+                kind = self.get_error_kind()
+                paths["engine"] = {
+                    "state": "FAILED",
+                    "note": f"classified {kind!r}; egress={proxy_state()['last_egress']}"}
+            else:
+                paths["engine"] = {
+                    "state": "PASS",
+                    "note": f"{track.title[:50]} | egress={proxy_state()['last_egress']}"}
+        direct_ok = paths["direct"]["state"] == "PASS"
+        return {
+            "ok": direct_ok,
+            "track": track_query,
+            "paths": paths,
+            "proxy_configured": proxy_configured(),
+            "cookies_configured": bool(cookies_path()),
+        }
+
     async def play_now(self, player: GuildPlayer, track: Track,
                        voice_channel: discord.VoiceChannel, announce=None,
                        seek_to: float = 0.0,
