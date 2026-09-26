@@ -54,6 +54,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Blocks credentials from ever reaching the repository (or its history):
+      # Discord/mongo/Google/GitHub/Slack/AWS/Stripe shapes, credentials in a
+      # URL, cookie-jar lines and long literals assigned to *SECRET*/*TOKEN*.
+      - name: Secret scan
+        run: node scripts/secret-scan.mjs
+
       - name: Typecheck
         run: npx tsc --noEmit
 
@@ -74,3 +80,34 @@ jobs:
 
       - name: Integration suite
         run: BASE_URL=http://localhost:3000 node scripts/integration-test.mjs
+
+  # The bot has no test framework of its own, but the YouTube egress fallback is
+  # the difference between "a flagged proxy degrades music" and "a flagged proxy
+  # kills music", so it is guarded here. Hermetic: yt-dlp is stubbed, so this
+  # needs no network, no cookies and no proxy.
+  bot-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install bot dependencies
+        run: pip install "discord.py>=2.4,<3.0" davey "yt-dlp[default]" python-dotenv
+
+      - name: YouTube egress fallback (proxy configured)
+        run: python discord-bot/scripts/test_youtube_egress_fallback.py
+
+      - name: YouTube egress fallback (no proxy)
+        run: python discord-bot/scripts/test_youtube_egress_fallback.py no-proxy
+
+      # Guards the root cause of the pf11 outage: bot.latency is NaN before
+      # the gateway connects, and the old truthy guard crashed /health every
+      # 10 s (ValueError: cannot convert float NaN to integer).
+      - name: Gateway latency NaN guard
+        run: python discord-bot/scripts/test_gateway_latency_nan.py

@@ -18,6 +18,7 @@ import bridge
 import config
 import database
 import embeds
+from gateway_util import gateway_latency_ms
 import net as http_mod
 import tmdb
 import threading
@@ -712,6 +713,19 @@ async def _health_server() -> None:
         except Exception:
             return None
 
+    def _youtube_egress_state() -> dict:
+        """Which egress path served the last YouTube resolve.
+
+        A proxy that answers but whose IP YouTube refuses reports HTTP 200, so
+        its presence says nothing about whether it works. This returns the
+        measured outcome instead — never the proxy URL or its credentials.
+        """
+        try:
+            import music as music_mod
+            return music_mod.proxy_state()
+        except Exception:
+            return {"configured": bool(config.YOUTUBE_PROXY), "status": "unknown"}
+
     def _js_runtime_state() -> dict:
         """Which JavaScript runtime yt-dlp can use for YouTube's challenges.
 
@@ -724,6 +738,36 @@ async def _health_server() -> None:
             return music_mod.js_runtimes()
         except Exception:
             return {"available": {}, "any": None, "yt_dlp_ejs_installed": None}
+
+    def _voice_state() -> dict:
+        """Is discord.py's voice backend importable?
+
+        Voice support was split into a separate package (davey); without it
+        every voice connect raises and no track can play. Same reasoning as
+        the runtime probe: a missing dependency must be a measurement, not a
+        guess the user later meets as "Unknown Playback Error".
+        """
+        try:
+            import davey  # noqa: F401
+            return {"davey": True}
+        except Exception:
+            return {"davey": False}
+
+    def _opus_state() -> dict:
+        """Opus codec introspection for /health (never raises)."""
+        try:
+            import music as music_mod
+            return music_mod.opus_status()
+        except Exception:
+            return {"loaded": False, "lib": None, "status": "unknown"}
+
+    def _bridge_detail() -> dict:
+        """Credential-free snapshot of the last site-bridge probe."""
+        try:
+            import bridge as bridge_mod
+            return bridge_mod.last_check()
+        except Exception:
+            return {"status": None, "reason": "unavailable"}
 
     async def _discord_api_probe() -> tuple[bool, int | None]:
         """Unauthenticated Discord API reachability check (credential-free).
@@ -802,7 +846,11 @@ async def _health_server() -> None:
 
     async def health(_request: web.Request) -> web.Response:
         statuses = http_mod.get_status()
-        latency_ms = round(bot.latency * 1000) if bot.latency else 0
+        # NaN-safe: bot.latency is NaN while the gateway is unconnected and
+        # NaN is truthy, so the old `if bot.latency` guard raised
+        # `ValueError: cannot convert float NaN to integer` here and crashed
+        # /health every 10s under Render's health probe.
+        latency_ms = gateway_latency_ms(bot, 0)
         uptime = time.time() - _start_time
         # Real heartbeat liveness. `ConnectionState.last_heartbeat` does not
         # exist (verified absent on discord.py 2.7.1), so the old lookup
@@ -871,10 +919,21 @@ async def _health_server() -> None:
             # must be able to tell "no FFmpeg" from "decoder fine, playback
             # unproven" instead of guessing from an aggregate flag.
             "ffmpeg": _ffmpeg_state(),
+            # Opus codec introspection (loaded lazily by discord.py on first
+            # voice connect — "unknown" at rest is normal, never an outage).
+            "opus": _opus_state(),
             # Real JavaScript-runtime discovery (deno/node/bun/quickjs) plus the
             # EJS solver scripts. Without a runtime, YouTube extraction fails in
             # a way that looks like an IP block — never guess, measure.
             "js_runtimes": _js_runtime_state(),
+            # YouTube egress (proxy) outcome — see _youtube_egress_state().
+            "youtube_egress": _youtube_egress_state(),
+            # discord.py's voice backend package. Its absence is a hard stop for
+            # every /play, so it belongs in the one endpoint the dashboard polls.
+            "voice_backend": _voice_state(),
+            # Last bridge probe: HTTP status + safe reason, so the dashboard
+            # can tell "authentication failed" from "endpoint unavailable".
+            "site_bridge_detail": _bridge_detail(),
             # Why the database is offline, without credentials. `database:
             # offline` alone cannot distinguish a missing variable from an
             # access-list rejection, so it was unactionable.
@@ -1301,6 +1360,10 @@ async def _health_server() -> None:
             # datacenter host. These three facts distinguish the possible
             # causes, so a failure is actionable instead of just "timed out".
             "proxy_configured": bool(config.YOUTUBE_PROXY),
+            # Presence is not health: this carries the outcome of the proxy
+            # (ready / challenged / bypassed) and which egress served the last
+            # resolve. Credential-free by construction.
+            "youtube_egress": music_mod.proxy_state(),
             "cookies_configured": bool(music_mod.cookies_path()),
             "js_runtimes": music_mod.js_runtimes(),
         }
@@ -1371,6 +1434,75 @@ async def _health_server() -> None:
             "last_playback": snap["last_playback"],
         })
 
+    async def health_music(_request: web.Request) -> web.Response:
+        """Public music aggregate for monitors and the dashboard.
+
+        No auth (uptime monitors cannot authenticate) and no secrets: only
+        measured subsystem states, counts (never guild/channel IDs), and a
+        machine-readable failure reason when degraded. Anything down here is
+        a real measurement, never a guess.
+        """
+        import music as music_mod
+        gateway_alive, hb_age, _ = gateway_liveness(bot)
+        ff = music_mod.ffmpeg_check()
+        opus = music_mod.opus_status()
+        runtimes = music_mod.js_runtimes()
+        try:
+            import davey  # noqa: F401
+            voice_backend: dict = {"davey": True}
+        except Exception:
+            voice_backend = {"davey": False}
+        snap = music_mod.engine.diagnostics_snapshot()
+        players = snap.get("players", {}) if isinstance(snap, dict) else {}
+        connected = sum(1 for p in players.values()
+                        if isinstance(p, dict) and p.get("connected"))
+        # Honest voice-playback claim: VERIFIED only while a player is audibly
+        # engaged (state playing + voice connected) this boot. Anything else
+        # — including a green HTTP service — is NOT_LIVE_VERIFIED. Hearing
+        # actual Discord audio is the only proof; this endpoint never fakes it.
+        voice_playback = "NOT_LIVE_VERIFIED"
+        for p in players.values():
+            if (isinstance(p, dict) and p.get("player") == "playing"
+                    and p.get("connected")):
+                voice_playback = "VERIFIED"
+                break
+        failed: list[str] = []
+        if ff.get("probed_ok") is not True:
+            failed.append("ffmpeg")
+        if opus.get("status") not in ("ready", "unknown"):
+            failed.append("opus")
+        if not runtimes.get("any"):
+            failed.append("audio_extractor")
+        if voice_backend.get("davey") is not True:
+            failed.append("voice_backend")
+        if not gateway_alive:
+            failed.append("discord_voice")
+        status = "online" if not failed else "degraded"
+        latency_ms = gateway_latency_ms(bot, None)
+        body: dict = {
+            "status": status,
+            "discord_voice": "ready" if gateway_alive else "unavailable",
+            "ffmpeg": ff.get("status"),
+            "audio_extractor": "ready" if runtimes.get("any") else "missing",
+            # Which egress YouTube actually accepted. A configured proxy that
+            # answers HTTP 200 but is refused by YouTube looks identical to a
+            # healthy one without this, so health reports the measured outcome
+            # (configured/ready/challenged/bypassed + last egress) and never the
+            # proxy URL or its credentials.
+            "youtube_egress": music_mod.proxy_state(),
+            "opus": opus.get("status"),
+            "player": "ready" if status == "online" else "degraded",
+            "latency": latency_ms,
+            "voice_backend": voice_backend,
+            "connected_voice_clients": connected,
+            "tracked_players": len(players),
+            "voice_playback": voice_playback,
+        }
+        if failed:
+            body["error"] = f"Degraded subsystems: {', '.join(failed)}"
+            body["failing"] = failed
+        return web.json_response(body, status=200 if status == "online" else 503)
+
     async def music_playback_log(request: web.Request) -> web.Response:
         """Recent staged playback attempts (newest first). Sanitized."""
         if not _authorized(request):
@@ -1402,6 +1534,7 @@ async def _health_server() -> None:
 
     app = web.Application()
     app.router.add_get("/health", health)
+    app.router.add_get("/health/music", health_music)
     app.router.add_get("/music/diagnose", music_diagnose)
     app.router.add_get("/music/diagnostics", music_diagnostics)
     app.router.add_get("/music/playback-log", music_playback_log)
@@ -1431,7 +1564,7 @@ async def _health_server() -> None:
         await bot.wait_until_ready()
         while not bot.is_closed():
             ok = not bot.is_closed() and http_mod.get_status().get("discord") == "online"
-            await database.keepalive_record(ok, round(bot.latency * 1000) if bot.latency else 0,
+            await database.keepalive_record(ok, gateway_latency_ms(bot, 0),
                                             200 if ok else 503, "bot self-check")
             try:
                 resp_status, _data = await http_mod.get_json(f"{config.MURASTREAM_URL}/api/dashboard/status")

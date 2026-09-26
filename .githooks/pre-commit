@@ -1,0 +1,16 @@
+#!/bin/sh
+# Block commits that contain real credential shapes.
+#
+# Enable once per clone (this is a local setting, never committed):
+#     git config core.hooksPath .githooks
+#
+# CI runs the same scanner on every push and pull request, so the guard holds
+# even where the hook is not enabled.
+set -e
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "pre-commit: node not found — skipping secret scan" >&2
+  exit 0
+fi
+
+node scripts/secret-scan.mjs --staged

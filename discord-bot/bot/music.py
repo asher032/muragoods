@@ -79,10 +79,23 @@ FFMPEG_ERROR: str | None = None
 AUDIO_SOURCE_FAILED = "audio_source_failed"
 VOICE_CONNECTION_FAILED = "voice_connection_failed"
 FFMPEG_FAILED = "ffmpeg_failed"
+FFMPEG_MISSING = "ffmpeg_missing"
+OPUS_MISSING = "opus_missing"
+OPUS_LOAD_FAILED = "opus_load_failed"
+AUDIO_PROCESS_FAILED = "audio_process_failed"
+EXPIRED_AUDIO_SOURCE = "expired_audio_source"
 SOURCE_UNAVAILABLE = "source_unavailable"
 PLAYBACK_TIMEOUT = "playback_timeout"
 MISSING_PERMISSION = "missing_permission"
 QUEUE_CORRUPTED = "queue_corrupted"
+# discord.py's voice backend was split into a separate package (davey). When it
+# is absent every voice connect raises a RuntimeError that names no subsystem
+# unless it is classified here — it used to fall through to the generic
+# "unknown playback error" and told the user nothing actionable.
+VOICE_LIBRARY_MISSING = "voice_library_missing"
+# YouTube is challenging this host's IP. The remedy is credentials (cookies or
+# a proxy), never a retry.
+YOUTUBE_CHALLENGED = "youtube_challenged"
 UNKNOWN_PLAYBACK_ERROR = "unknown_playback_error"
 
 PLAYBACK_USER_MESSAGES: dict[str, tuple[str, str]] = {
@@ -101,6 +114,32 @@ PLAYBACK_USER_MESSAGES: dict[str, tuple[str, str]] = {
         "The audio processor could not start. Check that FFmpeg is installed "
         "correctly and available to the bot.",
     ),
+    FFMPEG_MISSING: (
+        "🎚️ FFmpeg Unavailable",
+        "FFmpeg is unavailable on the music server, so no audio can be "
+        "produced. Install FFmpeg where the bot runs and restart it.",
+    ),
+    OPUS_MISSING: (
+        "🎙️ Opus Codec Missing",
+        "The Opus voice codec library was not found on the music server, so "
+        "Discord voice audio cannot be encoded. Install the Opus library "
+        "where the bot runs and restart it.",
+    ),
+    OPUS_LOAD_FAILED: (
+        "🎙️ Opus Codec Failed to Load",
+        "The Opus voice codec is present but could not be loaded. Check the "
+        "bot logs for the loader error and restart the bot.",
+    ),
+    AUDIO_PROCESS_FAILED: (
+        "🔇 Audio Process Exited",
+        "The audio process exited unexpectedly in the middle of playback. "
+        "Try again — if it keeps happening, check Music Diagnostics.",
+    ),
+    EXPIRED_AUDIO_SOURCE: (
+        "⌛ Audio Source Expired",
+        "The audio stream URL expired before playback started. Queue the "
+        "song again to fetch a fresh URL.",
+    ),
     SOURCE_UNAVAILABLE: (
         "🌐 Source Unavailable",
         "The selected audio source is currently unavailable. Try another result.",
@@ -117,6 +156,18 @@ PLAYBACK_USER_MESSAGES: dict[str, tuple[str, str]] = {
         "📋 Queue Error",
         "The music queue was in an unusable state and has been reset. "
         "Please queue the song again.",
+    ),
+    VOICE_LIBRARY_MISSING: (
+        "🔊 Voice Support Missing",
+        "The bot cannot open a Discord voice connection because its voice "
+        "library (davey) is not installed. Reinstall the bot's requirements "
+        "and restart it — audio cannot play until then.",
+    ),
+    YOUTUBE_CHALLENGED: (
+        "🔒 YouTube Needs Verification",
+        "YouTube is challenging this server's IP address. Set YT_COOKIES or "
+        "YOUTUBE_PROXY in the bot's environment and restart it — retrying "
+        "cannot help.",
     ),
     UNKNOWN_PLAYBACK_ERROR: (
         "❓ Unknown Playback Error",
@@ -175,16 +226,56 @@ def classify_playback_exception(exc: BaseException) -> str:
         return PLAYBACK_TIMEOUT
     name = type(exc).__name__
     msg = str(exc).lower()
+    if "timed out" in msg or "timeout" in msg or "timedout" in msg:
+        return PLAYBACK_TIMEOUT
+    # An expired googlevideo stream URL answers 403 — that is a stale URL, not
+    # a Discord permission problem. Must precede the Discord-403 rule below.
+    if "expired" in msg or ("403" in msg and ("googlevideo" in msg or "stream" in msg or "url" in msg)):
+        return EXPIRED_AUDIO_SOURCE
     if isinstance(exc, PermissionError) or "missing permission" in msg or "forbidden" in msg or "403" in msg:
         return MISSING_PERMISSION
+    # An FFmpeg process that DIED mid-playback is a different fault from one
+    # that never started (start failures are wrapped in an explicit
+    # PlaybackError with FFMPEG_FAILED/MISSING, so this rule only re-labels
+    # unwrapped process deaths). Must precede the generic ffmpeg rule.
+    if "exited" in msg or ("process" in msg and "exit" in msg):
+        return AUDIO_PROCESS_FAILED
     if "ffmpeg" in msg or "ffprobe" in msg or "executable" in msg or name in {"FileNotFoundError"} and "ffmpeg" in msg:
         return FFMPEG_FAILED
+    # A missing voice backend raises "RuntimeError: davey library needed in
+    # order to use voice". Classifying it matters three ways: it used to fall
+    # through to UNKNOWN_PLAYBACK_ERROR (the user saw a generic "check Music
+    # Diagnostics" for what is a missing dependency), and it must not be
+    # reported as a permissions problem either.
+    if "davey" in msg or ("library" in msg and "voice" in msg):
+        return VOICE_LIBRARY_MISSING
+    # Opus codec failures must name the codec, not the voice connection.
+    # Load failures ("OpusNotLoaded", "could not load") precede the generic
+    # missing-library wording so each maps to its own code.
+    if "opus" in msg:
+        if ("not loaded" in msg or "opusnotloaded" in msg or "could not load" in msg
+                or "failed to load" in msg or "load" in msg):
+            return OPUS_LOAD_FAILED
+        if ("missing" in msg or "not found" in msg or "not installed" in msg
+                or "no opus" in msg or "could not find" in msg
+                or ("cannot open" in msg and "shared" in msg)):
+            return OPUS_MISSING
+        return OPUS_LOAD_FAILED
+    # The resolve path already recognises YouTube's bot challenge; carry that
+    # through so a playback-time failure names the real remedy (cookies or a
+    # proxy) instead of falling back to the generic error.
+    if is_bot_challenge(msg):
+        return YOUTUBE_CHALLENGED
     if isinstance(exc, discord.ClientException):
         text = str(exc).lower()
         if "already playing" in text or "already connected" in text or "not connected" in text:
             return VOICE_CONNECTION_FAILED
         return VOICE_CONNECTION_FAILED
     if "connect" in msg and ("voice" in msg or "channel" in msg or "handshake" in msg):
+        return VOICE_CONNECTION_FAILED
+    # discord.py's voice failures surface as RuntimeError; without this they
+    # were the main remaining source of "unknown playback error".
+    if isinstance(exc, RuntimeError) and "voice" in msg:
         return VOICE_CONNECTION_FAILED
     if "unavailable" in msg or "not available" in msg or "404" in msg or "410" in msg:
         return SOURCE_UNAVAILABLE
@@ -274,6 +365,55 @@ def ffmpeg_check() -> dict:
         "error": FFMPEG_ERROR,
         "status": status,
     }
+
+
+def opus_status() -> dict:
+    """Opus voice-codec readiness. Actually verifies usability, never raises.
+
+    discord.py loads libopus lazily on the first voice connect. When it is
+    not loaded yet, this performs the same load discord.py itself would do
+    (`discord.opus.load_opus()`) so the result is a verification, not a
+    guess: success means the voice stack can really use it. Outcomes:
+
+    - ready        — loaded (already, or verified by a load just now)
+    - missing      — the loader reports OpusNotLoaded: no usable library
+    - load_failed  — the load raised something else (see error)
+    - unknown      — introspection itself failed (never raises either way)
+    """
+    try:
+        import discord as _discord
+        if bool(_discord.opus.is_loaded()):
+            return {"loaded": True, "lib": None, "status": "ready"}
+        # Verify the same way the voice stack does: discord.opus.load_opus()
+        # takes the library name (it has no zero-arg auto-discovery), so feed
+        # it ctypes' discovery result — exactly the documented public path.
+        # No name discoverable (common on Windows, where discord.py ships its
+        # own bundled DLL) is NOT proof of missing: report unknown and let
+        # the voice connect be the verifier.
+        try:
+            from ctypes.util import find_library
+            lib = find_library("opus")
+        except Exception:
+            lib = None
+        if not lib:
+            return {"loaded": False, "lib": None, "status": "unknown",
+                    "note": "opus not loaded and no library name discoverable; "
+                            "discord.py may still load its bundled copy on voice connect"}
+        try:
+            _discord.opus.load_opus(lib)
+        except Exception as load_exc:
+            name = type(load_exc).__name__
+            if name == "OpusNotLoaded" or "not loaded" in str(load_exc).lower():
+                return {"loaded": False, "lib": lib, "status": "missing",
+                        "error": "OpusNotLoaded"}
+            return {"loaded": False, "lib": lib, "status": "load_failed",
+                    "error": sanitize_for_log(f"{name}: {load_exc}", limit=200)}
+        loaded = bool(_discord.opus.is_loaded())
+        return {"loaded": loaded, "lib": lib, "status": "ready" if loaded else "unknown",
+                "note": "verified by load" if loaded else "load returned without error but opus reports unloaded"}
+    except Exception as exc:
+        return {"loaded": False, "lib": None, "status": "unknown",
+                "error": f"{type(exc).__name__}"}
 
 
 def check_voice_permissions(channel, me) -> dict:
@@ -387,6 +527,17 @@ _BOT_CHALLENGE_MARKERS = (
     "confirm you\u2019re not a bot",
     "cookies for the authentication",
     "use --cookies",
+    "sign in to confirm",
+    # YouTube's other wordings when it refuses a flagged egress IP. Deliberately
+    # NOT keyed on a bare "HTTP Error 403/429": a 403 from a private or removed
+    # video carries the same status as a bot refusal, so the status code alone
+    # cannot tell them apart and would mislabel ordinary removals as challenges.
+    # These markers only match when the message says what actually happened.
+    "captcha",
+    "automated queries",
+    "bot detection",
+    "unusual traffic",
+    "too many requests",
 )
 
 
@@ -422,8 +573,13 @@ def is_preview_url(url: str | None) -> bool:
     return "preview" in host
 
 
-def get_ydl_opts() -> dict[str, Any]:
-    """Build yt-dlp options, including cookies/proxy when configured."""
+def get_ydl_opts(use_proxy: bool = True) -> dict[str, Any]:
+    """Build yt-dlp options, including cookies/proxy when configured.
+
+    `use_proxy=False` drops only the proxy — cookies, JS runtimes, format and
+    retry policy stay identical, which is what the direct-egress fallback needs
+    when YouTube refuses the proxy's IP.
+    """
     # NOTE: no pinned format and no pinned player_client by default.
     #
     # Both were pinned, and that was actively harmful. A selector of
@@ -458,13 +614,141 @@ def get_ydl_opts() -> dict[str, Any]:
     if config.YT_PLAYER_CLIENT:
         opts["extractor_args"] = {"youtube": {"player_client": [
             c.strip() for c in config.YT_PLAYER_CLIENT.split(",") if c.strip()]}}
-    proxy = config.YOUTUBE_PROXY
-    if proxy:
-        opts["proxy"] = proxy
+    if use_proxy:
+        proxy = config.YOUTUBE_PROXY
+        if proxy:
+            opts["proxy"] = proxy
     cookies = cookies_path()
     if cookies:
         opts["cookiefile"] = cookies
     return opts
+
+
+# ── YouTube egress (proxy) health ─────────────────────────────────────
+# A proxy only helps while YouTube still accepts its egress IP. Reachability is
+# NOT that test: the configured proxy answers HTTP 200 and YouTube can still
+# refuse every request through it with
+#   ERROR: [youtube] <id>: Sign in to confirm you're not a bot.
+# while the identical cookies + JS runtime resolve the same track directly.
+# So a challenge benches the proxy for a cooldown and playback continues on
+# this host's own egress instead of dying with it. Bounded by construction:
+# at most one direct plan per resolve, and no flapping back to a proxy that
+# just refused us. Reported through /health/music as credential-free state.
+PROXY_EGRESS_NOT_CONFIGURED = "not_configured"
+PROXY_EGRESS_READY = "ready"
+PROXY_EGRESS_CHALLENGED = "challenged"
+PROXY_EGRESS_BYPASSED = "bypassed"
+
+PROXY_CHALLENGE_COOLDOWN = 900.0  # seconds a challenged proxy stays benched
+
+_egress_state: dict[str, Any] = {
+    "status": PROXY_EGRESS_NOT_CONFIGURED,
+    "last_path": None,
+    "bench_until": 0.0,
+    "challenge_count": 0,
+    "bypass_count": 0,
+    "last_reason": None,
+}
+
+
+def proxy_configured() -> bool:
+    return bool(config.YOUTUBE_PROXY)
+
+
+def _proxy_benched() -> bool:
+    return _egress_state["bench_until"] > time.time()
+
+
+def record_proxy_challenged(reason: str | None = None) -> None:
+    """Bench a challenged proxy and remember why (never the proxy URL).
+
+    The reason is scrubbed on the way in: it reaches a public health endpoint,
+    and a driver error can quote the proxy URL with its credentials in it.
+    """
+    _egress_state["status"] = PROXY_EGRESS_CHALLENGED
+    _egress_state["bench_until"] = time.time() + PROXY_CHALLENGE_COOLDOWN
+    _egress_state["challenge_count"] = int(_egress_state["challenge_count"]) + 1
+    _egress_state["last_path"] = "proxy"
+    _egress_state["last_reason"] = sanitize_for_log(reason, limit=160)
+
+
+def record_egress_success(used_proxy: bool) -> None:
+    if used_proxy:
+        _egress_state["status"] = PROXY_EGRESS_READY
+        _egress_state["last_path"] = "proxy"
+        _egress_state["last_reason"] = None
+        return
+    _egress_state["last_path"] = "direct"
+    if not proxy_configured():
+        _egress_state["status"] = PROXY_EGRESS_NOT_CONFIGURED
+        return
+    _egress_state["bypass_count"] = int(_egress_state["bypass_count"]) + 1
+    _egress_state["status"] = (
+        PROXY_EGRESS_CHALLENGED if _proxy_benched() else PROXY_EGRESS_BYPASSED
+    )
+
+
+def _current_proxy_status() -> str:
+    if not proxy_configured():
+        return PROXY_EGRESS_NOT_CONFIGURED
+    if _proxy_benched():
+        return PROXY_EGRESS_CHALLENGED
+    return str(_egress_state["status"])
+
+
+def proxy_state() -> dict[str, Any]:
+    """Credential-free YouTube egress state for /health/music.
+
+    Reports configuration presence and outcome only — the proxy URL, its
+    username and its password must never appear in health output or logs.
+    """
+    remaining = int(_egress_state["bench_until"] - time.time())
+    return {
+        "configured": proxy_configured(),
+        "status": _current_proxy_status(),
+        "in_use": proxy_configured() and not _proxy_benched(),
+        "benched": _proxy_benched(),
+        "bench_seconds_remaining": max(0, remaining),
+        "last_egress": _egress_state["last_path"],
+        "challenge_count": _egress_state["challenge_count"],
+        "bypass_count": _egress_state["bypass_count"],
+        # Scrubbed again on the way out: this payload is public.
+        "last_reason": sanitize_for_log(_egress_state["last_reason"], limit=160),
+    }
+
+
+def build_strategies(
+    query: str, is_url: bool, use_proxy: bool, scope: str = "all"
+) -> list[tuple[str, dict[str, Any]]]:
+    """yt-dlp strategies for this query, with the proxy included or omitted.
+
+    `scope` separates YouTube strategies from the other providers so the caller
+    can order them: when YouTube refuses one egress, the same query is worth
+    retrying on the other egress *before* falling back to a different provider
+    (which may answer with something unrelated).
+
+    A URL must resolve to that URL: the search fallbacks would otherwise treat
+    the URL itself as a search string and hand back some other provider's best
+    guess at it.
+    """
+    base = get_ydl_opts(use_proxy=use_proxy)
+    if is_url:
+        return [("url", base)]
+    youtube = [
+        ("ytsearch", base),
+        ("ytsearch1", {**base, "default_search": None}),
+        ("ytsearch5", {**base, "default_search": None}),
+    ]
+    providers = [
+        ("scsearch", {**base, "default_search": None}),
+        ("bandcamp", {**base, "default_search": None}),
+        ("direct", {**base, "force_generic_extractor": True}),
+    ]
+    if scope == "youtube":
+        return youtube
+    if scope == "providers":
+        return providers
+    return youtube + providers
 
 
 FFMPEG_OPTS = {
@@ -684,24 +968,39 @@ class MusicEngine:
         # treat the URL itself as a search string and hand back some other
         # provider's best guess at it.
         is_url = bool(re.match(r"^https?://", query.strip(), re.I))
-        if is_url:
-            strategies = [("url", get_ydl_opts())]
-        else:
-            strategies = [
-                ("ytsearch", get_ydl_opts()),
-                ("ytsearch1", {**get_ydl_opts(), "default_search": None}),
-                ("ytsearch5", {**get_ydl_opts(), "default_search": None}),
-                ("scsearch", {**get_ydl_opts(), "default_search": None}),
-                ("bandcamp", {**get_ydl_opts(), "default_search": None}),
-                ("direct", {**get_ydl_opts(), "force_generic_extractor": True}),
-            ]
+        # Tagged egress plan: try the configured proxy first (unless it is
+        # benched for a previous challenge), then this host's own egress at most
+        # once. Each entry is (strategy name, yt-dlp opts, uses proxy).
+        try_proxy = bool(config.YOUTUBE_PROXY) and not _proxy_benched()
+        plans: list[tuple[str, dict[str, Any], bool]] = [
+            (*strategy, try_proxy)
+            for strategy in build_strategies(query, is_url, try_proxy, "youtube")
+        ]
+        if try_proxy:
+            # Same query, this host's own egress, tried immediately: it is the
+            # same track, just a different IP, so it beats a different provider.
+            plans.extend(
+                (*strategy, False)
+                for strategy in build_strategies(query, is_url, False, "youtube")
+            )
+        # Other providers last: they do not hit YouTube, so the challenge does
+        # not apply to them and they keep the pre-existing behaviour of being a
+        # fallback rather than the first answer.
+        plans.extend(
+            (*strategy, try_proxy)
+            for strategy in build_strategies(query, is_url, try_proxy, "providers")
+        )
         youtube_challenged = False
-        for strategy_name, strategy_opts in strategies:
-            if youtube_challenged and strategy_name.startswith("ytsearch"):
-                # The challenge is a property of this host's egress IP, so the
-                # sibling YouTube strategies will be refused identically. Not
-                # retrying them is the difference between ~10s and ~80s.
-                log.info("skipping %s: YouTube already challenged this host's IP", strategy_name)
+        challenged_egress: set[bool] = set()
+        for strategy_name, strategy_opts, strategy_uses_proxy in plans:
+            if strategy_uses_proxy in challenged_egress and strategy_name.startswith("ytsearch"):
+                # The challenge is a property of the egress IP, so the sibling
+                # YouTube strategies on that same egress are refused
+                # identically. Not retrying them is the difference between ~10s
+                # and ~80s.
+                log.info(
+                    "skipping %s: YouTube already challenged the %s egress",
+                    strategy_name, "proxy" if strategy_uses_proxy else "host")
                 continue
             search_query = query
             if strategy_name == "ytsearch1":
@@ -731,7 +1030,8 @@ class MusicEngine:
                         last_exc = ValueError(f"[{strategy_name}] No URL in result")
                         continue
                     if not data.get("url"):
-                        data = await self._refresh_stream_url(data)
+                        data = await self._refresh_stream_url(
+                            data, use_proxy=strategy_uses_proxy)
                     track = Track(data, requester=None)
                     if strategy_name in ("scsearch", "bandcamp"):
                         # Fallback providers may answer with something else
@@ -755,6 +1055,7 @@ class MusicEngine:
                                         strategy_name, track.title[:60], query[:80])
                             continue
                     log.info("resolve ok via %s: %s (attempt %d)", strategy_name, track.title[:60], attempt + 1)
+                    record_egress_success(strategy_uses_proxy)
                     self._last_resolve_error = None
                     # Succeeded: there is no failure to describe, whatever the
                     # primary provider did on the way here.
@@ -762,16 +1063,38 @@ class MusicEngine:
                     return track
                 except Exception as exc:
                     last_exc = exc
-                    message = str(exc)[:500]
+                    raw_message = str(exc)[:500]
+                    # Challenge detection runs on the RAW text (the advisory
+                    # mentions --cookies, which sanitization would redact);
+                    # only the STORED copy is scrubbed so user-facing surfaces
+                    # and diagnostics can never leak credentials or long URLs.
+                    message = sanitize_for_log(raw_message, limit=500) or ""
                     self._last_resolve_error = message
-                    if is_bot_challenge(message):
+                    if is_bot_challenge(raw_message):
                         youtube_challenged = True
                         self._youtube_challenged = True
                         self._last_error_kind = "youtube_bot_challenge"
-                        log.warning(
-                            "YouTube bot-challenge on %s for %r — set YT_COOKIES (or "
-                            "YOUTUBE_PROXY) to authenticate; retrying cannot help",
-                            strategy_name, query[:80])
+                        challenged_egress.add(strategy_uses_proxy)
+                        if strategy_uses_proxy:
+                            # Reachability was never the question: bench the proxy
+                            # and let the direct plan below answer instead of
+                            # failing playback with it.
+                            record_proxy_challenged(message)
+                            has_direct_plan = any(
+                                not uses_proxy for _, _, uses_proxy in plans)
+                            log.warning(
+                                "YouTube bot-challenge on %s for %r via the configured "
+                                "proxy — %s",
+                                strategy_name, query[:80],
+                                "retrying on this host's own egress (cookies still apply)"
+                                if has_direct_plan else
+                                "set YT_COOKIES or replace the proxy; retrying cannot help")
+                        else:
+                            log.warning(
+                                "YouTube bot-challenge on %s for %r on this host's egress — "
+                                "set YT_COOKIES (or a proxy whose IP YouTube accepts) to "
+                                "authenticate; retrying cannot help",
+                                strategy_name, query[:80])
                         break
                     log.warning("yt-dlp %s attempt %d failed for %r: %s", strategy_name, attempt + 1, query[:100], exc)
                     if attempt < 1:
@@ -880,6 +1203,7 @@ class MusicEngine:
                 "executable": ff["executable"],
                 "error": ff["error"],
             },
+            "opus": opus_status(),
             "players": {
                 str(gid): {
                     "connection": p.connection_state,
@@ -961,12 +1285,15 @@ class MusicEngine:
                         "only a preview clip is available for this track")
 
         # Stage 4: FFmpeg precheck — fail fast with the real cause.
+        # A missing binary is FFMPEG_MISSING (install it); a present binary
+        # that fails to run is FFMPEG_FAILED (broken install). Different fixes.
         if ff["probed_ok"] is False:
-            raise _fail(FFMPEG_FAILED, "ffmpeg-precheck",
+            missing = ff["status"] == "missing" or "not found" in (ff["error"] or "").lower()
+            raise _fail(FFMPEG_MISSING if missing else FFMPEG_FAILED, "ffmpeg-precheck",
                         f"ffmpeg unavailable: {ff['error'] or ff['exe']}",
-                        error_type="FileNotFoundError" if ff["status"] == "missing" else "FFmpegNotFound")
+                        error_type="FileNotFoundError" if missing else "FFmpegNotFound")
         if not ff["exists"]:
-            raise _fail(FFMPEG_FAILED, "ffmpeg-precheck",
+            raise _fail(FFMPEG_MISSING, "ffmpeg-precheck",
                         f"ffmpeg binary not found: {ff['exe']}")
 
         # Stage 5: voice channel detection + automatic permission check.
@@ -1288,13 +1615,17 @@ class MusicEngine:
         ok = stages["ffmpeg"] == "PASS" and stages["audio_source"] == "PASS"
         return {"ok": ok, "stages": stages, "detail": detail}
 
-    async def _refresh_stream_url(self, data: dict[str, Any]) -> dict[str, Any]:
+    async def _refresh_stream_url(
+        self, data: dict[str, Any], use_proxy: bool = True
+    ) -> dict[str, Any]:
         webpage = data.get("webpage_url") or data.get("url")
         if not webpage:
             return data
         try:
             loop = asyncio.get_running_loop()
-            with yt_dlp.YoutubeDL(get_ydl_opts()) as ydl:
+            # Refresh through the egress that produced the result, otherwise a
+            # challenged proxy re-breaks a track that resolved directly.
+            with yt_dlp.YoutubeDL(get_ydl_opts(use_proxy=use_proxy)) as ydl:
                 fresh = await loop.run_in_executor(
                     None, lambda: ydl.extract_info(webpage, download=False))
             if fresh and fresh.get("url"):
