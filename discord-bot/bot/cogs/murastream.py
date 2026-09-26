@@ -10,6 +10,7 @@ from discord.ext import commands
 import bridge
 import config
 import embeds
+from gateway_util import gateway_latency_ms
 import tmdb
 import ui
 import utils
@@ -80,7 +81,8 @@ class MediaCommands(commands.Cog):
         import music as music_mod
 
         lines: list[str] = []
-        latency = round(self.bot.latency * 1000)
+        # NaN-safe: gateway latency is NaN mid-(re)connect (see gateway_util).
+        latency = gateway_latency_ms(self.bot, 0)
         lines.append(f"{'🟢' if latency < 250 else '🟡'} **Discord** — {latency} ms")
 
         try:
@@ -118,9 +120,8 @@ class MediaCommands(commands.Cog):
 
     @app_commands.command(name="ping", description="Bot latency.")
     async def ping(self, interaction: discord.Interaction):
-        latency = self.bot.latency or 0
-        # Gateway latency can be NaN during (re)connect — never crash on it.
-        ms = int(latency * 1000) if latency == latency else 0  # NaN check
+        # NaN-safe: gateway latency can be NaN during (re)connect.
+        ms = gateway_latency_ms(self.bot, 0)
         await interaction.response.send_message(
             embed=embeds.embed("🏓 Pong!", f"Latency: **{ms} ms**", embeds.INFO))
 

@@ -18,6 +18,7 @@ import bridge
 import config
 import database
 import embeds
+from gateway_util import gateway_latency_ms
 import net as http_mod
 import tmdb
 import threading
@@ -845,7 +846,11 @@ async def _health_server() -> None:
 
     async def health(_request: web.Request) -> web.Response:
         statuses = http_mod.get_status()
-        latency_ms = round(bot.latency * 1000) if bot.latency else 0
+        # NaN-safe: bot.latency is NaN while the gateway is unconnected and
+        # NaN is truthy, so the old `if bot.latency` guard raised
+        # `ValueError: cannot convert float NaN to integer` here and crashed
+        # /health every 10s under Render's health probe.
+        latency_ms = gateway_latency_ms(bot, 0)
         uptime = time.time() - _start_time
         # Real heartbeat liveness. `ConnectionState.last_heartbeat` does not
         # exist (verified absent on discord.py 2.7.1), so the old lookup
@@ -1473,7 +1478,7 @@ async def _health_server() -> None:
         if not gateway_alive:
             failed.append("discord_voice")
         status = "online" if not failed else "degraded"
-        latency_ms = round(bot.latency * 1000) if bot.latency else None
+        latency_ms = gateway_latency_ms(bot, None)
         body: dict = {
             "status": status,
             "discord_voice": "ready" if gateway_alive else "unavailable",
@@ -1559,7 +1564,7 @@ async def _health_server() -> None:
         await bot.wait_until_ready()
         while not bot.is_closed():
             ok = not bot.is_closed() and http_mod.get_status().get("discord") == "online"
-            await database.keepalive_record(ok, round(bot.latency * 1000) if bot.latency else 0,
+            await database.keepalive_record(ok, gateway_latency_ms(bot, 0),
                                             200 if ok else 503, "bot self-check")
             try:
                 resp_status, _data = await http_mod.get_json(f"{config.MURASTREAM_URL}/api/dashboard/status")
