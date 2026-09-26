@@ -1,6 +1,7 @@
 import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
 import { discordConfigCollection } from '@/app/lib/discord-config';
+import { verifyBotInGuild, fetchBotMember } from '@/app/lib/discord-bot';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -63,23 +64,15 @@ async function botGuildIds(): Promise<Set<string> | null> {
 }
 
 async function botMember(guildId: string): Promise<{ id: string; username: string; displayName: string; avatar: string | null; permissions: number; roles: string[] } | null> {
-  const token = process.env.DISCORD_TOKEN;
-  if (!token) return null;
-  const resp = await fetch(`https://discord.com/api/v10/guilds/${guildId}/member/@me`, {
-    headers: { Authorization: `Bot ${token}` },
-  });
-  if (!resp.ok) return null;
-  const data = (await resp.json()) as {
-    user: { id: string; username: string; display_name?: string; avatar?: string | null };
-    roles: string[];
-  } & { permissions?: number };
+  const doc = await fetchBotMember(guildId);
+  if (!doc || !doc.user) return null;
   return {
-    id: data.user.id,
-    username: data.user.username,
-    displayName: data.user.display_name ?? data.user.username,
-    avatar: data.user.avatar ?? null,
-    permissions: data.permissions ?? 0,
-    roles: data.roles ?? [],
+    id: doc.user.id,
+    username: doc.user.username,
+    displayName: doc.user.display_name ?? doc.user.username,
+    avatar: doc.user.avatar ?? null,
+    permissions: Number(doc.permissions ?? 0),
+    roles: doc.roles ?? [],
   };
 }
 
@@ -117,7 +110,12 @@ export async function GET(req: NextRequest) {
   // None of these come from the browser or from login-time caches.
   const botIds = await botGuildIds();
   const botMemberDoc = await botMember(guildId);
-  const botInstalled = botMemberDoc !== null;
+  // Tri-state verdict from the shared helper: only a real Discord 404 means
+  // absent. (Note: this file previously called the singular /member/@me
+  // endpoint, which Discord always 404s — so it reported "not installed"
+  // for every guild, working or not.)
+  const presence = await verifyBotInGuild(guildId);
+  const botInstalled = presence === 'installed' ? true : presence === 'absent' ? false : null;
 
   // Detached audit of the config the bot itself currently has on file ---
   let savedConfig: { permission?: string; logChannel?: string; musicChannel?: string } | null = null;
@@ -171,8 +169,8 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const manageable = botInstalled
-    ? (guildMemberManages(req, token, guildId, botMemberDoc) ?? false)
+  const manageable = botInstalled === true && botMemberDoc
+    ? (guildMemberManages(req, token, guildId) ?? false)
     : false;
 
   return NextResponse.json({
@@ -191,7 +189,7 @@ export async function GET(req: NextRequest) {
   });
 }
 
-async function guildMemberManages(req: NextRequest, token: string, guildId: string, bot: { id: string }): Promise<boolean | null> {
+async function guildMemberManages(req: NextRequest, token: string, guildId: string): Promise<boolean | null> {
   // Already used the bot token for the bot check — use the session token
   // for the user check so that both belong to the same request's lifecycle.
   try {

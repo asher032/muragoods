@@ -54,6 +54,45 @@ const PASSWORD = 'Integration123!';
 
 console.log(`\nIntegration tests against ${BASE}\n`);
 
+// ─── 0. Dashboard auth codes (no session at all) ──────────────────────
+// An expired/invalid session must read as AUTH_REQUIRED (401) — never as
+// "no permission" (403) and never as "bot not installed". Plain fetch here:
+// no cookies are sent, mirroring a dead/expired session cookie.
+console.log('[0] dashboard auth codes (sessionless)');
+{
+  const anon = (path) => fetch(`${BASE}${path}`).then(async (r) => ({
+    status: r.status,
+    body: await r.json().catch(() => null),
+  }));
+
+  const cfgNoAuth = await anon('/api/dashboard/config?guildId=997389969448517632');
+  check('config without session → 401 AUTH_REQUIRED',
+    cfgNoAuth.status === 401 && cfgNoAuth.body?.code === 'AUTH_REQUIRED',
+    `status ${cfgNoAuth.status} code ${cfgNoAuth.body?.code}`);
+
+  const cfgBadId = await anon('/api/dashboard/config?guildId=abc');
+  check('config without session still 401 (auth checked first)',
+    cfgBadId.status === 401, `status ${cfgBadId.status}`);
+
+  const serversNoAuth = await anon('/api/dashboard/servers');
+  check('servers without session → 401', serversNoAuth.status === 401,
+    `status ${serversNoAuth.status}`);
+
+  const statusBadId = await anon('/api/discord/guilds/abc/status');
+  check('status endpoint rejects malformed guildId → 400 INVALID_GUILD_ID',
+    statusBadId.status === 400 && statusBadId.body?.code === 'INVALID_GUILD_ID',
+    `status ${statusBadId.status} code ${statusBadId.body?.code}`);
+
+  const statusNoAuth = await anon('/api/discord/guilds/997389969448517632/status');
+  check('status endpoint without session → 401 AUTH_REQUIRED',
+    statusNoAuth.status === 401 && statusNoAuth.body?.code === 'AUTH_REQUIRED',
+    `status ${statusNoAuth.status} code ${statusNoAuth.body?.code}`);
+
+  const guildsNoAuth = await anon('/api/dashboard/guilds');
+  check('guilds without session → 401', guildsNoAuth.status === 401,
+    `status ${guildsNoAuth.status}`);
+}
+
 // ─── 1. Account profile ─────────────────────────────────────────────
 console.log('[1] account profile (session-based — the old ?email= IDOR is closed)');
 {

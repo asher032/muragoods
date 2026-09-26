@@ -1,6 +1,7 @@
 import { sessionToken } from '@/app/lib/require-session';
 import { NextRequest, NextResponse } from 'next/server';
 import { discordConfigCollection } from '@/app/lib/discord-config';
+import { verifyBotInGuild, botToken } from '@/app/lib/discord-bot';
 
 // Dashboard config API — authorization model:
 //   1. The caller presents a Discord access token (from the OAuth flow).
@@ -68,26 +69,13 @@ async function authorize(token: string | null, guildId: string): Promise<Authz> 
   return { ok: true, guild };
 }
 
-function botToken(): string | null {
-  return process.env.DISCORD_BOT_TOKEN?.trim() || process.env.DISCORD_TOKEN?.trim() || null;
-}
-
-/** Is the bot installed on this guild (Discord API, bot token)? null = unknown. */
+/** Is the bot installed on this guild? Tri-state via the shared helper:
+ *  true = verified member, false = real Discord 404, null = unverifiable
+ *  (no token / rejected credential / rate limit / challenged network).
+ *  Only `false` may ever gate a save or an invite prompt. */
 async function botInstalled(guildId: string): Promise<boolean | null> {
-  const token = botToken();
-  if (!token) return null;
-  try {
-    const resp = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/@me`, {
-      headers: { Authorization: `Bot ${token}` },
-      cache: 'no-store',
-      signal: AbortSignal.timeout(8000),
-    });
-    if (resp.status === 404 || resp.status === 403) return false;
-    if (!resp.ok) return null;
-    return true;
-  } catch {
-    return null;
-  }
+  const presence = await verifyBotInGuild(guildId);
+  return presence === 'installed' ? true : presence === 'absent' ? false : null;
 }
 
 // ── Server-side resource verification (§22) ──────────────────────────────
@@ -350,15 +338,15 @@ export async function PATCH(req: NextRequest) {
   // Server-side resource verification: every selected channel/category/role
   // must exist in THIS guild and be usable by the bot — a forged guildId or
   // a foreign ID is rejected here, never stored.
-  const botToken = process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN || '';
+  const bToken = botToken();
   const idFields = collectIdFields(update as Record<string, unknown>);
   if (idFields.length > 0) {
-    if (!botToken) {
+    if (!bToken) {
       return bad('The bot cannot verify these server settings right now (bot token not configured). Try again later.', 503);
     }
-    const check = await loadBotCheck(guildId, botToken);
+    const check = await loadBotCheck(guildId, bToken);
     if (!check) {
-      return bad('The bot cannot read this server right now. Check that it is still installed, then try again.', 502);
+      return bad('Discord did not answer the verification check — the bot may be unreachable or rate-limited. Wait a moment and try saving again.', 502);
     }
     for (const { field, value } of idFields) {
       const label = friendlyField('', field);
@@ -388,7 +376,7 @@ export async function PATCH(req: NextRequest) {
         }
       } else {
         // MemberId / UserId
-        if (!(await memberInGuild(guildId, value, botToken))) {
+        if (!(await memberInGuild(guildId, value, bToken))) {
           return bad(`${label} is no longer on this server. Pick another member.`);
         }
       }
