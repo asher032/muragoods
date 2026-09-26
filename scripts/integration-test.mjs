@@ -104,6 +104,7 @@ console.log('[0] dashboard auth codes (sessionless)');
     '/api/discord/guilds/997389969448517632/channels',
     '/api/dashboard/guilds/997389969448517632/overview',
     '/api/dashboard/guilds/997389969448517632/diagnostics',
+    '/api/dashboard/moderation/notes?guildId=997389969448517632&userId=123456789',
   ];
   for (const p of dataPaths) {
     const r = await anon(p);
@@ -122,6 +123,15 @@ console.log('[0] dashboard auth codes (sessionless)');
     const r = await anon(p);
     check(`${p.split('/').slice(0, 5).join('/')} rejects malformed guildId → 400`,
       r.status === 400 && r.body?.code === 'INVALID_GUILD_ID',
+      `status ${r.status} code ${r.body?.code}`);
+  }
+  // POST-only moderation routes: no session must still read as 401
+  // AUTH_REQUIRED (auth is checked before any body validation).
+  for (const p of ['/api/dashboard/moderation/lockdown', '/api/dashboard/moderation/purge']) {
+    const r = await fetch(`${BASE}${p}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      .then(async (rr) => ({ status: rr.status, body: await rr.json().catch(() => null) }));
+    check(`${p} without session → 401 AUTH_REQUIRED`,
+      r.status === 401 && r.body?.code === 'AUTH_REQUIRED',
       `status ${r.status} code ${r.body?.code}`);
   }
 }

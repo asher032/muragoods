@@ -72,9 +72,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const token = (await sessionToken());
   if (!token) return NextResponse.json({ success: false, code: 'AUTH_REQUIRED', error: 'Discord token required' }, { status: 401 });
-  let body: { guildId?: string; userId?: string; action?: string; reason?: string; minutes?: number; deleteMessageDays?: number };
+  let body: { guildId?: string; userId?: string; action?: string; reason?: string; minutes?: number; duration?: string | number; deleteMessageDays?: number };
   try { body = await req.json(); } catch {
-    return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 });
+    return NextResponse.json({ success: false, code: 'INVALID_INPUT', error: 'Invalid JSON' }, { status: 400 });
   }
   const guildId = String(body.guildId || '');
   const userId = String(body.userId || '');
@@ -82,7 +82,9 @@ export async function POST(req: NextRequest) {
   if (!/^\d{5,25}$/.test(guildId) || !/^\d{5,25}$/.test(userId)) {
     return NextResponse.json({ success: false, code: 'INVALID_GUILD_ID', error: 'Valid guildId and userId required' }, { status: 400 });
   }
-  const allowed = ['warn', 'timeout', 'kick', 'ban', 'unban'];
+  // Full punishment matrix — same actions as the /moderation slash group,
+  // executed by the same bot-side service.
+  const allowed = ['warn', 'timeout', 'removetimeout', 'mute', 'hardmute', 'unmute', 'kick', 'ban', 'softban', 'tempban', 'unban'];
   if (!allowed.includes(action)) {
     return NextResponse.json({ success: false, code: 'INVALID_OP', error: 'Unknown action' }, { status: 400 });
   }
@@ -94,26 +96,28 @@ export async function POST(req: NextRequest) {
   const actor = await botUsername(token);
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
+    const timer = setTimeout(() => controller.abort(), 15000);
     const resp = await fetch(`${BOT_BASE}/mod/action/${guildId}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action, userId, reason: body.reason || 'Dashboard action',
         minutes: body.minutes,
+        duration: body.duration,
         deleteMessageDays: Math.max(0, Math.min(7, Number(body.deleteMessageDays) || 0)),
         actor,
       }),
       signal: controller.signal,
     });
     clearTimeout(timer);
-    const data = await resp.json().catch(() => null) as { ok?: boolean; error?: string; caseId?: number } | null;
+    const data = await resp.json().catch(() => null) as { ok?: boolean; code?: string; error?: string; caseId?: number; warningCount?: number; dmSent?: boolean } | null;
     if (!resp.ok || !data?.ok) {
-      const code = resp.status === 404 ? 'BOT_NOT_IN_GUILD' : resp.status === 403 ? 'BOT_FORBIDDEN' : resp.status === 409 ? 'BOT_CONFLICT' : 'BOT_ERROR';
+      const code = typeof data?.code === 'string' && data.code ? data.code
+        : resp.status === 404 ? 'BOT_NOT_IN_GUILD' : resp.status === 403 ? 'BOT_FORBIDDEN' : resp.status === 409 ? 'BOT_CONFLICT' : 'BOT_ERROR';
       return NextResponse.json({ success: false, code, error: data?.error || `Bot returned ${resp.status}` },
         { status: resp.status });
     }
-    return NextResponse.json({ success: true, caseId: data.caseId });
+    return NextResponse.json({ success: true, caseId: data.caseId, warningCount: data.warningCount, dmSent: data.dmSent });
   } catch (err) {
     return NextResponse.json({ success: false, code: 'BOT_OFFLINE', error: `Bot unreachable: ${String(err).slice(0, 120)}` }, { status: 502 });
   }
