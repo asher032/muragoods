@@ -188,6 +188,8 @@ export default function MusicPage() {
     title: string; uploader: string; duration: number; thumbnail: string; url: string;
   }>>([]);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
+  // Monotonic search generation for the stale-response guard below.
+  const searchSeq = useRef(0);
   const { config: guildConfig, update: updateGuildConfig, save: saveGuildConfig, saveState: guildSaveState } = useGuildConfig();
   const { resources, loading: resLoading } = useGuildResources(selected?.id ?? null);
   const musicCfg = (guildConfig?.music ?? {}) as Record<string, unknown>;
@@ -338,6 +340,8 @@ export default function MusicPage() {
 
   const runSearch = useCallback(async () => {
     if (!token || !selected || searchQuery.trim().length < 2) return;
+    // Stale guard: keystroke B must never be overwritten by a slower A.
+    const mySeq = (searchSeq.current += 1);
     setSearching(true);
     setSearchError('');
     setSearchResults([]);
@@ -345,6 +349,7 @@ export default function MusicPage() {
       '/api/dashboard/music/search',
       { method: 'POST', token, body: { guildId: selected.id, query: searchQuery.trim() } },
     );
+    if (mySeq !== searchSeq.current) return; // superseded — drop silently
     if (resp.ok && resp.data.success) {
       setSearchResults(resp.data.results);
       if (resp.data.results.length === 0) setSearchError('No results — try different words.');

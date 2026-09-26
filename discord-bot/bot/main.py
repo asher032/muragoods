@@ -1303,44 +1303,13 @@ async def _health_server() -> None:
         if not guild:
             return web.json_response({"ok": False, "error": "Bot not in that guild"}, status=404)
         import music as music_mod
-        import yt_dlp
-        opts = music_mod.get_ydl_opts(use_proxy=True)
-        opts.update({"quiet": True, "no_warnings": True, "skip_download": True,
-                     "extract_flat": "in_playlist", "playlistend": 6,
-                     "default_search": "ytsearch5"})
-        loop = asyncio.get_running_loop()
-
-        def _run():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                return ydl.extract_info(f"ytsearch5:{query}", download=False)
-
         try:
-            data = await asyncio.wait_for(loop.run_in_executor(None, _run), timeout=45)
-        except asyncio.TimeoutError:
-            return web.json_response({"ok": False, "error": "Search timed out — try again"}, status=504)
+            results = await music_mod.engine.search_top(query, limit=5, timeout=40)
         except Exception as exc:
             return web.json_response(
                 {"ok": False,
                  "error": music_mod.sanitize_for_log(f"{type(exc).__name__}: {exc}", limit=200) or "Search failed"},
                 status=502)
-        entries = (data or {}).get("entries") or []
-        results = []
-        for e in entries[:5]:
-            if not e:
-                continue
-            vid = str(e.get("id") or "")
-            url = str(e.get("url") or e.get("webpage_url") or "")
-            if vid and not url.startswith("http"):
-                url = f"https://www.youtube.com/watch?v={vid}"
-            if not url:
-                continue
-            results.append({
-                "title": str(e.get("title") or "Unknown title")[:120],
-                "uploader": str(e.get("uploader") or e.get("channel") or "")[:80],
-                "duration": int(e.get("duration") or 0),
-                "thumbnail": str(e.get("thumbnail") or "")[:300],
-                "url": url[:300],
-            })
         return web.json_response({"ok": True, "results": results})
 
     async def music_queue_add(request: web.Request) -> web.Response:

@@ -1097,6 +1097,40 @@ class GuildPlayer:
             return f"queue reset after corruption: {type(exc).__name__}"
 
 
+# ── Search cache + in-flight deduplication ─────────────────────────────
+# Repeated and concurrent identical searches share one provider request.
+# Keys are normalized (case/whitespace) so "  Hello " hits "hello", but
+# distinct queries ("hello" vs "hello world") never merge. Bounded size.
+_SEARCH_CACHE_TTL = 60.0
+_SEARCH_CACHE_MAX = 50
+_search_cache: dict[str, tuple[float, list[dict]]] = {}
+_search_inflight: dict[str, "asyncio.Future[list[dict]]"] = {}
+
+
+def normalize_search_query(query: str | None) -> str:
+    """Canonical cache key: lowercase, collapsed whitespace, trimmed."""
+    q = re.sub(r"\s+", " ", (query or "")).strip().lower()[:200]
+    return q if len(q) >= 2 else ""
+
+
+def _search_cache_get(key: str) -> list[dict] | None:
+    hit = _search_cache.get(key)
+    if hit is None:
+        return None
+    at, rows = hit
+    if time.monotonic() - at > _SEARCH_CACHE_TTL:
+        _search_cache.pop(key, None)
+        return None
+    return rows
+
+
+def _search_cache_put(key: str, rows: list[dict]) -> None:
+    while len(_search_cache) >= _SEARCH_CACHE_MAX:
+        oldest = min(_search_cache, key=lambda k: _search_cache[k][0])
+        _search_cache.pop(oldest, None)
+    _search_cache[key] = (time.monotonic(), [dict(r) for r in rows])
+
+
 class MusicEngine:
     def __init__(self):
         from collections import deque as _dq
@@ -1497,46 +1531,128 @@ class MusicEngine:
             "cookies_configured": bool(cookies_path()),
         }
 
-    async def search_top(self, query: str, limit: int = 5) -> list[dict]:
+    async def search_top(self, query: str, limit: int = 5, timeout: float = 30) -> list[dict]:
         """Metadata-only search (no audio extraction per row): title,
-        uploader, duration, thumbnail and page URL for the top results."""
+        uploader, duration, thumbnail and page URL for the top results.
+
+        Fast by construction, not by luck:
+        - search-specific yt-dlp opts: tight retries/timeouts (the playback
+          retry policy would multiply a slow provider by 5x here),
+        - short-lived cache on the normalized query (60s),
+        - in-flight deduplication: concurrent identical searches share one
+          provider request instead of stampeding YouTube,
+        - proxy then direct egress, each bounded, so a challenged path fails
+          fast instead of hanging the interaction.
+        Full audio extraction happens ONLY when the user plays a result
+        (resolve()), never during search."""
         import yt_dlp
-        query = (query or "").strip()[:200]
-        if len(query) < 2:
+        key = normalize_search_query(query)
+        if not key:
             return []
-        opts = get_ydl_opts(use_proxy=True)
-        opts.update({"quiet": True, "no_warnings": True, "skip_download": True,
-                     "extract_flat": "in_playlist", "playlistend": max(1, min(limit, 10)),
-                     "default_search": "ytsearch"})
+        limit = max(1, min(limit, 10))
+        t_start = time.monotonic()
+        cached = _search_cache_get(key)
+        if cached is not None:
+            log.debug("search cache hit %r in %.0fms", key[:60],
+                      (time.monotonic() - t_start) * 1000)
+            return [dict(r) for r in cached[:limit]]
         loop = asyncio.get_running_loop()
-
-        def _run():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                return ydl.extract_info(f"ytsearch{max(1, min(limit, 10))}:{query}",
-                                        download=False)
-
+        existing = _search_inflight.get(key)
+        if existing is not None:
+            try:
+                results = await asyncio.wait_for(
+                    asyncio.shield(existing), timeout=timeout)
+                log.debug("search dedup hit %r in %.0fms", key[:60],
+                          (time.monotonic() - t_start) * 1000)
+                return [dict(r) for r in results[:limit]]
+            except Exception:
+                pass
+        future: asyncio.Future = loop.create_future()
+        _search_inflight[key] = future
         try:
-            data = await asyncio.wait_for(loop.run_in_executor(None, _run), timeout=45)
-        except Exception:
-            return []
-        out = []
-        for e in ((data or {}).get("entries") or [])[:limit]:
-            if not e:
+            results = await self._search_fetch(key, limit, timeout)
+            if not future.done():
+                future.set_result(results)
+            _search_cache_put(key, results)
+            return [dict(r) for r in results[:limit]]
+        except Exception as exc:
+            if not future.done():
+                future.set_exception(exc)
+            raise
+        finally:
+            _search_inflight.pop(key, None)
+            elapsed_ms = (time.monotonic() - t_start) * 1000
+            log.info("search_total_ms=%.0f query=%r", elapsed_ms, key[:60])
+
+    async def _search_fetch(self, key: str, limit: int, timeout: float) -> list[dict]:
+        """One uncached provider search: proxy egress, then direct egress."""
+        import yt_dlp
+
+        def light_opts(use_proxy: bool) -> dict:
+            opts = get_ydl_opts(use_proxy=use_proxy)
+            # Search must fail fast: the playback retry policy (retries 5,
+            # 20s sockets) would turn one slow provider into minutes here.
+            opts.update({"quiet": True, "no_warnings": True, "skip_download": True,
+                         "extract_flat": "in_playlist", "playlistend": limit,
+                         "default_search": "ytsearch",
+                         "retries": 1, "extractor_retries": 2, "fragment_retries": 1,
+                         "socket-timeout": 12})
+            return opts
+
+        async def attempt(use_proxy: bool, budget: float) -> list[dict] | None:
+            loop = asyncio.get_running_loop()
+            t0 = time.monotonic()
+
+            def _run():
+                with yt_dlp.YoutubeDL(light_opts(use_proxy)) as ydl:
+                    return ydl.extract_info(f"ytsearch{limit}:{key}", download=False)
+
+            try:
+                data = await asyncio.wait_for(loop.run_in_executor(None, _run), timeout=budget)
+            except asyncio.TimeoutError:
+                log.info("search provider_request TIMEOUT egress=%s query=%r",
+                         "proxy" if use_proxy else "direct", key[:60])
+                return None
+            except Exception as exc:
+                if is_bot_challenge(str(exc)):
+                    log.info("search provider_request CHALLENGED egress=%s query=%r",
+                             "proxy" if use_proxy else "direct", key[:60])
+                    return None
+                raise
+            finally:
+                log.debug("search provider_request_ms=%.0f egress=%s",
+                          (time.monotonic() - t0) * 1000,
+                          "proxy" if use_proxy else "direct")
+            t1 = time.monotonic()
+            out = []
+            for e in ((data or {}).get("entries") or [])[:limit]:
+                if not e:
+                    continue
+                vid = str(e.get("id") or "")
+                url = str(e.get("url") or e.get("webpage_url") or "")
+                if vid and not url.startswith("http"):
+                    url = f"https://www.youtube.com/watch?v={vid}"
+                if not url:
+                    continue
+                out.append({
+                    "title": str(e.get("title") or "Unknown title")[:120],
+                    "uploader": str(e.get("uploader") or e.get("channel") or "")[:80],
+                    "duration": int(e.get("duration") or 0),
+                    "thumbnail": str(e.get("thumbnail") or "")[:300],
+                    "url": url[:300],
+                })
+            log.debug("search result_parse_ms=%.0f rows=%d",
+                      (time.monotonic() - t1) * 1000, len(out))
+            return out
+
+        per_attempt = max(8.0, timeout / 2)
+        for use_proxy in (True, False):
+            if use_proxy and not proxy_configured():
                 continue
-            vid = str(e.get("id") or "")
-            url = str(e.get("url") or e.get("webpage_url") or "")
-            if vid and not url.startswith("http"):
-                url = f"https://www.youtube.com/watch?v={vid}"
-            if not url:
-                continue
-            out.append({
-                "title": str(e.get("title") or "Unknown title")[:120],
-                "uploader": str(e.get("uploader") or e.get("channel") or "")[:80],
-                "duration": int(e.get("duration") or 0),
-                "thumbnail": str(e.get("thumbnail") or "")[:300],
-                "url": url[:300],
-            })
-        return out
+            rows = await attempt(use_proxy, per_attempt)
+            if rows:
+                return rows
+        return []
 
     async def play_now(self, player: GuildPlayer, track: Track,
                        voice_channel: discord.VoiceChannel, announce=None,
