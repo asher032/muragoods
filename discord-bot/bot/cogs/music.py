@@ -1055,26 +1055,6 @@ class MusicCog(commands.Cog):
         await interaction.followup.send(
             f"🌙 24/7 mode **{'ON — I stay in voice' if player.stay_connected else 'OFF'}**.", ephemeral=True)
 
-    @app_commands.command(name="search", description="Search YouTube and show the top results.")
-    @app_commands.describe(query="What to search for")
-    async def search(self, interaction: discord.Interaction, query: str):
-        await interaction.response.defer(ephemeral=True)
-        if len(query.strip()) < 2:
-            await interaction.followup.send("Search for at least 2 characters.", ephemeral=True)
-            return
-        results = await music.engine.search_top(query.strip(), limit=5)
-        if not results:
-            await interaction.followup.send("No results — try different words.", ephemeral=True)
-            return
-        lines = []
-        for i, r in enumerate(results, 1):
-            dur = f" ({embeds.fmt_duration(r['duration'])})" if r.get("duration") else ""
-            lines.append(f"**{i}.** {r['title']}{dur}\n_{r.get('uploader', '')}_")
-        await interaction.followup.send(
-            embed=embeds.music("🔎 Search results",
-                               "\n\n".join(lines) + "\n\nRun `/play` with a title or pick a row on the dashboard to queue it."),
-            ephemeral=True)
-
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(MusicCog(bot))
