@@ -8,10 +8,14 @@ import { discordConfigCollection } from '@/app/lib/discord-config';
 // detection for ONE guild. Every fact is re-verified live; nothing comes
 // from the browser, login-time snapshots, or config documents:
 //
-//   user:        membership + manage right, from the caller's OAuth token
+//   guild:        id + name + icon (from the caller's live guild list)
+//   user:        authenticated / member / canManage / administrator / owner
 //   bot:         installed (bot-token REST identity) vs online (gateway set)
 //   permissions: owner / administrator / manage bits, from Discord
 //   configuration: exists + loadable (presence only — never content)
+//
+// If canManage is false the code says WHY (NOT_GUILD_MEMBER vs
+// INSUFFICIENT_GUILD_PERMISSION) — never a generic permission failure.
 //
 // Error codes (never conflated):
 //   401 AUTH_REQUIRED · 400 INVALID_GUILD_ID · 403 NOT_GUILD_MEMBER ·
@@ -154,7 +158,12 @@ export async function GET(
     return NextResponse.json({
       success: true,
       guildId,
-      user: { member: true, canManage: true },
+      guild: { id: userGuild.id, name: userGuild.name, icon: userGuild.icon },
+      user: {
+        authenticated: true, member: true, canManage: true,
+        administrator: bit(userGuild.permissions, ADMINISTRATOR) || userGuild.owner,
+        owner: userGuild.owner,
+      },
       bot: { installed: null, online: botOnline },
       permissions: {
         manageGuild: bit(userGuild.permissions, MANAGE_GUILD) || userGuild.owner,
@@ -172,7 +181,12 @@ export async function GET(
   return NextResponse.json({
     success: true,
     guildId,
-    user: { member: true, canManage: true },
+    guild: { id: userGuild.id, name: userGuild.name, icon: userGuild.icon },
+    user: {
+      authenticated: true, member: true, canManage: true,
+      administrator: bit(userGuild.permissions, ADMINISTRATOR) || userGuild.owner,
+      owner: userGuild.owner,
+    },
     bot: { installed: true, online: botOnline },
     permissions: {
       manageGuild: bit(userGuild.permissions, MANAGE_GUILD) || userGuild.owner,

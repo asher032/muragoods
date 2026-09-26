@@ -23,7 +23,7 @@ export default function ModuleSettings({ moduleId, title, description }: {
 }) {
   const { selected } = useGuild();
   const { config, loading, saveState, error, save, update } = useGuildConfig();
-  const { resources, loading: resLoading, error: resError, refresh: resRefresh } = useGuildResources(selected?.id ?? null);
+  const { resources, loading: resLoading, error: resError, code: resCode, retryable: resRetryable, refresh: resRefresh } = useGuildResources(selected?.id ?? null);
   // Per-field pre-save validation: { [fieldKey]: { checking, valid, checks, message } }
   const [validation, setValidation] = useState<Record<string, { checking: boolean; valid: boolean; checks: ValidateCheck[]; message: string }>>({});
   const [validateError, setValidateError] = useState('');
@@ -157,7 +157,7 @@ export default function ModuleSettings({ moduleId, title, description }: {
 
       {enabled && (
         <div className="cc-card" style={{ padding: '18px 20px', display: 'grid', gap: 16 }}>
-          <ResourceStatusBar loading={resLoading} error={resError} onRefresh={resRefresh} />
+          <ResourceStatusBar loading={resLoading} error={resError} code={resCode} retryable={resRetryable} onRefresh={resRefresh} />
           {(mod?.fields || []).map((f) => {
             const value = fieldValue(f.key);
             const val = validation[f.key];

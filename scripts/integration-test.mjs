@@ -91,6 +91,39 @@ console.log('[0] dashboard auth codes (sessionless)');
   const guildsNoAuth = await anon('/api/dashboard/guilds');
   check('guilds without session → 401', guildsNoAuth.status === 401,
     `status ${guildsNoAuth.status}`);
+
+  // Data-pipeline codes: every data route must answer a missing session
+  // with 401 AUTH_REQUIRED (never 403) and a malformed guildId with 400
+  // INVALID_GUILD_ID — a failed lookup is never a permission failure.
+  const dataPaths = [
+    '/api/dashboard/resources?guildId=997389969448517632',
+    '/api/dashboard/moderation/tools?op=overview&guildId=997389969448517632',
+    '/api/dashboard/moderation?guildId=997389969448517632&userId=123456789',
+    '/api/discord/guilds/997389969448517632/members?search=olin',
+    '/api/discord/guilds/997389969448517632/roles',
+    '/api/discord/guilds/997389969448517632/channels',
+    '/api/dashboard/guilds/997389969448517632/overview',
+    '/api/dashboard/guilds/997389969448517632/diagnostics',
+  ];
+  for (const p of dataPaths) {
+    const r = await anon(p);
+    check(`${p.split('?')[0]} without session → 401 AUTH_REQUIRED`,
+      r.status === 401 && r.body?.code === 'AUTH_REQUIRED',
+      `status ${r.status} code ${r.body?.code}`);
+  }
+  const badIdPaths = [
+    '/api/discord/guilds/abc/members?search=olin',
+    '/api/discord/guilds/abc/roles',
+    '/api/discord/guilds/abc/channels',
+    '/api/dashboard/guilds/abc/overview',
+    '/api/dashboard/guilds/abc/diagnostics',
+  ];
+  for (const p of badIdPaths) {
+    const r = await anon(p);
+    check(`${p.split('/').slice(0, 5).join('/')} rejects malformed guildId → 400`,
+      r.status === 400 && r.body?.code === 'INVALID_GUILD_ID',
+      `status ${r.status} code ${r.body?.code}`);
+  }
 }
 
 // ─── 1. Account profile ─────────────────────────────────────────────
