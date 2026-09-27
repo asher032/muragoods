@@ -36,42 +36,10 @@ class MediaCommands(commands.Cog):
             return False
         return True
 
-    @app_commands.command(name="help", description="Show everything MuraBot can do.")
-    async def help_command(self, interaction: discord.Interaction):
-        e = embeds.embed("🎬 MuraBot — Help",
-                         "Your all-in-one MuraStream companion.", embeds.GOLD)
-        e.add_field(name="🎬 MuraStream", value=(
-            "`/search` `/movie` `/tv` `/anime` `/trending` `/popular`\n"
-            "`/recommend` `/watch` `/watchlist` `/request` `/requests`\n"
-            "`/watchtogether` `/comments`"), inline=False)
-        e.add_field(name="🎵 Music", value=(
-            "`/play` `/searchmusic` `/skip` `/pause` `/resume` `/stop`\n"
-            "`/queue` `/nowplaying` `/loop` `/shuffle` `/remove`\n"
-            "`/clearqueue` `/volume` `/join` `/leave`"), inline=False)
-        e.add_field(name="🛡️ Moderation", value=(
-            "`/warn` `/warnings` `/clearwarnings` `/kick` `/ban` `/unban`\n"
-            "`/mute` `/unmute` `/clear` `/lock` `/unlock` `/case` `/cases`"), inline=False)
-        e.add_field(name="🔐 Security", value=(
-            "`/security raidmode` `/security lockdown` `/security unlock`\n"
-            "`/security status` — anti-raid & anti-nuke"), inline=False)
-        e.add_field(name="🎁 Community", value=(
-            "`/giveaway` `/reroll` `/suggest` `/suggestions` `/report`\n"
-            "`/remind` `/rep` `/repleaderboard` `/achievements`"), inline=False)
-        e.add_field(name="🎵 Music — advanced", value=(
-            "`/previous` `/replay` `/seek` `/history` `/autoplay` `/queueloop`\n"
-            "`/savequeue` `/loadqueue` `/savedqueues` `/queuepage` `/radio`"), inline=False)
-        e.add_field(name="📊 Leveling & Economy", value=(
-            "`/rank` `/leaderboard` `/balance` `/daily` `/pay` `/shop`"), inline=False)
-        e.add_field(name="🎮 Fun", value=(
-            "`/8ball` `/coinflip` `/roll` `/poll` `/choose` `/avatar`\n"
-            "`/userinfo` `/serverinfo`"), inline=False)
-        e.add_field(name="🎟️ Tickets", value="`/ticket` — open a support ticket", inline=False)
-        e.add_field(name="ℹ️ Utility", value="`/status` `/ping` `/dashboard` — health & web dashboard", inline=False)
-        view = discord.ui.View()
-        view.add_item(discord.ui.Button(label="🎬 Open MuraStream", url=bridge.home_url(), emoji="▶️"))
-        view.add_item(discord.ui.Button(label="📜 Terms", url=f"{config.MURASTREAM_URL}/terms", emoji="📄"))
-        view.add_item(discord.ui.Button(label="🔐 Privacy", url=f"{config.MURASTREAM_URL}/privacy", emoji="🔐"))
-        await interaction.response.send_message(embed=e, view=view)
+    # NOTE: /help lives in cogs/help.py now — an interactive registry-driven
+    # browser (category dropdown, pagination, search, details). A second
+    # top-level "help" here would kill this cog at load
+    # (CommandAlreadyRegistered) and bust the 100-command budget.
 
     @app_commands.command(name="status", description="MuraBot health dashboard.")
     async def status(self, interaction: discord.Interaction):
