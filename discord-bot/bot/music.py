@@ -2245,6 +2245,34 @@ class MusicEngine:
                  player.guild_id, getattr(voice_channel, "id", "?"),
                  (track.title or "")[:80], (track.source or "")[:60])
 
+    async def advance(self, player: GuildPlayer, announce=None) -> dict:
+        """Explicit next-track transition — THE authoritative playNextTrack.
+
+        Natural finishes (voice `after`), /skip, dashboard Skip, prefix skip
+        and failed-track recovery ALL funnel here, so every path advances the
+        same queue exactly once. The generation bump invalidates the stale
+        `after` callback that voice.stop() is about to fire; the shared
+        _on_track_end pipeline (with its per-guild lock) does the rest.
+        Returns {ok, started, title?} — started=False means queue exhausted
+        (player idled/left per 24/7 rules), never an error.
+        """
+        player._play_seq += 1
+        seq = player._play_seq
+        before = len(player.queue)
+        log.info("[Music] SKIP_REQUESTED guild=%s queue_before=%d current=%r",
+                 player.guild_id, before,
+                 getattr(player.current, "title", None))
+        vc = player.voice
+        try:
+            if vc is not None and (vc.is_playing() or vc.is_paused()):
+                vc.stop()
+        except Exception as exc:
+            log.debug("advance stop failed (non-fatal): %s", str(exc)[:120])
+        await self._on_track_end(player, announce, None, seq)
+        if player.current and player.playing:
+            return {"ok": True, "started": True, "title": player.current.title}
+        return {"ok": True, "started": False}
+
     async def _on_track_end(self, player: GuildPlayer, announce=None, err=None, seq: int | None = None) -> None:
         """Advance the queue. Failed tracks are logged, skipped, and the next
         valid track is tried — the service never crashes on one bad track.
@@ -2255,15 +2283,40 @@ class MusicEngine:
         or replay. skip() intentionally does NOT bump the generation — its
         stop() IS the advance trigger."""
         lock = player._advance_lock_get()
+        acquired = False
         try:
             await lock.acquire()
+            acquired = True
         except Exception:
             lock = None
+        try:
+            await self._advance_inner(player, announce, err, seq)
+        except Exception:
+            log.exception("Track-end handler failed")
+            player.playing = False
+            try:
+                player.player_state = "idle"
+            except Exception:
+                pass
+        finally:
+            if acquired:
+                try:
+                    lock.release()
+                except Exception:
+                    pass
+
+    async def _advance_inner(self, player: GuildPlayer, announce=None, err=None, seq: int | None = None) -> None:
+        """Track-end pipeline WITHOUT the lock (caller must hold it). Split
+        out so the failed-track retry path can recurse without deadlocking
+        asyncio.Lock, which is not reentrant."""
         try:
             if seq is not None and seq != player._play_seq:
                 return
             if not player.playing:
                 return
+            log.info("[Music] TRACK_FINISHED guild=%s title=%r queue_before=%d",
+                     player.guild_id, getattr(player.current, "title", None),
+                     len(player.queue))
             # Track ended with an FFmpeg/player error: log, then treat the
             # current track as failed and move on (with one re-resolve retry).
             if err and player.current:
@@ -2372,9 +2425,14 @@ class MusicEngine:
                 log.info("queue exhausted guild=%s — left voice", player.guild_id)
                 return
             if player.voice and player.voice.channel:
+                log.info("[Music] NEXT_TRACK guild=%s title=%r queue_after=%d",
+                         player.guild_id, getattr(next_track, "title", None),
+                         len(player.queue))
                 try:
                     await self.play_now(player, next_track, player.voice.channel, announce)
                     await self._emit_track_started(player)
+                    log.info("[Music] PLAYBACK_STARTED guild=%s title=%r",
+                             player.guild_id, getattr(next_track, "title", None))
                 except PlaybackError as pe:
                     # One bad next-track must not wedge the player: log it and
                     # continue with whatever follows.
@@ -2385,9 +2443,16 @@ class MusicEngine:
                     except Exception:
                         pass
                     player.current = None
-                    # Recurse once (bounded by queue length) to try the rest.
+                    # Recurse into the lock-free inner path (bounded by queue
+                    # length) to try the rest — never _on_track_end, whose
+                    # lock is already held here and is not reentrant.
+                    # Fresh seq: the failed play_now may have bumped the
+                    # generation at its Stage 7 (harmless — no callback was
+                    # armed yet); capturing now keeps this retry alive while
+                    # still dropping if the user stopped meanwhile. No await
+                    # runs between the failure and here, so this is atomic.
                     if player.queue:
-                        await self._on_track_end(player, announce, None)
+                        await self._advance_inner(player, announce, None, player._play_seq)
                     else:
                         player.playing = False
                         player.player_state = "idle"
@@ -2395,18 +2460,12 @@ class MusicEngine:
                 player.playing = False
                 player.player_state = "idle"
         except Exception:
-            log.exception("Track-end handler failed")
+            log.exception("Advance-inner failed")
             player.playing = False
             try:
                 player.player_state = "idle"
             except Exception:
                 pass
-        finally:
-            if lock is not None:
-                try:
-                    lock.release()
-                except Exception:
-                    pass
 
     async def run_playback_test(self) -> dict:
         """Controlled self-test for the [▶ Test Audio] button.

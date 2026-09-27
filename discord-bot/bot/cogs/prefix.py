@@ -259,7 +259,7 @@ class PrefixCog(commands.Cog, name="Prefix"):
     async def skip_prefix(self, ctx: commands.Context):
         player = music.engine.get_player(ctx.guild.id)
         if player.voice and (player.voice.is_playing() or player.voice.is_paused()):
-            player.voice.stop()
+            await music.engine.advance(player)
             await ctx.send("⏭ Skipped.")
         else:
             await ctx.send("Nothing is playing.")
