@@ -1567,7 +1567,10 @@ async def _health_server() -> None:
                 return _out(await svc.unban_member(bot, db, guild_id, target_id, reason, 0, "dashboard"))
             return web.json_response({"ok": False, "code": "INVALID_INPUT",
                                       "error": f"Unknown action: {action}"}, status=400)
-        except discord.Forbidden:
+        except discord.Forbidden as exc:
+            if getattr(exc, "code", 0) == 40333:
+                return web.json_response({"ok": False, "code": "DISCORD_API_ERROR",
+                                          "error": "Discord's network filter blocked the request (Cloudflare) — retry in a moment."}, status=502)
             return web.json_response({"ok": False, "code": "BOT_MISSING_PERMISSION",
                                       "error": "Discord rejected the action (Forbidden)"}, status=403)
         except discord.HTTPException as exc:
@@ -1662,8 +1665,12 @@ async def _health_server() -> None:
             return web.json_response({"ok": False, "error": "Bot not in that guild"}, status=404)
         try:
             bans = [entry async for entry in guild.bans(limit=200)]
-        except discord.Forbidden:
-            return web.json_response({"ok": False, "error": "I lack Ban Members permission"}, status=403)
+        except discord.Forbidden as exc:
+            if getattr(exc, "code", 0) == 40333:
+                return web.json_response({"ok": False, "code": "DISCORD_API_ERROR",
+                                          "error": "Discord's network filter blocked the request (Cloudflare) — retry in a moment."}, status=502)
+            return web.json_response({"ok": False, "code": "BOT_MISSING_PERMISSION",
+                                      "error": "I lack Ban Members permission"}, status=403)
         except discord.HTTPException as exc:
             return web.json_response({"ok": False, "error": f"Discord API error {exc.status}"}, status=502)
         return web.json_response({"ok": True, "bans": [
@@ -1720,8 +1727,12 @@ async def _health_server() -> None:
                 await member.add_roles(role, reason="Dashboard role tool")
             else:
                 await member.remove_roles(role, reason="Dashboard role tool")
-        except discord.Forbidden:
-            return web.json_response({"ok": False, "error": "Discord rejected the role change"}, status=403)
+        except discord.Forbidden as exc:
+            if getattr(exc, "code", 0) == 40333:
+                return web.json_response({"ok": False, "code": "DISCORD_API_ERROR",
+                                          "error": "Discord's network filter blocked the request (Cloudflare) — retry in a moment."}, status=502)
+            return web.json_response({"ok": False, "code": "BOT_MISSING_PERMISSION",
+                                      "error": "Discord rejected the role change"}, status=403)
         except discord.HTTPException as exc:
             return web.json_response({"ok": False, "error": f"Discord API error {exc.status}"}, status=502)
         case_id = await db.add_case(guild_id, target_id, 0, f"role_{action}",

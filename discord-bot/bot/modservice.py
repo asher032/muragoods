@@ -100,6 +100,26 @@ def _fail(code: str, error: str, **extra) -> dict:
     return out
 
 
+def _refused(exc: discord.Forbidden, perm_label: str, what: str) -> dict:
+    """Map a Discord 403 to the REAL cause.
+
+    Discord's Cloudflare edge answers HTTP 403 + JSON code 40333
+    ("internal network error") when it blocks the REQUEST ITSELF
+    (challenged egress IP / flagged user agent) — the bot's permissions are
+    irrelevant. discord.py surfaces that as Forbidden too, so the JSON code
+    must be inspected first, or a network block is misreported as
+    "I need <permission>".
+    """
+    if getattr(exc, "code", 0) == 40333:
+        return _fail("DISCORD_API_ERROR",
+                     "Discord's network filter blocked the request (Cloudflare) — "
+                     "not a permission problem. Retry in a moment; if it persists, "
+                     "this host's IP is challenged.")
+    return _fail("BOT_MISSING_PERMISSION",
+                 f"Discord refused {what} — I need **{perm_label}**.",
+                 permission=perm_label)
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -237,8 +257,7 @@ async def timeout_member(bot, db, guild_id: int, target_id: int, minutes: int,
     try:
         await member.timeout(_utcnow() + timedelta(minutes=minutes), reason=reason[:150])
     except discord.Forbidden:
-        return _fail("BOT_MISSING_PERMISSION", "Discord refused the timeout — I need **Timeout Members**.",
-                     permission="Timeout Members")
+        return _refused(exc, "Timeout Members", "the timeout")
     except discord.HTTPException as exc:
         return _fail("DISCORD_API_ERROR", f"Discord API error {exc.status}.")
     except Exception as exc:
@@ -268,8 +287,7 @@ async def remove_timeout(bot, db, guild_id: int, target_id: int, reason: str,
     try:
         await member.timeout(None, reason=reason[:150])
     except discord.Forbidden:
-        return _fail("BOT_MISSING_PERMISSION", "Discord refused — I need **Timeout Members**.",
-                     permission="Timeout Members")
+        return _refused(exc, "Timeout Members", "the action")
     except discord.HTTPException as exc:
         return _fail("DISCORD_API_ERROR", f"Discord API error {exc.status}.")
     except Exception as exc:
@@ -293,8 +311,7 @@ async def kick_member(bot, db, guild_id: int, target_id: int, reason: str,
     try:
         await member.kick(reason=reason[:200])
     except discord.Forbidden:
-        return _fail("BOT_MISSING_PERMISSION", "Discord refused the kick — I need **Kick Members**.",
-                     permission="Kick Members")
+        return _refused(exc, "Kick Members", "the kick")
     except discord.HTTPException as exc:
         return _fail("DISCORD_API_ERROR", f"Discord API error {exc.status}.")
     except Exception as exc:
@@ -326,8 +343,7 @@ async def ban_member(bot, db, guild_id: int, target_id: int, reason: str,
         await guild.ban(discord.Object(id=int(target_id)), reason=reason[:150],
                         delete_message_days=delete_days)
     except discord.Forbidden:
-        return _fail("BOT_MISSING_PERMISSION", "Discord refused the ban — I need **Ban Members**.",
-                     permission="Ban Members")
+        return _refused(exc, "Ban Members", "the ban")
     except discord.HTTPException as exc:
         return _fail("DISCORD_API_ERROR", f"Discord API error {exc.status}.")
     except Exception as exc:
@@ -353,8 +369,7 @@ async def unban_member(bot, db, guild_id: int, target_id: int, reason: str,
             return _fail("TARGET_NOT_FOUND", "That user is not banned.")
         await guild.unban(user, reason=reason[:150])
     except discord.Forbidden:
-        return _fail("BOT_MISSING_PERMISSION", "Discord refused the unban — I need **Ban Members**.",
-                     permission="Ban Members")
+        return _refused(exc, "Ban Members", "the unban")
     except discord.HTTPException as exc:
         return _fail("DISCORD_API_ERROR", f"Discord API error {exc.status}.")
     except Exception as exc:
@@ -438,8 +453,7 @@ async def mute_member(bot, db, guild_id: int, target_id: int, reason: str,
     try:
         await member.add_roles(role, reason=reason[:150])
     except discord.Forbidden:
-        return _fail("BOT_MISSING_PERMISSION", "Discord refused — I need **Manage Roles**.",
-                     permission="Manage Roles")
+        return _refused(exc, "Manage Roles", "the action")
     except discord.HTTPException as exc:
         return _fail("DISCORD_API_ERROR", f"Discord API error {exc.status}.")
     except Exception as exc:
@@ -491,8 +505,7 @@ async def hardmute_member(bot, db, guild_id: int, target_id: int, reason: str,
             await member.remove_roles(*removable, reason=f"Hardmute: {reason[:100]}")
         await member.add_roles(role, reason=reason[:150])
     except discord.Forbidden:
-        return _fail("BOT_MISSING_PERMISSION", "Discord refused — I need **Manage Roles**.",
-                     permission="Manage Roles")
+        return _refused(exc, "Manage Roles", "the action")
     except discord.HTTPException as exc:
         return _fail("DISCORD_API_ERROR", f"Discord API error {exc.status}.")
     except Exception as exc:
@@ -567,8 +580,7 @@ async def unmute_member(bot, db, guild_id: int, target_id: int, reason: str,
             except (discord.Forbidden, discord.HTTPException):
                 continue
     except discord.Forbidden:
-        return _fail("BOT_MISSING_PERMISSION", "Discord refused — I need **Manage Roles**.",
-                     permission="Manage Roles")
+        return _refused(exc, "Manage Roles", "the action")
     except discord.HTTPException as exc:
         return _fail("DISCORD_API_ERROR", f"Discord API error {exc.status}.")
     except Exception as exc:
@@ -702,8 +714,7 @@ async def lockdown_channel(bot, db, guild_id: int, channel_id: int, reason: str,
         await channel.set_permissions(guild.default_role, overwrite=overwrite,
                                       reason=f"Lockdown: {reason[:100]}")
     except discord.Forbidden:
-        return _fail("BOT_MISSING_PERMISSION", "Discord refused — I need **Manage Channels** there.",
-                     permission="Manage Channels")
+        return _refused(exc, "Manage Channels", "the action there")
     except (discord.HTTPException, Exception) as exc:
         return _fail("DISCORD_API_ERROR", f"Lock failed ({type(exc).__name__}).")
     dur_label = ""
@@ -745,8 +756,7 @@ async def unlock_channel(bot, db, guild_id: int, channel_id: int, reason: str,
         await channel.set_permissions(guild.default_role, overwrite=overwrite,
                                       reason=f"Unlock: {(reason or '')[:100]}")
     except discord.Forbidden:
-        return _fail("BOT_MISSING_PERMISSION", "Discord refused — I need **Manage Channels** there.",
-                     permission="Manage Channels")
+        return _refused(exc, "Manage Channels", "the action there")
     except (discord.HTTPException, Exception) as exc:
         return _fail("DISCORD_API_ERROR", f"Unlock failed ({type(exc).__name__}).")
     try:
@@ -933,8 +943,7 @@ async def purge_messages(bot, db, guild_id: int, channel_id: int, kind: str, cou
                     if len(matched) >= count:
                         break
     except discord.Forbidden:
-        return _fail("BOT_MISSING_PERMISSION", "Discord refused history access.",
-                     permission="Read History")
+        return _refused(exc, "Read History", "history access")
     except (discord.HTTPException, Exception) as exc:
         return _fail("DISCORD_API_ERROR", f"History scan failed ({type(exc).__name__}).")
 
