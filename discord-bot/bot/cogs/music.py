@@ -180,7 +180,7 @@ class MusicControls(utils.SafeView):
             return
         player = self._player()
         if player.voice and (player.voice.is_playing() or player.voice.is_paused()):
-            player.voice.stop()
+            await music.engine.advance(player)
         else:
             await interaction.followup.send("Nothing to skip.", ephemeral=True)
 
@@ -801,8 +801,11 @@ class MusicCog(commands.Cog):
             return
         player = music.engine.get_player(interaction.guild.id)
         if player.voice and (player.voice.is_playing() or player.voice.is_paused()):
-            player.voice.stop()
-            await interaction.followup.send("⏭ Skipped.", ephemeral=True)
+            # Explicit advancement through the shared pipeline — never a bare
+            # voice.stop() whose racy callback is the only thing advancing.
+            res = await music.engine.advance(player)
+            await interaction.followup.send(
+                "⏭ Skipped." if res.get("started") else "⏭ Skipped — queue empty.", ephemeral=True)
         else:
             await interaction.followup.send("Nothing is playing.", ephemeral=True)
 

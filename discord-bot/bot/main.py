@@ -1161,14 +1161,16 @@ async def _health_server() -> None:
             if action == "skip":
                 if r := need_voice():
                     return r
-                p.playing = True  # allow the track-end handler to advance
-                vc.stop()
+                # Explicit advancement through the shared pipeline (same as
+                # natural finish) — never a bare stop() whose racy callback
+                # is the only thing advancing.
+                res = await music_mod.engine.advance(p)
                 try:
                     from cogs.music import refresh_now_playing as _refresh_np
                     await _refresh_np(guild)
                 except Exception:
                     pass
-                return web.json_response({"ok": True})
+                return web.json_response({"ok": True, "started": res.get("started", False)})
             if action == "previous":
                 if r := need_voice():
                     return r
@@ -1205,21 +1207,16 @@ async def _health_server() -> None:
                 p.loop = not p.loop
                 return web.json_response({"ok": True, "loop": p.loop})
             if action == "queueLoop":
-                p.queue_loop = not p.queue_loop
-                return web.json_response({"ok": True, "queueLoop": p.queue_loop})
+                looped = p.set_queue_loop(not p.queue_loop)
+                return web.json_response({"ok": True, "queueLoop": looped})
             if action == "shuffle":
-                import random as _random
-                items = list(p.queue)
-                _random.shuffle(items)
-                p.queue.clear()
-                p.queue.extend(items)
-                return web.json_response({"ok": True, "queueLength": len(items)})
+                count = p.shuffle_queue()
+                return web.json_response({"ok": True, "queueLength": count})
             if action == "remove":
                 pos = int(body.get("position") or 0)
-                if pos < 1 or pos > len(p.queue):
+                removed = p.remove_at(pos)
+                if removed is None:
                     return web.json_response({"ok": False, "error": "Bad position"}, status=400)
-                removed = p.queue[pos - 1]
-                del p.queue[pos - 1]
                 return web.json_response({"ok": True, "removed": removed.title})
             if action == "move":
                 try:
