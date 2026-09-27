@@ -333,7 +333,17 @@ class CategorySelect(discord.ui.Select):
         view: HelpView = self.view  # type: ignore[assignment]
         if not await view.check_owner(interaction):
             return
-        await view.show_category(interaction, self.values[0], 0)
+        # Ack FIRST: rendering must never race the 3s interaction timeout.
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.defer()
+        except Exception:
+            pass
+        try:
+            await view.show_category(interaction, self.values[0], 0)
+        except Exception:
+            log.exception("Help category render failed")
+            await view._send_error(interaction, "Could not open that category. Try again.")
 
 
 class CommandSelect(discord.ui.Select):
@@ -354,7 +364,16 @@ class CommandSelect(discord.ui.Select):
         view: HelpView = self.view  # type: ignore[assignment]
         if not await view.check_owner(interaction):
             return
-        await view.show_detail(interaction, self.values[0], self.context)
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.defer()
+        except Exception:
+            pass
+        try:
+            await view.show_detail(interaction, self.values[0], self.context)
+        except Exception:
+            log.exception("Help detail render failed")
+            await view._send_error(interaction, "Could not open that command. Try again.")
 
 
 class SearchModal(discord.ui.Modal, title="Search commands"):
@@ -445,6 +464,23 @@ class HelpView(discord.ui.View):
         for btn in self._action_row():
             self.add_item(btn)
 
+    async def _send_error(self, interaction: discord.Interaction, text: str) -> None:
+        """Error path that can never itself leave the interaction unacked."""
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.send_message(text, ephemeral=True)
+            else:
+                await interaction.followup.send(text, ephemeral=True)
+        except Exception:
+            pass
+
+    async def _ack(self, interaction: discord.Interaction) -> None:
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.defer()
+        except Exception:
+            pass
+
     async def _safe_edit(self, interaction: discord.Interaction, **kwargs) -> bool:
         try:
             if not interaction.response.is_done():
@@ -533,29 +569,41 @@ class HelpView(discord.ui.View):
             return "search", search_index(self.index, self.search_query)
         return "", []
 
-    async def _on_prev(self, interaction: discord.Interaction):
+    async def _guarded_nav(self, interaction: discord.Interaction, work) -> None:
+        """Ack-first wrapper for every nav button: the interaction can never
+        time out, and a render failure becomes an error note, not silence."""
         if not await self.check_owner(interaction):
             return
-        kind, _ = await self._current_entries()
-        page = max(0, self.page - 1)
-        if kind == "category":
-            await self.show_category(interaction, self.category, page)
-        elif kind == "search":
-            await self.show_search(interaction, self.search_query, page)
-        else:
-            await self.show_home(interaction)
+        await self._ack(interaction)
+        try:
+            await work()
+        except Exception:
+            log.exception("Help navigation failed")
+            await self._send_error(interaction, "That action failed. Try again.")
+
+    async def _on_prev(self, interaction: discord.Interaction):
+        async def work():
+            kind, _ = await self._current_entries()
+            page = max(0, self.page - 1)
+            if kind == "category":
+                await self.show_category(interaction, self.category, page)
+            elif kind == "search":
+                await self.show_search(interaction, self.search_query, page)
+            else:
+                await self.show_home(interaction)
+        await self._guarded_nav(interaction, work)
 
     async def _on_next(self, interaction: discord.Interaction):
-        if not await self.check_owner(interaction):
-            return
-        kind, _ = await self._current_entries()
-        page = self.page + 1
-        if kind == "category":
-            await self.show_category(interaction, self.category, page)
-        elif kind == "search":
-            await self.show_search(interaction, self.search_query, page)
-        else:
-            await self.show_home(interaction)
+        async def work():
+            kind, _ = await self._current_entries()
+            page = self.page + 1
+            if kind == "category":
+                await self.show_category(interaction, self.category, page)
+            elif kind == "search":
+                await self.show_search(interaction, self.search_query, page)
+            else:
+                await self.show_home(interaction)
+        await self._guarded_nav(interaction, work)
 
     async def _on_search(self, interaction: discord.Interaction):
         if not await self.check_owner(interaction):
@@ -566,29 +614,29 @@ class HelpView(discord.ui.View):
             pass
 
     async def _on_home(self, interaction: discord.Interaction):
-        if not await self.check_owner(interaction):
-            return
-        await self.show_home(interaction)
+        async def work():
+            await self.show_home(interaction)
+        await self._guarded_nav(interaction, work)
 
     async def _on_return(self, interaction: discord.Interaction):
-        if not await self.check_owner(interaction):
-            return
-        if self.return_to.startswith("search:"):
-            _, _, page = self.return_to.rpartition(":")
-            try:
-                await self.show_search(interaction, self.search_query, int(page or 0))
-                return
-            except Exception:
-                pass
-        if self.return_to.startswith("cat:"):
-            _, rest = self.return_to.split(":", 1)
-            cid, _, page = rest.rpartition(":")
-            try:
-                await self.show_category(interaction, cid or self.category, int(page or 0))
-                return
-            except Exception:
-                pass
-        await self.show_home(interaction)
+        async def work():
+            if self.return_to.startswith("search:"):
+                _, _, page = self.return_to.rpartition(":")
+                try:
+                    await self.show_search(interaction, self.search_query, int(page or 0))
+                    return
+                except Exception:
+                    pass
+            if self.return_to.startswith("cat:"):
+                _, rest = self.return_to.split(":", 1)
+                cid, _, page = rest.rpartition(":")
+                try:
+                    await self.show_category(interaction, cid or self.category, int(page or 0))
+                    return
+                except Exception:
+                    pass
+            await self.show_home(interaction)
+        await self._guarded_nav(interaction, work)
 
     async def _on_close(self, interaction: discord.Interaction):
         if not await self.check_owner(interaction):
