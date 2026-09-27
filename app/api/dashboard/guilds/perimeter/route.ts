@@ -1,4 +1,5 @@
 import { sessionToken } from '@/app/lib/require-session';
+import { requireGuildManage } from '@/app/lib/discord-guilds';
 import { NextRequest, NextResponse } from 'next/server';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 import { verifyBotInGuild, fetchBotMember } from '@/app/lib/discord-bot';
@@ -190,20 +191,11 @@ export async function GET(req: NextRequest) {
 }
 
 async function guildMemberManages(req: NextRequest, token: string, guildId: string): Promise<boolean | null> {
-  // Already used the bot token for the bot check — use the session token
-  // for the user check so that both belong to the same request's lifecycle.
-  try {
-    const resp = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: 'no-store',
-    }).then(r => r.ok ? r.json() : null);
-    if (!resp) return null;
-    const g = (resp as Array<{ id: string; owner: boolean; permissions: string | number }>).find((x: any) => x.id === guildId);
-    if (!g) return false;
-    const ADMIN = BigInt(0x8);
-    const MANAGE = BigInt(0x20);
-    return g.owner || (BigInt(g.permissions) & MANAGE) !== BigInt(0) || (BigInt(g.permissions) & ADMIN) !== BigInt(0);
-  } catch {
-    return null; // auth cluster and bot cluster could disagree — unknown is honest
-  }
+  // Shared cached guard: user-manage verdicts come from one 30s-cached
+  // guild-list read instead of a fresh Discord call per route. AUTH and
+  // Discord-outage outcomes map to null (unknown), never to a false verdict.
+  const check = await requireGuildManage(token, guildId);
+  if (check.ok) return true;
+  if (check.code === 'NOT_GUILD_MEMBER' || check.code === 'INSUFFICIENT_GUILD_PERMISSION') return false;
+  return null; // auth cluster and bot cluster could disagree — unknown is honest
 }

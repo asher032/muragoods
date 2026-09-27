@@ -5,13 +5,19 @@ import { useRouter } from 'next/navigation';
 import { ChevronsUpDown, RefreshCw, Server, ShieldCheck } from 'lucide-react';
 import { useGuild } from '@/app/lib/guild-context';
 
-function BotDot({ state }: { state: 'online' | 'offline' | 'unknown' }) {
+function BotDot({ state, installed }: { state: 'online' | 'offline' | 'unknown'; installed?: boolean | null }) {
   const color = state === 'online'
     ? 'var(--cc-ok, #22c55e)'
     : state === 'offline' ? 'rgba(255,255,255,0.25)' : 'var(--cc-warn, #f59e0b)';
+  // 'offline' now ONLY means verified absence (botInstalled === false drives
+  // the not-installed text). An installed bot with a stale gateway list is
+  // 'unknown' from the API, never 'offline' — the old title mapped every
+  // offline dot to "Bot not installed", including installed-but-reconnecting.
   const title = state === 'online'
     ? 'Bot installed'
-    : state === 'offline' ? 'Bot not installed' : 'Bot status unknown';
+    : state === 'offline'
+      ? (installed === false ? 'Bot not installed' : 'Bot offline')
+      : 'Bot status unknown — checking';
   return (
     <span
       title={title}
@@ -74,11 +80,11 @@ export default function ServerSwitcher() {
         onClick={() => { setOpen((o) => !o); setQuery(''); }}
         aria-haspopup="listbox"
         aria-expanded={open}
-        title={selectedState === 'offline' ? 'Bot not installed on this server' : selected.name}
+        title={selectedState === 'offline' && selected.botInstalled === false ? 'Bot not installed on this server' : selected.name}
       >
         <Server size={20} aria-hidden />
         <span className="cc-server-name">{selected.name}</span>
-        <BotDot state={selectedState} />
+        <BotDot state={selectedState} installed={selected.botInstalled} />
         <ChevronsUpDown size={16} className="cc-server-chevron" aria-hidden />
       </button>
 
@@ -140,7 +146,7 @@ export default function ServerSwitcher() {
                       {typeof g.memberCount === 'number' ? ` · ${g.memberCount} members` : ''}
                     </span>
                   </span>
-                  <BotDot state={conn} />
+                  <BotDot state={conn} installed={g.botInstalled} />
                   {g.owner ? <ShieldCheck size={14} color="var(--cc-ok)" /> : null}
                 </button>
                 {g.needsInvite && g.inviteUrl && (
