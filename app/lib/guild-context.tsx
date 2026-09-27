@@ -84,6 +84,20 @@ interface GuildContextType {
 
 const GuildContext = createContext<GuildContextType | null>(null);
 
+// Every context fetch carries a hard timeout: a hung backend must resolve
+// to an error state, never to a permanently-spinning shell ("Connecting to
+// Discord…" / endless Refresh). Timeouts surface through the existing
+// error states of each loader below.
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = 15000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function GuildProvider({ children }: { children: ReactNode }) {
   const [authChecked, setAuthChecked] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
@@ -106,7 +120,7 @@ export function GuildProvider({ children }: { children: ReactNode }) {
     setServersLoading(true);
     setServersError('');
     try {
-      const resp = await fetch(`/api/dashboard/servers${force ? '?refresh=1' : ''}`, { cache: 'no-store' });
+      const resp = await fetchWithTimeout(`/api/dashboard/servers${force ? '?refresh=1' : ''}`, { cache: 'no-store' }, 25000);
       const data = (await resp.json().catch(() => null)) as {
         success?: boolean; servers?: DashGuild[]; meta?: ServersMeta; error?: string;
       } | null;
@@ -143,10 +157,11 @@ export function GuildProvider({ children }: { children: ReactNode }) {
 
   const loadMe = useCallback(async () => {
     try {
-      const resp = await fetch('/api/auth/discord/me', { cache: 'no-store' });
+      const resp = await fetchWithTimeout('/api/auth/discord/me', { cache: 'no-store' }, 15000);
       const data = (await resp.json()) as DashMe;
       setMe(data);
       setAuthenticated(Boolean(data.authenticated));
+      setError('');
       if (data.authenticated && data.guilds) {
         // Live detection replaces the login-time snapshot when it answers;
         // the snapshot keeps the UI usable until then.
@@ -164,6 +179,7 @@ export function GuildProvider({ children }: { children: ReactNode }) {
     } catch {
       setMe({ authenticated: false });
       setAuthenticated(false);
+      setError('Could not reach the dashboard session — check your connection and refresh. If it persists, sign in again.');
     } finally {
       setAuthChecked(true);
     }
@@ -182,7 +198,7 @@ export function GuildProvider({ children }: { children: ReactNode }) {
     let alive = true;
     const load = async () => {
       try {
-        const resp = await fetch('/api/dashboard/status', { cache: 'no-store' });
+        const resp = await fetchWithTimeout('/api/dashboard/status', { cache: 'no-store' }, 12000);
         if (!resp.ok) return;
         const data = (await resp.json()) as {
           status?: string;
