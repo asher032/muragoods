@@ -23,6 +23,18 @@ export function useGuildConfig() {
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState('');
 
+  // Hard ceiling per request: a hung config call must resolve to an error
+  // state, never to a permanently-spinning page.
+  const fetchWithTimeout = async (url: string, init: RequestInit, timeoutMs: number): Promise<Response> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
   /**
    * Report a failed request with the endpoint, the HTTP status and the server's
    * own message.
@@ -63,7 +75,7 @@ export function useGuildConfig() {
     const endpoint = `/api/dashboard/config?guildId=${selected.id}`;
     let resp: Response | null = null;
     try {
-      resp = await fetch(endpoint, { headers: { 'x-discord-token': token } });
+      resp = await fetchWithTimeout(endpoint, { headers: { 'x-discord-token': token } }, 20000);
       const data = await resp.json();
       if (data.success) {
         setConfig(data.config || {});
@@ -84,11 +96,11 @@ export function useGuildConfig() {
     const endpoint = '/api/dashboard/config';
     let resp: Response | null = null;
     try {
-      resp = await fetch(endpoint, {
+      resp = await fetchWithTimeout(endpoint, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'x-discord-token': token },
         body: JSON.stringify({ guildId: selected.id, config }),
-      });
+      }, 20000);
       const data = await resp.json();
       if (data.success) {
         setSaveState('saved');

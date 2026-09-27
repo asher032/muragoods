@@ -6,6 +6,7 @@ import { useGuild } from '@/app/lib/guild-context';
 import { ArrowLeft, Bot, Menu, RefreshCw, Search } from 'lucide-react';
 import Sidebar from './Sidebar';
 import ServerSwitcher from './ServerSwitcher';
+import InitDebugPanel from './InitDebugPanel';
 
 // ── Dashboard shell ──────────────────────────────────────────────────────
 // Auth is a server-side session (HttpOnly cookie). This shell:
@@ -19,6 +20,11 @@ import ServerSwitcher from './ServerSwitcher';
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  // Debug panel flag read without useSearchParams (which would force a
+  // Suspense boundary on every dashboard page for one query flag).
+  const [showDebug] = useState(
+    () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1',
+  );
   const {
     authChecked, authenticated, guilds, selected, botOnline,
     botInSelectedGuild, loginUrl, error, setSelected, logout,
@@ -300,6 +306,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           </div>
         </header>
         <main className="cc-page">
+          {showDebug && <InitDebugPanel />}
           {/* Per-server bot state, verified server-side. Never assume the bot
               is installed just because the user manages the server. */}
           {selected && botInSelectedGuild === false && (
