@@ -585,9 +585,9 @@ class MusicCog(commands.Cog):
         if not await dj_guard(interaction, "loop"):
             return
         player = music.engine.get_player(interaction.guild.id)
-        player.queue_loop = not player.queue_loop
+        looped = player.set_queue_loop(not player.queue_loop)
         await interaction.followup.send(
-            f"🔁 Queue loop **{'on' if player.queue_loop else 'off'}**.", ephemeral=True)
+            f"🔁 Queue loop **{'on' if looped else 'off'}**.", ephemeral=True)
 
     @app_commands.command(name="queuepage", description="Show a specific queue page (10 per page).")
     @app_commands.describe(page="Page number")
@@ -893,11 +893,8 @@ class MusicCog(commands.Cog):
         if len(player.queue) < 2:
             await interaction.followup.send("Need at least 2 tracks to shuffle.", ephemeral=True)
             return
-        items = list(player.queue)
-        random.shuffle(items)
-        player.queue.clear()
-        player.queue.extend(items)
-        await interaction.followup.send(f"🔀 Shuffled **{len(items)}** tracks.", ephemeral=True)
+        count = player.shuffle_queue()
+        await interaction.followup.send(f"🔀 Shuffled **{count}** tracks.", ephemeral=True)
 
     @app_commands.command(name="remove", description="Remove a track from the queue by position.")
     @app_commands.describe(position="Queue position to remove (1 = first)")
@@ -906,11 +903,10 @@ class MusicCog(commands.Cog):
         if not await dj_guard(interaction, "remove"):
             return
         player = music.engine.get_player(interaction.guild.id)
-        if position < 1 or position > len(player.queue):
+        track = player.remove_at(position)
+        if track is None:
             await interaction.followup.send("That position isn't in the queue.", ephemeral=True)
             return
-        track = player.queue[position - 1]
-        del player.queue[position - 1]
         await interaction.followup.send(f"🗑 Removed **{track.title}**.", ephemeral=True)
 
     @app_commands.command(name="clearqueue", description="Clear the music queue.")
