@@ -672,26 +672,28 @@ class HelpCog(commands.Cog):
 
     @app_commands.command(name="help", description="Browse Murabot commands by category.")
     async def help_command(self, interaction: discord.Interaction):
-        # Ack FIRST: registry walk + first render must never race the 3s
-        # window. Any failure below becomes a visible error, never silence.
+        # Canonical pattern FIRST: response.send_message registers the view
+        # against the interaction for component dispatch. Only if that
+        # fails (already-acked edge) fall back to defer + followup WITH
+        # wait=True — without wait the followup returns no message, the
+        # view binds to message None, and every select silently dies.
+        try:
+            view = HelpView(self.bot, interaction.user.id)
+            await interaction.response.send_message(embed=overview_embed(), view=view)
+            try:
+                view.message = await interaction.original_response()
+            except Exception:
+                pass
+            return
+        except Exception:
+            log.exception("Help direct send failed, trying deferred followup")
         try:
             await interaction.response.defer()
         except Exception:
             pass
         try:
             view = HelpView(self.bot, interaction.user.id)
-        except Exception:
-            log.exception("Help browser construction failed")
-            try:
-                await interaction.followup.send(
-                    embed=utils.base_embed("⚠️ Help unavailable",
-                                           "Could not build the command browser."),
-                    ephemeral=True)
-            except Exception:
-                pass
-            return
-        try:
-            await interaction.followup.send(embed=overview_embed(), view=view)
+            await interaction.followup.send(embed=overview_embed(), view=view, wait=True)
             try:
                 view.message = await interaction.original_response()
             except Exception:
