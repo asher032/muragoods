@@ -333,12 +333,8 @@ class CategorySelect(discord.ui.Select):
         view: HelpView = self.view  # type: ignore[assignment]
         if not await view.check_owner(interaction):
             return
-        # Ack FIRST: rendering must never race the 3s interaction timeout.
-        try:
-            if not interaction.response.is_done():
-                await interaction.response.defer()
-        except Exception:
-            pass
+        # No pre-defer: _safe_edit answers with a single edit roundtrip
+        # first (fastest spinner clear). Failures become error notes.
         try:
             await view.show_category(interaction, self.values[0], 0)
         except Exception:
@@ -364,11 +360,6 @@ class CommandSelect(discord.ui.Select):
         view: HelpView = self.view  # type: ignore[assignment]
         if not await view.check_owner(interaction):
             return
-        try:
-            if not interaction.response.is_done():
-                await interaction.response.defer()
-        except Exception:
-            pass
         try:
             await view.show_detail(interaction, self.values[0], self.context)
         except Exception:
@@ -482,6 +473,10 @@ class HelpView(discord.ui.View):
             pass
 
     async def _safe_edit(self, interaction: discord.Interaction, **kwargs) -> bool:
+        """Answer with a single edit roundtrip FIRST (clears the component
+        spinner immediately), then fall back to defer+edit. The old
+        defer-then-edit order left the spinner hanging forever whenever the
+        edit leg failed after a successful defer."""
         try:
             if not interaction.response.is_done():
                 await interaction.response.edit_message(**kwargs)
@@ -489,12 +484,23 @@ class HelpView(discord.ui.View):
                 await interaction.edit_original_response(**kwargs)
             return True
         except Exception:
-            try:
-                if hasattr(self, "message") and self.message is not None:
-                    await self.message.edit(**kwargs)
-                return True
-            except Exception:
-                return False
+            pass
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.defer()
+        except Exception:
+            pass
+        try:
+            await interaction.edit_original_response(**kwargs)
+            return True
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "message") and self.message is not None:
+                await self.message.edit(**kwargs)
+            return True
+        except Exception:
+            return False
 
     async def show_home(self, interaction: discord.Interaction):
         self.mode = "home"
@@ -570,11 +576,10 @@ class HelpView(discord.ui.View):
         return "", []
 
     async def _guarded_nav(self, interaction: discord.Interaction, work) -> None:
-        """Ack-first wrapper for every nav button: the interaction can never
-        time out, and a render failure becomes an error note, not silence."""
+        """Nav buttons answer with a single edit roundtrip (via show_* and
+        _safe_edit). A render failure becomes an error note, never silence."""
         if not await self.check_owner(interaction):
             return
-        await self._ack(interaction)
         try:
             await work()
         except Exception:
