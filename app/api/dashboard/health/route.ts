@@ -1,19 +1,19 @@
 import { sessionToken } from '@/app/lib/require-session';
+import { requireGuildManage } from '@/app/lib/discord-guilds';
 import { NextRequest, NextResponse } from 'next/server';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 
 export const dynamic = 'force-dynamic';
 
-async function getManageableGuilds(accessToken: string): Promise<Map<string, { id: string }>> {
-  const MANAGE_GUILD = BigInt(0x20);
-  const ADMINISTRATOR = BigInt(0x8);
-  const resp = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    next: { revalidate: 0 },
-  });
-  if (!resp.ok) return new Map();
-  const guilds = (await resp.json()) as Array<{ id: string; permissions: string | number; owner: boolean }>;
-  return new Map(guilds.filter((g) => g.owner || (BigInt(g.permissions) & MANAGE_GUILD) !== BigInt(0) || (BigInt(g.permissions) & ADMINISTRATOR) !== BigInt(0)).map((g) => [g.id, { id: g.id }]));
+async function guard(token: string, guildId: string) {
+  // Shared cached manage check — distinct codes instead of a collapsed Map
+  // lookup that turned every Discord outage into a false 403.
+  const check = await requireGuildManage(token, guildId);
+  if (check.ok) return null;
+  return NextResponse.json(
+    { ok: false, code: check.code, error: check.error, retryable: check.retryable },
+    { status: check.status },
+  );
 }
 
 // GET /api/dashboard/health — service health check
@@ -28,8 +28,8 @@ export async function GET(req: NextRequest) {
   let botError = null;
 
   if (guildId && /^\d{5,25}$/.test(guildId)) {
-    const manageable = await getManageableGuilds(token);
-    if (!manageable.has(guildId)) return NextResponse.json({ ok: false, error: 'You do not have permission to manage this server' }, { status: 403 });
+    const denied = await guard(token, guildId);
+    if (denied) return denied;
 
     try {
       const botToken = process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN;
