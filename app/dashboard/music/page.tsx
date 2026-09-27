@@ -194,6 +194,7 @@ export default function MusicPage() {
   const [searchError, setSearchError] = useState('');
   const [searchResults, setSearchResults] = useState<Array<{
     title: string; uploader: string; duration: number; thumbnail: string; url: string;
+    versionType?: string;
   }>>([]);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   // Monotonic search generation for the stale-response guard below.
@@ -685,7 +686,18 @@ export default function MusicPage() {
                   <span style={{ width: 64, height: 36, borderRadius: 6, background: 'rgba(255,255,255,0.06)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>🎵</span>
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ color: '#fff', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</div>
+                  <div style={{ color: '#fff', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {r.title}{' '}
+                    {r.versionType === 'official' && (
+                      <span style={{ fontSize: 9.5, background: 'rgba(34,197,94,0.25)', color: '#7fe3a8', borderRadius: 4, padding: '1px 5px', verticalAlign: 1 }}>OFFICIAL</span>
+                    )}
+                    {r.versionType === 'original' && (
+                      <span style={{ fontSize: 9.5, background: 'rgba(99,102,241,0.3)', color: '#c7c9ff', borderRadius: 4, padding: '1px 5px', verticalAlign: 1 }}>ORIGINAL</span>
+                    )}
+                    {r.versionType === 'alternate' && (
+                      <span style={{ fontSize: 9.5, background: 'rgba(240,180,41,0.2)', color: '#f0b429', borderRadius: 4, padding: '1px 5px', verticalAlign: 1 }}>ALT VERSION</span>
+                    )}
+                  </div>
                   <div style={{ color: 'var(--cc-text-faint)', fontSize: 11.5 }}>{r.uploader}{r.duration ? ` · ${fmt(r.duration)}` : ''}</div>
                 </div>
                 <button className="cc-btn" style={{ fontSize: 11.5 }} disabled={acting !== null}

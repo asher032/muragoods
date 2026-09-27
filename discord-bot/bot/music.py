@@ -563,6 +563,170 @@ def looks_relevant(query: str, title: str) -> bool:
     return any(tok in in_title for tok in tokens)
 
 
+# ── Original-recording ranking ────────────────────────────────────────
+# yt-dlp returns results in provider order, which favors engagement over
+# authenticity: the first hit for "Die With A Smile" is routinely a sped-up,
+# slowed+reverb, cover or karaoke reupload. rank_candidates() scores every
+# candidate so the OFFICIAL/original recording wins whenever one exists.
+#
+# Rules that keep this honest instead of aggressive:
+# - penalties apply to the TITLE (and closely related fields), never to the
+#   uploader/channel name — an artist literally named e.g. "Covers" must not
+#   nuke their own legitimate uploads;
+# - every pattern uses word boundaries ("cover" must not match "recovery",
+#   "live" must not match "alive"/"oliver", "edit" must not match "credits");
+# - mild weights for ambiguous words ("live", "acoustic", "version") so a
+#   strong official signal still outranks them;
+# - if the USER asked for the variant ("remix", "live", ...), that kind is
+#   not penalized at all — the override is the request, not the filter.
+_ALTERNATE_KINDS: tuple[tuple[str, str, int], ...] = (
+    ("cover", r"\bcovers?\b|\bai\s*covers?\b|\bfan\s*made\b|\bfanmade\b", 40),
+    ("karaoke", r"\bkaraoke\b", 40),
+    ("instrumental", r"\binstrumentals?\b", 40),
+    ("remix", r"\bremix(?:es|ed)?\b", 30),
+    ("sped-up", r"\bsped\s*-?\s*up\b|\bspeed\s*-?\s*up\b|\b2x\b", 30),
+    ("slowed", r"\bslowed(?:\s*\+\s*reverb)?\b|\bslow\s+(?:version|edit|songs?)\b", 30),
+    ("reverb", r"\breverb\b", 25),
+    ("nightcore", r"\bnightcore\b", 30),
+    ("8d", r"\b8\s*d\b", 25),
+    ("bass-boosted", r"\bbass\s*-?\s*boost(?:ed)?\b", 25),
+    ("mashup", r"\bmashups?\b", 35),
+    ("acoustic", r"\bacoustic\b", 15),
+    ("live", r"\blive\b", 15),
+    ("edit", r"\bedits?\b|\bfan\s*edit\b", 20),
+    ("version-alt", r"\bother\s+version\b|\balt(?:ernate)?\s+version\b", 10),
+    ("loop-upload", r"\b\d+\s*hours?\b|\b1\s*hour\b|\bloop\b|\brepeat\b", 15),
+    ("remaster", r"\bremaster(?:ed)?\b", 5),
+    ("lyrics-video", r"\blyric(?:s)?\s*(?:video|only)\b", 8),
+)
+_COMPILED_KINDS: tuple[tuple[str, "re.Pattern[str]", int], ...] = tuple(
+    (kind, re.compile(pattern, re.IGNORECASE), weight)
+    for kind, pattern, weight in _ALTERNATE_KINDS
+)
+_OFFICIAL_CHANNEL_RES = (
+    # VEVO channels concatenate the name (TaylorSwiftVEVO) — no word
+    # boundary before VEVO, so anchor at the end as well.
+    re.compile(r"(?:\bvevo\b|vevo$)", re.IGNORECASE),
+    re.compile(r"\bofficial\b", re.IGNORECASE),
+    re.compile(r"-\s*topic$", re.IGNORECASE),
+)
+_LABEL_CHANNEL_RES = (
+    re.compile(r"\brecords\b", re.IGNORECASE),
+    re.compile(r"\bmusic\b", re.IGNORECASE),
+)
+_OFFICIAL_TITLE_RES = (
+    re.compile(r"\bofficial\s+(?:music\s+)?video\b", re.IGNORECASE),
+    re.compile(r"\bofficial\s+audio\b", re.IGNORECASE),
+)
+_AUDIO_TITLE_RES = (re.compile(r"\baudio\b", re.IGNORECASE),)
+
+
+def requested_kinds(query: str) -> set[str]:
+    """Alternate kinds the user explicitly asked for — never penalized."""
+    text = f" {(query or '').lower()} "
+    return {kind for kind, rx, _ in _COMPILED_KINDS if rx.search(text)}
+
+
+def score_candidate(query: str, entry: dict) -> tuple[float, str, list[str]]:
+    """Score one search candidate. Returns (score, version_type, kinds).
+
+    version_type is one of official|original|alternate|unknown. "official"
+    requires a verifiable marker (VEVO/official/Topic channel or official
+    video/audio title) — it is never claimed from vibes.
+    """
+    title = str(entry.get("title") or "")
+    uploader = str(entry.get("uploader") or entry.get("channel") or "")
+    low_title = title.lower()
+    requested = requested_kinds(query)
+    kinds: list[str] = []
+    score = 0.0
+
+    q_tokens = set(_search_tokens(query))
+    t_tokens = set(re.findall(r"[a-z0-9]+", low_title))
+    if q_tokens:
+        overlap = len(q_tokens & t_tokens) / len(q_tokens)
+        score += overlap * 30.0
+        if overlap >= 0.6:
+            score += 5.0
+    u_tokens = set(re.findall(r"[a-z0-9]+", uploader.lower()))
+    if q_tokens and u_tokens:
+        score += min(len(q_tokens & u_tokens) * 5.0, 15.0)
+
+    official = False
+    for rx in _OFFICIAL_CHANNEL_RES:
+        if rx.search(uploader):
+            score += 25.0
+            official = True
+            break
+    if not official:
+        for rx in _LABEL_CHANNEL_RES:
+            if rx.search(uploader):
+                score += 10.0
+                break
+    for rx in _OFFICIAL_TITLE_RES:
+        if rx.search(title):
+            score += 15.0
+            official = True
+            break
+    else:
+        for rx in _AUDIO_TITLE_RES:
+            if rx.search(title):
+                score += 5.0
+                break
+
+    for kind, rx, weight in _COMPILED_KINDS:
+        if kind in requested:
+            # Explicit request ("remix", "live", ...) is the strongest
+            # relevance signal: matching entries earn a bonus instead of a
+            # penalty, so the requested version wins over the original.
+            if rx.search(title):
+                kinds.append(f"requested:{kind}")
+                score += 30.0
+            continue
+        if rx.search(title):
+            kinds.append(kind)
+            score -= float(weight)
+
+    if kinds:
+        version_type = "alternate"
+    elif official:
+        version_type = "official"
+    elif q_tokens and (len(q_tokens & t_tokens) / len(q_tokens)) >= 0.6:
+        version_type = "original"
+    else:
+        version_type = "unknown"
+    return score, version_type, kinds
+
+
+def rank_candidates(query: str, entries: list[dict]) -> list[dict]:
+    """Order candidates best-first, tagging each with versionType.
+
+    Stable: ties keep provider order (no gratuitous reshuffling). Never
+    mutates the input dicts.
+    """
+    scored: list[tuple[float, int, dict, str, list[str]]] = []
+    for idx, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            continue
+        score, version_type, kinds = score_candidate(query, entry)
+        row = dict(entry)
+        row["versionType"] = version_type
+        row["_rank_kinds"] = kinds
+        scored.append((score, idx, row, version_type, kinds))
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    out: list[dict] = []
+    for score, _idx, row, version_type, kinds in scored:
+        row.pop("_rank_kinds", None)
+        row["_rank_score"] = round(score, 1)
+        out.append(row)
+    if out:
+        best = out[0]
+        log.info("rank pick %r (type=%s score=%s) from %d candidates for %r",
+                 str(best.get("title") or "")[:70], best.get("versionType"),
+                 best.get("_rank_score"), len(out), (query or "")[:60])
+    return out
+
+
 def is_preview_url(url: str | None) -> bool:
     """True for SoundCloud-style preview CDNs, which serve ~30s clips.
 
@@ -774,6 +938,10 @@ class Track:
         # primary provider's.
         self.source: str = (self.stream_url or "").split("/")[2] if self.stream_url.count("/") > 2 else ""
         self.requester = requester
+        # How the recording was classified at resolve time
+        # (official|original|alternate|unknown). Surfaced in diagnostics and
+        # dashboard results; never claimed without a verifiable marker.
+        self.version_type: str = str(data.get("versionType") or "unknown")
 
     def __str__(self) -> str:
         mins, secs = divmod(self.duration, 60)
@@ -1380,7 +1548,18 @@ class MusicEngine:
                         if not entries:
                             last_exc = ValueError(f"[{strategy_name}] No entries found")
                             continue
-                        data = entries[0]
+                        if not is_url and strategy_name.startswith("ytsearch"):
+                            # Rank: the provider's first hit is routinely a
+                            # sped-up/cover/karaoke reupload. Prefer the
+                            # official/original recording when one exists.
+                            ranked = rank_candidates(query, entries)
+                            data = ranked[0]
+                            if len(ranked) > 1:
+                                log.info("rank chose %r over %r",
+                                         str(data.get("title") or "")[:60],
+                                         str(ranked[1].get("title") or "")[:60])
+                        else:
+                            data = entries[0]
                     if not data.get("url") and not data.get("webpage_url"):
                         last_exc = ValueError(f"[{strategy_name}] No URL in result")
                         continue
@@ -1773,6 +1952,20 @@ class MusicEngine:
                     "thumbnail": str(e.get("thumbnail") or "")[:300],
                     "url": url[:300],
                 })
+            # Rank so the official/original recording surfaces first instead
+            # of the provider's engagement-ordered first hit (often a cover,
+            # sped-up or karaoke reupload). Rows carry versionType for the UI.
+            try:
+                ranked = rank_candidates(key, [
+                    {"title": r["title"], "uploader": r["uploader"], **r} for r in out
+                ])
+                out = [{
+                    "title": r["title"], "uploader": r["uploader"],
+                    "duration": r["duration"], "thumbnail": r["thumbnail"],
+                    "url": r["url"], "versionType": r.get("versionType", "unknown"),
+                } for r in ranked]
+            except Exception:
+                pass
             log.debug("search result_parse_ms=%.0f rows=%d",
                       (time.monotonic() - t1) * 1000, len(out))
             return out

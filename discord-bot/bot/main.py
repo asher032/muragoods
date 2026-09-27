@@ -1051,6 +1051,7 @@ async def _health_server() -> None:
             "title": t.title, "uploader": t.uploader, "duration": t.duration,
             "thumbnail": t.thumbnail, "url": t.url,
             "requester": str(t.requester) if t.requester else None,
+            "versionType": getattr(t, "version_type", "unknown"),
         }
 
     async def music_state(request: web.Request) -> web.Response:
