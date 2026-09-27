@@ -667,19 +667,36 @@ class HelpCog(commands.Cog):
 
     @app_commands.command(name="help", description="Browse Murabot commands by category.")
     async def help_command(self, interaction: discord.Interaction):
-        view = HelpView(self.bot, interaction.user.id)
+        # Ack FIRST: registry walk + first render must never race the 3s
+        # window. Any failure below becomes a visible error, never silence.
         try:
-            await interaction.response.send_message(embed=overview_embed(), view=view)
+            await interaction.response.defer()
+        except Exception:
+            pass
+        try:
+            view = HelpView(self.bot, interaction.user.id)
+        except Exception:
+            log.exception("Help browser construction failed")
+            try:
+                await interaction.followup.send(
+                    embed=utils.base_embed("⚠️ Help unavailable",
+                                           "Could not build the command browser."),
+                    ephemeral=True)
+            except Exception:
+                pass
+            return
+        try:
+            await interaction.followup.send(embed=overview_embed(), view=view)
             try:
                 view.message = await interaction.original_response()
             except Exception:
                 pass
-        except Exception as exc:
+        except Exception:
             log.exception("Help failed to send")
             try:
                 await interaction.followup.send(
                     embed=utils.base_embed("⚠️ Help unavailable",
-                                           f"Could not open the browser ({type(exc).__name__})."),
+                                           "Could not open the browser."),
                     ephemeral=True)
             except Exception:
                 pass
