@@ -1,22 +1,27 @@
 import { sessionToken } from '@/app/lib/require-session';
+import { fetchUserGuildsCached, hasManageBits } from '@/app/lib/discord-guilds';
 import { NextRequest, NextResponse } from 'next/server';
 import { MongoClient, ObjectId } from 'mongodb';
 
 export const dynamic = 'force-dynamic';
 
-const MANAGE_GUILD = BigInt(0x20);
-const ADMINISTRATOR = BigInt(0x8);
+type ManageResult = { ok: true; ids: Set<string> } | { ok: false; status: number; code: string; error: string };
 
-async function getManageableGuilds(accessToken: string): Promise<Map<string, { id: string }>> {
-  const resp = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: 'no-store',
-  });
-  if (!resp.ok) return new Map();
-  const guilds = (await resp.json()) as Array<{ id: string; permissions: string | number; owner: boolean }>;
-  return new Map(guilds
-    .filter((g) => g.owner || (BigInt(g.permissions) & MANAGE_GUILD) !== BigInt(0) || (BigInt(g.permissions) & ADMINISTRATOR) !== BigInt(0))
-    .map((g) => [g.id, { id: g.id }]));
+async function getManageableGuilds(accessToken: string): Promise<ManageResult> {
+  // Shared 30s-cached guild list. A Discord failure is reported distinctly —
+  // the old code collapsed it into an empty set, which read as "no
+  // permission" / "no manageable servers" on a healthy account.
+  const res = await fetchUserGuildsCached(accessToken);
+  if (!res.ok && res.authFailed) {
+    return { ok: false, status: 401, code: 'AUTH_REQUIRED', error: 'Discord rejected the session — sign in again' };
+  }
+  if (!res.ok) {
+    return { ok: false, status: 502, code: 'DISCORD_API_ERROR', error: 'Discord did not answer — retry in a moment' };
+  }
+  return {
+    ok: true,
+    ids: new Set(res.guilds.filter((g) => hasManageBits(g.owner, g.permissions)).map((g) => g.id)),
+  };
 }
 
 // ── Shared cluster access (bot writes here; dashboard reads) ────────────
@@ -95,16 +100,19 @@ export async function GET(req: NextRequest) {
   }
 
   const manageable = await getManageableGuilds(token);
-  if (guildId && !manageable.has(guildId)) {
-    return NextResponse.json({ success: false, error: 'No permission for this server' }, { status: 403 });
+  if (!manageable.ok) {
+    return NextResponse.json({ success: false, code: manageable.code, error: manageable.error }, { status: manageable.status });
   }
-  if (!guildId && manageable.size === 0) {
+  if (guildId && !manageable.ids.has(guildId)) {
+    return NextResponse.json({ success: false, code: 'INSUFFICIENT_GUILD_PERMISSION', error: 'No permission for this server' }, { status: 403 });
+  }
+  if (!guildId && manageable.ids.size === 0) {
     return NextResponse.json({ success: false, error: 'No manageable servers' }, { status: 403 });
   }
 
   try {
     const col = await errorsCollection();
-    const query: Record<string, unknown> = guildId ? { guildId } : { guildId: { $in: ['', ...manageable.keys()] } };
+    const query: Record<string, unknown> = guildId ? { guildId } : { guildId: { $in: ['', ...manageable.ids.keys()] } };
     const docs = await col.find(query).sort({ createdAt: -1 }).limit(100).toArray();
     return NextResponse.json({
       success: true,
@@ -143,7 +151,10 @@ export async function PATCH(req: NextRequest) {
   }
 
   const manageable = await getManageableGuilds(token);
-  if (manageable.size === 0) {
+  if (!manageable.ok) {
+    return NextResponse.json({ success: false, code: manageable.code, error: manageable.error }, { status: manageable.status });
+  }
+  if (manageable.ids.size === 0) {
     return NextResponse.json({ success: false, error: 'No manageable servers' }, { status: 403 });
   }
 
@@ -152,8 +163,8 @@ export async function PATCH(req: NextRequest) {
     const doc = await col.findOne({ _id: new ObjectId(id) });
     if (!doc) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     const guildId = String(doc.guildId || '');
-    if (guildId && !manageable.has(guildId)) {
-      return NextResponse.json({ success: false, error: 'No permission for this server' }, { status: 403 });
+    if (guildId && !manageable.ids.has(guildId)) {
+      return NextResponse.json({ success: false, code: 'INSUFFICIENT_GUILD_PERMISSION', error: 'No permission for this server' }, { status: 403 });
     }
     await col.updateOne({ _id: new ObjectId(id) }, { $set: { resolved: Boolean(body.resolved) } });
     return NextResponse.json({ success: true });
