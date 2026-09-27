@@ -148,6 +148,7 @@ class MuraBot(commands.Bot):
             "cogs.music",
             "cogs.moderation",
             "cogs.modgroup",
+            "cogs.debug",
             "cogs.notes",
             "cogs.purge",
             "cogs.lockdown",

@@ -120,6 +120,74 @@ def _refused(exc: discord.Forbidden, perm_label: str, what: str) -> dict:
                  permission=perm_label)
 
 
+def is_cloudflare_block(exc: BaseException) -> bool:
+    """True when a Discord HTTP error is the Cloudflare edge blocking the
+    request itself (JSON code 40333), not a permission decision."""
+    return getattr(exc, "code", 0) == 40333
+
+
+def describe_forbidden(exc: discord.Forbidden, perm_label: str, what: str) -> str:
+    """User-facing text for a Discord 403 in cogs: Cloudflare blocks are
+    reported as network blocks (never as missing permissions), genuine
+    refusals keep the exact permission message. No lookup is trusted — the
+    `code` comes from Discord's own response object."""
+    if is_cloudflare_block(exc):
+        return ("Discord's network filter blocked that request (Cloudflare) — "
+                "not a permission problem. Try again in a moment.")
+    return f"Discord refused {what} — I need **{perm_label}**."
+
+
+async def refresh_bot_member(guild):
+    """Re-resolve the bot's member object from the CURRENT guild.
+
+    `guild.me` can go stale (role changes, partial member cache without the
+    privileged members intent). Before reporting a permission as missing,
+    fetch the live member once and re-evaluate. Returns the fresh member, or
+    None when the refresh itself fails (caller keeps the original verdict —
+    a failed lookup is never alibied into a permission claim).
+    """
+    try:
+        me = getattr(guild, "me", None)
+        me_id = getattr(me, "id", None)
+        fetch = getattr(guild, "fetch_member", None)
+        if me_id is None or fetch is None:
+            return None
+        fresh = await fetch(int(me_id))
+        return fresh
+    except Exception:
+        return None
+
+
+async def _bot_has(guild, attr: str) -> bool | None:
+    """Bot's guild-level permission, with one refresh-on-deny.
+
+    True = granted (live or cached), False = denied even after a fresh fetch,
+    None = unresolvable (no member object at all — caller must NOT report a
+    permission verdict from this).
+    """
+    me = getattr(guild, "me", None)
+    if me is None:
+        return None
+    try:
+        if bool(getattr(me.guild_permissions, attr, False)):
+            return True
+    except Exception:
+        return None
+    fresh = await refresh_bot_member(guild)
+    if fresh is not None:
+        try:
+            if bool(getattr(fresh.guild_permissions, attr, False)):
+                # Heal the cached object so the action below re-checks pass.
+                try:
+                    guild.me = fresh
+                except Exception:
+                    pass
+                return True
+        except Exception:
+            pass
+    return False
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -160,16 +228,29 @@ def _bot_perm(guild, attr: str) -> bool:
         return False
 
 
-def _guard_bot(guild, action: str) -> dict | None:
-    """Bot installed + holds the Discord permission for `action`."""
+async def _guard_bot(guild, action: str) -> dict | None:
+    """Bot installed + holds the Discord permission for `action`.
+
+    The permission read goes through _bot_has: on a cached denial the bot
+    member is re-fetched from the CURRENT guild once before reporting the
+    permission missing (stale cache false-negatives), and an unresolvable
+    member yields no verdict at all (a lookup failure is never alibied into
+    a permission claim)."""
     if guild is None:
         return _fail("BOT_NOT_IN_GUILD", "I'm not in that server.")
     need = BOT_PERMISSIONS.get(action)
-    if need and not _bot_perm(guild, need):
-        return _fail("BOT_MISSING_PERMISSION",
-                     f"I need the **{PERM_LABELS[need]}** permission for this.",
-                     permission=PERM_LABELS[need])
-    return None
+    if not need:
+        return None
+    has = await _bot_has(guild, need)
+    if has is True:
+        return None
+    if has is None:
+        return _fail("DISCORD_API_ERROR",
+                     "I could not resolve my own member record to check "
+                     "permissions — retry in a moment, do not assume denial.")
+    return _fail("BOT_MISSING_PERMISSION",
+                 f"I need the **{PERM_LABELS[need]}** permission for this.",
+                 permission=PERM_LABELS[need])
 
 
 def _guard_target(guild, member, actor_id: int) -> dict | None:
@@ -245,7 +326,7 @@ async def warn_member(bot, db, guild_id: int, target_id: int, reason: str,
 async def timeout_member(bot, db, guild_id: int, target_id: int, minutes: int,
                          reason: str, actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
-    problem = _guard_bot(guild, "timeout")
+    problem = await _guard_bot(guild, "timeout")
     if problem:
         return problem
     member = guild.get_member(int(target_id))
@@ -256,7 +337,7 @@ async def timeout_member(bot, db, guild_id: int, target_id: int, minutes: int,
     reason = (reason or "No reason given").strip()[:300]
     try:
         await member.timeout(_utcnow() + timedelta(minutes=minutes), reason=reason[:150])
-    except discord.Forbidden:
+    except discord.Forbidden as exc:
         return _refused(exc, "Timeout Members", "the timeout")
     except discord.HTTPException as exc:
         return _fail("DISCORD_API_ERROR", f"Discord API error {exc.status}.")
@@ -271,7 +352,7 @@ async def timeout_member(bot, db, guild_id: int, target_id: int, minutes: int,
 async def remove_timeout(bot, db, guild_id: int, target_id: int, reason: str,
                          actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
-    problem = _guard_bot(guild, "removetimeout")
+    problem = await _guard_bot(guild, "removetimeout")
     if problem:
         return problem
     member = guild.get_member(int(target_id))
@@ -286,7 +367,7 @@ async def remove_timeout(bot, db, guild_id: int, target_id: int, reason: str,
     reason = (reason or "Timeout removed").strip()[:300]
     try:
         await member.timeout(None, reason=reason[:150])
-    except discord.Forbidden:
+    except discord.Forbidden as exc:
         return _refused(exc, "Timeout Members", "the action")
     except discord.HTTPException as exc:
         return _fail("DISCORD_API_ERROR", f"Discord API error {exc.status}.")
@@ -300,7 +381,7 @@ async def remove_timeout(bot, db, guild_id: int, target_id: int, reason: str,
 async def kick_member(bot, db, guild_id: int, target_id: int, reason: str,
                       actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
-    problem = _guard_bot(guild, "kick")
+    problem = await _guard_bot(guild, "kick")
     if problem:
         return problem
     member = guild.get_member(int(target_id))
@@ -310,7 +391,7 @@ async def kick_member(bot, db, guild_id: int, target_id: int, reason: str,
     reason = (reason or "No reason given").strip()[:300]
     try:
         await member.kick(reason=reason[:200])
-    except discord.Forbidden:
+    except discord.Forbidden as exc:
         return _refused(exc, "Kick Members", "the kick")
     except discord.HTTPException as exc:
         return _fail("DISCORD_API_ERROR", f"Discord API error {exc.status}.")
@@ -324,7 +405,7 @@ async def kick_member(bot, db, guild_id: int, target_id: int, reason: str,
 async def ban_member(bot, db, guild_id: int, target_id: int, reason: str,
                      delete_days: int = 0, actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
-    problem = _guard_bot(guild, "ban")
+    problem = await _guard_bot(guild, "ban")
     if problem:
         return problem
     try:
@@ -342,7 +423,7 @@ async def ban_member(bot, db, guild_id: int, target_id: int, reason: str,
     try:
         await guild.ban(discord.Object(id=int(target_id)), reason=reason[:150],
                         delete_message_days=delete_days)
-    except discord.Forbidden:
+    except discord.Forbidden as exc:
         return _refused(exc, "Ban Members", "the ban")
     except discord.HTTPException as exc:
         return _fail("DISCORD_API_ERROR", f"Discord API error {exc.status}.")
@@ -357,7 +438,7 @@ async def ban_member(bot, db, guild_id: int, target_id: int, reason: str,
 async def unban_member(bot, db, guild_id: int, target_id: int, reason: str,
                        actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
-    problem = _guard_bot(guild, "unban")
+    problem = await _guard_bot(guild, "unban")
     if problem:
         return problem
     reason = (reason or "Unbanned").strip()[:300]
@@ -368,7 +449,7 @@ async def unban_member(bot, db, guild_id: int, target_id: int, reason: str,
         except discord.NotFound:
             return _fail("TARGET_NOT_FOUND", "That user is not banned.")
         await guild.unban(user, reason=reason[:150])
-    except discord.Forbidden:
+    except discord.Forbidden as exc:
         return _refused(exc, "Ban Members", "the unban")
     except discord.HTTPException as exc:
         return _fail("DISCORD_API_ERROR", f"Discord API error {exc.status}.")
@@ -439,7 +520,7 @@ async def mute_member(bot, db, guild_id: int, target_id: int, reason: str,
                       duration_minutes: int | None = None,
                       actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
-    problem = _guard_bot(guild, "mute")
+    problem = await _guard_bot(guild, "mute")
     if problem:
         return problem
     member = guild.get_member(int(target_id))
@@ -452,7 +533,7 @@ async def mute_member(bot, db, guild_id: int, target_id: int, reason: str,
     reason = (reason or "No reason given").strip()[:300]
     try:
         await member.add_roles(role, reason=reason[:150])
-    except discord.Forbidden:
+    except discord.Forbidden as exc:
         return _refused(exc, "Manage Roles", "the action")
     except discord.HTTPException as exc:
         return _fail("DISCORD_API_ERROR", f"Discord API error {exc.status}.")
@@ -480,7 +561,7 @@ async def hardmute_member(bot, db, guild_id: int, target_id: int, reason: str,
                           actor_id: int = 0, source: str = "dashboard") -> dict:
     """Mute + strip all other roles (saved for restoration)."""
     guild = _guild(bot, guild_id)
-    problem = _guard_bot(guild, "hardmute")
+    problem = await _guard_bot(guild, "hardmute")
     if problem:
         return problem
     member = guild.get_member(int(target_id))
@@ -504,7 +585,7 @@ async def hardmute_member(bot, db, guild_id: int, target_id: int, reason: str,
         if removable:
             await member.remove_roles(*removable, reason=f"Hardmute: {reason[:100]}")
         await member.add_roles(role, reason=reason[:150])
-    except discord.Forbidden:
+    except discord.Forbidden as exc:
         return _refused(exc, "Manage Roles", "the action")
     except discord.HTTPException as exc:
         return _fail("DISCORD_API_ERROR", f"Discord API error {exc.status}.")
@@ -539,7 +620,7 @@ async def hardmute_member(bot, db, guild_id: int, target_id: int, reason: str,
 async def unmute_member(bot, db, guild_id: int, target_id: int, reason: str,
                         actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
-    problem = _guard_bot(guild, "unmute")
+    problem = await _guard_bot(guild, "unmute")
     if problem:
         return problem
     member = guild.get_member(int(target_id))
@@ -579,7 +660,7 @@ async def unmute_member(bot, db, guild_id: int, target_id: int, reason: str,
                     restored += 1
             except (discord.Forbidden, discord.HTTPException):
                 continue
-    except discord.Forbidden:
+    except discord.Forbidden as exc:
         return _refused(exc, "Manage Roles", "the action")
     except discord.HTTPException as exc:
         return _fail("DISCORD_API_ERROR", f"Discord API error {exc.status}.")
@@ -682,7 +763,7 @@ async def lockdown_channel(bot, db, guild_id: int, channel_id: int, reason: str,
                            duration_minutes: int | None = None,
                            actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
-    problem = _guard_bot(guild, "lockdown")
+    problem = await _guard_bot(guild, "lockdown")
     if problem:
         return problem
     channel = guild.get_channel(int(channel_id)) if hasattr(guild, "get_channel") else None
@@ -694,7 +775,22 @@ async def lockdown_channel(bot, db, guild_id: int, channel_id: int, reason: str,
                 "text", "news", "forum", "textchannel", "newschannel", "forumchannel"):
             return _fail("TARGET_NOT_FOUND", "That channel cannot be locked (text channels only).")
     try:
-        if not channel.permissions_for(guild.me).manage_channels:
+        if guild.me is None:
+            return _fail("DISCORD_API_ERROR",
+                         "I could not resolve my own member record in that server — "
+                         "retry in a moment, do not assume denial.")
+        allowed = channel.permissions_for(guild.me).manage_channels
+        if not allowed:
+            # The cached member can go stale (role changes, partial member
+            # cache): re-resolve from the CURRENT guild once before
+            # reporting the permission missing.
+            fresh = await refresh_bot_member(guild)
+            if fresh is not None:
+                try:
+                    allowed = channel.permissions_for(fresh).manage_channels
+                except Exception:
+                    pass
+        if not allowed:
             return _fail("BOT_MISSING_PERMISSION",
                          f"I need **Manage Channels** in #{getattr(channel, 'name', '?')}.",
                          permission="Manage Channels")
@@ -713,7 +809,7 @@ async def lockdown_channel(bot, db, guild_id: int, channel_id: int, reason: str,
         overwrite.send_messages = False
         await channel.set_permissions(guild.default_role, overwrite=overwrite,
                                       reason=f"Lockdown: {reason[:100]}")
-    except discord.Forbidden:
+    except discord.Forbidden as exc:
         return _refused(exc, "Manage Channels", "the action there")
     except (discord.HTTPException, Exception) as exc:
         return _fail("DISCORD_API_ERROR", f"Lock failed ({type(exc).__name__}).")
@@ -737,7 +833,7 @@ async def lockdown_channel(bot, db, guild_id: int, channel_id: int, reason: str,
 async def unlock_channel(bot, db, guild_id: int, channel_id: int, reason: str,
                          actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
-    problem = _guard_bot(guild, "lockdown")
+    problem = await _guard_bot(guild, "lockdown")
     if problem:
         return problem
     channel = guild.get_channel(int(channel_id)) if hasattr(guild, "get_channel") else None
@@ -755,7 +851,7 @@ async def unlock_channel(bot, db, guild_id: int, channel_id: int, reason: str,
         overwrite.send_messages = restore.get("send_messages", None)
         await channel.set_permissions(guild.default_role, overwrite=overwrite,
                                       reason=f"Unlock: {(reason or '')[:100]}")
-    except discord.Forbidden:
+    except discord.Forbidden as exc:
         return _refused(exc, "Manage Channels", "the action there")
     except (discord.HTTPException, Exception) as exc:
         return _fail("DISCORD_API_ERROR", f"Unlock failed ({type(exc).__name__}).")
@@ -778,7 +874,7 @@ async def lockdown_server(bot, db, guild_id: int, reason: str,
                           duration_minutes: int | None = None,
                           actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
-    problem = _guard_bot(guild, "lockdown")
+    problem = await _guard_bot(guild, "lockdown")
     if problem:
         return problem
     reason = (reason or "Server lockdown").strip()[:300]
@@ -823,7 +919,7 @@ async def unlock_server(bot, db, guild_id: int, reason: str,
     """Restore ONLY channels this service locked (saved state) — never
     unrelated administrator overwrites."""
     guild = _guild(bot, guild_id)
-    problem = _guard_bot(guild, "lockdown")
+    problem = await _guard_bot(guild, "lockdown")
     if problem:
         return problem
     restored: list[str] = []
@@ -908,7 +1004,7 @@ async def purge_messages(bot, db, guild_id: int, channel_id: int, kind: str, cou
                          include_pinned: bool = False,
                          actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
-    problem = _guard_bot(guild, "purge")
+    problem = await _guard_bot(guild, "purge")
     if problem:
         return problem
     kind = (kind or "all").lower()
@@ -942,7 +1038,7 @@ async def purge_messages(bot, db, guild_id: int, channel_id: int, kind: str, cou
                     matched.append(msg)
                     if len(matched) >= count:
                         break
-    except discord.Forbidden:
+    except discord.Forbidden as exc:
         return _refused(exc, "Read History", "history access")
     except (discord.HTTPException, Exception) as exc:
         return _fail("DISCORD_API_ERROR", f"History scan failed ({type(exc).__name__}).")

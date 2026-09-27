@@ -9,6 +9,7 @@ from discord.ext import commands
 
 import database
 import embeds
+import modservice
 import utils
 
 log = logging.getLogger("bot.tickets")
@@ -72,9 +73,10 @@ class TicketControls(utils.SafeView):
             if creator:
                 await channel.set_permissions(
                     creator, send_messages=False, view_channel=True, reason="Ticket closed")
-        except discord.Forbidden:
+        except discord.Forbidden as exc:
             await interaction.followup.send(
-                "I need **Manage Channels** to lock this ticket.", ephemeral=True)
+                modservice.describe_forbidden(exc, "Manage Channels", "locking this ticket"),
+                ephemeral=True)
             return
 
         await database._db.tickets.update_one(
@@ -147,9 +149,10 @@ class TicketsCog(commands.Cog):
             channel = await interaction.guild.create_text_channel(
                 f"ticket-{interaction.user.name}"[:90],
                 category=category, overwrites=overwrites)
-        except discord.Forbidden:
+        except discord.Forbidden as exc:
             await interaction.followup.send(
-                "I need **Manage Channels** to create tickets.", ephemeral=True)
+                modservice.describe_forbidden(exc, "Manage Channels", "creating the ticket channel"),
+                ephemeral=True)
             return
         ticket_id = f"t-{interaction.user.id}-{channel.id}"
         await database._db.tickets.insert_one({

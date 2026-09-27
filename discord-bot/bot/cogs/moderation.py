@@ -11,6 +11,7 @@ from discord.ext import commands
 import database
 import config
 import utils
+import modservice
 
 log = logging.getLogger("bot.moderation")
 
@@ -258,8 +259,10 @@ class ModerationCog(commands.Cog):
                 await user.add_roles(role, reason=f"By {interaction.user}")
             else:
                 await user.remove_roles(role, reason=f"By {interaction.user}")
-        except discord.Forbidden:
-            await interaction.response.send_message("I lack permission to change that role.", ephemeral=True)
+        except discord.Forbidden as exc:
+            await interaction.response.send_message(
+                modservice.describe_forbidden(exc, "Manage Roles", "that role change"),
+                ephemeral=True)
             return
         await database.add_case(interaction.guild.id, user.id, interaction.user.id,
                                 f"role_{action.value}",
@@ -297,9 +300,10 @@ class ModerationCog(commands.Cog):
         try:
             await interaction.channel.edit(slowmode_delay=seconds,
                                            reason=f"By {interaction.user}")
-        except discord.Forbidden:
+        except discord.Forbidden as exc:
             await interaction.response.send_message(
-                "I need **Manage Channels** permission in this channel.", ephemeral=True)
+                modservice.describe_forbidden(exc, "Manage Channels", "that slowmode change"),
+                ephemeral=True)
             return
         await self._log(interaction.guild, utils.base_embed(
             "🐌 Slowmode changed",
@@ -319,9 +323,10 @@ class ModerationCog(commands.Cog):
             return
         try:
             await user.edit(nick=nickname[:32] or None, reason=f"By {interaction.user}")
-        except discord.Forbidden:
+        except discord.Forbidden as exc:
             await interaction.response.send_message(
-                "I can't change that nickname — check my role position and permissions.", ephemeral=True)
+                modservice.describe_forbidden(exc, "Manage Nicknames", "that nickname change"),
+                ephemeral=True)
             return
         await self._log(interaction.guild, utils.base_embed(
             "✏️ Nickname changed",
