@@ -145,6 +145,10 @@ export function useGuildResources(guildId: string | null) {
       }
       const controller = new AbortController();
       controllerRef.current = controller;
+      // Hard ceiling per attempt: a hung backend must surface as an error
+      // state, never as a permanently-spinning "Loading…".
+      let timedOut = false;
+      const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 25000);
       try {
         const resp = await fetch(`/api/dashboard/resources?guildId=${encodeURIComponent(guildId)}`, {
           cache: 'no-store',
@@ -173,13 +177,14 @@ export function useGuildResources(guildId: string | null) {
         return;
       } catch (err) {
         if (id !== requestId.current) return;
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        if (attempt < BACKOFFS.length - 1) continue; // network blip: auto-retry
-        setError("Couldn't reach the server. Check your connection and retry.");
-        setCode('NETWORK_ERROR');
+        if (err instanceof DOMException && err.name === 'AbortError' && !timedOut) return;
+        if (attempt < BACKOFFS.length - 1) continue; // network blip/timeout: auto-retry
+        setError(timedOut ? 'Server data timed out — retry in a moment.' : "Couldn't reach the server. Check your connection and retry.");
+        setCode(timedOut ? 'REQUEST_TIMEOUT' : 'NETWORK_ERROR');
         setRetryable(true);
         return;
       } finally {
+        clearTimeout(timer);
         if (id === requestId.current && attempt === BACKOFFS.length - 1) setLoading(false);
       }
     }
@@ -249,6 +254,10 @@ export function useGuildMemberSearch(guildId: string | null, query: string, limi
     setSearchCode('');
     const timer = setTimeout(() => {
       void (async () => {
+        // Hard ceiling: a hung search must resolve to an error state, never
+        // a permanent "Searching…".
+        let timedOut = false;
+        const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 20000);
         try {
           const resp = await fetch(
             `/api/discord/guilds/${encodeURIComponent(guildId)}/members?search=${encodeURIComponent(q)}&limit=${limit}`,
@@ -267,11 +276,12 @@ export function useGuildMemberSearch(guildId: string | null, query: string, limi
           }
         } catch (err) {
           if (id !== requestId.current) return;
-          if (err instanceof DOMException && err.name === 'AbortError') return;
+          if (err instanceof DOMException && err.name === 'AbortError' && !timedOut) return;
           setResults([]);
-          setSearchError("Couldn't reach member search. Retry.");
-          setSearchCode('NETWORK_ERROR');
+          setSearchError(timedOut ? 'Member search timed out — retry.' : "Couldn't reach member search. Retry.");
+          setSearchCode(timedOut ? 'REQUEST_TIMEOUT' : 'NETWORK_ERROR');
         } finally {
+          clearTimeout(timeout);
           if (id === requestId.current) setSearching(false);
         }
       })();
@@ -899,6 +909,12 @@ export function statusMessage(code: string, detail: string): { title: string; hi
       return {
         title: "Moderation data couldn't be loaded.",
         hint: detail || 'The Discord server is available, but the moderation database could not be reached.',
+      };
+    case 'NETWORK_ERROR':
+    case 'REQUEST_TIMEOUT':
+      return {
+        title: code === 'REQUEST_TIMEOUT' ? 'The request timed out.' : "Couldn't reach the server.",
+        hint: 'Check your connection and press Retry.',
       };
     default:
       return {

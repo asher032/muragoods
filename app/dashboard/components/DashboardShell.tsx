@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useGuild } from '@/app/lib/guild-context';
-import { Bot, Menu, RefreshCw, Search } from 'lucide-react';
+import { ArrowLeft, Bot, Menu, RefreshCw, Search } from 'lucide-react';
 import Sidebar from './Sidebar';
 import ServerSwitcher from './ServerSwitcher';
 
@@ -18,6 +18,7 @@ import ServerSwitcher from './ServerSwitcher';
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const {
     authChecked, authenticated, guilds, selected, botOnline,
     botInSelectedGuild, loginUrl, error, setSelected, logout,
@@ -277,6 +278,20 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             <ServerSwitcher />
           </div>
           <div className="cc-topbar-nav">
+            {pathname !== '/dashboard' && (
+              <button
+                type="button"
+                className="cc-back"
+                title="Go to previous page"
+                aria-label="Go to previous page"
+                onClick={() => {
+                  if (typeof window !== 'undefined' && window.history.length > 1) router.back();
+                  else router.push('/dashboard');
+                }}
+              >
+                <ArrowLeft size={17} aria-hidden />
+              </button>
+            )}
             <a href="/murastream" className="cc-link" style={{ color: 'rgba(255,255,255,0.55)' }}>MuraStream</a>
             <span className={`cc-status-pill ${botOnline ? 'cc-status-online' : 'cc-status-offline'}`}>
               <span className="cc-dot" />
@@ -284,7 +299,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             </span>
           </div>
         </header>
-        <main style={{ padding: '28px 28px 60px', maxWidth: 1360, margin: '0 auto' }}>
+        <main className="cc-page">
           {/* Per-server bot state, verified server-side. Never assume the bot
               is installed just because the user manages the server. */}
           {selected && botInSelectedGuild === false && (
