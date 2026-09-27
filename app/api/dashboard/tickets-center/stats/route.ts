@@ -1,4 +1,5 @@
 import { sessionToken } from '@/app/lib/require-session';
+import { requireGuildManage } from '@/app/lib/discord-guilds';
 import { NextRequest, NextResponse } from 'next/server';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 
@@ -13,6 +14,7 @@ type TicketRecord = Record<string, unknown>;
 
 interface HttpError extends Error {
   status: number;
+  code?: string;
 }
 
 function isSnowflake(value: string): boolean {
@@ -52,34 +54,17 @@ function statusOf(ticket: TicketRecord): 'open' | 'closed' {
   return stringValue(ticket.status) === 'closed' ? 'closed' : 'open';
 }
 
-function errorWithStatus(message: string, status: number): HttpError {
+function errorWithStatus(message: string, status: number, code?: string): HttpError {
   const error = new Error(message) as HttpError;
   error.status = status;
+  if (code) error.code = code;
   return error;
 }
 
 async function getManagedGuild(accessToken: string, guildId: string): Promise<void> {
-  const response = await fetch(`${DISCORD_API}/users/@me/guilds?with_counts=true`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    next: { revalidate: 0 },
-  });
-
-  if (!response.ok) {
-    throw errorWithStatus(response.status === 401 ? 'Discord authentication is required' : 'Discord authentication failed', response.status === 401 ? 401 : 403);
-  }
-
-  const guilds = (await response.json()) as Array<{
-    id: string;
-    owner: boolean;
-    permissions: string | number;
-  }>;
-  const guild = guilds.find((candidate) => candidate.id === guildId);
-  if (!guild) throw errorWithStatus('You do not have permission to manage this server', 403);
-
-  const permissions = BigInt(guild.permissions);
-  if (!guild.owner && (permissions & MANAGE_GUILD) === BigInt(0) && (permissions & ADMINISTRATOR) === BigInt(0)) {
-    throw errorWithStatus('You do not have permission to manage this server', 403);
-  }
+  // Shared cached manage check — distinct coded errors, never collapsed.
+  const check = await requireGuildManage(accessToken, guildId);
+  if (!check.ok) throw errorWithStatus(check.error, check.status, check.code);
 }
 
 function staffIds(ticket: TicketRecord): string[] {
@@ -149,6 +134,7 @@ export async function GET(req: NextRequest) {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unable to load ticket statistics';
     const status = error instanceof Object && 'status' in error ? Number((error as { status: unknown }).status) : 500;
-    return NextResponse.json({ success: false, error: message }, { status: Number.isFinite(status) ? status : 500 });
+    const code = error instanceof Object && 'code' in error ? String((error as { code: unknown }).code) : undefined;
+    return NextResponse.json({ success: false, error: message, ...(code ? { code } : {}) }, { status: Number.isFinite(status) ? status : 500 });
   }
 }

@@ -1,4 +1,5 @@
 import { sessionToken } from '@/app/lib/require-session';
+import { requireGuildManage } from '@/app/lib/discord-guilds';
 import { NextRequest, NextResponse } from 'next/server';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 import dbConnect from '@/app/lib/mongodb';
@@ -45,16 +46,16 @@ async function safeCount(collectionName: string, query: Record<string, unknown>)
   }
 }
 
-async function getManageableGuilds(accessToken: string): Promise<Set<string>> {
-  const MANAGE_GUILD = BigInt(0x20);
-  const ADMINISTRATOR = BigInt(0x8);
-  const resp = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: 'no-store',
-  });
-  if (!resp.ok) return new Set();
-  const guilds = (await resp.json()) as Array<{ id: string; permissions: string | number; owner: boolean }>;
-  return new Set(guilds.filter((g) => g.owner || (BigInt(g.permissions) & MANAGE_GUILD) !== BigInt(0) || (BigInt(g.permissions) & ADMINISTRATOR) !== BigInt(0)).map((g) => g.id));
+async function guard(token: string, guildId: string) {
+  // Shared cached manage check (30s per token across ALL dashboard routes).
+  // The old inline fetch ran uncached on every call and collapsed every
+  // Discord failure into a false 'No permission' 403.
+  const check = await requireGuildManage(token, guildId);
+  if (check.ok) return null;
+  return NextResponse.json(
+    { success: false, code: check.code, error: check.error, retryable: check.retryable, debug: check.debug },
+    { status: check.status },
+  );
 }
 
 export async function GET(req: NextRequest) {
@@ -65,8 +66,8 @@ export async function GET(req: NextRequest) {
   if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
   if (!guildId || !/^\d{5,25}$/.test(guildId)) return NextResponse.json({ success: false, error: 'Valid guildId required' }, { status: 400 });
 
-  const manageable = await getManageableGuilds(token);
-  if (!manageable.has(guildId)) return NextResponse.json({ success: false, error: 'You do not have permission to manage this server' }, { status: 403 });
+  const denied = await guard(token, guildId);
+  if (denied) return denied;
 
   const rangeConfig = RANGE_MAP[range] || RANGE_MAP['7days'];
   const { start, end } = getDateRange(rangeConfig.days);

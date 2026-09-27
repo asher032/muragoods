@@ -1,4 +1,5 @@
 import { sessionToken } from '@/app/lib/require-session';
+import { requireGuildManage } from '@/app/lib/discord-guilds';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -18,15 +19,15 @@ export async function POST(req: NextRequest) {
   if (!guildId || !/^\d{5,25}$/.test(guildId)) return NextResponse.json({ success: false, error: 'Valid guildId required' }, { status: 400 });
   if (!channelId || !/^\d{5,25}$/.test(channelId)) return NextResponse.json({ success: false, error: 'Valid channelId required' }, { status: 400 });
 
-  // Authorize: verify caller can manage this guild
-  const MANAGE_GUILD = BigInt(0x20);
-  const ADMINISTRATOR = BigInt(0x8);
-  const userGuilds = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
-    headers: { Authorization: `Bearer ${token}` },
-  }).then((r) => (r.ok ? r.json() : []));
-  const guild = userGuilds.find((g: { id: string; owner: boolean; permissions: string | number }) => g.id === guildId);
-  if (!guild || !(guild.owner || (BigInt(guild.permissions) & MANAGE_GUILD) !== BigInt(0) || (BigInt(guild.permissions) & ADMINISTRATOR) !== BigInt(0))) {
-    return NextResponse.json({ success: false, error: 'You do not have permission to manage this server' }, { status: 403 });
+  // Authorize through the shared cached guard: distinct codes for dead
+  // token / non-member / unmanaged / Discord outage — never a collapsed
+  // boolean that turns every Discord failure into a false 403.
+  const check = await requireGuildManage(token, guildId);
+  if (!check.ok) {
+    return NextResponse.json(
+      { success: false, code: check.code, error: check.error, retryable: check.retryable, debug: check.debug },
+      { status: check.status },
+    );
   }
 
   const payload: Record<string, unknown> = {};

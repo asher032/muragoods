@@ -1,4 +1,5 @@
 import { sessionToken } from '@/app/lib/require-session';
+import { fetchUserGuildsCached, requireGuildManage } from '@/app/lib/discord-guilds';
 import { NextRequest, NextResponse } from 'next/server';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 
@@ -24,6 +25,7 @@ interface ManagedGuild {
 
 interface HttpError extends Error {
   status: number;
+  code?: string;
 }
 
 interface DiscordChannel {
@@ -51,37 +53,21 @@ function parsePositiveInteger(value: string | null, fallback: number, maximum: n
   return parsed;
 }
 
-function httpError(message: string, status: number): HttpError {
+function httpError(message: string, status: number, code?: string): HttpError {
   const error = new Error(message) as HttpError;
   error.status = status;
+  if (code) error.code = code;
   return error;
 }
 
 async function getManagedGuild(accessToken: string, guildId: string): Promise<ManagedGuild> {
-  const response = await fetch(`${DISCORD_API}/users/@me/guilds?with_counts=true`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    next: { revalidate: 0 },
-  });
-
-  if (!response.ok) {
-    throw httpError(response.status === 401 ? 'Discord authentication is required' : 'Discord authentication failed', response.status === 401 ? 401 : 403);
-  }
-
-  const guilds = (await response.json()) as Array<{
-    id: string;
-    name: string;
-    owner: boolean;
-    permissions: string | number;
-  }>;
-  const guild = guilds.find((candidate) => candidate.id === guildId);
-  if (!guild) throw httpError('You do not have permission to manage this server', 403);
-
-  const permissions = BigInt(guild.permissions);
-  if (!guild.owner && (permissions & MANAGE_GUILD) === BigInt(0) && (permissions & ADMINISTRATOR) === BigInt(0)) {
-    throw httpError('You do not have permission to manage this server', 403);
-  }
-
-  return { id: guild.id, name: guild.name };
+  // Shared cached manage check: distinct coded errors instead of collapsing
+  // every Discord failure into a false 403.
+  const check = await requireGuildManage(accessToken, guildId);
+  if (!check.ok) throw httpError(check.error, check.status, check.code);
+  const cached = await fetchUserGuildsCached(accessToken);
+  const found = cached.ok ? cached.guilds.find((candidate) => candidate.id === guildId) : undefined;
+  return { id: guildId, name: found?.name ?? guildId };
 }
 
 async function discordRequest<T>(path: string, init: RequestInit = {}): Promise<T | null> {
@@ -330,7 +316,8 @@ export async function GET(req: NextRequest) {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unable to list tickets';
     const status = error instanceof Object && 'status' in error ? Number((error as { status: unknown }).status) : 500;
-    return NextResponse.json({ success: false, error: message }, { status: Number.isFinite(status) ? status : 500 });
+    const code = error instanceof Object && 'code' in error ? String((error as { code: unknown }).code) : undefined;
+    return NextResponse.json({ success: false, error: message, ...(code ? { code } : {}) }, { status: Number.isFinite(status) ? status : 500 });
   }
 }
 
@@ -493,7 +480,8 @@ export async function PATCH(req: NextRequest) {
   } catch (error: unknown) {
     if (error instanceof Error && 'status' in error) {
       const status = Number((error as { status: unknown }).status);
-      return NextResponse.json({ success: false, error: error.message }, { status: discordStatus(status) });
+      const code = 'code' in error ? String((error as { code: unknown }).code) : undefined;
+      return NextResponse.json({ success: false, error: error.message, ...(code ? { code } : {}) }, { status: discordStatus(status) });
     }
     return NextResponse.json({ success: false, error: 'Unable to update ticket' }, { status: 500 });
   }
