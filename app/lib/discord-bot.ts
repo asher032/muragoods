@@ -105,3 +105,43 @@ export async function fetchBotMember(guildId: string): Promise<BotMemberDoc | nu
     return null;
   }
 }
+
+// ── Bot-token REST cache (storm reduction, not a verdict) ──────────────
+// The servers endpoint enriches EVERY manageable guild (guild object +
+// channels + roles ≈ 3 calls each). Without caching, one Refresh with N
+// guilds fires 5N bot-token calls at Discord and eats its own 429 storm —
+// which then reads as UNKNOWN bot states across the dashboard. 30s TTL,
+// keyed by exact path; errors are NEVER cached (a 429 must not become a
+// sticky "unknown").
+interface BotRestCacheEntry {
+  at: number;
+  data: unknown;
+}
+const botRestCache = new Map<string, BotRestCacheEntry>();
+const BOT_REST_TTL_MS = 30_000;
+
+export async function botRestCached<T>(path: string): Promise<{ data: T | null; status: number }> {
+  const token = botToken();
+  if (!token) return { data: null, status: -1 };
+  const hit = botRestCache.get(path);
+  if (hit && Date.now() - hit.at < BOT_REST_TTL_MS) {
+    return { data: hit.data as T, status: 200 };
+  }
+  try {
+    const resp = await fetch(`https://discord.com/api/v10${path}`, {
+      headers: { Authorization: `Bot ${token}` },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) return { data: null, status: resp.status };
+    const data = (await resp.json().catch(() => null)) as T;
+    botRestCache.set(path, { at: Date.now(), data });
+    if (botRestCache.size > 200) {
+      const oldest = botRestCache.keys().next().value;
+      if (oldest) botRestCache.delete(oldest);
+    }
+    return { data, status: resp.status };
+  } catch {
+    return { data: null, status: 0 };
+  }
+}

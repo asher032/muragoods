@@ -1,5 +1,5 @@
 import { sessionToken } from '@/app/lib/require-session';
-import { hasManageBits } from '@/app/lib/discord-guilds';
+import { fetchUserGuildsCached, hasManageBits } from '@/app/lib/discord-guilds';
 import { NextRequest, NextResponse } from 'next/server';
 
 // List Discord servers the authenticated user can manage (Manage Server or
@@ -41,17 +41,20 @@ export async function GET(req: NextRequest) {
   if (!token) {
     return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
   }
-  const resp = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
-    headers: { Authorization: `Bearer ${token}` },
-    next: { revalidate: 0 },
-  });
-  if (!resp.ok) {
+  const guildsRes = await fetchUserGuildsCached(token);
+  if (!guildsRes.ok && guildsRes.authFailed) {
     return NextResponse.json(
-      { success: false, error: 'Discord rejected the token — try logging in again' },
-      { status: resp.status },
+      { success: false, code: 'AUTH_REQUIRED', error: 'Discord rejected the token — try logging in again' },
+      { status: 401 },
     );
   }
-  const guilds = (await resp.json()) as DashGuild[];
+  if (!guildsRes.ok) {
+    return NextResponse.json(
+      { success: false, code: 'DISCORD_API_ERROR', error: `Discord API error ${guildsRes.status} — retry in a moment`, retryable: true },
+      { status: 502 },
+    );
+  }
+  const guilds = guildsRes.guilds as DashGuild[];
   // Bot presence hint from the bot's own authenticated connection. This is a
   // hint only — per-guild verification lives in /api/dashboard/servers and
   // /api/dashboard/guilds/perimeter. Managing a server never implies install.

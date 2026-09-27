@@ -111,6 +111,14 @@ Palette: dark-neutral surfaces, indigo accent, subtle glass panels. */
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
 }
 .cc-input::placeholder { color: var(--cc-text-faint); }
+/* Native <select> dropdown lists render with the OS theme (white), which
+   made options unreadable white-on-white against the dark UI. Force the
+   dark surface on options everywhere a .cc-input select is used. */
+select.cc-input option,
+.cc-select option {
+  background-color: #15151d;
+  color: #fff;
+}
 
 .cc-tabs { display: inline-flex; gap: 4; background: rgba(255,255,255,0.04); border-radius: 10px; padding: 4; }
 .cc-tab {

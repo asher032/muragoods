@@ -1,4 +1,5 @@
 import { sessionToken } from '@/app/lib/require-session';
+import { requireGuildManage } from '@/app/lib/discord-guilds';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -10,22 +11,19 @@ export const dynamic = 'force-dynamic';
 // show disconnected histories.
 
 const BOT_BASE = process.env.BOT_HEALTH_URL?.replace(/\/health$/, '') || 'https://murastream-bot-pf11.onrender.com';
-const MANAGE_GUILD = BigInt(0x20);
-const ADMINISTRATOR = BigInt(0x8);
 
-async function manageable(token: string, guildId: string): Promise<boolean> {
-  const resp = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
-    headers: { Authorization: `Bearer ${token}` },
-    next: { revalidate: 0 },
-  });
-  if (!resp.ok) return false;
-  const guilds = (await resp.json()) as Array<{ id: string; permissions: string | number; owner: boolean }>;
-  const g = guilds.find((x) => x.id === guildId);
-  return Boolean(g && (g.owner || (BigInt(g.permissions) & MANAGE_GUILD) !== BigInt(0) || (BigInt(g.permissions) & ADMINISTRATOR) !== BigInt(0)));
+async function guard(token: string, guildId: string) {
+  // Shared cached manage check — distinct codes, never a collapsed boolean.
+  const check = await requireGuildManage(token, guildId);
+  if (check.ok) return null;
+  return NextResponse.json(
+    { success: false, code: check.code, error: check.error, retryable: check.retryable, debug: check.debug },
+    { status: check.status },
+  );
 }
 
-function bad(message: string, status = 400) {
-  return NextResponse.json({ success: false, error: message }, { status });
+function bad(message: string, status = 400, code?: string) {
+  return NextResponse.json({ success: false, error: message, ...(code ? { code } : {}) }, { status });
 }
 
 function bridgeSecret(): string | null {
@@ -37,11 +35,11 @@ export async function GET(req: NextRequest) {
   const token = await sessionToken();
   const sp = req.nextUrl.searchParams;
   const guildId = sp.get('guildId') || '';
-  if (!token) return bad('Discord token required', 401);
+  if (!token) return bad('Discord token required', 401, 'AUTH_REQUIRED');
   if (!/^\d{5,25}$/.test(guildId)) return bad('Valid guildId required');
-  if (!(await manageable(token, guildId))) return bad('You do not have permission to manage this server', 403);
+  const denied = await guard(token, guildId); if (denied) return denied;
   const secret = bridgeSecret();
-  if (!secret) return bad('Bridge not configured', 503);
+  if (!secret) return bad('Bridge not configured', 503, 'BRIDGE_NOT_CONFIGURED');
 
   const forward = new URLSearchParams();
   for (const k of ['action', 'source', 'status', 'search', 'limit', 'before']) {
@@ -58,20 +56,20 @@ export async function GET(req: NextRequest) {
     if (!resp.ok || !data?.ok) return bad(data?.error || `Bot returned ${resp.status}`, resp.status || 502);
     return NextResponse.json({ success: true, cases: data.cases || [] });
   } catch {
-    return bad('Bot unreachable — is it online?', 502);
+    return bad('Bot unreachable — is it online?', 502, 'BOT_OFFLINE');
   }
 }
 
 // POST /api/dashboard/cases { guildId, targetId, action, reason, duration } — manual case.
 export async function POST(req: NextRequest) {
   const token = await sessionToken();
-  if (!token) return bad('Discord token required', 401);
+  if (!token) return bad('Discord token required', 401, 'AUTH_REQUIRED');
   const body = await req.json().catch(() => null) as Record<string, unknown> | null;
   const guildId = String(body?.guildId || '');
   if (!/^\d{5,25}$/.test(guildId)) return bad('Valid guildId required');
-  if (!(await manageable(token, guildId))) return bad('You do not have permission to manage this server', 403);
+  const denied = await guard(token, guildId); if (denied) return denied;
   const secret = bridgeSecret();
-  if (!secret) return bad('Bridge not configured', 503);
+  if (!secret) return bad('Bridge not configured', 503, 'BRIDGE_NOT_CONFIGURED');
   try {
     const resp = await fetch(`${BOT_BASE}/mod/cases/${guildId}`, {
       method: 'POST',
@@ -88,22 +86,22 @@ export async function POST(req: NextRequest) {
     if (!resp.ok || !data?.ok) return bad(data?.error || `Bot returned ${resp.status}`, resp.status || 502);
     return NextResponse.json({ success: true, caseId: data.caseId });
   } catch {
-    return bad('Bot unreachable — is it online?', 502);
+    return bad('Bot unreachable — is it online?', 502, 'BOT_OFFLINE');
   }
 }
 
 // PATCH /api/dashboard/cases { guildId, caseId, note?, reason?, status? } — notes, edit reason, close/reopen.
 export async function PATCH(req: NextRequest) {
   const token = await sessionToken();
-  if (!token) return bad('Discord token required', 401);
+  if (!token) return bad('Discord token required', 401, 'AUTH_REQUIRED');
   const body = await req.json().catch(() => null) as Record<string, unknown> | null;
   const guildId = String(body?.guildId || '');
   const caseId = Number(body?.caseId || 0);
   if (!/^\d{5,25}$/.test(guildId)) return bad('Valid guildId required');
   if (!Number.isInteger(caseId) || caseId <= 0) return bad('Valid numeric caseId required');
-  if (!(await manageable(token, guildId))) return bad('You do not have permission to manage this server', 403);
+  const denied = await guard(token, guildId); if (denied) return denied;
   const secret = bridgeSecret();
-  if (!secret) return bad('Bridge not configured', 503);
+  if (!secret) return bad('Bridge not configured', 503, 'BRIDGE_NOT_CONFIGURED');
   const payload: Record<string, unknown> = {};
   if (body?.note !== undefined) payload.note = String(body.note).slice(0, 300);
   if (body?.reason !== undefined) payload.reason = String(body.reason).slice(0, 500);
@@ -122,6 +120,6 @@ export async function PATCH(req: NextRequest) {
     if (!resp.ok || !data?.ok) return bad(data?.error || `Bot returned ${resp.status}`, resp.status || 502);
     return NextResponse.json({ success: true, case: data.case });
   } catch {
-    return bad('Bot unreachable — is it online?', 502);
+    return bad('Bot unreachable — is it online?', 502, 'BOT_OFFLINE');
   }
 }

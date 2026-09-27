@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/app/lib/require-session';
-import { verifyBotInGuild, botToken, fetchBotMember } from '@/app/lib/discord-bot';
+import { verifyBotInGuild, botToken, fetchBotMember, botRestCached } from '@/app/lib/discord-bot';
+import { fetchUserGuildsCached, hasManageBits, requireGuildManage } from '@/app/lib/discord-guilds';
 
 // ── Unified server/guild detection ─────────────────────────────────────────
 // GET /api/dashboard/servers[?refresh=1][?guildId=ID]
@@ -31,8 +32,7 @@ import { verifyBotInGuild, botToken, fetchBotMember } from '@/app/lib/discord-bo
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const MANAGE_GUILD = BigInt(0x20);
-const ADMINISTRATOR = BigInt(0x8);
+const ADMINISTRATOR = BigInt(0x8); // bot's own admin bit (isAdmin fact)
 
 // Least-privilege install URL for the running bot (no secret inside).
 const BOT_PERMISSIONS = '271698944';
@@ -55,13 +55,7 @@ function inviteUrlFor(guildId: string): string | null {
 }
 
 function hasManage(owner: boolean, perms: string | number): boolean {
-  if (owner) return true;
-  try {
-    const p = BigInt(perms);
-    return (p & MANAGE_GUILD) !== BigInt(0) || (p & ADMINISTRATOR) !== BigInt(0);
-  } catch {
-    return false;
-  }
+  return hasManageBits(owner, perms);
 }
 
 function iconUrl(id: string, icon: string | null): string | null {
@@ -150,17 +144,20 @@ async function verifyGuildWithBot(
   // Authoritative check via the shared tri-state helper: ONLY a real 404
   // means "not installed". A rejected credential, rate limit, or challenged
   // network returns 'unknown' — never a false invite loop.
+  // botConnection 'offline' is reserved for VERIFIED absence. An installed
+  // bot missing from the gateway list (restart, reconnect lag, sharding) is
+  // 'unknown' — the UI must never read that as "not installed".
   const presence = await verifyBotInGuild(guildId);
   if (presence === 'absent') {
     return { botInstalled: false, botOnlineInGuild: false, botConnection: 'offline' };
   }
   if (presence === 'unknown') {
-    return { botInstalled: null, botOnlineInGuild: gatewayIds ? gatewayIds.has(guildId) : null, botConnection: gatewayIds ? (gatewayIds.has(guildId) ? 'online' : 'offline') : 'unknown' };
+    const online = gatewayIds ? gatewayIds.has(guildId) : null;
+    return { botInstalled: null, botOnlineInGuild: online, botConnection: online ? 'online' : 'unknown' };
   }
   // Installed: resolve the bot's own member doc for permissions. A missing
   // doc here (transient blip right after the 200 above) degrades to nulls,
   // never to a false verdict — presence is already established.
-  const token = botToken();
   const m = await fetchBotMember(guildId);
   const perms = m && m.permissions !== undefined ? String(m.permissions) : null;
   let isAdmin: boolean | null = null;
@@ -169,31 +166,33 @@ async function verifyGuildWithBot(
   }
 
   // Enrichment: guild object (member counts), channels, roles — all via the
-  // bot token so counts reflect what the BOT can actually see.
-  const headers: Record<string, string> = token ? { Authorization: `Bot ${token}` } : {};
+  // bot token so counts reflect what the BOT can actually see. Reads share a
+  // 30s cache so one Refresh with N guilds does not fire 3N calls at Discord
+  // and eat its own rate-limit storm (which used to read as UNKNOWN states).
   const [guildRes, channelsRes, rolesRes] = await Promise.all([
-    fetchJson(`https://discord.com/api/v10/guilds/${guildId}?with_counts=true`, headers),
-    fetchJson(`https://discord.com/api/v10/guilds/${guildId}/channels`, headers),
-    fetchJson(`https://discord.com/api/v10/guilds/${guildId}/roles`, headers),
+    botRestCached<{ approximate_member_count?: number; approximate_presence_count?: number }>(
+      `/guilds/${guildId}?with_counts=true`),
+    botRestCached<Array<{ type?: number }>>(`/guilds/${guildId}/channels`),
+    botRestCached<unknown[]>(`/guilds/${guildId}/roles`),
   ]);
 
   let memberCount: number | null = null;
   let presenceCount: number | null = null;
-  if (guildRes.ok && guildRes.data && typeof guildRes.data === 'object') {
-    const g = guildRes.data as { approximate_member_count?: number; approximate_presence_count?: number };
+  if (guildRes.data && typeof guildRes.data === 'object') {
+    const g = guildRes.data;
     memberCount = typeof g.approximate_member_count === 'number' ? g.approximate_member_count : null;
     presenceCount = typeof g.approximate_presence_count === 'number' ? g.approximate_presence_count : null;
   }
   let channelCount: number | null = null;
   let categoryCount: number | null = null;
-  if (channelsRes.ok && Array.isArray(channelsRes.data)) {
-    const channels = channelsRes.data as Array<{ type?: number }>;
+  if (Array.isArray(channelsRes.data)) {
+    const channels = channelsRes.data;
     channelCount = channels.length;
     categoryCount = channels.filter((c) => c.type === 4).length;
   }
   let roleCount: number | null = null;
-  if (rolesRes.ok && Array.isArray(rolesRes.data)) {
-    roleCount = (rolesRes.data as unknown[]).length;
+  if (Array.isArray(rolesRes.data)) {
+    roleCount = rolesRes.data.length;
   }
 
   const inGateway = gatewayIds ? gatewayIds.has(guildId) : null;
@@ -207,7 +206,9 @@ async function verifyGuildWithBot(
     roleCount,
     memberCount,
     presenceCount,
-    botConnection: inGateway === null ? 'unknown' : inGateway ? 'online' : 'offline',
+    // Installed is VERIFIED — but gateway absence only means the WS list is
+    // stale (restart/reconnect lag), never "not installed". Report unknown.
+    botConnection: inGateway ? 'online' : 'unknown',
   };
 }
 
@@ -215,18 +216,18 @@ async function detectServers(accessToken: string): Promise<{
   servers: DetectedServer[];
   meta: { botOnline: boolean | null; botGuildCount: number | null; userGuildCount: number; manageableCount: number; refreshedAt: string };
 }> {
-  // 1. Live user guilds — the user's Discord authorization, right now.
-  const userRes = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: 'no-store',
-  });
-  if (userRes.status === 401) {
+  // 1. Live user guilds — through the SHARED 30s cache. Every dashboard
+  // route used to fetch this list itself on every call; a page load fired a
+  // burst of identical calls that ate Discord's rate limit and read back as
+  // "no permission" / UNKNOWN states across the whole dashboard.
+  const userRes = await fetchUserGuildsCached(accessToken);
+  if (!userRes.ok && userRes.authFailed) {
     throw { status: 401, error: 'Discord rejected the session token — sign in again' };
   }
   if (!userRes.ok) {
     throw { status: 502, error: `Discord API error ${userRes.status}` };
   }
-  const userGuilds = (await userRes.json()) as UserGuild[];
+  const userGuilds = userRes.guilds as UserGuild[];
   const manageable = userGuilds.filter((g) => hasManage(g.owner, g.permissions));
 
   // 2 + 3. Bot presence from both of the bot's authenticated connections.
@@ -258,7 +259,7 @@ async function detectServers(accessToken: string): Promise<{
         roleCount: null,
         memberCount: typeof g.approximate_member_count === 'number' ? g.approximate_member_count : null,
         presenceCount: typeof g.approximate_presence_count === 'number' ? g.approximate_presence_count : null,
-        botConnection: gateway.ids ? (gateway.ids.has(g.id) ? 'online' : 'offline') : 'unknown',
+        botConnection: gateway.ids ? (gateway.ids.has(g.id) ? 'online' : 'unknown') : 'unknown',
         inviteUrl: inviteUrlFor(g.id),
         needsInvite: false,
         missingPermissions: false,
@@ -312,21 +313,75 @@ async function handleGet(req: NextRequest) {
   const forceRefresh = url.searchParams.get('refresh') === '1';
   const onlyGuildId = url.searchParams.get('guildId') || '';
 
+  function singleMeta(
+    gateway: { online: boolean | null; count: number | null },
+    userGuildCount: number,
+    manageableCount: number,
+  ) {
+    return {
+      botOnline: gateway.online,
+      botGuildCount: gateway.count,
+      userGuildCount,
+      manageableCount,
+      refreshedAt: new Date().toISOString(),
+      cached: false,
+    };
+  }
+
   // Single-guild mode: the id is re-verified (user-manages + live bot check),
-  // never trusted from the query string.
+  // never trusted from the query string. Verifies ONLY this guild — running
+  // full multi-guild detection here used to fire 5N bot-token calls plus a
+  // user-guilds call for a single-server question, feeding the rate-limit
+  // storm that surfaced as UNKNOWN/false-not-installed states.
   if (onlyGuildId) {
     if (!/^\d{5,25}$/.test(onlyGuildId)) {
       return NextResponse.json({ success: false, error: 'Valid guildId required' }, { status: 400 });
     }
-    const { servers, meta } = await detectServers(guard.accessToken);
-    const found = servers.find((s) => s.id === onlyGuildId);
-    if (!found) {
+    const check = await requireGuildManage(guard.accessToken, onlyGuildId);
+    if (!check.ok) {
       return NextResponse.json(
-        { success: false, error: 'You do not manage that server, or it is not visible to your Discord authorization' },
-        { status: 403 },
+        { success: false, code: check.code, error: check.error },
+        { status: check.status },
       );
     }
-    return NextResponse.json({ success: true, server: found, meta });
+    const bToken = botToken();
+    const gateway = await botGatewayGuildIds();
+    const base: DetectedServer = {
+      id: check.guild.id,
+      name: check.guild.name,
+      icon: iconUrl(check.guild.id, check.guild.icon),
+      owner: check.guild.owner,
+      inUserGuilds: true,
+      userCanManage: true,
+      userPermissions: String(check.guild.permissions ?? 0),
+      botInGateway: gateway.ids ? gateway.ids.has(onlyGuildId) : null,
+      botInRest: null,
+      botInstalled: null,
+      botOnlineInGuild: gateway.ids ? gateway.ids.has(onlyGuildId) : null,
+      botPermissions: null,
+      botIsAdmin: null,
+      channelCount: null,
+      categoryCount: null,
+      roleCount: null,
+      memberCount: null,
+      presenceCount: null,
+      botConnection: gateway.ids ? (gateway.ids.has(onlyGuildId) ? 'online' : 'unknown') : 'unknown',
+      inviteUrl: inviteUrlFor(onlyGuildId),
+      needsInvite: false,
+      missingPermissions: false,
+    };
+    if (!bToken) {
+      const { servers, meta } = { servers: [base], meta: singleMeta(gateway, 1, 1) };
+      return NextResponse.json({ success: true, server: servers[0], meta });
+    }
+    const verified = await verifyGuildWithBot(onlyGuildId, gateway.ids);
+    const merged: DetectedServer = { ...base, ...verified };
+    merged.needsInvite = merged.botInstalled === false;
+    return NextResponse.json({
+      success: true,
+      server: merged,
+      meta: singleMeta(gateway, 1, 1),
+    });
   }
 
   const cacheKey = `u:${guard.discordId}`;

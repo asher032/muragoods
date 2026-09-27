@@ -1,4 +1,5 @@
 import { sessionToken } from '@/app/lib/require-session';
+import { requireGuildManage } from '@/app/lib/discord-guilds';
 import { NextRequest, NextResponse } from 'next/server';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 import { verifyBotInGuild, botToken } from '@/app/lib/discord-bot';
@@ -12,21 +13,12 @@ import { verifyBotInGuild, botToken } from '@/app/lib/discord-bot';
 
 export const dynamic = 'force-dynamic';
 
-const MANAGE_GUILD = BigInt(0x20);
-const ADMINISTRATOR = BigInt(0x8);
-
 interface DashGuild {
   id: string;
   name: string;
   icon: string | null;
   owner: boolean;
   permissions: string | number;
-}
-
-function hasManage(owner: boolean, perms: string | number): boolean {
-  if (owner) return true;
-  const p = BigInt(perms);
-  return (p & MANAGE_GUILD) !== BigInt(0) || (p & ADMINISTRATOR) !== BigInt(0);
 }
 
 function bad(message: string, status = 400, code?: string) {
@@ -51,22 +43,14 @@ async function authorize(token: string | null, guildId: string): Promise<Authz> 
   if (!guildId || !SNOWFLAKE.test(guildId)) {
     return { ok: false, status: 400, code: 'INVALID_GUILD_ID', error: 'Valid guildId required' };
   }
-  const resp = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
-    headers: { Authorization: `Bearer ${token}` },
-    next: { revalidate: 0 },
-  });
-  if (!resp.ok) {
-    return { ok: false, status: 401, code: 'AUTH_REQUIRED', error: 'Discord rejected the session — sign in again' };
+  // Shared cached guard: one Discord guild-list read per 30s per token across
+  // ALL dashboard routes. The old inline fetch ran uncached on every call and
+  // turned rate limits/outages into a false "sign in again" 401.
+  const check = await requireGuildManage(token, guildId);
+  if (!check.ok) {
+    return { ok: false, status: check.status, code: check.code, error: check.error };
   }
-  const guilds = (await resp.json()) as DashGuild[];
-  const guild = guilds.find((g) => g.id === guildId);
-  if (!guild) {
-    return { ok: false, status: 403, code: 'NOT_GUILD_MEMBER', error: 'You are not a member of that server' };
-  }
-  if (!hasManage(guild.owner, guild.permissions)) {
-    return { ok: false, status: 403, code: 'INSUFFICIENT_GUILD_PERMISSION', error: 'You need Manage Server permission on that server' };
-  }
-  return { ok: true, guild };
+  return { ok: true, guild: check.guild };
 }
 
 /** Is the bot installed on this guild? Tri-state via the shared helper:
