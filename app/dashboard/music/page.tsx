@@ -6,7 +6,7 @@ import { useGuild } from '@/app/lib/guild-context';
 import { useGuildConfig } from '@/app/lib/use-guild-config';
 import { apiFetch } from '../lib/api';
 import {
-  DiscordChannelSelect, DiscordRoleSelect, useGuildResources,
+  DiscordChannelSelect, DiscordRoleSelect, useGuildResources, ResourceStatusBar,
 } from '../components/selectors';
 
 // ── Now Playing ──────────────────────────────────────────────────────────
@@ -191,7 +191,7 @@ export default function MusicPage() {
   // Monotonic search generation for the stale-response guard below.
   const searchSeq = useRef(0);
   const { config: guildConfig, update: updateGuildConfig, save: saveGuildConfig, saveState: guildSaveState } = useGuildConfig();
-  const { resources, loading: resLoading } = useGuildResources(selected?.id ?? null);
+  const { resources, loading: resLoading, error: resError, code: resCode, retryable: resRetryable, refresh: resRefresh } = useGuildResources(selected?.id ?? null);
   const musicCfg = (guildConfig?.music ?? {}) as Record<string, unknown>;
 
   // Position is measured, not guessed: remember the player's position and the
@@ -980,6 +980,7 @@ export default function MusicPage() {
       {/* ── Settings (persisted per server, pushed to the bot on save) ── */}
       <section className="cc-card" style={{ padding: '14px 18px', marginTop: 14 }}>
         <div className="cc-section-label" style={{ marginBottom: 10 }}>⚙️ Music settings</div>
+        <ResourceStatusBar loading={resLoading} error={resError} code={resCode} retryable={resRetryable} onRefresh={resRefresh} />
         <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
           <div>
             <label style={{ display: 'block', fontSize: 12, color: 'var(--cc-text-dim)', marginBottom: 6 }}>Music text channel</label>
