@@ -146,7 +146,7 @@ export async function GET(req: NextRequest) {
   const guildId = req.nextUrl.searchParams.get('guildId');
 
   if (!token) {
-    return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
+    return NextResponse.json({ success: false, code: 'AUTH_REQUIRED', error: 'Discord token required' }, { status: 401 });
   }
   if (!guildId || !/^\d{5,25}$/.test(guildId)) {
     return NextResponse.json({ success: false, error: 'Valid guildId required' }, { status: 400 });

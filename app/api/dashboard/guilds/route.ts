@@ -39,7 +39,7 @@ async function botGatewayIds(): Promise<Set<string> | null> {
 export async function GET(req: NextRequest) {
   const token = (await sessionToken());
   if (!token) {
-    return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
+    return NextResponse.json({ success: false, code: 'AUTH_REQUIRED', error: 'Discord token required' }, { status: 401 });
   }
   const guildsRes = await fetchUserGuildsCached(token);
   if (!guildsRes.ok && guildsRes.authFailed) {

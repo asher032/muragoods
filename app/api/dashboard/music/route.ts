@@ -28,7 +28,7 @@ async function guard(token: string, guildId: string) {
 export async function GET(req: NextRequest) {
   const token = (await sessionToken());
   const guildId = req.nextUrl.searchParams.get('guildId') || '';
-  if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
+  if (!token) return NextResponse.json({ success: false, code: 'AUTH_REQUIRED', error: 'Discord token required' }, { status: 401 });
   if (!/^\d{5,25}$/.test(guildId)) return NextResponse.json({ success: false, error: 'Valid guildId required' }, { status: 400 });
   const denied = await guard(token, guildId);
   if (denied) return denied;
@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
 // POST → real control action on the bot's player
 export async function POST(req: NextRequest) {
   const token = (await sessionToken());
-  if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
+  if (!token) return NextResponse.json({ success: false, code: 'AUTH_REQUIRED', error: 'Discord token required' }, { status: 401 });
   let body: { guildId?: string; action?: string; level?: number; position?: number; enabled?: boolean; from?: number; to?: number; filter?: string };
   try { body = await req.json(); } catch {
     return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 });

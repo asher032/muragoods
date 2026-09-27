@@ -100,7 +100,7 @@ function apply(p: number, o: { allow?: number; deny?: number }): number {
 export async function GET(req: NextRequest) {
   const token = (await sessionToken());
   const guildId = req.nextUrl.searchParams.get('guildId') || '';
-  if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
+  if (!token) return NextResponse.json({ success: false, code: 'AUTH_REQUIRED', error: 'Discord token required' }, { status: 401 });
   if (!/^\d{5,25}$/.test(guildId)) return NextResponse.json({ success: false, error: 'Valid guildId required' }, { status: 400 });
 
   // ── Bot must actually be in the guild. We verify four things independently:
