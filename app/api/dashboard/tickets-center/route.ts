@@ -264,7 +264,7 @@ export async function GET(req: NextRequest) {
   const page = parsePositiveInteger(req.nextUrl.searchParams.get('page'), 1, 100000);
   const limit = parsePositiveInteger(req.nextUrl.searchParams.get('limit'), 20, 100);
 
-  if (!accessToken) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
+  if (!accessToken) return NextResponse.json({ success: false, code: 'AUTH_REQUIRED', error: 'Discord token required' }, { status: 401 });
   if (!isSnowflake(guildId)) return NextResponse.json({ success: false, error: 'Valid guildId required' }, { status: 400 });
   if (!['all', 'open', 'closed'].includes(status)) return NextResponse.json({ success: false, error: 'Invalid status filter' }, { status: 400 });
 
@@ -337,7 +337,7 @@ export async function PATCH(req: NextRequest) {
   const newName = stringValue(body.newName).trim();
   const newCategoryId = stringValue(body.newCategoryId);
 
-  if (!accessToken) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
+  if (!accessToken) return NextResponse.json({ success: false, code: 'AUTH_REQUIRED', error: 'Discord token required' }, { status: 401 });
   if (!isSnowflake(guildId)) return NextResponse.json({ success: false, error: 'Valid guildId required' }, { status: 400 });
   if (!isSnowflake(channelId)) return NextResponse.json({ success: false, error: 'Valid channelId required' }, { status: 400 });
   if (!(['assign', 'unassign', 'claim', 'close', 'reopen', 'lock', 'unlock', 'rename', 'move'] as string[]).includes(action)) {

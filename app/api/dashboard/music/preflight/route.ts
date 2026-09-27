@@ -28,7 +28,7 @@ async function guard(token: string, guildId: string) {
 // Auth: dashboard session + guild manage check; bot bridge secret stays server-side.
 export async function GET(req: NextRequest) {
   const token = await sessionToken();
-  if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
+  if (!token) return NextResponse.json({ success: false, code: 'AUTH_REQUIRED', error: 'Discord token required' }, { status: 401 });
   const guildId = req.nextUrl.searchParams.get('guildId') || '';
   if (!/^\d{5,25}$/.test(guildId)) return NextResponse.json({ success: false, error: 'Valid guildId required' }, { status: 400 });
   const denied = await guard(token, guildId);

@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
   const accessToken = (await sessionToken()) || '';
   const guildId = req.nextUrl.searchParams.get('guildId') || '';
 
-  if (!accessToken) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
+  if (!accessToken) return NextResponse.json({ success: false, code: 'AUTH_REQUIRED', error: 'Discord token required' }, { status: 401 });
   if (!isSnowflake(guildId)) return NextResponse.json({ success: false, error: 'Valid guildId required' }, { status: 400 });
 
   try {

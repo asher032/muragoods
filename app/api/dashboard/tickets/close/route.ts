@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const token = (await sessionToken());
   const botToken = process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN;
 
-  if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
+  if (!token) return NextResponse.json({ success: false, code: 'AUTH_REQUIRED', error: 'Discord token required' }, { status: 401 });
   if (!botToken) return NextResponse.json({ success: false, error: 'Bot token not configured' }, { status: 503 });
 
   let body: { guildId?: string; channelId?: string; ticketId?: string };

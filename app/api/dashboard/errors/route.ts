@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
 // ── GET — list errors for the Error Center (dashboard OAuth) ────────────
 export async function GET(req: NextRequest) {
   const token = (await sessionToken());
-  if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
+  if (!token) return NextResponse.json({ success: false, code: 'AUTH_REQUIRED', error: 'Discord token required' }, { status: 401 });
   const guildId = req.nextUrl.searchParams.get('guildId') || '';
   if (guildId && !/^\d{5,25}$/.test(guildId)) {
     return NextResponse.json({ success: false, error: 'Invalid guildId' }, { status: 400 });
@@ -139,7 +139,7 @@ export async function GET(req: NextRequest) {
 // ── PATCH — mark resolved / retry ────────────────────────────────────────
 export async function PATCH(req: NextRequest) {
   const token = (await sessionToken());
-  if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
+  if (!token) return NextResponse.json({ success: false, code: 'AUTH_REQUIRED', error: 'Discord token required' }, { status: 401 });
 
   let body: { id?: string; resolved?: boolean };
   try { body = await req.json(); } catch {

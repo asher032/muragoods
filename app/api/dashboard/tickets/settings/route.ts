@@ -21,7 +21,7 @@ async function guard(token: string, guildId: string) {
 export async function GET(req: NextRequest) {
   const token = (await sessionToken());
   const guildId = req.nextUrl.searchParams.get('guildId');
-  if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
+  if (!token) return NextResponse.json({ success: false, code: 'AUTH_REQUIRED', error: 'Discord token required' }, { status: 401 });
   if (!guildId || !/^\d{5,25}$/.test(guildId)) return NextResponse.json({ success: false, error: 'Valid guildId required' }, { status: 400 });
 
   const denied = await guard(token, guildId);
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
 // PATCH /api/dashboard/tickets/settings — save ticket settings
 export async function PATCH(req: NextRequest) {
   const token = (await sessionToken());
-  if (!token) return NextResponse.json({ success: false, error: 'Discord token required' }, { status: 401 });
+  if (!token) return NextResponse.json({ success: false, code: 'AUTH_REQUIRED', error: 'Discord token required' }, { status: 401 });
 
   let body: { guildId?: string; categoryId?: string; supportRoleId?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 }); }

@@ -307,7 +307,7 @@ async function detectServers(accessToken: string): Promise<{
 async function handleGet(req: NextRequest) {
   const guard = await requireSession();
   if (!guard.ok) {
-    return NextResponse.json({ success: false, error: guard.error }, { status: guard.status });
+    return NextResponse.json({ success: false, code: 'AUTH_REQUIRED', error: guard.error }, { status: guard.status });
   }
   const url = req.nextUrl;
   const forceRefresh = url.searchParams.get('refresh') === '1';
@@ -417,7 +417,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const guard = await requireSession();
   if (!guard.ok) {
-    return NextResponse.json({ success: false, error: guard.error }, { status: guard.status });
+    return NextResponse.json({ success: false, code: 'AUTH_REQUIRED', error: guard.error }, { status: guard.status });
   }
   LIST_CACHE.delete(`u:${guard.discordId}`);
   META_CACHE.delete(`u:${guard.discordId}`);
