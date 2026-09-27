@@ -89,6 +89,14 @@ interface Diagnostics {
     exists?: boolean;
     executable?: boolean;
   };
+  opus?: { status?: string | null };
+  players?: Record<string, {
+    connection?: string | null;
+    player?: string | null;
+    connected?: boolean | null;
+    current?: string | null;
+    queue?: number | null;
+  } | null>;
   last_playback?: MusicState['lastPlayback'];
 }
 
@@ -559,6 +567,35 @@ export default function MusicPage() {
               <div style={{ fontSize: 12, color: 'var(--cc-text-dim)', marginTop: 4 }}>
                 Shows the current music player&apos;s operational state.
               </div>
+            </div>
+            <div>
+              <div className="cc-section-label">YouTube Resolver</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginTop: 4 }}>
+                {diag.audio_service?.youtube_challenged ? '🟡 Degraded' : '🟢 Working'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--cc-text-dim)', marginTop: 4 }}>
+                {diag.audio_service?.youtube_challenged
+                  ? 'YouTube challenged the diagnostic request — check cookies/proxy. Playback of already-resolved audio is unaffected.'
+                  : 'Resolve path operational.'}
+              </div>
+            </div>
+            <div>
+              <div className="cc-section-label">Discord Playback</div>
+              {(() => {
+                const gp = (selected && diag.players?.[selected.id]) || null;
+                const verified = gp?.player === 'playing' && gp?.connected;
+                const connected = Boolean(gp?.connected);
+                return (<>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginTop: 4 }}>
+                    {verified ? '🟢 Verified' : connected ? '🟢 Connected, idle' : '⚪ Not live-verified'}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--cc-text-dim)', marginTop: 4 }}>
+                    {verified
+                      ? `Audible now${gp?.current ? ` — ${gp.current}` : ''}. Proven by real voice output, never inferred.`
+                      : 'Only live voice output counts as verified.'}
+                  </div>
+                </>);
+              })()}
             </div>
           </div>
         )}

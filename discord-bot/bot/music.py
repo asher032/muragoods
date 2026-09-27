@@ -955,6 +955,15 @@ class GuildPlayer:
         self._volume_touched: bool = False
         self.autoplay_chain: int = 0
         self.autoplay_failures: int = 0
+        # ── Advancement generation + full-cycle snapshot ──────────────
+        # _play_seq invalidates stale voice `after` callbacks: every
+        # play_now/stop/clear bumps it, so a stop() fired during a NEW setup
+        # (or an old finish arriving late) can never skip or replay tracks.
+        # cycle snapshots [current]+queue while QUEUE-loop is on so a drained
+        # queue refills in full A→B→C order instead of losing the head.
+        self._play_seq: int = 0
+        self.cycle: list = []
+        self._advance_lock = None  # lazy asyncio.Lock (created on first use)
 
     def mark_paused(self) -> None:
         if self._paused_at is None and self._play_started:
@@ -986,7 +995,104 @@ class GuildPlayer:
         # Human-queued tracks reset the autoplay safety counters.
         self.autoplay_chain = 0
         self.autoplay_failures = 0
+        # Queue-loop cycle follows live edits: seed from current when the
+        # cycle is empty, then track appends (deduplicated by URL).
+        if self.queue_loop:
+            if not self.cycle and self.current and getattr(self.current, "url", None):
+                self.cycle = [self.current]
+            if track.url and all(getattr(t, "url", None) != track.url for t in self.cycle):
+                self.cycle.append(track)
         return len(self.queue)
+
+    @staticmethod
+    def _track_key(track) -> str:
+        url = getattr(track, "url", None) or ""
+        if url:
+            return f"u:{url}"
+        return f"t:{getattr(track, 'title', '') or ''}"
+
+    def _remove_track(self, track) -> None:
+        """Drop every queue entry for `track`. Enforces the core invariant:
+        the queue NEVER contains the currently-playing track, so a natural
+        finish always advances instead of replaying queue[0]."""
+        try:
+            key = self._track_key(track)
+            self.queue = deque(t for t in self.queue if self._track_key(t) != key)
+        except Exception:
+            pass
+
+    def _advance_lock_get(self):
+        import asyncio
+        lock = self._advance_lock
+        if lock is None:
+            lock = asyncio.Lock()
+            self._advance_lock = lock
+        return lock
+
+    def set_queue_loop(self, on: bool) -> bool:
+        """Enable/disable full-queue looping with a cycle snapshot, so a
+        drained queue refills A→B→C in order instead of dropping the head."""
+        self.queue_loop = bool(on)
+        if self.queue_loop:
+            seen: set[str] = set()
+            ordered: list = []
+            for t in ([self.current] if self.current else []) + list(self.queue):
+                k = self._track_key(t)
+                if k not in seen:
+                    seen.add(k)
+                    ordered.append(t)
+            self.cycle = ordered
+        else:
+            self.cycle = []
+        return self.queue_loop
+
+    def remove_at(self, position: int) -> object | None:
+        """Remove queue position (1-based), keeping the loop cycle coherent."""
+        if position < 1 or position > len(self.queue):
+            return None
+        items = list(self.queue)
+        track = items.pop(position - 1)
+        self.queue.clear()
+        self.queue.extend(items)
+        try:
+            key = self._track_key(track)
+            self.cycle = [t for t in self.cycle if self._track_key(t) != key]
+        except Exception:
+            pass
+        return track
+
+    def shuffle_queue(self) -> int:
+        """Shuffle upcoming tracks, keeping the loop cycle coherent."""
+        import random
+        items = list(self.queue)
+        random.shuffle(items)
+        self.queue.clear()
+        self.queue.extend(items)
+        if self.queue_loop:
+            self.set_queue_loop(True)
+        return len(items)
+
+    def _refill_cycle(self, exclude_key: str) -> None:
+        """Refill a drained queue from the loop cycle, rotated so playback
+        continues in original order right after the just-popped track."""
+        try:
+            keys = [self._track_key(t) for t in self.cycle]
+            if exclude_key in keys:
+                idx = keys.index(exclude_key)
+                ordered = self.cycle[idx + 1:] + self.cycle[:idx]
+            else:
+                ordered = list(self.cycle)
+            refill = [t for t in ordered if self._track_key(t) != exclude_key]
+            if refill:
+                self.queue.extend(refill)
+            elif self.current:
+                self.queue.append(self.current)
+        except Exception:
+            if self.current:
+                try:
+                    self.queue.append(self.current)
+                except Exception:
+                    pass
 
     def pop_next(self) -> Optional[Track]:
         if self.loop and self.current:
@@ -996,11 +1102,28 @@ class GuildPlayer:
                 self.history.append(self.current)
             nxt = self.queue.popleft()
             if self.queue_loop and not self.queue and self.current:
-                self.queue.append(self.current)
+                # Last item popped with QUEUE-loop on: refill the FULL cycle
+                # in order so the loop continues A→B→C→A→B→C.
+                self._refill_cycle(self._track_key(nxt))
             return nxt
         if self.queue_loop and self.current:
-            return self.current
+            # Drained queue with QUEUE-loop on: refill the full cycle in
+            # order starting after current, then pop the head.
+            self._refill_cycle(self._track_key(self.current))
+            return self.pop_next_shallow()
         return None
+
+    def pop_next_shallow(self) -> Optional[Track]:
+        """Single popleft + history append, without cycle refill (used by the
+        refill path above to avoid recursion)."""
+        if not self.queue:
+            return None
+        if self.current:
+            try:
+                self.history.append(self.current)
+            except Exception:
+                pass
+        return self.queue.popleft()
 
     def move(self, from_pos: int, to_pos: int) -> bool:
         """Reorder the queue (1-based positions, current track untouched).
@@ -1033,11 +1156,20 @@ class GuildPlayer:
         return None
 
     def clear(self) -> None:
+        # Bumping the generation invalidates any in-flight voice `after`
+        # callback (e.g. from the stop() below) so it can never advance or
+        # replay after a stop/leave. The queue-loop cycle resets with the
+        # queue; the loop FLAGS persist (toggles win over stops).
+        try:
+            self._play_seq += 1
+        except Exception:
+            pass
         try:
             self.queue.clear()
         except Exception:
             from collections import deque as _dq
             self.queue = _dq()
+        self.cycle = []
         self.current = None
         self.player_state = "idle"
 
@@ -1700,9 +1832,10 @@ class MusicEngine:
                 defaults = await get_music_config(player.guild_id)
                 player.stay_connected = bool(defaults["twentyFourSeven"])
                 if defaults["defaultLoop"] == "track":
-                    player.loop, player.queue_loop = True, False
+                    player.loop, _ = True, player.set_queue_loop(False)
                 elif defaults["defaultLoop"] == "queue":
-                    player.loop, player.queue_loop = False, True
+                    player.loop = False
+                    player.set_queue_loop(True)
                 if defaults["autoPlay"]:
                     player.autoplay = True
                 player._config_applied = True
@@ -1830,6 +1963,12 @@ class MusicEngine:
 
         # Stage 7: FFmpeg start — capture stderr-worthy failures explicitly.
         player.current = track
+        # Core invariant: the queue NEVER contains the playing track (prevents
+        # the finished track replaying from queue[0]). New generation: stale
+        # `after` callbacks from an interrupted previous track are dropped.
+        player._remove_track(track)
+        player._play_seq += 1
+        seq = player._play_seq
         player.playing = True
         player.player_state = "buffering"
         # Server default volume applies once per player lifetime; any explicit
@@ -1888,7 +2027,7 @@ class MusicEngine:
                 log.error("Bot loop unavailable for track-end handling; queue halted")
                 return
             asyncio.run_coroutine_threadsafe(
-                self._on_track_end(player, announce, err), loop)
+                self._on_track_end(player, announce, err, seq), loop)
 
         try:
             player.voice.play(src, after=_after)
@@ -1913,10 +2052,23 @@ class MusicEngine:
                  player.guild_id, getattr(voice_channel, "id", "?"),
                  (track.title or "")[:80], (track.source or "")[:60])
 
-    async def _on_track_end(self, player: GuildPlayer, announce=None, err=None) -> None:
+    async def _on_track_end(self, player: GuildPlayer, announce=None, err=None, seq: int | None = None) -> None:
         """Advance the queue. Failed tracks are logged, skipped, and the next
-        valid track is tried — the service never crashes on one bad track."""
+        valid track is tried — the service never crashes on one bad track.
+
+        Serialized per guild (advance lock) and generation-guarded: a stale
+        `after` callback (stop/skip/new-play racing the finish event) carries
+        an old seq and is dropped, so finish/skip/stop can never double-advance
+        or replay. skip() intentionally does NOT bump the generation — its
+        stop() IS the advance trigger."""
+        lock = player._advance_lock_get()
         try:
+            await lock.acquire()
+        except Exception:
+            lock = None
+        try:
+            if seq is not None and seq != player._play_seq:
+                return
             if not player.playing:
                 return
             # Track ended with an FFmpeg/player error: log, then treat the
@@ -1995,9 +2147,36 @@ class MusicEngine:
                     except Exception:
                         player.autoplay_failures += 1
             if next_track is None:
+                # Queue exhausted: autoplay already declined above. With 24/7
+                # ON the bot holds the voice channel idling; otherwise it
+                # MUST stop, destroy the voice connection, clear state and
+                # leave — never an invisible stale connection.
                 player.current = None
                 player.playing = False
                 player.player_state = "idle"
+                if player.stay_connected:
+                    log.info("queue exhausted guild=%s — 24/7 hold, staying connected",
+                             player.guild_id)
+                    return
+                voice = player.voice
+                player.voice = None
+                try:
+                    if voice is not None:
+                        try:
+                            if voice.is_playing() or voice.is_paused():
+                                voice.stop()
+                        except Exception:
+                            pass
+                        await voice.disconnect(force=True)
+                except Exception as exc:
+                    log.debug("leave-on-exhaustion failed (non-fatal): %s", str(exc)[:120])
+                finally:
+                    try:
+                        player.note_disconnected("queue exhausted")
+                    except Exception:
+                        pass
+                    player.connection_state = "disconnected"
+                log.info("queue exhausted guild=%s — left voice", player.guild_id)
                 return
             if player.voice and player.voice.channel:
                 try:
@@ -2029,6 +2208,12 @@ class MusicEngine:
                 player.player_state = "idle"
             except Exception:
                 pass
+        finally:
+            if lock is not None:
+                try:
+                    lock.release()
+                except Exception:
+                    pass
 
     async def run_playback_test(self) -> dict:
         """Controlled self-test for the [▶ Test Audio] button.
