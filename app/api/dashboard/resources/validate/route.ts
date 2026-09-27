@@ -79,12 +79,23 @@ export async function POST(req: NextRequest) {
 
   // Bot presence + identity in this guild.
   const botMemberRes = await botGet(`/guilds/${guildId}/members/@me`, bToken);
+  // Tri-state bot presence: ONLY a real Discord 404 means "not installed".
+  // A 429/5xx/timeout/Cloudflare block must surface as unverifiable (with
+  // retry), never as a false "not a member" verdict that sticks.
   if (!botMemberRes.ok) {
+    if (botMemberRes.status === 404) {
+      return NextResponse.json({
+        success: true, valid: false, objectName: null,
+        checks: [{ key: 'installed', label: 'Bot installed on this server', ok: false }],
+        message: 'The bot is not a member of this server. Invite it first.',
+      });
+    }
     return NextResponse.json({
-      success: true, valid: false, objectName: null,
-      checks: [{ key: 'installed', label: 'Bot installed on this server', ok: false }],
-      message: 'The bot is not a member of this server. Invite it first.',
-    });
+      success: false, valid: false, objectName: null,
+      code: 'DISCORD_API_ERROR', retryable: true,
+      checks: [{ key: 'installed', label: 'Bot installation verifiable right now', ok: false }],
+      message: 'Discord did not answer the bot check — retry in a moment.',
+    }, { status: 502 });
   }
   const botMember = botMemberRes.data as { user: { id: string }; roles: string[] };
   const rolesRes = await botGet(`/guilds/${guildId}/roles`, bToken);
