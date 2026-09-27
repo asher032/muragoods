@@ -181,7 +181,6 @@ export default function MusicPage() {
   const [acting, setActing] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [counts, setCounts] = useState<Record<Feedback, number>>({ like: 0, love: 0, dislike: 0 });
-  const [ffmpeg, setFfmpeg] = useState<boolean | null>(null);
   const [artFailed, setArtFailed] = useState(false);
   const [scrub, setScrub] = useState<number | null>(null);
   const [diag, setDiag] = useState<Diagnostics | null>(null);
@@ -252,16 +251,9 @@ export default function MusicPage() {
     return () => clearInterval(t);
   }, []);
 
-  // Is the decoder actually available? Read from the bot, not assumed.
-  useEffect(() => {
-    if (!token) return;
-    (async () => {
-      const resp = await apiFetch<{ bot?: { ffmpeg?: boolean | null } }>(
-        '/api/dashboard/status', { token },
-      );
-      if (resp.ok) setFfmpeg(resp.data.bot?.ffmpeg ?? null);
-    })();
-  }, [token]);
+  // FFmpeg truth comes from the LIVE polled diagnostics (diag.ffmpeg),
+  // never from a one-shot fetch: a stale boolean rendered "unavailable"
+  // next to a Ready check from the same host.
 
   // ⚙️ Music Diagnostics — real aggregate from the bot (audio service,
   // FFmpeg, gateway, last playback failure). No secrets ever leave the bot.
@@ -470,10 +462,10 @@ export default function MusicPage() {
           {notice}
         </div>
       )}
-      {ffmpeg === false && (
+      {(diag?.ffmpeg?.status === 'missing' || diag?.ffmpeg?.status === 'failed') && (
         <div className="cc-alert cc-alert-error" role="alert" style={{ marginBottom: 14 }}>
-          <strong>🟠 FFmpeg unavailable on the bot host.</strong> Playback cannot start until the
-          decoder is installed where the bot runs.
+          <strong>🟠 FFmpeg {diag.ffmpeg.status} on the bot host.</strong>{' '}
+          {diag.ffmpeg.error || 'Playback cannot start until the decoder is installed where the bot runs.'}
         </div>
       )}
 

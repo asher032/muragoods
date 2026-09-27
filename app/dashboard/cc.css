@@ -290,6 +290,44 @@ select.cc-input option,
 
 .cc-shell-main { margin-left: 264px; }
 
+/* ─── Centered page content ──────────────────────────────────────────────
+   One reusable container for every feature page: centered, comfortably
+   wide, slightly roomier than before — never edge-to-edge, never tiny.
+   Pages must NOT hardcode their own outer margins; they render inside this.
+   ────────────────────────────────────────────────────────────────────── */
+.cc-page {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 40px 64px;
+}
+@media (max-width: 900px) {
+  .cc-page { padding: 24px 20px 48px; }
+}
+@media (max-width: 600px) {
+  .cc-page { padding: 20px 16px 40px; }
+}
+
+/* Subtle previous-page control (chevron only — never the word "Back"). */
+.cc-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--cc-text-dim);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.cc-back:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  border-color: var(--cc-border);
+}
+
 /* ─── Header ─────────────────────────────────────────────────────────────
    Explicit two-row structure: the server selector owns row 1, the nav +
    bot status own row 2. This is a deliberate column flex, NOT two blocks
