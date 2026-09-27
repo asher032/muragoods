@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/app/lib/require-session';
-import { verifyBotInGuild } from '@/app/lib/discord-bot';
+import { verifyBotInGuild, fetchBotMember } from '@/app/lib/discord-bot';
 import { fetchUserGuilds, hasManageBits } from '@/app/lib/discord-guilds';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 
@@ -113,10 +113,12 @@ export async function GET(
   // ── Bot side: installed (REST identity) vs online (gateway) ──
   const presence = await verifyBotInGuild(guildId);
   let botOnline: boolean | null = null;
+  let gatewayReachable: boolean | null = null;
   try {
     const resp = await fetch(`${botBase()}/health`, {
       cache: 'no-store', signal: AbortSignal.timeout(5000),
     });
+    gatewayReachable = true;
     if (resp.ok) {
       const data = (await resp.json().catch(() => null)) as {
         ok?: boolean; guild_ids?: string[]; subsystems?: Record<string, string>;
@@ -126,7 +128,12 @@ export async function GET(
     }
   } catch {
     botOnline = null;
+    gatewayReachable = false;
   }
+  const gatewayStatus = gatewayReachable === true
+    ? (botOnline === true ? 'connected' : botOnline === false ? 'disconnected' : 'unknown')
+    : 'unknown';
+  const checkedAt = new Date().toISOString();
 
   if (presence === 'absent') {
     return NextResponse.json(
@@ -155,16 +162,24 @@ export async function GET(
   }
 
   if (presence === 'unknown') {
+    const botMember = await fetchBotMember(guildId);
     return NextResponse.json({
       success: true,
       guildId,
+      checkedAt,
       guild: { id: userGuild.id, name: userGuild.name, icon: userGuild.icon },
       user: {
         authenticated: true, member: true, canManage: true,
         administrator: bit(userGuild.permissions, ADMINISTRATOR) || userGuild.owner,
         owner: userGuild.owner,
       },
-      bot: { installed: null, online: botOnline },
+      bot: {
+        installed: null, online: botOnline,
+        userId: botMember?.user?.id ?? null,
+        username: botMember?.user?.username ?? null,
+      },
+      gatewayStatus,
+      discord: { reachable: true },
       permissions: {
         manageGuild: bit(userGuild.permissions, MANAGE_GUILD) || userGuild.owner,
         administrator: bit(userGuild.permissions, ADMINISTRATOR) || userGuild.owner,
@@ -178,16 +193,24 @@ export async function GET(
     });
   }
 
+  const botMember = await fetchBotMember(guildId);
   return NextResponse.json({
     success: true,
     guildId,
+    checkedAt,
     guild: { id: userGuild.id, name: userGuild.name, icon: userGuild.icon },
     user: {
       authenticated: true, member: true, canManage: true,
       administrator: bit(userGuild.permissions, ADMINISTRATOR) || userGuild.owner,
       owner: userGuild.owner,
     },
-    bot: { installed: true, online: botOnline },
+    bot: {
+      installed: true, online: botOnline,
+      userId: botMember?.user?.id ?? null,
+      username: botMember?.user?.username ?? null,
+    },
+    gatewayStatus,
+    discord: { reachable: true },
     permissions: {
       manageGuild: bit(userGuild.permissions, MANAGE_GUILD) || userGuild.owner,
       administrator: bit(userGuild.permissions, ADMINISTRATOR) || userGuild.owner,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import MusicFeedback from '@/app/lib/models/MusicFeedback';
 import { requireSession } from '@/app/lib/require-session';
+import { requireGuildManage } from '@/app/lib/discord-guilds';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -47,9 +48,16 @@ export async function GET(req: NextRequest) {
   if (!trackKey) {
     return NextResponse.json({ success: false, error: 'trackKey required' }, { status: 400 });
   }
-  const guard = await requireSession(guildId);
+  const guard = await requireSession();
   if (!guard.ok) {
     return NextResponse.json({ success: false, error: guard.error }, { status: guard.status });
+  }
+  const manage = await requireGuildManage(guard.accessToken, guildId);
+  if (!manage.ok) {
+    return NextResponse.json(
+      { success: false, code: manage.code, error: manage.error, retryable: manage.retryable },
+      { status: manage.status },
+    );
   }
   try {
     await dbConnect();
@@ -95,9 +103,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'A track url or title is required' }, { status: 400 });
   }
 
-  const guard = await requireSession(guildId);
+  const guard = await requireSession();
   if (!guard.ok) {
     return NextResponse.json({ success: false, error: guard.error }, { status: guard.status });
+  }
+  const manage = await requireGuildManage(guard.accessToken, guildId);
+  if (!manage.ok) {
+    return NextResponse.json(
+      { success: false, code: manage.code, error: manage.error, retryable: manage.retryable },
+      { status: manage.status },
+    );
   }
 
   try {
