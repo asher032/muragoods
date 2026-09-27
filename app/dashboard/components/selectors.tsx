@@ -128,43 +128,62 @@ export function useGuildResources(guildId: string | null) {
     if (!guildId) return;
     const id = ++requestId.current;
     controllerRef.current?.abort();
-    const controller = new AbortController();
-    controllerRef.current = controller;
+    // Automatic recovery: retryable failures (rate limits, Discord
+    // outages, network blips) retry with backoff before surfacing. The
+    // Retry button is the last resort, not the first — a transient Discord
+    // fault must never look like a permanent "couldn't load" state.
+    const BACKOFFS = [0, 2000, 5000];
     setLoading(true);
     setError('');
     setCode('');
     setRetryable(false);
-    try {
-      const resp = await fetch(`/api/dashboard/resources?guildId=${encodeURIComponent(guildId)}`, {
-        cache: 'no-store',
-        signal: controller.signal,
-      });
-      if (id !== requestId.current) return; // stale: a newer load superseded us
-      const data = (await resp.json().catch(() => null)) as
-        | (Partial<GuildResources> & { success?: boolean; error?: string; code?: string; retryable?: boolean })
-        | null;
-      if (!resp.ok || !data?.success) {
-        setError(data?.error || `Couldn't load server data (HTTP ${resp.status}).`);
-        setCode(typeof data?.code === 'string' ? data.code : '');
-        setRetryable(Boolean(data?.retryable) || resp.status === 429 || resp.status >= 500);
-        return;
+    for (let attempt = 0; attempt < BACKOFFS.length; attempt++) {
+      if (id !== requestId.current) return; // superseded
+      if (BACKOFFS[attempt] > 0) {
+        await new Promise((resolve) => setTimeout(resolve, BACKOFFS[attempt]));
+        if (id !== requestId.current) return;
       }
-      setResources({
-        guild: data.guild ?? null,
-        channels: data.channels ?? [],
-        roles: data.roles ?? [],
-        members: data.members ?? [],
-        bot: data.bot ?? null,
-      });
-    } catch (err) {
-      if (id !== requestId.current) return;
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      setError("Couldn't reach the server. Check your connection and retry.");
-      setCode('NETWORK_ERROR');
-      setRetryable(true);
-    } finally {
-      if (id === requestId.current) setLoading(false);
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      try {
+        const resp = await fetch(`/api/dashboard/resources?guildId=${encodeURIComponent(guildId)}`, {
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        if (id !== requestId.current) return; // stale: a newer load superseded us
+        const data = (await resp.json().catch(() => null)) as
+          | (Partial<GuildResources> & { success?: boolean; error?: string; code?: string; retryable?: boolean })
+          | null;
+        if (!resp.ok || !data?.success) {
+          const code = typeof data?.code === 'string' ? data.code : '';
+          const retryable = Boolean(data?.retryable) || resp.status === 429 || resp.status >= 500;
+          if (retryable && attempt < BACKOFFS.length - 1) continue; // auto-retry
+          setError(data?.error || `Couldn't load server data (HTTP ${resp.status}).`);
+          setCode(code);
+          setRetryable(retryable);
+          return;
+        }
+        setResources({
+          guild: data.guild ?? null,
+          channels: data.channels ?? [],
+          roles: data.roles ?? [],
+          members: data.members ?? [],
+          bot: data.bot ?? null,
+        });
+        return;
+      } catch (err) {
+        if (id !== requestId.current) return;
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        if (attempt < BACKOFFS.length - 1) continue; // network blip: auto-retry
+        setError("Couldn't reach the server. Check your connection and retry.");
+        setCode('NETWORK_ERROR');
+        setRetryable(true);
+        return;
+      } finally {
+        if (id === requestId.current && attempt === BACKOFFS.length - 1) setLoading(false);
+      }
     }
+    if (id === requestId.current) setLoading(false);
   }, [guildId]);
 
   useEffect(() => {
@@ -862,6 +881,11 @@ export function statusMessage(code: string, detail: string): { title: string; hi
       return {
         title: 'Muragoods is currently offline.',
         hint: detail || 'Your server configuration can still be viewed, but live bot actions may be unavailable. Retry in a moment.',
+      };
+    case 'RATE_LIMITED':
+      return {
+        title: 'Temporarily rate limited by Discord.',
+        hint: detail || 'Too many requests at once — retrying automatically. If it persists, wait a few seconds and press Retry.',
       };
     case 'DISCORD_API_ERROR':
     case 'ROLE_FETCH_FAILED':

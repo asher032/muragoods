@@ -26,7 +26,7 @@ export interface UserGuild {
 export type UserGuildsResult =
   | { ok: true; guilds: UserGuild[] }
   | { ok: false; authFailed: true }
-  | { ok: false; authFailed: false; status: number };
+  | { ok: false; authFailed: false; status: number; retryAfterMs?: number };
 
 const MANAGE_GUILD = BigInt(0x20);
 const ADMINISTRATOR = BigInt(0x8);
@@ -42,21 +42,78 @@ export function hasManageBits(owner: boolean, perms: string | number): boolean {
   }
 }
 
-/** Live guild list for the OAuth identity behind accessToken. */
-export async function fetchUserGuilds(accessToken: string): Promise<UserGuildsResult> {
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Structured operational log for the guild-list read. Token fingerprints
+ * (never the token), status codes and counts only — no secrets, no user
+ * data beyond the session owner's id supplied by the caller for correlation.
+ */
+export function logGuilds(
+  outcome: string,
+  fields: Record<string, string | number | boolean | null | undefined>,
+): void {
   try {
-    const resp = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      cache: 'no-store',
-      signal: AbortSignal.timeout(8000),
-    });
-    if (resp.status === 401) return { ok: false, authFailed: true };
-    if (!resp.ok) return { ok: false, authFailed: false, status: resp.status };
-    const guilds = (await resp.json()) as UserGuild[];
-    return { ok: true, guilds: Array.isArray(guilds) ? guilds : [] };
+    const parts = Object.entries(fields)
+      .filter(([, v]) => v !== undefined)
+      .map(([k, v]) => `${k}=${String(v)}`);
+    console.log(`[DiscordGuilds] ${outcome}${parts.length ? ` ${parts.join(' ')}` : ''}`);
   } catch {
-    return { ok: false, authFailed: false, status: 0 };
+    /* logging must never break the request */
   }
+}
+
+/** Live guild list for the OAuth identity behind accessToken. */
+export async function fetchUserGuilds(accessToken: string, discordId?: string): Promise<UserGuildsResult> {
+  // 429s carry Retry-After: honor it (plus one capped backoff retry) instead
+  // of instantly failing the whole dashboard. Other transient faults
+  // (5xx/timeout) get a single quick retry; 401 is final (dead token).
+  const logCtx = { token: tokenFingerprint(accessToken), ...(discordId ? { userId: discordId } : {}) };
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) {
+      await sleep(attempt === 1 ? 1500 : 4000);
+    }
+    try {
+      const resp = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(8000),
+      });
+      if (resp.status === 401) {
+        logGuilds('guilds 401', { ...logCtx, reason: 'oauth_token_invalid' });
+        return { ok: false, authFailed: true };
+      }
+      if (resp.status === 429) {
+        const retryAfter = Number(resp.headers.get('retry-after') || 0);
+        const waitMs = Math.max(0, Math.min(15000, (Number.isFinite(retryAfter) ? retryAfter * 1000 : 2000)));
+        logGuilds('guilds 429', { ...logCtx, reason: 'discord_rate_limited', retryAfterMs: waitMs, attempt: attempt + 1 });
+        if (attempt < 2) {
+          await sleep(waitMs);
+          continue;
+        }
+        return { ok: false, authFailed: false, status: 429, retryAfterMs: waitMs };
+      }
+      if (!resp.ok) {
+        logGuilds('guilds error', { ...logCtx, discordStatus: resp.status, attempt: attempt + 1 });
+        if (resp.status >= 500 && attempt < 2) continue;
+        return { ok: false, authFailed: false, status: resp.status };
+      }
+      const guilds = (await resp.json()) as UserGuild[];
+      const list = Array.isArray(guilds) ? guilds : [];
+      logGuilds('guilds ok', { ...logCtx, discordStatus: 200, guildCount: list.length });
+      return { ok: true, guilds: list };
+    } catch (err) {
+      lastStatus = 0;
+      logGuilds('guilds exception', {
+        ...logCtx,
+        reason: err instanceof Error && err.name === 'AbortError' ? 'timeout' : 'network',
+        attempt: attempt + 1,
+      });
+      if (attempt >= 2) return { ok: false, authFailed: false, status: 0 };
+    }
+  }
+  return { ok: false, authFailed: false, status: lastStatus };
 }
 
 /** Manageable guild ids for the OAuth identity. null = token dead/unreachable. */
@@ -121,10 +178,12 @@ export type ManageCheck =
         | 'AUTH_REQUIRED'
         | 'NOT_GUILD_MEMBER'
         | 'INSUFFICIENT_GUILD_PERMISSION'
+        | 'RATE_LIMITED'
         | 'DISCORD_API_ERROR';
       status: number;
       error: string;
       retryable: boolean;
+      retryAfterMs?: number;
       debug: {
         guildId: string;
         userMember: boolean | null;
@@ -162,6 +221,16 @@ export async function requireGuildManage(
     };
   }
   if (!res.ok) {
+    // 429 keeps its own code so the UI can say "rate limited — retrying"
+    // instead of the generic outage message.
+    if (!res.authFailed && res.status === 429) {
+      return {
+        ok: false, code: 'RATE_LIMITED', status: 429,
+        error: 'Discord rate-limited the request — retrying automatically',
+        retryable: true, retryAfterMs: res.retryAfterMs,
+        debug: { ...debugBase, discordStatus: 429 },
+      };
+    }
     return {
       ok: false, code: 'DISCORD_API_ERROR', status: 502,
       error: 'Discord did not answer the permission check — retry in a moment',
