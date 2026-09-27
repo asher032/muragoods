@@ -26,7 +26,10 @@ import utils
 log = logging.getLogger("bot.help")
 
 PAGE_SIZE = 10
-VIEW_TIMEOUT = 300.0
+# Component views die server-side at timeout while the message can look
+# alive (a missed expiry edit leaves a clickable-but-dead menu whose clicks
+# silently time out). 15 minutes keeps menus usable without masking expiry.
+VIEW_TIMEOUT = 900.0
 
 # ── Categories ────────────────────────────────────────────────────────
 CATEGORIES: tuple[tuple[str, str, str], ...] = (
