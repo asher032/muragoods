@@ -265,6 +265,8 @@ async def _ensure_indexes() -> list[str]:
         ("economy_pets.guildId_userId", ""),
         ("economy_trades.status_expires", ""),
         ("economy_lottery.guildId_drawAt", ""),
+        ("xp.guildId_xp", ""),
+        ("level_events.guildId_at", ""),
     ]
     keys: dict[str, list] = {
         "guild_config.guildId": [("guildId", ASCENDING)],
@@ -302,6 +304,8 @@ async def _ensure_indexes() -> list[str]:
         "economy_pets.guildId_userId": [("guildId", DESCENDING), ("userId", DESCENDING)],
         "economy_trades.status_expires": [("status", ASCENDING), ("expiresAt", ASCENDING)],
         "economy_lottery.guildId_drawAt": [("guildId", DESCENDING), ("drawAt", ASCENDING)],
+        "xp.guildId_xp": [("guildId", DESCENDING), ("xp", DESCENDING)],
+        "level_events.guildId_at": [("guildId", DESCENDING), ("at", DESCENDING)],
     }
     failures: list[str] = []
     for label, kind in specs:
