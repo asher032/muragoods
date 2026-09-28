@@ -283,6 +283,9 @@ def category_embed(category_id: str, entries: list[dict], page: int) -> tuple[di
     e = utils.base_embed(f"{label} Commands",
                          f"Page {page + 1}/{total} — pick a command below for details."
                          if total > 1 else "Pick a command below for details.")
+    if not page_items:
+        e.add_field(name="No commands available",
+                    value="This category is empty right now.", inline=False)
     for entry in page_items:
         e.add_field(name=entry["path"],
                     value=entry.get("description", "No description.")[:150],
@@ -323,26 +326,38 @@ def search_embed(query: str, results: list[dict], page: int) -> tuple[discord.Em
     return e, total
 
 
-class CategorySelect(discord.ui.Select):
-    def __init__(self, owner_id: int):
+class CategoryButton(discord.ui.Button):
+    """One category tile. Buttons are the primary category navigation:
+    same dispatch as selects but immune to select-specific payload issues,
+    and every press re-verifies against the live registry."""
+
+    def __init__(self, owner_id: int, category_id: str, label: str, row: int):
         self.owner_id = owner_id
-        options = [
-            discord.SelectOption(label=label, value=cid, description=desc[:100], emoji=label.split(" ")[0])
-            for cid, label, desc in CATEGORIES
-        ]
-        super().__init__(placeholder="Select a category", options=options, row=0)
+        self.category_id = category_id
+        emoji, _, short = label.partition(" ")
+        super().__init__(style=discord.ButtonStyle.secondary,
+                         label=short or label,
+                         emoji=emoji or None,
+                         custom_id=f"help:cat:{category_id}",
+                         row=row)
 
     async def callback(self, interaction: discord.Interaction):
         view: HelpView = self.view  # type: ignore[assignment]
         if not await view.check_owner(interaction):
             return
-        # No pre-defer: _safe_edit answers with a single edit roundtrip
-        # first (fastest spinner clear). Failures become error notes.
         try:
-            await view.show_category(interaction, self.values[0], 0)
+            await view.show_category(interaction, self.category_id, 0)
         except Exception:
             log.exception("Help category render failed")
             await view._send_error(interaction, "Could not open that category. Try again.")
+
+
+def category_buttons(owner_id: int) -> list[CategoryButton]:
+    """15 categories across rows 0-2 (5 per row, the Discord maximum)."""
+    buttons: list[CategoryButton] = []
+    for idx, (cid, label, _desc) in enumerate(CATEGORIES):
+        buttons.append(CategoryButton(owner_id, cid, label, row=idx // 5))
+    return buttons
 
 
 class CommandSelect(discord.ui.Select):
@@ -356,7 +371,7 @@ class CommandSelect(discord.ui.Select):
             for e in entries[:25]
         ]
         super().__init__(placeholder="Select a command for details",
-                         options=options, row=1,
+                         options=options, row=3,
                          disabled=not options)
 
     async def callback(self, interaction: discord.Interaction):
@@ -396,7 +411,7 @@ class HelpView(discord.ui.View):
         self.detail_path = ""
         self.return_to = ""
         self.search_query = ""
-        self.add_item(CategorySelect(owner_id))
+        self._rebuild(show_home=False)
 
     async def check_owner(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.owner_id:
@@ -422,40 +437,58 @@ class HelpView(discord.ui.View):
         except Exception:
             pass
 
-    def _nav_row(self, page: int, total: int, show_home: bool = True):
-        prev_btn = discord.ui.Button(emoji="◀", style=discord.ButtonStyle.secondary,
-                                     disabled=page <= 0, row=2)
-        prev_btn.callback = self._on_prev  # type: ignore[method-assign]
-        page_btn = discord.ui.Button(label=f"Page {page + 1}/{total}",
-                                     style=discord.ButtonStyle.secondary,
-                                     disabled=True, row=2)
-        next_btn = discord.ui.Button(emoji="▶", style=discord.ButtonStyle.secondary,
-                                     disabled=page >= total - 1, row=2)
-        next_btn.callback = self._on_next  # type: ignore[method-assign]
-        return [prev_btn, page_btn, next_btn]
-
-    def _action_row(self, show_home: bool = True):
+    def _action_row(self, page: int = 0, total: int = 1, show_nav: bool = False,
+                    detail: bool = False, detail_label: str = "",
+                    show_home: bool = True):
+        # Row 4 holds at most 5 buttons: [prev next] + search + home/return + close.
+        # The Page X/Y indicator lives in the embed text (a disabled button
+        # would consume a slot for zero function).
+        items = []
+        if detail:
+            back_btn = discord.ui.Button(
+                label=f"◀ Return{(' to ' + detail_label) if detail_label else ''}"[:80],
+                style=discord.ButtonStyle.secondary,
+                custom_id="help:act:return", row=4)
+            back_btn.callback = self._on_return  # type: ignore[method-assign]
+            items.append(back_btn)
+        elif show_nav and total > 1:
+            prev_btn = discord.ui.Button(emoji="◀", style=discord.ButtonStyle.secondary,
+                                         custom_id="help:nav:prev",
+                                         disabled=page <= 0, row=4)
+            prev_btn.callback = self._on_prev  # type: ignore[method-assign]
+            next_btn = discord.ui.Button(emoji="▶", style=discord.ButtonStyle.secondary,
+                                         custom_id="help:nav:next",
+                                         disabled=page >= total - 1, row=4)
+            next_btn.callback = self._on_next  # type: ignore[method-assign]
+            items.extend([prev_btn, next_btn])
         search_btn = discord.ui.Button(emoji="🔎", label="Search",
-                                       style=discord.ButtonStyle.primary, row=3)
+                                       style=discord.ButtonStyle.primary,
+                                       custom_id="help:act:search", row=4)
         search_btn.callback = self._on_search  # type: ignore[method-assign]
         home_btn = discord.ui.Button(emoji="🏠", label="Home",
-                                     style=discord.ButtonStyle.secondary, row=3)
+                                     style=discord.ButtonStyle.secondary,
+                                     custom_id="help:act:home", row=4)
         home_btn.callback = self._on_home  # type: ignore[method-assign]
         close_btn = discord.ui.Button(emoji="✕", label="Close",
-                                      style=discord.ButtonStyle.danger, row=3)
+                                      style=discord.ButtonStyle.danger,
+                                      custom_id="help:act:close", row=4)
         close_btn.callback = self._on_close  # type: ignore[method-assign]
-        return [search_btn, home_btn, close_btn]
+        items.extend([search_btn, close_btn])
+        if show_home:
+            items.insert(-1, home_btn)
+        return items
 
     def _rebuild(self, extra_select=None, page: int = 0, total: int = 1,
-                 show_nav: bool = False):
+                 show_nav: bool = False, detail: bool = False, detail_label: str = "",
+                 show_home: bool = True):
         self.clear_items()
-        self.add_item(CategorySelect(self.owner_id))
+        for btn in category_buttons(self.owner_id):
+            self.add_item(btn)
         if extra_select is not None:
             self.add_item(extra_select)
-        if show_nav and total > 1:
-            for btn in self._nav_row(page, total):
-                self.add_item(btn)
-        for btn in self._action_row():
+        for btn in self._action_row(page=page, total=total, show_nav=show_nav,
+                                    detail=detail, detail_label=detail_label,
+                                    show_home=show_home):
             self.add_item(btn)
 
     async def _send_error(self, interaction: discord.Interaction, text: str) -> None:
@@ -507,7 +540,7 @@ class HelpView(discord.ui.View):
 
     async def show_home(self, interaction: discord.Interaction):
         self.mode = "home"
-        self._rebuild()
+        self._rebuild(show_home=False)
         await self._safe_edit(interaction, embed=overview_embed(), view=self)
 
     async def show_category(self, interaction: discord.Interaction, category_id: str, page: int):
@@ -542,12 +575,8 @@ class HelpView(discord.ui.View):
         self.mode = "detail"
         self.detail_path = path
         self.return_to = context
-        self._rebuild()
-        back_btn = discord.ui.Button(
-            label=f"◀ Return to {next((c[1] for c in CATEGORIES if c[0] == category_id), 'list')}",
-            style=discord.ButtonStyle.secondary, row=2)
-        back_btn.callback = self._on_return  # type: ignore[method-assign]
-        self.add_item(back_btn)
+        cat_label = next((c[1] for c in CATEGORIES if c[0] == category_id), "")
+        self._rebuild(detail=True, detail_label=cat_label)
         await self._safe_edit(interaction, embed=detail_embed(entry, category_id), view=self)
 
     async def show_search(self, interaction: discord.Interaction, query: str, page: int):
@@ -674,15 +703,39 @@ class HelpCog(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="help", description="Browse Murabot commands by category.")
-    async def help_command(self, interaction: discord.Interaction):
+    @app_commands.describe(category="Jump straight to a category (optional)")
+    @app_commands.choices(category=[
+        app_commands.Choice(name=label, value=cid) for cid, label, _desc in CATEGORIES if cid != "overview"
+    ])
+    async def help_command(self, interaction: discord.Interaction, category: str = ""):
         # Canonical pattern FIRST: response.send_message registers the view
         # against the interaction for component dispatch. Only if that
         # fails (already-acked edge) fall back to defer + followup WITH
         # wait=True — without wait the followup returns no message, the
         # view binds to message None, and every select silently dies.
+        if not isinstance(category, str):
+            category = str(getattr(category, "value", category) or "")
+        cid = category.strip().lower()
+        if cid and cid not in CATEGORY_IDS:
+            cid = ""
         try:
             view = HelpView(self.bot, interaction.user.id)
-            await interaction.response.send_message(embed=overview_embed(), view=view)
+            if cid:
+                # Component-free direct render: works even if every UI
+                # control on the message were broken.
+                entries = view.index.get(cid, [])
+                embed, total = category_embed(cid, entries, 0)
+                page_items, page, _ = paginate(entries, 0)
+                view.mode = "category"
+                view.category = cid
+                view.page = page
+                view._rebuild(
+                    extra_select=CommandSelect(view.owner_id, page_items, f"cat:{cid}:{page}")
+                    if page_items else None,
+                    page=page, total=total, show_nav=total > 1)
+                await interaction.response.send_message(embed=embed, view=view)
+            else:
+                await interaction.response.send_message(embed=overview_embed(), view=view)
             try:
                 view.message = await interaction.original_response()
             except Exception:
@@ -696,7 +749,20 @@ class HelpCog(commands.Cog):
             pass
         try:
             view = HelpView(self.bot, interaction.user.id)
-            await interaction.followup.send(embed=overview_embed(), view=view, wait=True)
+            if cid:
+                entries = view.index.get(cid, [])
+                embed, total = category_embed(cid, entries, 0)
+                page_items, page, _ = paginate(entries, 0)
+                view.mode = "category"
+                view.category = cid
+                view.page = page
+                view._rebuild(
+                    extra_select=CommandSelect(view.owner_id, page_items, f"cat:{cid}:{page}")
+                    if page_items else None,
+                    page=page, total=total, show_nav=total > 1)
+                await interaction.followup.send(embed=embed, view=view, wait=True)
+            else:
+                await interaction.followup.send(embed=overview_embed(), view=view, wait=True)
             try:
                 view.message = await interaction.original_response()
             except Exception:
