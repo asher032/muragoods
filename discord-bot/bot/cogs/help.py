@@ -697,6 +697,46 @@ class HelpView(discord.ui.View):
         self.stop()
 
 
+def _failure_tag(exc: BaseException) -> str:
+    """Compact Discord failure fingerprint for the user-visible note.
+
+    Includes the HTTP status, the Discord JSON error code, and the first
+    error field path (e.g. components.3) — enough to name the rejected
+    part, and nothing secret (Discord error bodies never carry tokens).
+    """
+    status = getattr(exc, "status", "?")
+    code = getattr(exc, "code", "?")
+    detail = ""
+    try:
+        import json as _json
+
+        text = getattr(exc, "text", "") or ""
+        if text:
+            body = _json.loads(text)
+            errs = body.get("errors", {}) if isinstance(body, dict) else {}
+            paths: list[str] = []
+
+            def walk(node, prefix=""):
+                if isinstance(node, dict):
+                    for key, val in node.items():
+                        if key.startswith("_"):
+                            continue
+                        walk(val, f"{prefix}{key}." if prefix else f"{key}.")
+                        if isinstance(val, dict) and "_errors" in val:
+                            paths.append(prefix + key)
+                elif isinstance(node, list):
+                    for idx, val in enumerate(node):
+                        walk(val, f"{prefix}{idx}.")
+
+            walk(errs)
+            if paths:
+                detail = ",".join(paths[:3])
+    except Exception:
+        pass
+    tag = f"{type(exc).__name__}/{status}/{code}"
+    return tag + (f"/{detail}" if detail else "")
+
+
 class HelpCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -742,7 +782,7 @@ class HelpCog(commands.Cog):
             return
         except Exception as first_err:
             log.exception("Help direct send failed, trying deferred followup")
-            first_name = type(first_err).__name__
+            first_name = _failure_tag(first_err)
         try:
             await interaction.response.defer()
         except Exception:
@@ -774,8 +814,8 @@ class HelpCog(commands.Cog):
                     embed=utils.base_embed(
                         "⚠️ Help unavailable",
                         f"Could not open the browser "
-                        f"(send:{first_name}, retry:{type(second_err).__name__}). "
-                        f"Please report these two words."),
+                        f"(send:{first_name}, retry:{_failure_tag(second_err)}). "
+                        f"Please report the parenthesized part."),
                     ephemeral=True)
             except Exception:
                 pass
