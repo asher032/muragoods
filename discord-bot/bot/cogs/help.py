@@ -331,15 +331,14 @@ class CategoryButton(discord.ui.Button):
     same dispatch as selects but immune to select-specific payload issues,
     and every press re-verifies against the live registry."""
 
-    def __init__(self, owner_id: int, category_id: str, label: str, row: int):
+    def __init__(self, owner_id: int, category_id: str, label: str):
         self.owner_id = owner_id
         self.category_id = category_id
         emoji, _, short = label.partition(" ")
         super().__init__(style=discord.ButtonStyle.secondary,
                          label=short or label,
                          emoji=emoji or None,
-                         custom_id=f"help:cat:{category_id}",
-                         row=row)
+                         custom_id=f"help:cat:{category_id}")
 
     async def callback(self, interaction: discord.Interaction):
         view: HelpView = self.view  # type: ignore[assignment]
@@ -356,7 +355,7 @@ def category_buttons(owner_id: int) -> list[CategoryButton]:
     """15 categories across rows 0-2 (5 per row, the Discord maximum)."""
     buttons: list[CategoryButton] = []
     for idx, (cid, label, _desc) in enumerate(CATEGORIES):
-        buttons.append(CategoryButton(owner_id, cid, label, row=idx // 5))
+        buttons.append(CategoryButton(owner_id, cid, label))
     return buttons
 
 
@@ -371,7 +370,7 @@ class CommandSelect(discord.ui.Select):
             for e in entries[:25]
         ]
         super().__init__(placeholder="Select a command for details",
-                         options=options, row=3,
+                         options=options,
                          disabled=not options)
 
     async def callback(self, interaction: discord.Interaction):
@@ -448,30 +447,30 @@ class HelpView(discord.ui.View):
             back_btn = discord.ui.Button(
                 label=f"◀ Return{(' to ' + detail_label) if detail_label else ''}"[:80],
                 style=discord.ButtonStyle.secondary,
-                custom_id="help:act:return", row=4)
+                custom_id="help:act:return")
             back_btn.callback = self._on_return  # type: ignore[method-assign]
             items.append(back_btn)
         elif show_nav and total > 1:
             prev_btn = discord.ui.Button(emoji="◀", style=discord.ButtonStyle.secondary,
                                          custom_id="help:nav:prev",
-                                         disabled=page <= 0, row=4)
+                                         disabled=page <= 0)
             prev_btn.callback = self._on_prev  # type: ignore[method-assign]
             next_btn = discord.ui.Button(emoji="▶", style=discord.ButtonStyle.secondary,
                                          custom_id="help:nav:next",
-                                         disabled=page >= total - 1, row=4)
+                                         disabled=page >= total - 1)
             next_btn.callback = self._on_next  # type: ignore[method-assign]
             items.extend([prev_btn, next_btn])
         search_btn = discord.ui.Button(emoji="🔎", label="Search",
                                        style=discord.ButtonStyle.primary,
-                                       custom_id="help:act:search", row=4)
+                                       custom_id="help:act:search")
         search_btn.callback = self._on_search  # type: ignore[method-assign]
         home_btn = discord.ui.Button(emoji="🏠", label="Home",
                                      style=discord.ButtonStyle.secondary,
-                                     custom_id="help:act:home", row=4)
+                                     custom_id="help:act:home")
         home_btn.callback = self._on_home  # type: ignore[method-assign]
         close_btn = discord.ui.Button(emoji="✕", label="Close",
                                       style=discord.ButtonStyle.danger,
-                                      custom_id="help:act:close", row=4)
+                                      custom_id="help:act:close")
         close_btn.callback = self._on_close  # type: ignore[method-assign]
         items.extend([search_btn, close_btn])
         if show_home:
