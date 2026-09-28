@@ -740,8 +740,9 @@ class HelpCog(commands.Cog):
             except Exception:
                 pass
             return
-        except Exception:
+        except Exception as first_err:
             log.exception("Help direct send failed, trying deferred followup")
+            first_name = type(first_err).__name__
         try:
             await interaction.response.defer()
         except Exception:
@@ -766,12 +767,15 @@ class HelpCog(commands.Cog):
                 view.message = await interaction.original_response()
             except Exception:
                 pass
-        except Exception:
+        except Exception as second_err:
             log.exception("Help failed to send")
             try:
                 await interaction.followup.send(
-                    embed=utils.base_embed("⚠️ Help unavailable",
-                                           "Could not open the browser."),
+                    embed=utils.base_embed(
+                        "⚠️ Help unavailable",
+                        f"Could not open the browser "
+                        f"(send:{first_name}, retry:{type(second_err).__name__}). "
+                        f"Please report these two words."),
                     ephemeral=True)
             except Exception:
                 pass
