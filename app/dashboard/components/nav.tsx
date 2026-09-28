@@ -33,6 +33,7 @@ export const DASH_SECTIONS: { label: string; items: NavItem[] }[] = [
       { label: 'Music', href: '/dashboard/music', icon: <ListMusic size={16} /> },
       { label: 'Leveling', href: '/dashboard/leveling', icon: <Star size={16} /> },
       { label: 'Economy', href: '/dashboard/economy', icon: <Coins size={16} /> },
+      { label: 'Games', href: '/dashboard/games', icon: <Gamepad2 size={16} /> },
       { label: 'Fun', href: '/dashboard/fun', icon: <Gamepad2 size={16} /> },
       { label: 'Giveaways', href: '/dashboard/giveaways', icon: <Gift size={16} /> },
       { label: 'Suggestions', href: '/dashboard/suggestions', icon: <MessageSquare size={16} /> },

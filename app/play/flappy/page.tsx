@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
-import { useCoins } from '@/app/hooks/useCoins';
+import { useGameSession } from '@/app/hooks/useGameSession';
+import { DiscordNudge } from '@/app/components/DiscordNudge';
 import { Bird, Lightbulb, Skull } from 'lucide-react';
 
 const GAME_WIDTH = 320;
@@ -22,7 +23,7 @@ interface Pipe {
 }
 
 export default function FlappyBird() {
-  const { addCoins } = useCoins();
+  const { award } = useGameSession('flappy');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loaded, setLoaded] = useState(false);
   const [gameState, setGameState] = useState<'menu' | 'playing' | 'over'>('menu');
@@ -193,11 +194,13 @@ export default function FlappyBird() {
     gameStateRef.current = 'over';
     setGameState('over');
     const finalScore = scoreRef.current;
-    const earned = Math.floor(finalScore / 2);
-    if (earned > 0) addCoins(earned);
-    setCoinsEarned(earned);
+    setCoinsEarned(-1); // pending until the server confirms
     if (finalScore > bestScore) setBestScore(finalScore);
-  }, [addCoins, bestScore]);
+    // Server settles floor(score/2) with a per-play cap — no local minting.
+    void award({ gameId: 'flappy', score: finalScore }).then(res => {
+      setCoinsEarned(res.success ? (res.coins ?? 0) : 0);
+    });
+  }, [award, bestScore]);
 
   const jump = useCallback(() => {
     if (gameStateRef.current === 'menu') {
@@ -240,6 +243,7 @@ export default function FlappyBird() {
     <main style={{ minHeight: '100vh', background: '#0a0a18' }}>
       <NavBar pageLabel="Flappy Bird" />
       <div style={{ maxWidth: '400px', margin: '0 auto', padding: '80px 20px 100px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div style={{ width: '100%' }}><DiscordNudge compact /></div>
         <div style={{ textAlign: 'center', marginBottom: '20px', opacity: loaded ? 1 : 0, transition: 'all 0.6s ease' }}>
           <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: '#ffd60a', marginBottom: '4px' }}><Bird className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Flappy Bird</h1>
           <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>Tap or press Space to fly!</p>
@@ -266,6 +270,7 @@ export default function FlappyBird() {
               <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '24px', color: '#ffd60a', marginBottom: '4px' }}>{score}</p>
               <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginBottom: '4px' }}>pipes passed</p>
               {coinsEarned > 0 && <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#06d6a0', marginBottom: '12px' }}>+{coinsEarned} coins!</p>}
+              {coinsEarned === -1 && <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px', color: '#888', marginBottom: '12px' }}>Confirming…</p>}
               {bestScore > 0 && <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginBottom: '16px' }}>Best: {bestScore}</p>}
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button onClick={(e) => { e.stopPropagation(); setGameState('menu'); gameStateRef.current = 'menu'; scoreRef.current = 0; birdRef.current = { y: GAME_HEIGHT / 2, velocity: 0 }; pipesRef.current = []; draw(); }} style={{ padding: '8px 20px', borderRadius: '8px', border: '1px solid rgba(255,214,10,0.4)', background: 'rgba(255,214,10,0.12)', color: '#ffd60a', fontFamily: 'var(--font-arcade)', fontSize: '9px', cursor: 'pointer' }}>Retry</button>

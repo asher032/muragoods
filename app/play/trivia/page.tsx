@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
-import { useCoins } from '@/app/hooks/useCoins';
+import { useGameSession } from '@/app/hooks/useGameSession';
+import { DiscordNudge } from '@/app/components/DiscordNudge';
 import { Icon } from '@/app/components/Icon';
 import { Brain, Check, CircleX, Coins, Flame, Gamepad2, Heart, PartyPopper, RefreshCw, Skull, Star, Trophy } from 'lucide-react';
 // ─── Question Bank ──────────────────────────────────────────
@@ -71,7 +72,9 @@ const TRIVIA_PLAYS_KEY = 'muragoods_trivia_plays';
 
 export default function TriviaPage() {
   const router = useRouter();
-  const { addCoins } = useCoins();
+  const { award } = useGameSession('trivia');
+  const [serverCoins, setServerCoins] = useState<number | null>(null);
+  const [awardNote, setAwardNote] = useState('');
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [phase, setPhase] = useState<GamePhase>('menu');
@@ -212,6 +215,20 @@ export default function TriviaPage() {
 
     setPhase('feedback');
 
+    // The final score is settled server-side (capped, rate-limited,
+    // idempotent) — the local score is display-only until confirmed.
+    const finishAward = (finalScore: number) => {
+      void award({ gameId: 'trivia', score: finalScore }).then(res => {
+        if (res.success) {
+          setServerCoins(res.coins ?? 0);
+          if (typeof res.playsLeft === 'number') setPlaysLeft(res.playsLeft);
+        } else {
+          setAwardNote(res.error || 'Reward claim failed.');
+          if ((res.error || '').includes('Daily play limit')) setPlaysLeft(0);
+        }
+      });
+    };
+
     // After feedback, move to next or game over
     setTimeout(() => {
       if (!correct && lives <= 1) {
@@ -225,11 +242,12 @@ export default function TriviaPage() {
           setLegendaryHighScore(finalScore);
           localStorage.setItem('muragoods_trivia_legendary_hs', String(finalScore));
         }
-        if (coinsEarned > 0) addCoins(coinsEarned, isLegendaryMode ? 'Legendary Mode — Game Over' : 'Trivia Challenge — Game Over');
+        setServerCoins(null);
+        setAwardNote('');
+        if (finalScore > 0) finishAward(finalScore);
         setPhase('gameover');
       } else if (currentIndex >= questions.length - 1) {
         // Completed all questions
-        if (coinsEarned > 0) addCoins(coinsEarned, isLegendaryMode ? 'Legendary Mode — Quest Complete' : 'Trivia Challenge — Quest Complete');
         const finalScore = score;
         if (finalScore > highScore) {
           setHighScore(finalScore);
@@ -239,6 +257,9 @@ export default function TriviaPage() {
           setLegendaryHighScore(finalScore);
           localStorage.setItem('muragoods_trivia_legendary_hs', String(finalScore));
         }
+        setServerCoins(null);
+        setAwardNote('');
+        if (finalScore > 0) finishAward(finalScore);
         setPhase('complete');
       } else {
         setCurrentIndex(prev => prev + 1);
@@ -247,7 +268,7 @@ export default function TriviaPage() {
         setPhase('playing');
       }
     }, 2000);
-  }, [phase, questions, currentIndex, timer, streak, lives, score, coinsEarned, highScore, addCoins]);
+  }, [phase, questions, currentIndex, timer, streak, lives, score, coinsEarned, highScore, award]);
 
   if (!isLoggedIn) return null;
 
@@ -268,6 +289,10 @@ export default function TriviaPage() {
               </h1>
               <p className="mt-3 text-base text-[var(--gold)]">Test your knowledge and earn coins!</p>
             </div>
+            <DiscordNudge compact />
+            {awardNote && (
+              <p className="text-center text-sm text-red-300 mb-4">{awardNote}</p>
+            )}
 
             {/* High Scores */}
             <div className="grid grid-cols-2 gap-3 mb-6">
@@ -388,7 +413,7 @@ export default function TriviaPage() {
                   </div>
                   <div className="border border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-3 rounded-xl">
                     <p className="text-[8px] text-[var(--gold)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Coins</p>
-                    <p className="text-sm text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>+{coinsEarned}</p>
+                    <p className="text-sm text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>+{serverCoins ?? '…'}</p>
                   </div>
                   <div className="border border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-3 rounded-xl">
                     <p className="text-[8px] text-[var(--gold)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Correct</p>
@@ -436,7 +461,7 @@ export default function TriviaPage() {
                   </div>
                   <div className="border border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-3 rounded-xl">
                     <p className="text-[8px] text-[var(--gold)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Coins Earned</p>
-                    <p className="text-lg text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> +{coinsEarned}</p>
+                    <p className="text-lg text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> +{serverCoins ?? '…'}</p>
                   </div>
                   <div className="border border-[rgba(242,240,228,0.12)] bg-[var(--charcoal-light)] p-3 rounded-xl">
                     <p className="text-[8px] text-[var(--gold)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Accuracy</p>

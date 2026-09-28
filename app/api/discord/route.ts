@@ -73,6 +73,62 @@ export async function GET(req: Request) {
     });
   }
 
+  // ─── GET /api/discord?action=profile&discordId=123 ───────────────────
+  // Linked Muragoods profile bundle for Murabot. Used when the bot host
+  // cannot reach the site's database directly (separate clusters). The
+  // bot enforces viewer privacy from the included privacy object.
+  if (action === 'profile') {
+    const discordId = searchParams.get('discordId') || '';
+    if (!/^\d{5,25}$/.test(discordId)) {
+      return badRequest('Valid discordId required');
+    }
+    const { default: User } = await import('@/app/lib/models/User');
+    const { default: GameProgress } = await import('@/app/lib/models/GameProgress');
+    const { default: UserPreference } = await import('@/app/lib/models/UserPreference');
+    const { default: GameReward } = await import('@/app/lib/models/GameReward');
+    const { default: UserLibrary } = await import('@/app/lib/models/UserLibrary');
+    const user = await User.findOne({ 'discord.discordId': discordId })
+      .select('name email avatar coinBalance perks privacy discord').lean() as {
+        name?: string; email: string; avatar?: string; coinBalance?: number;
+        perks?: Array<{ perkName?: string; perkId?: string }>;
+        privacy?: Record<string, string>;
+        discord?: { username?: string; avatar?: string };
+      } | null;
+    if (!user) return NextResponse.json({ success: true, linked: false });
+    const emailLc = user.email.toLowerCase();
+    const [rows, favs, recent, lib] = await Promise.all([
+      GameProgress.find({ userEmail: emailLc }).sort({ lastPlayed: -1 }).limit(20).lean(),
+      UserPreference.find({ userEmail: emailLc }).sort({ createdAt: -1 }).limit(15).lean(),
+      GameReward.find({ userEmail: emailLc }).sort({ createdAt: -1 }).limit(5).lean(),
+      UserLibrary.findOne({ email: emailLc }).select('myList').lean() as Promise<{ myList?: Array<{ title?: string }> } | null>,
+    ]);
+    const totalXp = rows.reduce((s, r) => s + (r.xp || 0), 0);
+    const totalPlays = rows.reduce((s, r) => s + (r.plays || 0), 0);
+    const achievements = [...new Set(rows.flatMap((r) => r.achievements || []))];
+    return NextResponse.json({
+      success: true,
+      linked: true,
+      email: user.email,
+      privacy: {
+        gameProfile: 'public', favorites: 'private', activity: 'private', watchHistory: 'private',
+        ...(user.privacy || {}),
+      },
+      profile: {
+        name: user.name || '', avatar: user.avatar || user.discord?.avatar || '',
+        discordUsername: user.discord?.username || '', coins: user.coinBalance || 0,
+        totalXp, totalPlays, gamesPlayed: rows.length, achievements,
+        games: rows.slice(0, 5).map((r) => ({ gameId: r.gameId, bestScore: r.bestScore || 0, plays: r.plays || 0 })),
+        favorites: (favs || []).map((f) => ({
+          type: f.contentType, action: f.action,
+          title: String(f.snapshot?.title || f.contentId),
+        })),
+        watchlist: ((lib?.myList) || []).slice(0, 10).map((m) => String(m.title || '?')),
+        perks: ((user.perks) || []).slice(-5).map((p) => String(p.perkName || p.perkId)),
+        recent: (recent || []).map((r) => ({ kind: r.kind, amount: r.amount, label: String(r.label || '').slice(0, 60) })),
+      },
+    });
+  }
+
   return badRequest('Unknown action');
 }
 

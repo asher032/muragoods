@@ -42,6 +42,44 @@ class InventoryGroup(commands.Cog):
             f"🎒 {getattr(target, 'display_name', 'Inventory')}",
             "\n".join(lines), embeds.INFO), ephemeral=True)
 
+    @inv.command(name="favorites", description="Cross-platform favorites (site, Murastream, games).")
+    @app_commands.describe(user="Whose favorites (default: you; others only if public)",
+                           kind="Filter: game, movie, anime, series, product, music")
+    @app_commands.choices(kind=[
+        app_commands.Choice(name="games", value="game"),
+        app_commands.Choice(name="movies", value="movie"),
+        app_commands.Choice(name="anime", value="anime"),
+        app_commands.Choice(name="series", value="series"),
+        app_commands.Choice(name="products", value="product"),
+        app_commands.Choice(name="music", value="music"),
+    ])
+    async def favorites(self, interaction: discord.Interaction,
+                        user: discord.User | None = None, kind: str = ""):
+        await interaction.response.defer(ephemeral=True)
+        import siteprofile
+        target = user or interaction.user
+        try:
+            ok, rows = await siteprofile.favorites_for(
+                database._db, interaction.user.id, target.id, (kind or "").strip())
+        except Exception:
+            log.exception("favorites read failed")
+            await interaction.followup.send("Could not load favorites right now.", ephemeral=True)
+            return
+        if not ok:
+            await interaction.followup.send(
+                "Link Discord at Muragoods → My Muragoods → Connected Accounts to sync favorites here.",
+                ephemeral=True)
+            return
+        if not rows:
+            await interaction.followup.send(
+                "No favorites yet — or theirs are private. Favorite things on the site to fill this in!",
+                ephemeral=True)
+            return
+        lines = [f"• *{r['type']}* {r['action']} — **{r['title'][:80]}**" for r in rows[:15]]
+        await interaction.followup.send(embed=embeds.embed(
+            f"❤️ Favorites — {getattr(target, 'display_name', 'you')}",
+            "\n".join(lines), embeds.INFO), ephemeral=True)
+
     @inv.command(name="item", description="Inspect an item.")
     @app_commands.describe(item="Item ID (see inventory view)")
     async def item(self, interaction: discord.Interaction, item: str):

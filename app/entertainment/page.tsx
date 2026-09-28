@@ -126,6 +126,22 @@ export default function EntertainmentPage() {
             </div>
           </div>
 
+          {/* Game Center entry — the unified hub (progress, leaderboards, achievements) */}
+          <div style={{ marginBottom: 20 }}>
+            <Link href="/games" className="power-card p-6 rounded-2xl hover:border-[var(--gold-bright)] transition-all group"
+              style={{ display: 'block', textDecoration: 'none', background: 'linear-gradient(135deg, rgba(123,47,247,0.18), rgba(255,214,10,0.08))' }}>
+              <p className="text-[8px] px-3 py-1 rounded-lg border inline-block" style={{ fontFamily: 'var(--font-arcade)', color: 'var(--gold-bright)', background: '#ffd60a15', borderColor: '#ffd60a40' }}>
+                NEW HUB
+              </p>
+              <h3 className="text-xs text-[var(--cream)] uppercase mt-2 group-hover:text-[var(--gold-bright)] transition-colors" style={{ fontFamily: 'var(--font-arcade)' }}>
+                🎮 Muragoods Game Center
+              </h3>
+              <p className="text-sm text-[var(--pewter)] leading-relaxed">
+                Featured games, continue playing, leaderboards, achievements and your cross-platform game profile — progress saves to your account.
+              </p>
+            </Link>
+          </div>
+
           {/* Feature Grid */}
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {features.map((feature) => (

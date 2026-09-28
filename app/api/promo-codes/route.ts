@@ -61,8 +61,17 @@ export async function GET(req: Request) {
         return NextResponse.json({ success: false, error: 'This promo code has expired' }, { status: 400 });
       }
 
-      // Check if already used by this user
+      // Game-reward codes are bound to their winner at mint time
+      // (description `game:<email>`) — anyone else gets a refusal, never a hint.
       const userEmail = searchParams.get('email');
+      const owner = typeof promoCode.description === 'string' && promoCode.description.startsWith('game:')
+        ? promoCode.description.slice(5).toLowerCase()
+        : null;
+      if (owner && userEmail?.toLowerCase() !== owner) {
+        return NextResponse.json({ success: false, error: 'Invalid promo code' }, { status: 404 });
+      }
+
+      // Check if already used by this user
       if (userEmail && promoCode.usedBy?.includes(userEmail)) {
         return NextResponse.json({ success: false, error: 'You have already used this code' }, { status: 400 });
       }

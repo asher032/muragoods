@@ -1,6 +1,7 @@
 import { NextResponse, after } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import Order from '@/app/lib/models/Order';
+import PromoCode from '@/app/lib/models/PromoCode';
 
 export async function POST(req: Request) {
   try {
@@ -24,6 +25,37 @@ export async function POST(req: Request) {
     // Add initial status to history
     if (!body.statusHistory) {
       body.statusHistory = [{ status: body.status || 'Pending Payment', timestamp: new Date() }];
+    }
+
+    // Game-reward promo codes are consumed here, server-side, so a code can
+    // never be spent twice even if the checkout request is replayed. Only
+    // game-bound codes (description `game:<email>`) take this path — admin
+    // codes keep their existing validate-then-apply flow.
+    const promoCode = typeof body.promoCode === 'string' ? body.promoCode.trim().toUpperCase() : '';
+    const orderEmail = typeof body.userId === 'string' ? body.userId.trim().toLowerCase() : '';
+    if (promoCode) {
+      const promo = await PromoCode.findOne({ code: promoCode, active: true });
+      const owner = promo && typeof promo.description === 'string' && promo.description.startsWith('game:')
+        ? promo.description.slice(5).toLowerCase()
+        : null;
+      if (owner) {
+        if (!orderEmail || orderEmail !== owner) {
+          return NextResponse.json({ success: false, error: 'That promo code belongs to another account' }, { status: 403 });
+        }
+        if ((promo.maxUses > 0 && promo.usedCount >= promo.maxUses) || promo.usedBy?.includes(body.userId)) {
+          return NextResponse.json({ success: false, error: 'That promo code was already used' }, { status: 409 });
+        }
+        if (promo.validUntil && new Date(promo.validUntil) < new Date()) {
+          return NextResponse.json({ success: false, error: 'That promo code has expired' }, { status: 400 });
+        }
+        const consumed = await PromoCode.findOneAndUpdate(
+          { _id: promo._id, usedCount: promo.usedCount },
+          { $inc: { usedCount: 1 }, $addToSet: { usedBy: body.userId } },
+        );
+        if (!consumed) {
+          return NextResponse.json({ success: false, error: 'That promo code was just used — try again' }, { status: 409 });
+        }
+      }
     }
 
     const order = await Order.create(body);

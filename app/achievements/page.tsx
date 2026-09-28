@@ -64,12 +64,22 @@ export default function AchievementsPage() {
   const [user, setUser] = useState<{ name: string; email: string } | null>(null);
   const [badges, setBadges] = useState<Badge[]>([]);
   const [activeCategory, setActiveCategory] = useState('all');
+  const [serverAchievements, setServerAchievements] = useState<string[]>([]);
   const { coins, history } = useCoins();
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
     if (!userStr) { router.push('/login'); return; }
     setUser(JSON.parse(userStr));
+    // Server-tracked game achievements (verified unlocks, shared everywhere).
+    (async () => {
+      try {
+        const res = await fetch('/api/games/progress?summary=1');
+        const data = await res.json();
+        const rows = (data.games || []) as Array<{ achievements?: string[] }>;
+        setServerAchievements([...new Set(rows.flatMap(r => r.achievements || []))]);
+      } catch { /* offline */ }
+    })();
   }, [router]);
 
   useEffect(() => {
@@ -151,6 +161,25 @@ export default function AchievementsPage() {
               </div>
             </div>
           </div>
+
+          {/* Server-verified game achievements (shared with Discord + dashboard) */}
+          {serverAchievements.length > 0 && (
+            <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.07)] rounded-2xl p-5 mb-8">
+              <p className="text-[10px] text-[var(--gold)] uppercase tracking-[0.15em] mb-3 text-center" style={{ fontFamily: 'var(--font-arcade)' }}>
+                🏆 Verified Game Achievements ({serverAchievements.length})
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {serverAchievements.map(a => (
+                  <span key={a} className="text-[11px] px-3 py-1.5 rounded-lg border border-[var(--gold)] text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>
+                    🏅 {a.replace(/_/g, ' ')}
+                  </span>
+                ))}
+              </div>
+              <p className="text-center text-xs text-[var(--pewter)] mt-3">
+                Also visible in <Link href="/games" className="underline">Game Center</Link> and Murabot <code>/profile</code>.
+              </p>
+            </div>
+          )}
 
           {/* Category Filters */}
           <div className="flex flex-wrap justify-center gap-2 mb-8">

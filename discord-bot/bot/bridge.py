@@ -167,6 +167,25 @@ async def create_site_request(user: str, title: str, media_type: str, note: str)
     return None
 
 
+# ── Linked Muragoods profile bundle (unified account reads) ────────────
+async def site_profile(discord_id) -> dict | None:
+    """Shareable profile bundle for one Discord id (secret-authed).
+
+    Used when the bot host cannot read the site's database directly
+    (separate clusters). The caller enforces viewer privacy from the
+    bundle's privacy object. Cached 60s — profile commands stay snappy.
+    """
+    try:
+        did = str(int(discord_id))
+    except (TypeError, ValueError):
+        return None
+    data = await _get("/api/discord",
+                      {"action": "profile", "discordId": did}, ttl=60)
+    if isinstance(data, dict) and data.get("success"):
+        return data
+    return None
+
+
 # ── Recent comments for a title ──────────────────────────────────────────
 async def recent_comments(media_type: str, media_id: int, limit: int = 5) -> list[dict[str, Any]]:
     data = await _get("/api/discord", {

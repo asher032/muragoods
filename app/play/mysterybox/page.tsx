@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useCoins } from '@/app/hooks/useCoins';
+import { useGameSession } from '@/app/hooks/useGameSession';
+import { DiscordNudge } from '@/app/components/DiscordNudge';
 import { Icon } from '@/app/components/Icon';
 import { Coins, Flame, Gift } from 'lucide-react';
 const BOX_COST = 10;
@@ -37,20 +39,8 @@ const prizes: Prize[] = [
   { id: 'jackpot_50', label: 'JACKPOT! +50', description: 'MEGA JACKPOT! 50 bonus coins added to your balance!', type: 'jackpot', value: 50, icon: <Icon name="star" size={20} />, rarity: 'legendary', color: 'var(--gold-bright)' },
 ];
 
-// Weighted random selection
-// Common: 45%, Rare (coupons+coins_25): 53%, Legendary: ~2%
-// Coupons appear ~40% of the time total!
-function rollPrize(): Prize {
-  const weights = [14, 12, 10, 9, 12, 10, 8, 10, 8, 2, 5]; // total ~100
-  const rand = Math.random() * 100;
-  let cumulative = 0;
-  for (let i = 0; i < prizes.length; i++) {
-    cumulative += weights[i];
-    if (rand < cumulative) return prizes[i];
-  }
-  return prizes[0];
-}
-
+// Legendary tier: ultra-rare drops (tier is derived server-side from the
+// prize size now — the odds live in the reward service, not here).
 // Legendary tier: ultra-rare drops that require extreme luck
 const LEGENDARY_TIERS = [
   { id: 'mythic', label: 'MYTHIC DROP', description: '1 in 500 chance. The rarest thing in MuraGoods.', chance: '1/500', icon: <Icon name="trophy" size={20} />, color: '#ff6b35' },
@@ -96,7 +86,34 @@ export default function MysteryBoxPage() {
   const [showTierReveal, setShowTierReveal] = useState<string | null>(null);
   const [maxStreak, setMaxStreak] = useState(0);
   const [currentStreak, setCurrentStreak] = useState(0);
-  const { coins, addCoins, removeCoins } = useCoins();
+  const [notice, setNotice] = useState('');
+  const [wonCode, setWonCode] = useState<string | null>(null);
+  const { coins } = useCoins();
+  const { award } = useGameSession('mysterybox');
+
+  // Map a server-rolled result back onto a display prize. The server owns
+  // the odds; this only picks the matching card art and tier fanfare.
+  const prizeForResult = (resultCoins: number, discountPct: number, discountCode?: string): { prize: Prize; tier: string | null } => {
+    if (discountPct > 0) {
+      const match = prizes.find(p => p.type === 'discount' && p.value === discountPct)
+        || { ...prizes[4], label: `${discountPct}% OFF` };
+      return {
+        prize: {
+          ...match, label: `${discountPct}% OFF`,
+          description: discountCode
+            ? `Use code ${discountCode} at checkout for ${discountPct}% off! (single use, 7 days)`
+            : match.description,
+        },
+        tier: null,
+      };
+    }
+    const match = prizes.find(p => (p.type === 'coins' || p.type === 'jackpot') && p.value === resultCoins);
+    if (match) {
+      const tier = resultCoins >= 100 ? 'mythic' : resultCoins >= 50 ? 'legendary' : resultCoins >= 25 ? 'epic' : null;
+      return { prize: match, tier };
+    }
+    return { prize: { ...prizes[0], label: `+${resultCoins} Coins` }, tier: null };
+  };
 
   useEffect(() => {
     const user = localStorage.getItem('user');
@@ -144,101 +161,71 @@ export default function MysteryBoxPage() {
 
   const handleOpen = () => {
     if (isOpening || coins < BOX_COST) return;
+    setNotice('');
 
     setIsOpening(true);
     setBoxShaking(true);
     setShowPrize(false);
     setRevealPrize(null);
     setBoxOpened(false);
+    setWonCode(null);
 
-    // Deduct coins
-    removeCoins(BOX_COST, 'Mystery Box opened');
-    setTotalSpent(prev => {
-      const next = prev + BOX_COST;
-      localStorage.setItem('muragoods_mystery_spent', String(next));
-      return next;
-    });
+    // The server charges the 10-coin entry and rolls the prize. The client
+    // only animates, then reveals the authoritative result.
+    const awardPromise = award({ gameId: 'mysterybox' });
 
     // Shake animation (1.5s)
-    setTimeout(() => {
+    setTimeout(async () => {
+      const res = await awardPromise;
       setBoxShaking(false);
-      setBoxOpened(true);
-
-      // Roll prize
-      const prize = rollPrize();
-      setRevealPrize(prize);
-
-      // Check for legendary tier drop (separate roll — much harder)
-      const tierRoll = Math.random();
-      let tierDrop: string | null = null;
-      if (tierRoll < 0.002) { // 1/500 — Mythic
-        tierDrop = 'mythic';
-        setMythicCount(prev => {
-          const next = prev + 1;
-          localStorage.setItem('muragoods_mystery_mythic', String(next));
-          return next;
-        });
-        addCoins(100, 'MYTHIC DROP BONUS!');
-      } else if (tierRoll < 0.015) { // 1/77 — Legendary
-        tierDrop = 'legendary';
-        setLegendaryCount(prev => {
-          const next = prev + 1;
-          localStorage.setItem('muragoods_mystery_legendary', String(next));
-          return next;
-        });
-        addCoins(50, 'LEGENDARY DROP BONUS!');
-      } else if (tierRoll < 0.055) { // 1/25 — Epic
-        tierDrop = 'epic';
-        addCoins(25, 'EPIC DROP BONUS!');
+      if (!res.success) {
+        setIsOpening(false);
+        setNotice(res.error || 'Box failed to open.');
+        return;
       }
+      setBoxOpened(true);
+      setTotalSpent(prev => prev + BOX_COST);
+      // Discount wins arrive as a real single-use server promo code.
+      const { prize, tier: tierDrop } = prizeForResult(res.coins ?? 0, res.discountPct ?? 0, res.discountCode);
+      let shown: Prize = prize;
+      let shownTier: string | null = tierDrop;
+      if (res.discountCode) {
+        setWonCode(res.discountCode);
+        const pct = res.discountPct ?? 0;
+        const base = prizes.find(p => p.type === 'discount' && p.value === pct) || prizes[4];
+        shown = {
+          ...base, label: `${pct}% OFF`,
+          description: `Use code ${res.discountCode} at checkout for ${pct}% off! (single use, 7 days)`,
+        };
+        shownTier = null;
+        try {
+          const savedCodes = JSON.parse(localStorage.getItem('muragoods_discount_codes') || '[]');
+          savedCodes.push({ code: res.discountCode, label: shown.label, wonAt: new Date().toISOString(), server: true });
+          localStorage.setItem('muragoods_discount_codes', JSON.stringify(savedCodes));
+        } catch { /* display cache only */ }
+      }
+      setRevealPrize(shown);
 
-      if (tierDrop) {
-        setTimeout(() => setShowTierReveal(tierDrop), 800);
+      if (shownTier === 'mythic') setMythicCount(prev => prev + 1);
+      if (shownTier === 'legendary') setLegendaryCount(prev => prev + 1);
+      if (shownTier) {
+        setTimeout(() => setShowTierReveal(shownTier), 800);
         setCurrentStreak(prev => {
           const next = prev + 1;
-          setMaxStreak(m => {
-            const newMax = Math.max(m, next);
-            localStorage.setItem('muragoods_mystery_maxstreak', String(newMax));
-            return newMax;
-          });
+          setMaxStreak(m => Math.max(m, next));
           return next;
         });
       } else {
         setCurrentStreak(0);
       }
 
-      // Award prize
-      if (prize.type === 'coins' || prize.type === 'jackpot') {
-        addCoins(prize.value, `Mystery Box: ${prize.label}`);
-      }
-      // Save discount code to localStorage for checkout redemption
-      if (prize.type === 'discount') {
-        const codeMap: Record<string, string> = {
-          discount_10: 'MYSTERY10',
-          discount_15: 'MYSTERY15',
-          discount_20: 'MYSTERY20',
-          free_musubi: 'FREEMUSUBI',
-          free_shipping: 'FREESHIP',
-        };
-        const code = codeMap[prize.id];
-        if (code) {
-          const savedCodes = JSON.parse(localStorage.getItem('muragoods_discount_codes') || '[]');
-          savedCodes.push({ code, label: prize.label, wonAt: new Date().toISOString() });
-          localStorage.setItem('muragoods_discount_codes', JSON.stringify(savedCodes));
-        }
-      }
-
       // Save to history — plain data only (id/label/rarity), icons are
       // looked up from the prize table at render time.
-      const entry: HistoryEntry = { id: prize.id, label: prize.label, rarity: prize.rarity, date: new Date().toISOString(), tier: tierDrop };
+      const entry: HistoryEntry = { id: shown.id, label: shown.label, rarity: shown.rarity, date: new Date().toISOString(), tier: shownTier };
       const newHistory = [entry, ...history].slice(0, 50);
       setHistory(newHistory);
-      localStorage.setItem('muragoods_mystery_history', JSON.stringify(newHistory));
-      setTotalOpened(prev => {
-        const next = prev + 1;
-        localStorage.setItem('muragoods_mystery_total', String(next));
-        return next;
-      });
+      try { localStorage.setItem('muragoods_mystery_history', JSON.stringify(newHistory)); } catch { /* cache */ }
+      setTotalOpened(prev => prev + 1);
 
       // Reveal prize (0.5s after opening)
       setTimeout(() => {
@@ -342,6 +329,8 @@ export default function MysteryBoxPage() {
 
           {/* Open Button */}
           <div className="text-center mb-6">
+            <DiscordNudge compact />
+            {notice && <p className="text-sm text-red-300 mb-3">{notice}</p>}
             {!showPrize ? (
               <button
                 onClick={handleOpen}
@@ -391,9 +380,9 @@ export default function MysteryBoxPage() {
                 <p className="text-sm text-[var(--pewter)]">{revealPrize.description}</p>
                 {revealPrize.type === 'discount' && (
                   <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.1)] p-3 rounded-xl">
-                    <p className="text-[9px] text-[var(--gold)] uppercase mb-1" style={{ fontFamily: 'var(--font-arcade)' }}>Your Code</p>
+                    <p className="text-[9px] text-[var(--gold)] uppercase mb-1" style={{ fontFamily: 'var(--font-arcade)' }}>Your Code (single use)</p>
                     <p className="text-lg text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>
-                      {revealPrize.id === 'discount_10' ? 'MYSTERY10' : revealPrize.id === 'discount_15' ? 'MYSTERY15' : revealPrize.id === 'discount_20' ? 'MYSTERY20' : 'FREEMUSUBI'}
+                      {wonCode || '…'}
                     </p>
                   </div>
                 )}

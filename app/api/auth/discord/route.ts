@@ -57,9 +57,14 @@ export async function GET(req: NextRequest) {
   });
 
   const next = new URL('/', req.nextUrl.origin).toString();
+  // Account-link mode: a signed-in shop user connects their Discord identity
+  // to their Muragoods account (?mode=link&next=/games). The callback links
+  // instead of creating a dashboard session.
+  const mode = req.nextUrl.searchParams.get('mode') === 'link' ? 'link' : 'login';
   const withState = {
     state,
-    next: install ? '/dashboard' : (req.nextUrl.searchParams.get('next') || next),
+    mode,
+    next: install ? '/dashboard' : (req.nextUrl.searchParams.get('next') || (mode === 'link' ? '/account/connected' : next)),
     guild: guildParam && /^\d{5,25}$/.test(guildParam) ? guildParam : null,
   };
 

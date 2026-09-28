@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
-import { useCoins } from '@/app/hooks/useCoins';
+import { useGameSession } from '@/app/hooks/useGameSession';
+import { DiscordNudge } from '@/app/components/DiscordNudge';
 import { Icon } from '@/app/components/Icon';
 import { Calendar, Check, PartyPopper, Star } from 'lucide-react';
 const dayRewards = [
@@ -23,65 +24,48 @@ export default function CheckInPage() {
   const [currentStreak, setCurrentStreak] = useState(0);
   const [checkedInToday, setCheckedInToday] = useState(false);
   const [justCheckedIn, setJustCheckedIn] = useState(false);
-  const [totalEarned, setTotalEarned] = useState(0);
-  const { addCoins } = useCoins();
+  const [lastReward, setLastReward] = useState(0);
+  const [notice, setNotice] = useState('');
+  const [checking, setChecking] = useState(false);
+  const { award } = useGameSession('checkin');
 
+  // Streak and reward come from the server — the calendar below renders the
+  // server streak, so tampering with the clock or storage changes nothing.
   useEffect(() => {
     const user = localStorage.getItem('user');
     if (!user) { router.push('/login'); return; }
     setIsLoggedIn(true);
-
-    const today = new Date().toDateString();
-    const lastCheckIn = localStorage.getItem('muragoods_checkin_date');
-    const savedStreak = parseInt(localStorage.getItem('muragoods_checkin_streak') || '0', 10);
-    const savedTotal = parseInt(localStorage.getItem('muragoods_checkin_total') || '0', 10);
-
-    setTotalEarned(savedTotal);
-
-    if (lastCheckIn === today) {
-      setCheckedInToday(true);
-      setCurrentStreak(savedStreak);
-    } else {
-      // Check if yesterday was the last check-in for streak continuity
-      const yesterday = new Date(Date.now() - 86400000).toDateString();
-      if (lastCheckIn === yesterday) {
-        setCurrentStreak(savedStreak);
-      } else if (lastCheckIn && lastCheckIn !== today) {
-        // Streak broken
-        setCurrentStreak(0);
-        localStorage.setItem('muragoods_checkin_streak', '0');
-      }
-    }
+    (async () => {
+      try {
+        const res = await fetch('/api/games/progress?gameId=checkin');
+        const data = await res.json();
+        const p = data.progress;
+        if (p) {
+          setCurrentStreak(p.streak || 0);
+          const today = new Date().toISOString().slice(0, 10);
+          if (p.lastPlayedDay === today) setCheckedInToday(true);
+        }
+      } catch { /* offline: allow the attempt, server decides */ }
+    })();
   }, [router]);
 
-  const handleCheckIn = () => {
-    if (checkedInToday) return;
-
-    const today = new Date().toDateString();
-    const yesterday = new Date(Date.now() - 86400000).toDateString();
-    const lastCheckIn = localStorage.getItem('muragoods_checkin_date');
-
-    let newStreak = currentStreak;
-    if (lastCheckIn === yesterday || !lastCheckIn) {
-      newStreak = currentStreak + 1;
-    } else if (lastCheckIn !== today) {
-      newStreak = 1;
+  const handleCheckIn = async () => {
+    if (checkedInToday || checking) return;
+    setChecking(true);
+    setNotice('');
+    const res = await award({ gameId: 'checkin' });
+    setChecking(false);
+    if (!res.success) {
+      setNotice(res.error || 'Check-in failed.');
+      if ((res.error || '').includes('Daily play limit') || (res.error || '').includes('cooldown')) {
+        setCheckedInToday(true);
+      }
+      return;
     }
-
-    // Cap at 7 days for the cycle
-    const dayInCycle = ((newStreak - 1) % 7);
-    const reward = dayRewards[dayInCycle];
-
-    addCoins(reward.coins, `Daily Check-In Day ${newStreak}`);
-    setTotalEarned(prev => prev + reward.coins);
-    setCurrentStreak(newStreak);
+    setCurrentStreak(res.streak || currentStreak + 1);
+    setLastReward(res.coins || 0);
     setCheckedInToday(true);
     setJustCheckedIn(true);
-
-    localStorage.setItem('muragoods_checkin_date', today);
-    localStorage.setItem('muragoods_checkin_streak', String(newStreak));
-    localStorage.setItem('muragoods_checkin_total', String(totalEarned + reward.coins));
-
     setTimeout(() => setJustCheckedIn(false), 3000);
   };
 
@@ -99,7 +83,7 @@ export default function CheckInPage() {
             </h1>
             <p className="mt-3 text-base text-[var(--gold)]">Log in daily to earn bonus coins!</p>
             <p className="mt-1 text-sm text-[var(--pewter)]">
-              Streak: {currentStreak}/7 days · Total earned: {totalEarned} coins
+              Streak: {currentStreak} day{currentStreak === 1 ? '' : 's'} · rewards paid server-side
             </p>
           </div>
 
@@ -130,13 +114,15 @@ export default function CheckInPage() {
 
           {/* Check-In Button */}
           <div className="text-center mb-6">
+            <DiscordNudge compact />
+            {notice && <p className="text-sm text-red-300 mb-3">{notice}</p>}
             <button
               onClick={handleCheckIn}
-              disabled={checkedInToday}
+              disabled={checkedInToday || checking}
               className={`deco-btn deco-btn-lg rounded-2xl ${checkedInToday ? 'opacity-50 cursor-not-allowed' : 'deco-btn-gold pulse-glow'}`}
               style={{ fontFamily: 'var(--font-arcade)', minWidth: '200px' }}
             >
-              {checkedInToday ? 'CHECKED IN TODAY!' : 'CHECK IN NOW!'}
+              {checkedInToday ? 'CHECKED IN TODAY!' : checking ? 'CHECKING IN…' : 'CHECK IN NOW!'}
             </button>
           </div>
 
@@ -146,7 +132,7 @@ export default function CheckInPage() {
               <div className="deco-modal-body text-center space-y-3">
                 <div className="text-4xl"><PartyPopper color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
                 <p className="text-sm text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>
-                  +{dayRewards[((currentStreak - 1) % 7)].coins} COINS!
+                  +{lastReward} COINS!
                 </p>
                 <p className="text-xs text-[var(--pewter)]">Keep your streak going!</p>
               </div>
