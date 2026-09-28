@@ -246,13 +246,24 @@ async def run() -> int:
         await bot.load_extension(cog)
 
     total = 0
+
+    async def walk(label: str, command) -> None:
+        nonlocal total
+        if isinstance(command, app_commands.Group):
+            # Subgroups nest (e.g. /ranch pets view): recurse, counting only
+            # real invokable leaves. A bare group is never a command.
+            for sub in command.commands:
+                await walk(f"{label} {sub.name}", sub)
+            return
+        total += 1
+        await test_one(label, cog, command)
+
     for cog_name, cog in bot.cogs.items():
         commands = cog.__cog_app_commands__
         for command in commands:
             if isinstance(command, app_commands.Group):
                 for sub in command.commands:
-                    total += 1
-                    await test_one(f"/{command.name} {sub.name}", cog, sub)
+                    await walk(f"/{command.name} {sub.name}", sub)
             else:
                 total += 1
                 await test_one(f"/{command.name}", cog, command)

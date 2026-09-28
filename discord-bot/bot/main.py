@@ -148,6 +148,11 @@ class MuraBot(commands.Bot):
             "cogs.music",
             "cogs.moderation",
             "cogs.modgroup",
+            "cogs.economy",
+            "cogs.games",
+            "cogs.inventory",
+            "cogs.profile",
+            "cogs.ranch",
             "cogs.help",
             "cogs.debug",
             "cogs.notes",
@@ -2208,6 +2213,31 @@ async def _health_server() -> None:
     app.router.add_post("/mod/notes-clear/{guild_id:\\d+}", mod_notes)
     app.router.add_post("/mod/lockdown/{guild_id:\\d+}", mod_lockdown)
     app.router.add_post("/mod/purge/{guild_id:\\d+}", mod_purge)
+
+    async def economy_overview(request: web.Request) -> web.Response:
+        """Dashboard economy overview — same collections the slash commands
+        use, so the dashboard can never show disconnected numbers."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            return web.json_response({"ok": False, "error": "Bot not in that guild"}, status=404)
+        import economy as eco_mod
+        import database as db
+        try:
+            data = await eco_mod.economy_overview(db, guild_id)
+            cfg = await eco_mod.get_economy_config(db, guild_id)
+            return web.json_response({"ok": True, "overview": data, "config": {
+                "currencyName": cfg.get("currencyName"), "currencySymbol": cfg.get("currencySymbol"),
+                "startBalance": cfg.get("startBalance"), "dailyAmount": cfg.get("dailyAmount"),
+                "weeklyAmount": cfg.get("weeklyAmount"), "monthlyAmount": cfg.get("monthlyAmount"),
+                "workMin": cfg.get("workMin"), "workMax": cfg.get("workMax"),
+                "gambleMax": cfg.get("gambleMax"),
+            }})
+        except Exception as exc:
+            return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
+    app.router.add_get("/economy/overview/{guild_id:\\d+}", economy_overview)
     app.router.add_post("/self-test/gateway-drop", gateway_drop)
     port = int(os.environ.get("PORT") or 8080) or 8080  # PORT=0 → default
     runner = web.AppRunner(app)

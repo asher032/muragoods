@@ -1,0 +1,174 @@
+"""`/games` group — wager minigames on the shared wallet engine.
+
+Every game: bet validated server-side (min/max/balance), outcome from pure
+engine functions, guarded atomic debit/credit. No negative balances, no
+client-side amounts — the payout math lives in bot/economy.py.
+"""
+
+import logging
+
+import discord
+from discord import app_commands
+from discord.ext import commands
+
+import database
+import economy as eco
+import embeds
+import utils
+
+log = logging.getLogger("bot.games")
+
+
+class GamesGroup(commands.Cog):
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+
+    games = app_commands.Group(name="minigames", description="Wager minigames")
+
+    async def _wager(self, interaction: discord.Interaction, bet: int):
+        """Validate + lock the stake. Returns (cfg, wallet, stake) or sends
+        the reason and returns None."""
+        cfg = await eco.get_economy_config(database._db, interaction.guild.id)
+        wallet = await eco.get_wallet(database._db, interaction.guild.id, interaction.user.id)
+        ok, reason = eco.validate_bet(int(wallet.get("balance", 0)), int(bet or 0), cfg)
+        if not ok:
+            await interaction.followup.send(reason, ephemeral=True)
+            return None
+        stake = int(bet)
+        locked, _ = await eco.apply_delta(
+            database._db, interaction.guild.id, interaction.user.id,
+            "balance", -stake, "game_stake", "discord")
+        if not locked:
+            await interaction.followup.send("Insufficient funds.", ephemeral=True)
+            return None
+        return cfg, wallet, stake
+
+    async def _settle(self, interaction: discord.Interaction, stake: int, delta: int, label: str):
+        """Credit winnings (delta includes stake-back where applicable)."""
+        if delta > 0:
+            await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
+                                  "balance", delta, "game_win", "discord")
+            await interaction.followup.send(embed=embeds.ok("🎉 You won!", f"{label}\n+**{delta}** coins."))
+        elif delta == 0:
+            await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
+                                  "balance", stake, "game_push", "discord")
+            await interaction.followup.send(f"{label}\nPush — stake returned.")
+        else:
+            await interaction.followup.send(embed=embeds.embed(
+                "😞 You lost", f"{label}\n**{-delta}** coins.", embeds.WARN))
+
+    @games.command(name="slots", description="Spin the slots.")
+    @app_commands.describe(bet="Coins to wager")
+    async def slots(self, interaction: discord.Interaction, bet: int):
+        await interaction.response.defer()
+        pre = await self._wager(interaction, bet)
+        if not pre:
+            return
+        _, _, stake = pre
+        delta, label = eco.play_slots(stake)
+        await self._settle(interaction, stake, delta, f"🎰 `{label}`")
+
+    @games.command(name="cointoss", description="Heads or tails.")
+    @app_commands.describe(bet="Coins to wager", guess="heads or tails")
+    @app_commands.choices(guess=[
+        app_commands.Choice(name="heads", value="heads"),
+        app_commands.Choice(name="tails", value="tails"),
+    ])
+    async def cointoss(self, interaction: discord.Interaction, bet: int, guess: str):
+        await interaction.response.defer()
+        pre = await self._wager(interaction, bet)
+        if not pre:
+            return
+        _, _, stake = pre
+        try:
+            delta, label = eco.play_cointoss(stake, guess)
+        except ValueError as exc:
+            await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
+                                  "balance", stake, "game_refund", "discord")
+            await interaction.followup.send(str(exc), ephemeral=True)
+            return
+        await self._settle(interaction, stake, delta, f"🪙 Landed **{label}**")
+
+    @games.command(name="highlow", description="Will the roll be high or low?")
+    @app_commands.describe(bet="Coins to wager", guess="high or low")
+    @app_commands.choices(guess=[
+        app_commands.Choice(name="high", value="high"),
+        app_commands.Choice(name="low", value="low"),
+    ])
+    async def highlow(self, interaction: discord.Interaction, bet: int, guess: str):
+        await interaction.response.defer()
+        pre = await self._wager(interaction, bet)
+        if not pre:
+            return
+        _, _, stake = pre
+        try:
+            delta, label = eco.play_highlow(stake, guess)
+        except ValueError as exc:
+            await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
+                                  "balance", stake, "game_refund", "discord")
+            await interaction.followup.send(str(exc), ephemeral=True)
+            return
+        await self._settle(interaction, stake, delta, f"🎲 {label}")
+
+    @games.command(name="roulette", description="Red/black/even/odd or a number.")
+    @app_commands.describe(bet="Coins to wager", pick="red, black, even, odd or 0-36")
+    async def roulette(self, interaction: discord.Interaction, bet: int, pick: str):
+        await interaction.response.defer()
+        pre = await self._wager(interaction, bet)
+        if not pre:
+            return
+        _, _, stake = pre
+        try:
+            delta, label = eco.play_roulette(stake, pick)
+        except ValueError as exc:
+            await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
+                                  "balance", stake, "game_refund", "discord")
+            await interaction.followup.send(str(exc), ephemeral=True)
+            return
+        await self._settle(interaction, stake, delta, f"🎡 {label}")
+
+    @games.command(name="blackjack", description="Beat the dealer (simplified).")
+    @app_commands.describe(bet="Coins to wager")
+    async def blackjack(self, interaction: discord.Interaction, bet: int):
+        await interaction.response.defer()
+        pre = await self._wager(interaction, bet)
+        if not pre:
+            return
+        _, _, stake = pre
+        player, dealer, outcome = eco.play_blackjack_hand()
+        label = f"You **{player}** — dealer **{dealer}**"
+        if outcome == "win":
+            await self._settle(interaction, stake, stake, f"🃏 {label}")
+        elif outcome == "push":
+            await self._settle(interaction, stake, 0, f"🃏 {label}")
+        elif outcome == "bust":
+            await self._settle(interaction, stake, -stake, f"🃏 Bust! {label}")
+        else:
+            await self._settle(interaction, stake, -stake, f"🃏 Dealer wins. {label}")
+
+    @games.command(name="snakeeyes", description="Roll for snake eyes (10x).")
+    @app_commands.describe(bet="Coins to wager")
+    async def snakeeyes(self, interaction: discord.Interaction, bet: int):
+        await interaction.response.defer()
+        pre = await self._wager(interaction, bet)
+        if not pre:
+            return
+        _, _, stake = pre
+        delta, label = eco.play_snakeeyes(stake)
+        await self._settle(interaction, stake, delta, f"🎲 {label}")
+
+    @games.command(name="scratch", description="Scratch a free ticket.")
+    async def scratch(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        reward, label, rows = eco.play_scratch()
+        if reward:
+            await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
+                                  "balance", reward, "game_win", "discord")
+            await interaction.followup.send(embed=embeds.ok(
+                "🎫 Scratch WIN!", "\n".join(f"`{row}`" for row in rows) + f"\n+**{reward}** coins."))
+        else:
+            await interaction.followup.send("🎫\n" + "\n".join(f"`{row}`" for row in rows) + "\nNo match.")
+
+
+async def setup(bot: commands.Bot):
+    await bot.add_cog(GamesGroup(bot))

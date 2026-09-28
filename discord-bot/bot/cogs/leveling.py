@@ -108,8 +108,14 @@ class LevelingCog(commands.Cog):
     @app_commands.command(name="balance", description="Your coin balance.")
     async def balance(self, interaction: discord.Interaction):
         wallet = await self._wallet(interaction.guild.id, interaction.user.id)
+        bank = int(wallet.get("bank", 0))
+        gems = int(wallet.get("gems", 0))
+        balance = int(wallet.get("balance", 0))
         await interaction.response.send_message(embed=embeds.embed(
-            "💰 Balance", f"{interaction.user.mention} has **{wallet['balance']}** coins.",
+            "💰 Balance",
+            f"{interaction.user.mention} has **{balance}** coins"
+            f" (+**{bank}** bank = **{balance + bank}** net worth)"
+            f" and 💎 **{gems}** gems.",
             embeds.GOLD))
 
     @app_commands.command(name="daily", description="Claim your daily coins.")
@@ -169,10 +175,10 @@ class LevelingCog(commands.Cog):
 
     @app_commands.command(name="shop", description="Browse the coin shop.")
     async def shop(self, interaction: discord.Interaction):
-        e = embeds.embed("🛒 Server Shop", "Spend your coins!", embeds.GOLD)
-        e.add_field(name="🎟️ Mystery Box key", value="500 coins — /buy mystery", inline=False)
-        e.add_field(name="✨ Custom role color", value="1,500 coins — /buy color", inline=False)
-        e.add_field(name="🎰 Bonus daily roll", value="300 coins — /buy dailyroll", inline=False)
+        e = embeds.embed("🛒 Server Shop", "Buy with `/inventory shop buy:<id>` — `/inventory shop` lists all items.", embeds.GOLD)
+        e.add_field(name="🎟️ Mystery Box", value="500 coins — `/inventory shop buy:mystery_box`", inline=False)
+        e.add_field(name="🎣 Fishing Rod", value="200 coins — `/inventory shop buy:fishing_rod`", inline=False)
+        e.add_field(name="🍀 Lucky Charm", value="500 coins — `/inventory shop buy:lucky_charm`", inline=False)
         e.set_footer(text="Purchases are tracked per server • MuraStream")
         await interaction.response.send_message(embed=e)
 
