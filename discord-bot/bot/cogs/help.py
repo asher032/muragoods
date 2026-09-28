@@ -468,7 +468,7 @@ class HelpView(discord.ui.View):
                                      style=discord.ButtonStyle.secondary,
                                      custom_id="help:act:home")
         home_btn.callback = self._on_home  # type: ignore[method-assign]
-        close_btn = discord.ui.Button(emoji="✕", label="Close",
+        close_btn = discord.ui.Button(emoji="❌", label="Close",
                                       style=discord.ButtonStyle.danger,
                                       custom_id="help:act:close")
         close_btn.callback = self._on_close  # type: ignore[method-assign]
