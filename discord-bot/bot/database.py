@@ -257,6 +257,14 @@ async def _ensure_indexes() -> list[str]:
         ("user_notes.guildId_noteId", "unique"),
         ("scheduled_actions.status_runAt", ""),
         ("lockdown_state.guildId_scope", ""),
+        ("economy.guildId_balance", ""),
+        ("economy.guildId_net", ""),
+        ("economy_tx.guildId_createdAt", ""),
+        ("economy_tx.txId", "unique"),
+        ("economy_inv.guildId_userId", "unique"),
+        ("economy_pets.guildId_userId", ""),
+        ("economy_trades.status_expires", ""),
+        ("economy_lottery.guildId_drawAt", ""),
     ]
     keys: dict[str, list] = {
         "guild_config.guildId": [("guildId", ASCENDING)],
@@ -286,6 +294,14 @@ async def _ensure_indexes() -> list[str]:
         "user_notes.guildId_noteId": [("guildId", DESCENDING), ("noteId", DESCENDING)],
         "scheduled_actions.status_runAt": [("status", ASCENDING), ("runAt", ASCENDING)],
         "lockdown_state.guildId_scope": [("guildId", DESCENDING), ("scope", ASCENDING)],
+        "economy.guildId_balance": [("guildId", DESCENDING), ("balance", DESCENDING)],
+        "economy.guildId_net": [("guildId", DESCENDING)],
+        "economy_tx.guildId_createdAt": [("guildId", DESCENDING), ("createdAt", DESCENDING)],
+        "economy_tx.txId": [("txId", ASCENDING)],
+        "economy_inv.guildId_userId": [("guildId", DESCENDING), ("userId", DESCENDING)],
+        "economy_pets.guildId_userId": [("guildId", DESCENDING), ("userId", DESCENDING)],
+        "economy_trades.status_expires": [("status", ASCENDING), ("expiresAt", ASCENDING)],
+        "economy_lottery.guildId_drawAt": [("guildId", DESCENDING), ("drawAt", ASCENDING)],
     }
     failures: list[str] = []
     for label, kind in specs:

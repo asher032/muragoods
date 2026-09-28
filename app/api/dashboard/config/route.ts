@@ -316,6 +316,29 @@ export async function PATCH(req: NextRequest) {
       requestUpdates: Boolean(n.requestUpdates),
     };
   }
+  if (safe.economy && typeof safe.economy === 'object') {
+    const e = safe.economy as Record<string, unknown>;
+    const num = (v: unknown, lo: number, hi: number, fb: number) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? Math.max(lo, Math.min(hi, Math.floor(n))) : fb;
+    };
+    update.economy = {
+      currencyName: String(e.currencyName || 'coins').slice(0, 20),
+      currencySymbol: String(e.currencySymbol || '🪙').slice(0, 8),
+      startBalance: num(e.startBalance, 0, 100000, 100),
+      dailyAmount: num(e.dailyAmount, 0, 100000, 250),
+      weeklyAmount: num(e.weeklyAmount, 0, 500000, 1500),
+      monthlyAmount: num(e.monthlyAmount, 0, 2000000, 6000),
+      workMin: num(e.workMin, 0, 100000, 50),
+      workMax: num(e.workMax, 0, 100000, 300),
+      gambleMax: num(e.gambleMax, 10, 1000000, 10000),
+      workCooldownSec: num(e.workCooldownSec, 60, 86400, 3600),
+      begCooldownSec: num(e.begCooldownSec, 30, 86400, 300),
+      lotteryTicketPrice: num(e.lotteryTicketPrice, 1, 100000, 100),
+      disabledItems: Array.isArray(e.disabledItems)
+        ? e.disabledItems.map((s) => String(s).slice(0, 40)).slice(0, 50) : [],
+    };
+  }
 
   const collection = await discordConfigCollection();
 
