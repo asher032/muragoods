@@ -445,17 +445,17 @@ class HelpView(discord.ui.View):
         items = []
         if detail:
             back_btn = discord.ui.Button(
-                label=f"◀ Return{(' to ' + detail_label) if detail_label else ''}"[:80],
+                label=f"⬅️ Return{(' to ' + detail_label) if detail_label else ''}"[:80],
                 style=discord.ButtonStyle.secondary,
                 custom_id="help:act:return")
             back_btn.callback = self._on_return  # type: ignore[method-assign]
             items.append(back_btn)
         elif show_nav and total > 1:
-            prev_btn = discord.ui.Button(emoji="◀", style=discord.ButtonStyle.secondary,
+            prev_btn = discord.ui.Button(emoji="⬅️", style=discord.ButtonStyle.secondary,
                                          custom_id="help:nav:prev",
                                          disabled=page <= 0)
             prev_btn.callback = self._on_prev  # type: ignore[method-assign]
-            next_btn = discord.ui.Button(emoji="▶", style=discord.ButtonStyle.secondary,
+            next_btn = discord.ui.Button(emoji="➡️", style=discord.ButtonStyle.secondary,
                                          custom_id="help:nav:next",
                                          disabled=page >= total - 1)
             next_btn.callback = self._on_next  # type: ignore[method-assign]
