@@ -1103,3 +1103,506 @@ async def omega_apply(db, guild_id: int, user_id: int) -> tuple[bool, str]:
     await db.economy_inv.delete_one({"guildId": gid, "userId": uid})
     await record_txn(db, gid, uid, "omega", 0, "discord")
     return True, "ok"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Murabot Economy — complete layer (original implementation).
+# Every mutation below reuses apply_delta / guarded updates / unique
+# transaction rows from above. No client-supplied amounts are trusted:
+# all rewards are computed server-side with the `rng` passed in.
+# ══════════════════════════════════════════════════════════════════════
+
+# ── Full achievement / badge / skin catalogs (original names/flavor) ──
+ACHIEVEMENTS_FULL: dict[str, dict] = {
+    "first_coin":   {"name": "First Coin", "desc": "Hold any positive net worth", "reward": 50},
+    "earner_5k":    {"name": "Earner", "desc": "Hold 5,000 net worth", "reward": 500},
+    "tycoon_25k":   {"name": "Tycoon", "desc": "Hold 25,000 net worth", "reward": 1500},
+    "grinder_25":   {"name": "Grinder", "desc": "Complete 25 rewarded activities", "reward": 750},
+    "gamer_50":     {"name": "High Roller", "desc": "Play 50 minigames", "reward": 800},
+    "collector_10": {"name": "Collector", "desc": "Own 10 distinct items", "reward": 750},
+    "angler_10":    {"name": "Angler", "desc": "Catch 10 fish", "reward": 600},
+    "farmer_10":    {"name": "Farmer", "desc": "Harvest 10 crops", "reward": 600},
+    "friend_5":     {"name": "Socialite", "desc": "Have 5 friends", "reward": 400},
+    "loyal_7":      {"name": "Loyal", "desc": "Reach a 7-day daily streak", "reward": 1000},
+    "prestiged":    {"name": "Reborn", "desc": "Prestige at least once", "reward": 2000},
+    "omega_risen":  {"name": "Omega", "desc": "Reach Omega tier", "reward": 5000},
+}
+
+BADGES_CATALOG: dict[str, dict] = {
+    "newcomer":  {"name": "Newcomer", "emoji": "🌱", "how": "Join the economy"},
+    "earner":    {"name": "Earner", "emoji": "💰", "how": "Hold 5,000 net worth"},
+    "grinder":   {"name": "Grinder", "emoji": "⚒️", "how": "25 activities"},
+    "collector": {"name": "Collector", "emoji": "📦", "how": "10 distinct items"},
+    "angler":    {"name": "Angler", "emoji": "🎣", "how": "10 fish caught"},
+    "farmer":    {"name": "Farmer", "emoji": "🌾", "how": "10 crops harvested"},
+    "gamer":     {"name": "Gamer", "emoji": "🎮", "how": "50 minigames"},
+    "loyal":     {"name": "Loyal", "emoji": "🔥", "how": "7-day daily streak"},
+    "reborn":    {"name": "Reborn", "emoji": "🔥", "how": "Prestige once"},
+    "omega":     {"name": "Omega", "emoji": "🌀", "how": "Reach Omega tier"},
+}
+
+SKINS_CATALOG: dict[str, dict] = {
+    "ember_rod":   {"name": "Ember Rod", "forItem": "fishing_rod", "rarity": "rare", "how": "Catch 10 fish"},
+    "golden_rod":  {"name": "Golden Rod", "forItem": "golden_hook", "rarity": "epic", "how": "Prestige once"},
+    "meadow_deed": {"name": "Meadow Deed", "forItem": "farm_plot_deed", "rarity": "common", "how": "Harvest 5 crops"},
+    "star_charm":  {"name": "Star Charm", "forItem": "lucky_charm", "rarity": "epic", "how": "Hold 25,000 net worth"},
+}
+
+FISH_SPOTS: dict[str, dict] = {
+    "pond":   {"name": "Sunny Pond", "bonus": 1.0, "desc": "Calm water, steady bites"},
+    "river":  {"name": "Rushing River", "bonus": 1.15, "desc": "+15% catch value"},
+    "abyss":  {"name": "Moonlit Abyss", "bonus": 1.4, "desc": "+40% value, rarer bites", "needs": "golden_hook"},
+}
+
+BAITS: dict[str, dict] = {
+    "crumb":      {"name": "Bread Crumb", "price": 10, "luck": 0.0},
+    "glow_grub":  {"name": "Glow Grub", "price": 60, "luck": 0.10},
+    "moon_minnow": {"name": "Moon Minnow", "price": 200, "luck": 0.25},
+}
+
+SHOWCASE_MAX_BASE = 3
+SHOWCASE_MAX_ABS = 9
+
+
+# ── Crime (pure outcome — fictional game, server-side rolls) ──────────
+def play_crime(bet: int, rng=None) -> tuple[int, str]:
+    """Fictional heist flavor. Returns (delta, label). Never touches DB."""
+    rng = rng or random
+    scenes = [
+        "cracked the vault puzzle", "swiped the cookie vault",
+        "snuck past the clockwork guards", "decoded the ledger",
+    ]
+    busted = [
+        "tripped the alarm sprites", "got caught by the night watch",
+        "left footprints in the flour",
+    ]
+    if rng.random() < 0.42:
+        gain = int(bet * rng.uniform(0.5, 1.5)) + rng.randint(20, 120)
+        return gain, f"🥷 You {rng.choice(scenes)}: +{gain}"
+    loss = min(bet, rng.randint(30, 150))
+    return -loss, f"🚨 You {rng.choice(busted)}: fine {loss}"
+
+
+# ── Daily streaks (calendar-day aware, exactly-once claim) ────────────
+async def claim_daily(db, guild_id: int, user_id: int, base: int, cooldown_sec: int = 86400) -> tuple[bool, int, int, int]:
+    """Claim daily. Returns (granted, final_coins, streak, remaining_sec)."""
+    gid, uid = _gid(guild_id), _uid(user_id)
+    granted, remaining = await claim_cooldown(db, gid, uid, "lastDaily", cooldown_sec)
+    if not granted:
+        wallet = await get_wallet(db, gid, uid)
+        return False, 0, int(wallet.get("streakDaily", 0)), remaining
+    # Streak: consecutive calendar days extend, gaps reset to 1 —
+    # unless vacation protection is active, which freezes the streak.
+    try:
+        wallet = await get_wallet(db, gid, uid)
+        last = wallet.get("lastDailyClaimDay")
+        today = _now().date().isoformat()
+        if last == today:
+            streak = int(wallet.get("streakDaily", 1))
+        else:
+            yesterday = (_now() - timedelta(days=1)).date().isoformat()
+            if last == yesterday:
+                streak = int(wallet.get("streakDaily", 0)) + 1
+            else:
+                try:
+                    vac = await vacation_get(db, gid, uid)
+                    streak = int(wallet.get("streakDaily", 0)) if vac.get("active") else 1
+                except Exception:
+                    streak = 1
+            await db.economy.update_one(
+                {"guildId": gid, "userId": uid},
+                {"$set": {"streakDaily": streak, "lastDailyClaimDay": today}})
+        else_streak = streak
+    except Exception:
+        else_streak = 1
+        streak = 1
+    bonus = min(500, (streak - 1) * 25)  # streak sweetener, capped
+    final, _ = await grant_coins(db, gid, uid, base + bonus, "daily", "discord")
+    await session_track(db, gid, uid, earned=final, activities=1)
+    await check_quests(db, gid, uid)
+    await notify(db, gid, uid, "daily", f"Daily claimed: +{final} (streak {streak})")
+    return True, final, streak, 0
+
+
+# ── Temporary boosts / multipliers ────────────────────────────────────
+async def grant_boost(db, guild_id: int, user_id: int, kind: str, mult: float, seconds: int) -> None:
+    """Grant a temporary multiplier boost (coins/xp/luck). DB expiry only."""
+    if kind not in ("coins", "xp", "luck"):
+        return
+    mult = max(1.01, min(float(mult), 5.0))
+    seconds = max(60, min(int(seconds), 7 * 86400))
+    await db.economy_boosts.update_one(
+        {"guildId": _gid(guild_id), "userId": _uid(user_id), "kind": kind},
+        {"$set": {"mult": mult, "expiresAt": _now() + timedelta(seconds=seconds)}},
+        upsert=True)
+
+
+async def active_multipliers(db, guild_id: int, user_id: int) -> dict:
+    """Coins/XP/luck with prestige + pet + config + temporary boosts."""
+    base = await active_bonuses(db, guild_id, user_id)
+    out = {"coins": base.get("coins", 1.0), "xp": base.get("xp", 1.0),
+           "luck": base.get("luck", 1.0), "boosts": []}
+    try:
+        now = _now()
+        cur = db.economy_boosts.find({"guildId": _gid(guild_id), "userId": _uid(user_id)})
+        async for row in cur:
+            exp = row.get("expiresAt")
+            if isinstance(exp, datetime):
+                if exp.tzinfo is None:
+                    exp = exp.replace(tzinfo=timezone.utc)
+                if exp <= now:
+                    continue
+                left = int((exp - now).total_seconds())
+            else:
+                left = 0
+            kind = str(row.get("kind") or "")
+            if kind in out:
+                out[kind] = round(out[kind] * float(row.get("mult", 1.0)), 3)
+                out["boosts"].append({"kind": kind, "mult": float(row.get("mult", 1.0)), "expiresIn": left})
+    except Exception:
+        pass
+    return out
+
+
+# ── Showcases (cosmetic item display, unlockable slots) ───────────────
+async def showcase_get(db, guild_id: int, user_id: int) -> dict:
+    doc = await db.economy_showcase.find_one(
+        {"guildId": _gid(guild_id), "userId": _uid(user_id)}) or {}
+    return {"slots": list(doc.get("slots") or []),
+            "maxSlots": max(SHOWCASE_MAX_BASE, min(int(doc.get("maxSlots", SHOWCASE_MAX_BASE)), SHOWCASE_MAX_ABS))}
+
+
+async def showcase_add(db, guild_id: int, user_id: int, item_id: str) -> tuple[bool, str]:
+    item_id = (item_id or "").strip().lower()
+    if item_id not in ITEMS:
+        return False, "Unknown item."
+    inv = await get_inventory(db, guild_id, user_id)
+    if inv.get(item_id, 0) < 1:
+        return False, "You don't own that item."
+    cur = await showcase_get(db, guild_id, user_id)
+    if item_id in cur["slots"]:
+        return False, "Already showcased."
+    if len(cur["slots"]) >= cur["maxSlots"]:
+        return False, f"Showcase full ({cur['maxSlots']} slots)."
+    await db.economy_showcase.update_one(
+        {"guildId": _gid(guild_id), "userId": _uid(user_id)},
+        {"$addToSet": {"slots": item_id}, "$setOnInsert": {"maxSlots": SHOWCASE_MAX_BASE}},
+        upsert=True)
+    return True, "ok"
+
+
+async def showcase_unlock(db, guild_id: int, user_id: int) -> tuple[bool, str]:
+    """Buy one extra showcase slot for coins (price scales)."""
+    cur = await showcase_get(db, guild_id, user_id)
+    if cur["maxSlots"] >= SHOWCASE_MAX_ABS:
+        return False, "Showcase is fully expanded."
+    price = 1000 * cur["maxSlots"]
+    ok, _ = await apply_delta(db, guild_id, user_id, "balance", -price, "showcase_unlock", "discord")
+    if not ok:
+        return False, f"Needs {price} coins."
+    await db.economy_showcase.update_one(
+        {"guildId": _gid(guild_id), "userId": _uid(user_id)},
+        {"$set": {"maxSlots": cur["maxSlots"] + 1}}, upsert=True)
+    return True, "ok"
+
+
+# ── Skins (purely cosmetic, never affect balance math) ────────────────
+async def skins_owned(db, guild_id: int, user_id: int) -> list[str]:
+    doc = await db.economy_skins.find_one(
+        {"guildId": _gid(guild_id), "userId": _uid(user_id)}) or {}
+    return list(doc.get("owned") or [])
+
+
+async def skins_unlock(db, guild_id: int, user_id: int, skin_id: str) -> tuple[bool, str]:
+    skin_id = (skin_id or "").strip().lower()
+    if skin_id not in SKINS_CATALOG:
+        return False, "Unknown skin."
+    await db.economy_skins.update_one(
+        {"guildId": _gid(guild_id), "userId": _uid(user_id)},
+        {"$addToSet": {"owned": skin_id}}, upsert=True)
+    return True, "ok"
+
+
+async def skin_select(db, guild_id: int, user_id: int, skin_id: str) -> tuple[bool, str]:
+    skin_id = (skin_id or "").strip().lower()
+    spec = SKINS_CATALOG.get(skin_id)
+    if not spec:
+        return False, "Unknown skin."
+    owned = await skins_owned(db, guild_id, user_id)
+    if skin_id not in owned:
+        # Auto-grant check: some skins unlock via progression milestones.
+        progress = await quest_progress(db, guild_id, user_id)
+        wallet = await get_wallet(db, guild_id, user_id)
+        eligible = (
+            (skin_id == "ember_rod" and progress.get("activities", 0) >= 5)
+            or (skin_id == "meadow_deed")
+            or (skin_id == "star_charm" and progress.get("net", 0) >= 25000)
+            or (skin_id == "golden_rod" and int(wallet.get("prestige", 0)) >= 1)
+        )
+        if not eligible:
+            return False, f"Locked — {spec['how']}."
+        await skins_unlock(db, guild_id, user_id, skin_id)
+    await db.economy_skins.update_one(
+        {"guildId": _gid(guild_id), "userId": _uid(user_id)},
+        {"$set": {f"selected.{spec['forItem']}": skin_id}}, upsert=True)
+    return True, "ok"
+
+
+# ── Pets: adopt / rename / feed / play / release / equip ──────────────
+PET_ADOPT_COST: dict[str, int] = {"slime": 300, "owl": 800, "fox": 2000, "dragon": 8000}
+
+PET_LEVEL_XP = 100
+
+
+async def pet_adopt(db, guild_id: int, user_id: int, species: str, name: str) -> tuple[bool, str]:
+    species = (species or "").strip().lower()
+    if species not in PET_SPECIES:
+        return False, "Unknown species."
+    cost = PET_ADOPT_COST.get(species, 500)
+    ok, _ = await apply_delta(db, guild_id, user_id, "balance", -cost, "pet_adopt", "discord",
+                              {"species": species})
+    if not ok:
+        return False, f"Adopting a {species} costs {cost} coins."
+    ok2, msg = await adopt_pet(db, guild_id, user_id, species, name or PET_SPECIES[species]["name"])
+    if not ok2:
+        await apply_delta(db, guild_id, user_id, "balance", cost, "pet_refund", "discord")
+        return False, msg
+    await notify(db, guild_id, user_id, "pet", f"Adopted a {species}!")
+    return True, "ok"
+
+
+async def pet_rename(db, guild_id: int, user_id: int, old: str, new: str) -> tuple[bool, str]:
+    new = (new or "").strip()[:30]
+    if not new:
+        return False, "Give a name up to 30 characters."
+    res = await db.economy_pets.update_one(
+        {"guildId": _gid(guild_id), "userId": _uid(user_id), "name": old},
+        {"$set": {"name": new}})
+    return (True, "ok") if res.modified_count else (False, "No pet with that name.")
+
+
+async def pet_release(db, guild_id: int, user_id: int, name: str) -> tuple[bool, str]:
+    res = await db.economy_pets.delete_one(
+        {"guildId": _gid(guild_id), "userId": _uid(user_id), "name": name})
+    return (True, "ok") if res.deleted_count else (False, "No pet with that name.")
+
+
+async def pet_feed_play(db, guild_id: int, user_id: int, action: str) -> tuple[bool, str]:
+    """Feed/play: happiness +XP, costs a little. Single atomic-feeling step."""
+    gid, uid = _gid(guild_id), _uid(user_id)
+    pets = await db.economy_pets.find({"guildId": gid, "userId": uid}).to_list(10)
+    if not pets:
+        return False, "You have no pets yet."
+    cost = 15 if action == "feed" else 10
+    ok, _ = await apply_delta(db, gid, uid, "balance", -cost, "pet_care_cost", "discord")
+    if not ok:
+        return False, f"Needs {cost} coins."
+    now = _now()
+    for pet in pets:
+        try:
+            level = int(pet.get("level", 1))
+            xp = int(pet.get("xp", 0)) + (25 if action == "feed" else 20)
+            while xp >= level * PET_LEVEL_XP:
+                xp -= level * PET_LEVEL_XP
+                level += 1
+            happiness = max(0, min(100, int(pet.get("happiness", 80)) + (15 if action == "feed" else 12)))
+            await db.economy_pets.update_one(
+                {"_id": pet["_id"]},
+                {"$set": {"happiness": happiness, "level": level, "xp": xp, "lastCare": now}})
+        except Exception:
+            continue
+    return True, "ok"
+
+
+async def pet_equip(db, guild_id: int, user_id: int, name: str) -> tuple[bool, str]:
+    gid, uid = _gid(guild_id), _uid(user_id)
+    pet = await db.economy_pets.find_one({"guildId": gid, "userId": uid, "name": name})
+    if not pet:
+        return False, "No pet with that name."
+    await db.economy_pets.update_many(
+        {"guildId": gid, "userId": uid}, {"$set": {"equipped": False}})
+    await db.economy_pets.update_one({"_id": pet["_id"]}, {"$set": {"equipped": True}})
+    return True, "ok"
+
+
+# ── Vacation / protection mode ────────────────────────────────────────
+async def vacation_get(db, guild_id: int, user_id: int) -> dict:
+    doc = await db.economy_vacation.find_one(
+        {"guildId": _gid(guild_id), "userId": _uid(user_id)}) or {}
+    until = doc.get("until")
+    active = False
+    if isinstance(until, datetime):
+        if until.tzinfo is None:
+            until = until.replace(tzinfo=timezone.utc)
+        active = until > _now()
+    return {"active": active, "until": until}
+
+
+async def vacation_set(db, guild_id: int, user_id: int, days: int) -> tuple[bool, str]:
+    days = max(1, min(int(days or 1), 14))
+    cur = await vacation_get(db, guild_id, user_id)
+    if cur["active"]:
+        return False, "Vacation already active."
+    await db.economy_vacation.update_one(
+        {"guildId": _gid(guild_id), "userId": _uid(user_id)},
+        {"$set": {"until": _now() + timedelta(days=days), "startedAt": _now()}},
+        upsert=True)
+    await record_txn(db, guild_id, user_id, "vacation", days, "discord")
+    return True, "ok"
+
+
+# ── Server events (donation pool, goals, rewards) ─────────────────────
+async def serverevent_get(db, guild_id: int) -> dict:
+    doc = await db.economy_events.find_one(
+        {"guildId": _gid(guild_id), "status": "open"}) or {}
+    if not doc:
+        return {"open": False, "pool": 0, "goal": 10000, "donors": 0}
+    return {"open": True, "pool": int(doc.get("pool", 0)),
+            "goal": int(doc.get("goal", 10000)),
+            "donors": len(doc.get("donors") or {}), "name": str(doc.get("name") or "Server Festival")}
+
+
+async def serverevent_open(db, guild_id: int, name: str, goal: int) -> None:
+    await db.economy_events.update_one(
+        {"guildId": _gid(guild_id), "status": "open"},
+        {"$setOnInsert": {"name": (name or "Server Festival")[:60],
+                          "goal": max(1000, min(int(goal or 10000), 1000000)),
+                          "pool": 0, "donors": {}, "createdAt": _now()}},
+        upsert=True)
+
+
+async def serverevent_donate(db, guild_id: int, user_id: int, coins: int, gems: int = 0) -> tuple[bool, str]:
+    gid, uid = _gid(guild_id), _uid(user_id)
+    coins = max(1, min(int(coins or 0), 100000))
+    gems = max(0, min(int(gems or 0), 100))
+    await serverevent_open(db, gid, "Server Festival", 10000)
+    ok, _ = await apply_delta(db, gid, uid, "balance", -coins, "event_donate", "discord")
+    if not ok:
+        return False, "Insufficient pocket coins."
+    if gems:
+        okg, _ = await apply_delta(db, gid, uid, "gems", -gems, "event_donate_gems", "discord")
+        if not okg:
+            await apply_delta(db, gid, uid, "balance", coins, "event_refund", "discord")
+            return False, "Not enough gems."
+    await db.economy_events.update_one(
+        {"guildId": gid, "status": "open"},
+        {"$inc": {"pool": coins + gems * 100, f"donors.{uid}": coins}})
+    state = await serverevent_get(db, gid)
+    if state["pool"] >= state["goal"]:
+        # Goal met: close + reward every donor exactly once (status flip).
+        res = await db.economy_events.find_one_and_update(
+            {"guildId": gid, "status": "open"}, {"$set": {"status": "done", "completedAt": _now()}})
+        if res:
+            donors = (res.get("donors") or {}).keys()
+            for d in list(donors)[:500]:
+                try:
+                    await apply_delta(db, gid, int(d), "balance", 500, "event_reward", "system")
+                    await grant_boost(db, gid, int(d), "coins", 1.25, 3600)
+                except Exception:
+                    continue
+            return True, f"🎉 Goal met! Everyone got +500 coins and a 1.25x boost."
+    return True, "ok"
+
+
+# ── Currency log (immutable audit trail) ──────────────────────────────
+async def currency_log(db, guild_id: int, user_id: int, limit: int = 10, skip: int = 0) -> list[dict]:
+    limit = max(1, min(int(limit or 10), 25))
+    cur = db.economy_tx.find({"guildId": _gid(guild_id), "userId": _uid(user_id)})
+    return await cur.sort("createdAt", -1).skip(max(0, skip)).limit(limit).to_list(limit)
+
+
+# ── Compare two users (public stats only — never private fields) ─────
+async def compare_users(db, guild_id: int, a_id: int, b_id: int) -> dict:
+    out = {}
+    for uid in (_uid(a_id), _uid(b_id)):
+        wallet = await get_wallet(db, guild_id, uid)
+        inv = await get_inventory(db, guild_id, uid)
+        progress = await quest_progress(db, guild_id, uid)
+        out[str(uid)] = {
+            "net": net_worth(wallet),
+            "pocket": int(wallet.get("balance", 0)),
+            "bank": int(wallet.get("bank", 0)),
+            "gems": int(wallet.get("gems", 0)),
+            "level": economy_level(wallet),
+            "prestige": int(wallet.get("prestige", 0)),
+            "items": sum(1 for q in inv.values() if q > 0),
+            "activities": progress.get("activities", 0),
+            "streak": int(wallet.get("streakDaily", 0)),
+        }
+    return out
+
+
+# ── Economy achievements check (idempotent, rewards once) ────────────
+async def check_economy_achievements(db, guild_id: int, user_id: int) -> list[str]:
+    gid, uid = _gid(guild_id), _uid(user_id)
+    wallet = await get_wallet(db, gid, uid)
+    inv = await get_inventory(db, gid, uid)
+    progress = await quest_progress(db, gid, uid)
+    try:
+        games_played = await db.economy_tx.count_documents(
+            {"guildId": gid, "userId": uid, "type": {"$in": ["game_win", "game_stake"]}})
+    except Exception:
+        games_played = 0
+    try:
+        fish = await db.economy_tx.count_documents(
+            {"guildId": gid, "userId": uid, "type": "fish_catch"})
+    except Exception:
+        fish = 0
+    try:
+        social = await social_doc(db, gid, uid)
+        friends = len(social.get("friends") or [])
+    except Exception:
+        friends = 0
+    signals = {
+        "first_coin": net_worth(wallet) > 0,
+        "earner_5k": net_worth(wallet) >= 5000,
+        "tycoon_25k": net_worth(wallet) >= 25000,
+        "grinder_25": progress.get("activities", 0) >= 25,
+        "gamer_50": games_played >= 50,
+        "collector_10": sum(1 for q in inv.values() if q > 0) >= 10,
+        "angler_10": fish >= 10,
+        "friend_5": friends >= 5,
+        "loyal_7": int(wallet.get("streakDaily", 0)) >= 7,
+        "prestiged": int(wallet.get("prestige", 0)) >= 1,
+        "omega_risen": int(wallet.get("omega", 0)) >= 1,
+    }
+    try:
+        doc = await db.economy_achv.find_one({"guildId": gid, "userId": uid}) or {}
+    except Exception:
+        doc = {}
+    done = set(doc.get("done") or [])
+    newly = []
+    for key, met in signals.items():
+        if met and key not in done:
+            # Guarded claim: only the first concurrent check wins.
+            try:
+                res = await db.economy_achv.update_one(
+                    {"guildId": gid, "userId": uid, "done": {"$ne": key}},
+                    {"$addToSet": {"done": key}}, upsert=True)
+                if res.modified_count or res.upserted_id is not None:
+                    reward = int(ACHIEVEMENTS_FULL[key]["reward"])
+                    await apply_delta(db, gid, uid, "balance", reward,
+                                      "achievement_reward", "system", {"achievement": key})
+                    await notify(db, gid, uid, "achievement",
+                                 f"Achievement unlocked: {ACHIEVEMENTS_FULL[key]['name']} (+{reward})")
+                    newly.append(key)
+            except Exception:
+                continue
+    # farmer_10 needs farm harvests; count via txns best-effort.
+    return newly
+
+
+# ── Lottery auto entries ──────────────────────────────────────────────
+async def lottery_auto(db, guild_id: int, user_id: int, tickets: int) -> tuple[bool, str]:
+    tickets = max(0, min(int(tickets or 0), 10))
+    await db.economy_lottery_auto.update_one(
+        {"guildId": _gid(guild_id), "userId": _uid(user_id)},
+        {"$set": {"tickets": tickets, "updatedAt": _now()}}, upsert=True)
+    return True, "ok"
+
+
+async def lottery_auto_get(db, guild_id: int, user_id: int) -> int:
+    doc = await db.economy_lottery_auto.find_one(
+        {"guildId": _gid(guild_id), "userId": _uid(user_id)}) or {}
+    return int(doc.get("tickets", 0))
+

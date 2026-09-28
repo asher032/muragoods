@@ -152,6 +152,7 @@ class MuraBot(commands.Bot):
             "cogs.games",
             "cogs.inventory",
             "cogs.profile",
+            "cogs.vault",
             "cogs.ranch",
             "cogs.help",
             "cogs.debug",
@@ -2229,12 +2230,13 @@ async def _health_server() -> None:
             data = await eco_mod.economy_overview(db_mod._require_db(), guild_id)
             cfg = await eco_mod.get_economy_config(db_mod._require_db(), guild_id)
             return web.json_response({"ok": True, "overview": data, "config": {
-                "currencyName": cfg.get("currencyName"), "currencySymbol": cfg.get("currencySymbol"),
-                "startBalance": cfg.get("startBalance"), "dailyAmount": cfg.get("dailyAmount"),
-                "weeklyAmount": cfg.get("weeklyAmount"), "monthlyAmount": cfg.get("monthlyAmount"),
-                "workMin": cfg.get("workMin"), "workMax": cfg.get("workMax"),
-                "gambleMax": cfg.get("gambleMax"),
-            }})
+                k: cfg.get(k) for k in (
+                    "currencyName", "currencySymbol", "startBalance", "dailyAmount",
+                    "weeklyAmount", "monthlyAmount", "workMin", "workMax", "begMin", "begMax",
+                    "workCooldownSec", "begCooldownSec", "crimeCooldownSec",
+                    "activityCooldownSec", "gambleMax", "gambleCooldownSec",
+                    "robCooldownSec", "robMinTarget", "lotteryTicketPrice", "lotteryMaxTickets",
+                )}})
         except Exception as exc:
             return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
     app.router.add_get("/economy/overview/{guild_id:\\d+}", economy_overview)

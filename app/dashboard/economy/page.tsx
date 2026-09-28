@@ -15,9 +15,46 @@ interface EconomyOverview {
   recent: Array<{ type: string; amount: number; at: string }>;
 }
 
+interface EconomyConfig {
+  currencyName?: string;
+  currencySymbol?: string;
+  startBalance?: number;
+  dailyAmount?: number;
+  weeklyAmount?: number;
+  monthlyAmount?: number;
+  workMin?: number;
+  workMax?: number;
+  gambleMax?: number;
+  workCooldownSec?: number;
+  begCooldownSec?: number;
+  crimeCooldownSec?: number;
+  activityCooldownSec?: number;
+  robCooldownSec?: number;
+  lotteryTicketPrice?: number;
+  lotteryMaxTickets?: number;
+}
+
+const SHOP = [
+  { id: 'bread', name: 'Bread', price: 25, rarity: 'common' },
+  { id: 'fishing_rod', name: 'Fishing Rod', price: 200, rarity: 'common' },
+  { id: 'lucky_charm', name: 'Lucky Charm', price: 500, rarity: 'rare' },
+  { id: 'mystery_box', name: 'Mystery Box', price: 500, rarity: 'rare' },
+  { id: 'adventure_ticket', name: 'Adventure Ticket', price: 300, rarity: 'rare' },
+  { id: 'farm_plot_deed', name: 'Farm Plot Deed', price: 400, rarity: 'common' },
+  { id: 'speed_fertilizer', name: 'Speed Fertilizer', price: 150, rarity: 'common' },
+  { id: 'golden_hook', name: 'Golden Hook', price: 2500, rarity: 'epic' },
+];
+
+const ACHIEVEMENTS = [
+  'First Coin', 'Earner (5k net)', 'Tycoon (25k net)', 'Grinder (25 activities)',
+  'High Roller (50 games)', 'Collector (10 items)', 'Angler (10 fish)',
+  'Socialite (5 friends)', 'Loyal (7-day streak)', 'Reborn (prestige)', 'Omega',
+];
+
 export default function EconomyPage() {
   const { token, selected } = useGuild();
   const [overview, setOverview] = useState<EconomyOverview | null>(null);
+  const [config, setConfig] = useState<EconomyConfig | null>(null);
   const [error, setError] = useState('');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -27,10 +64,11 @@ export default function EconomyPage() {
     setLoading(true);
     setError('');
     setCode('');
-    const resp = await apiFetch<{ success: boolean; overview?: EconomyOverview; error?: string; code?: string }>(
+    const resp = await apiFetch<{ success: boolean; overview?: EconomyOverview; config?: EconomyConfig; error?: string; code?: string }>(
       `/api/dashboard/economy/overview?guildId=${selected.id}`, { token });
     if (resp.ok && resp.data.success && resp.data.overview) {
       setOverview(resp.data.overview);
+      setConfig(resp.data.config ?? null);
     } else {
       setOverview(null);
       setError(resp.ok ? resp.data.error || 'Could not load economy' : resp.error);
@@ -41,6 +79,7 @@ export default function EconomyPage() {
 
   useEffect(() => {
     setOverview(null);
+    setConfig(null);
     setError('');
     setCode('');
     void load();
@@ -61,6 +100,8 @@ export default function EconomyPage() {
   );
 
   const mapped = error ? statusMessage(code, error) : null;
+  const sym = config?.currencySymbol || '🪙';
+  const cur = config?.currencyName || 'coins';
 
   return (
     <div style={{ maxWidth: 960 }}>
@@ -68,9 +109,10 @@ export default function EconomyPage() {
       <h1 style={{ margin: '4px 0 4px', fontSize: 26, fontWeight: 800, color: '#fff' }}>💰 Economy — {selected.name}</h1>
       <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--cc-text-dim)' }}>
         Live totals from the same database the Discord commands use — never a parallel economy.
+        Users, channels and roles are auto-discovered; admins never enter Discord IDs.
       </p>
 
-      <div className="cc-section-label" style={{ marginBottom: 10 }}>Overview</div>
+      <div className="cc-section-label" style={{ marginBottom: 10 }}>Overview · statistics</div>
       {mapped && (
         <div className="cc-alert cc-alert-error" role="alert" style={{ marginBottom: 12 }}>
           <strong>⚠️ {mapped.title}</strong>
@@ -87,13 +129,14 @@ export default function EconomyPage() {
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 14 }}>
             {stat('Users', overview.users)}
-            {stat('In circulation', overview.circulation.total.toLocaleString())}
+            {stat(`In circulation (${cur})`, overview.circulation.total.toLocaleString())}
+            {stat('Pocket / Bank', `${overview.circulation.pocket.toLocaleString()} / ${overview.circulation.bank.toLocaleString()}`)}
             {stat('Daily active', overview.dau)}
             {stat('Transactions', overview.transactions.toLocaleString())}
           </div>
           <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', marginBottom: 22 }}>
             <div className="cc-card" style={{ padding: '14px 18px' }}>
-              <strong style={{ color: '#fff', fontSize: 14 }}>🏆 Top holders</strong>
+              <strong style={{ color: '#fff', fontSize: 14 }}>🏆 Top holders · leaderboards</strong>
               {overview.top.length === 0 ? (
                 <p style={{ margin: '8px 0 0', color: 'var(--cc-text-faint)', fontSize: 13 }}>No holders yet.</p>
               ) : (
@@ -101,14 +144,17 @@ export default function EconomyPage() {
                   {overview.top.map((t, i) => (
                     <div key={t.userId} style={{ fontSize: 12.5, color: 'var(--cc-text-dim)' }}>
                       <strong style={{ color: '#fff' }}>#{i + 1}</strong> <code>&lt;@{t.userId}&gt;</code>
-                      {' '}— {(t.balance + t.bank).toLocaleString()}
+                      {' '}— {(t.balance + t.bank).toLocaleString()} {sym}
                     </div>
                   ))}
                 </div>
               )}
+              <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--cc-text-faint)' }}>
+                In Discord: /vault leaderboards stats|item (scope: server), /identity leaderboard.
+              </p>
             </div>
             <div className="cc-card" style={{ padding: '14px 18px' }}>
-              <strong style={{ color: '#fff', fontSize: 14 }}>📜 Recent activity</strong>
+              <strong style={{ color: '#fff', fontSize: 14 }}>📜 Economy logs · audit</strong>
               {overview.recent.length === 0 ? (
                 <p style={{ margin: '8px 0 0', color: 'var(--cc-text-faint)', fontSize: 13 }}>No transactions yet.</p>
               ) : (
@@ -121,10 +167,74 @@ export default function EconomyPage() {
                   ))}
                 </div>
               )}
+              <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--cc-text-faint)' }}>
+                Every mutation writes a unique transaction ID. In Discord: /currencylog.
+              </p>
             </div>
           </div>
         </>
       )}
+
+      <div className="cc-section-label" style={{ margin: '22px 0 10px' }}>Rewards · cooldowns · anti-exploit</div>
+      <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', marginBottom: 22 }}>
+        <div className="cc-card" style={{ padding: '14px 18px', fontSize: 13, color: 'var(--cc-text-dim)' }}>
+          <strong style={{ color: '#fff' }}>🎁 Daily / Weekly / Monthly</strong>
+          <div style={{ marginTop: 6 }}>
+            Daily <strong style={{ color: '#fff' }}>{config?.dailyAmount ?? 250}</strong> · Weekly{' '}
+            <strong style={{ color: '#fff' }}>{config?.weeklyAmount ?? 1500}</strong> · Monthly{' '}
+            <strong style={{ color: '#fff' }}>{config?.monthlyAmount ?? 6000}</strong> {sym}
+          </div>
+          <div style={{ marginTop: 4 }}>Starting balance: <strong style={{ color: '#fff' }}>{config?.startBalance ?? 100}</strong></div>
+        </div>
+        <div className="cc-card" style={{ padding: '14px 18px', fontSize: 13, color: 'var(--cc-text-dim)' }}>
+          <strong style={{ color: '#fff' }}>⏳ Cooldowns (seconds)</strong>
+          <div style={{ marginTop: 6 }}>
+            Work {config?.workCooldownSec ?? 3600} · Beg {config?.begCooldownSec ?? 300} · Crime {config?.crimeCooldownSec ?? 1800}
+            <br />Activity {config?.activityCooldownSec ?? 600} · Rob {config?.robCooldownSec ?? 3600}
+          </div>
+        </div>
+        <div className="cc-card" style={{ padding: '14px 18px', fontSize: 13, color: 'var(--cc-text-dim)' }}>
+          <strong style={{ color: '#fff' }}>🛡️ Anti-exploit</strong>
+          <div style={{ marginTop: 6 }}>
+            Atomic guarded balance updates · unique transaction IDs · idempotent claims ·
+            server-side reward math · trade locking with timeout · max bet {config?.gambleMax ?? 10000}.
+            Negative balances and duplicate payouts are refused by the write itself.
+          </div>
+        </div>
+      </div>
+
+      <div className="cc-section-label" style={{ margin: '22px 0 10px' }}>Shop · items · lottery · events</div>
+      <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', marginBottom: 22 }}>
+        <div className="cc-card" style={{ padding: '14px 18px', fontSize: 13, color: 'var(--cc-text-dim)' }}>
+          <strong style={{ color: '#fff' }}>🛒 Shop management</strong>
+          <div style={{ marginTop: 6, display: 'grid', gap: 3 }}>
+            {SHOP.map((s) => (
+              <div key={s.id}><code>{s.id}</code> — {s.name} · <strong style={{ color: '#fff' }}>{s.price}</strong> {sym} · <em>{s.rarity}</em></div>
+            ))}
+          </div>
+          <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--cc-text-faint)' }}>Buy/sell in Discord: /inventory shop, /shop, /inventory sell. Prices live in the bot catalog.</p>
+        </div>
+        <div className="cc-card" style={{ padding: '14px 18px', fontSize: 13, color: 'var(--cc-text-dim)' }}>
+          <strong style={{ color: '#fff' }}>🎟️ Lottery · 🎉 Events</strong>
+          <div style={{ marginTop: 6 }}>
+            Ticket <strong style={{ color: '#fff' }}>{config?.lotteryTicketPrice ?? 100}</strong> {sym} · max{' '}
+            <strong style={{ color: '#fff' }}>{config?.lotteryMaxTickets ?? 10}</strong>/round · daily server-side draw
+            (/vault lottery buy|auto|status, /economy lottery).
+            <br />Server events: donation pool + goal + donor rewards via /vault serverevents donate|pool|status.
+          </div>
+        </div>
+        <div className="cc-card" style={{ padding: '14px 18px', fontSize: 13, color: 'var(--cc-text-dim)' }}>
+          <strong style={{ color: '#fff' }}>🏆 Achievements · badges · titles · pets · farm · fishing</strong>
+          <div style={{ marginTop: 6 }}>{ACHIEVEMENTS.join(' · ')}</div>
+          <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--cc-text-faint)' }}>
+            Discord (all under /vault to respect the 100-command cap): profile, compare, showcase, skins,
+            pets (adopt/rename/equip/feed/play/release), farm, fish, friends, marriage, badges, title,
+            collection, bundles, multipliers, currencylog, vacation, drops, trade, advancements prestige|omega,
+            work shift|stars — plus /economy, /inventory, /identity, /ranch, /minigames groups and
+            /balance, /daily, /pay, /shop, /rank, /leaderboard, /achievements.
+          </p>
+        </div>
+      </div>
 
       <div className="cc-section-label" style={{ margin: '22px 0 10px' }}>Configuration</div>
       <ModuleSettings moduleId="economy" />
