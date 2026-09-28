@@ -316,6 +316,46 @@ export async function PATCH(req: NextRequest) {
       requestUpdates: Boolean(n.requestUpdates),
     };
   }
+  if (safe.leveling && typeof safe.leveling === 'object') {
+    const l = safe.leveling as Record<string, unknown>;
+    const num = (v: unknown, lo: number, hi: number, fb: number) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? Math.max(lo, Math.min(hi, Math.floor(n))) : fb;
+    };
+    const str25 = (v: unknown) => String(v || '').slice(0, 25);
+    const rewards: Record<string, string> = {};
+    const rawRewards = (l.rewards && typeof l.rewards === 'object' ? l.rewards : {}) as Record<string, unknown>;
+    for (const [k, v] of Object.entries(rawRewards).slice(0, 100)) {
+      if (/^\d{1,3}$/.test(k) && /^\d{5,25}$/.test(String(v || ''))) rewards[k] = String(v);
+    }
+    // Legacy dashboard role fields map onto the same rewards dict.
+    for (const n of ['5', '10', '25', '50', '100']) {
+      const v = String((l as Record<string, unknown>)[`reward${n}`] || '');
+      if (/^\d{5,25}$/.test(v)) rewards[n] = v;
+    }
+    update.leveling = {
+      xpMin: num(l.xpMin, 1, 100, 15),
+      xpMax: num(l.xpMax, 1, 100, 25),
+      xpCooldownSec: num(l.xpCooldownSec, 5, 3600, 60),
+      voiceXp: Boolean(l.voiceXp),
+      voiceXpAmount: num(l.voiceXpAmount, 1, 500, 10),
+      blacklistedChannels: Array.isArray(l.blacklistedChannels)
+        ? l.blacklistedChannels.filter((s) => /^\d{5,25}$/.test(String(s))).map(String).slice(0, 100) : [],
+      blacklistedRoles: Array.isArray(l.blacklistedRoles)
+        ? l.blacklistedRoles.filter((s) => /^\d{5,25}$/.test(String(s))).map(String).slice(0, 100) : [],
+      levelUpChannelId: str25(l.levelUpChannelId),
+      levelUpMessage: String(l.levelUpMessage || '').slice(0, 300),
+      dmNotify: Boolean(l.dmNotify),
+      rewardReplace: l.rewardReplace !== false,
+      announceMinLevel: num(l.announceMinLevel, 1, 100, 1),
+      announceMod: num(l.announceMod, 0, 100, 0),
+      rewardOnly: Boolean(l.rewardOnly),
+      cardColor: /^#[0-9a-fA-F]{6}$/.test(String(l.cardColor || '')) ? String(l.cardColor) : '#5865F2',
+      cardOpacity: Math.max(0, Math.min(1, Number(l.cardOpacity ?? 1) || 0)),
+      serverBackground: String(l.serverBackground || '').slice(0, 300),
+      rewards,
+    };
+  }
   if (safe.economy && typeof safe.economy === 'object') {
     const e = safe.economy as Record<string, unknown>;
     const num = (v: unknown, lo: number, hi: number, fb: number) => {

@@ -19,3 +19,7 @@ curl-cffi>=0.5
 imageio-ffmpeg>=0.5
 motor>=3.4,<4.0
 python-dotenv>=1.0,<2.0
+# Level-card PNG rendering (avatar circle, progress bar, backgrounds).
+# Pure wheels on all platforms; the card renderer falls back to styled text
+# if Pillow is ever missing, so this is never a hard dependency at runtime.
+Pillow>=10,<12

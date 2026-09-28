@@ -2238,6 +2238,34 @@ async def _health_server() -> None:
         except Exception as exc:
             return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
     app.router.add_get("/economy/overview/{guild_id:\\d+}", economy_overview)
+
+    async def leveling_overview(request: web.Request) -> web.Response:
+        """Dashboard leveling overview — same xp collection the listeners
+        and slash commands use."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            return web.json_response({"ok": False, "error": "Bot not in that guild"}, status=404)
+        import leveling_sys as lvl_mod
+        import database as db_mod
+        try:
+            db = db_mod._require_db()
+            top = await lvl_mod.top_xp(db, guild_id, 5)
+            users = await db.xp.count_documents({"guildId": int(guild_id)})
+            cfg = await lvl_mod.get_level_config(db, guild_id)
+            return web.json_response({"ok": True, "overview": {
+                "users": users,
+                "top": [{"userId": str(t.get("userId")), "xp": int(t.get("xp", 0)),
+                         "level": lvl_mod.level_from_xp(int(t.get("xp", 0)))[0]} for t in top],
+            }, "config": {
+                "xpMin": cfg.get("xpMin"), "xpMax": cfg.get("xpMax"),
+                "xpCooldownSec": cfg.get("xpCooldownSec"), "voiceXp": cfg.get("voiceXp"),
+            }})
+        except Exception as exc:
+            return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
+    app.router.add_get("/leveling/overview/{guild_id:\\d+}", leveling_overview)
     app.router.add_post("/self-test/gateway-drop", gateway_drop)
     port = int(os.environ.get("PORT") or 8080) or 8080  # PORT=0 → default
     runner = web.AppRunner(app)
