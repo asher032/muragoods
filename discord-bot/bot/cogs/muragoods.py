@@ -55,16 +55,45 @@ class MuragoodsCog(commands.Cog):
         view.add_item(utils.site_link_button("💌 Open Letters", f"{config.MURASTREAM_URL}/hub", "💌"))
         await interaction.response.send_message(embed=embed, view=view)
 
-    @app_commands.command(name="games", description="Play Muragoods games (Mystery Box & more).")
+    @app_commands.command(name="games", description="Your Muragoods game profile (shared with the site).")
     async def games(self, interaction: discord.Interaction):
-        embed = utils.base_embed(
-            "🎮 Games",
-            "Mystery Box, Untold Words and more — play on Muragoods and earn points.")
-        embed.add_field(name="🎮 Mystery Box", value="Spend coins, win prizes — on the site.", inline=True)
+        await interaction.response.defer()
+        import database
+        import siteprofile
+        try:
+            email = await siteprofile.linked_email(database._db, interaction.user.id)
+        except Exception:
+            email = None
+        if not email:
+            e = utils.base_embed(
+                "🎮 Games",
+                "Link Discord at Muragoods → My Muragoods → Connected Accounts, "
+                "then this command shows your shared game profile.")
+            view = discord.ui.View()
+            view.add_item(utils.site_link_button("🎮 Game Center", f"{config.MURASTREAM_URL}/games", "🎮"))
+            await interaction.followup.send(embed=e, view=view)
+            return
+        try:
+            summary = await siteprofile.game_summary(database._db, email)
+        except Exception:
+            log.exception("games profile read failed")
+            await interaction.followup.send("Could not load your game profile right now.", ephemeral=True)
+            return
+        e = utils.base_embed(
+            "🎮 YOUR MURAGOODS GAME PROFILE",
+            f"Level **{summary['level']}** · **{summary['totalXp']:,}** XP\n"
+            f"🪙 **{summary['coins']:,}** Coins · 🏆 **{len(summary['achievements'])}** Achievements · "
+            f"🎯 **{summary['totalPlays']}** Games Played")
+        top = summary.get("games") or []
+        if top:
+            e.add_field(name="Recent games",
+                        value="\n".join(f"• **{g['gameId']}** — best {g['bestScore']}, {g['plays']} plays" for g in top[:5]),
+                        inline=False)
+        if summary.get("favorites"):
+            e.add_field(name="❤️ Favorite", value=" · ".join(summary["favorites"][:5]), inline=False)
         view = discord.ui.View()
-        view.add_item(utils.site_link_button("🎮 Play now", f"{config.MURASTREAM_URL}/play/mysterybox", "🎮"))
-        view.add_item(utils.site_link_button("🍔 All games", f"{config.MURASTREAM_URL}/hub", "🍔"))
-        await interaction.response.send_message(embed=embed, view=view)
+        view.add_item(utils.site_link_button("🎮 Game Center", f"{config.MURASTREAM_URL}/games", "🎮"))
+        await interaction.followup.send(embed=e, view=view)
 
     @app_commands.command(name="points", description="How MuraPoints work.")
     async def points(self, interaction: discord.Interaction):
@@ -84,15 +113,35 @@ class MuragoodsCog(commands.Cog):
         view.add_item(utils.site_link_button("⭐ View my points", f"{config.MURASTREAM_URL}/account/my-space", "⭐"))
         await interaction.response.send_message(embed=embed, view=view)
 
-    @app_commands.command(name="rewards", description="Redeem rewards with your points.")
+    @app_commands.command(name="rewards", description="Your perks and recent game rewards (shared).")
     async def rewards(self, interaction: discord.Interaction):
-        embed = utils.base_embed("🎁 Rewards", (
-            "Redeem your points on Muragoods:\n"
-            "🍪 Snacks • 🍕 Food • 🎮 Game plays • 🎁 Mystery Boxes"
-        ))
+        await interaction.response.defer(ephemeral=True)
+        import database
+        import siteprofile
+        try:
+            ok, data = await siteprofile.rewards_for(database._db, interaction.user.id)
+        except Exception:
+            log.exception("rewards read failed")
+            await interaction.followup.send("Could not load rewards right now.", ephemeral=True)
+            return
+        if not ok:
+            embed = utils.base_embed("🎁 Rewards", (
+                "Link Discord at Muragoods → My Muragoods → Connected Accounts to see "
+                "your perks and game rewards here.\n\nRedeem points on Muragoods:\n"
+                "🍪 Snacks • 🍕 Food • 🎮 Game plays • 🎁 Mystery Boxes"))
+            view = discord.ui.View()
+            view.add_item(utils.site_link_button("🎁 Redeem now", f"{config.MURASTREAM_URL}/hub", "🎁"))
+            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+            return
+        lines = [f"🪙 Site coins **{data['coins']:,}**"]
+        if data["perks"]:
+            lines.append("🎁 Perks: " + ", ".join(data["perks"]))
+        for r in data["recent"]:
+            lines.append(f"• *{r['kind']}* {r['amount']:+} — {r['label']}")
+        embed = utils.base_embed("🎁 Your Rewards", "\n".join(lines) or "No rewards yet — play in the Game Center!")
         view = discord.ui.View()
-        view.add_item(utils.site_link_button("🎁 Redeem now", f"{config.MURASTREAM_URL}/hub", "🎁"))
-        await interaction.response.send_message(embed=embed, view=view)
+        view.add_item(utils.site_link_button("🎮 Game Center", f"{config.MURASTREAM_URL}/games", "🎮"))
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

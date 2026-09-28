@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
 
   // State validation: must match the HttpOnly cookie we set on the way out.
   const jar = req.cookies.get(OAUTH_STATE_COOKIE)?.value;
-  let flow: { state: string; next: string; guild: string | null } | null = null;
+  let flow: { state: string; next: string; guild: string | null; mode?: string } | null = null;
   if (jar) {
     try { flow = JSON.parse(jar); } catch { /* corrupt cookie */ }
   }
@@ -90,6 +90,13 @@ export async function GET(req: NextRequest) {
       owner: g.owner,
     }));
 
+  // Account-link mode: bind this Discord identity to the signed-in shop
+  // user instead of creating a dashboard session. Anti-abuse: the shop
+  // session must be valid, and one Discord id links to exactly one account.
+  if (flow.mode === 'link') {
+    return linkDiscordAccount(req, user);
+  }
+
   // Preselect: explicit ?guild= deep link, else the first manageable guild
   // where the bot is present is decided later by the dashboard's bot check —
   // here we just take the deep link or leave null (UI shows the chooser).
@@ -122,4 +129,69 @@ export async function GET(req: NextRequest) {
   // One-time state is spent either way.
   res.cookies.set(OAUTH_STATE_COOKIE, '', { path: '/', maxAge: 0 });
   return res;
+}
+
+async function linkDiscordAccount(
+  req: NextRequest,
+  user: { id: string; username: string; global_name?: string; avatar: string | null },
+): Promise<NextResponse> {
+  const done = (ok: boolean, msg: string) => {
+    const target = new URL('/account/connected', req.nextUrl.origin);
+    target.searchParams.set(ok ? 'linked' : 'error', msg);
+    const res = NextResponse.redirect(target);
+    res.cookies.set(OAUTH_STATE_COOKIE, '', { path: '/', maxAge: 0 });
+    return res;
+  };
+  try {
+    const { getSessionUser } = await import('@/app/lib/session');
+    const session = await getSessionUser(req);
+    if (!session) return done(false, 'Sign in to Muragoods first, then connect Discord.');
+    const [{ default: dbConnect }, { default: User }] = await Promise.all([
+      import('@/app/lib/mongodb'),
+      import('@/app/lib/models/User'),
+    ]);
+    await dbConnect();
+    const emailLc = session.email.toLowerCase();
+    // One Discord identity → one Muragoods account, enforced by the unique
+    // sparse index and re-checked here for a readable error.
+    const taken = await User.findOne({ 'discord.discordId': user.id, email: { $ne: session.email } })
+      .select('_id').lean();
+    if (taken) return done(false, 'That Discord account is already linked to another Muragoods account.');
+    const avatar = user.avatar
+      ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=128`
+      : '';
+    await User.updateOne(
+      { email: session.email },
+      {
+        $set: {
+          'discord.discordId': user.id,
+          'discord.username': user.username,
+          'discord.avatar': avatar,
+          'discord.linkedAt': new Date(),
+        },
+      },
+    );
+    // Backfill the join key onto existing ecosystem rows so history,
+    // progress and favorites instantly become cross-platform.
+    const [{ default: GameProgress }, { default: UserPreference }, { default: UserActivity }, { default: GameReward }] =
+      await Promise.all([
+        import('@/app/lib/models/GameProgress'),
+        import('@/app/lib/models/UserPreference'),
+        import('@/app/lib/models/UserActivity'),
+        import('@/app/lib/models/GameReward'),
+      ]);
+    await Promise.all([
+      GameProgress.updateMany({ userEmail: emailLc }, { $set: { discordId: user.id } }),
+      UserPreference.updateMany({ userEmail: emailLc }, { $set: { discordId: user.id } }),
+      UserActivity.updateMany({ userEmail: emailLc }, { $set: { discordId: user.id } }),
+      GameReward.updateMany({ userEmail: emailLc }, { $set: { discordId: user.id } }),
+    ]);
+    await UserActivity.create({
+      userEmail: emailLc, discordId: user.id, type: 'link',
+      text: `Connected Discord @${user.username}`, visibility: 'private',
+    }).catch(() => undefined);
+    return done(true, `@${user.username}`);
+  } catch {
+    return done(false, 'Linking failed — please try again.');
+  }
 }

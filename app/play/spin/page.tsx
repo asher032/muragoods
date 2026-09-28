@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useCoins } from '@/app/hooks/useCoins';
+import { useGameSession } from '@/app/hooks/useGameSession';
+import { DiscordNudge } from '@/app/components/DiscordNudge';
 
 const SEGMENTS = [
   { label: '5 coins', coins: 5, color: '#e63946', textColor: '#fff' },
@@ -42,69 +44,63 @@ function textPos(index: number) {
 
 export default function SpinWheelPage() {
   const router = useRouter();
-  const { coins, addCoins } = useCoins();
+  const { coins } = useCoins();
+  const { award } = useGameSession('spin');
   const [spinning, setSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [result, setResult] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [spinsLeft, setSpinsLeft] = useState(3);
   const [totalWon, setTotalWon] = useState(0);
+  const [notice, setNotice] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
     const user = localStorage.getItem('user');
     if (!user) { router.push('/login'); return; }
     setIsLoggedIn(true);
-    const saved = localStorage.getItem('spin_spins_left');
-    const savedDate = localStorage.getItem('spin_date');
-    const today = new Date().toDateString();
-    if (savedDate === today && saved) {
-      setSpinsLeft(Number(saved));
-    } else {
-      localStorage.setItem('spin_date', today);
-      localStorage.setItem('spin_spins_left', '3');
-      setSpinsLeft(3);
-    }
-    const savedTotal = localStorage.getItem('spin_total_won');
-    if (savedTotal) setTotalWon(Number(savedTotal));
   }, [router]);
 
-  const spin = useCallback(() => {
+  // The prize is rolled server-side; the wheel animates to the real outcome.
+  const spin = useCallback(async () => {
     if (spinning || spinsLeft <= 0 || coins < SPIN_COST) return;
-    addCoins(-SPIN_COST, 'Spin the Wheel');
-    setSpinsLeft(prev => {
-      const next = prev - 1;
-      localStorage.setItem('spin_spins_left', String(next));
-      return next;
-    });
+    setNotice('');
     setSpinning(true);
     setShowResult(false);
     setResult(null);
-    const winIndex = Math.floor(Math.random() * SEGMENTS.length);
+    const res = await award({ gameId: 'spin' });
+    if (!res.success) {
+      setSpinning(false);
+      setNotice(res.error || 'Spin failed.');
+      if ((res.error || '').includes('Daily play limit')) setSpinsLeft(0);
+      return;
+    }
+    const won = res.coins ?? 0;
+    if (typeof res.playsLeft === 'number') setSpinsLeft(res.playsLeft);
+    else setSpinsLeft(prev => Math.max(0, prev - 1));
+    const winIndex = Math.max(0, SEGMENTS.findIndex(s => s.coins === won));
     const targetAngle = 360 - (winIndex * SEGMENT_ANGLE) - SEGMENT_ANGLE / 2;
     const spins = 5 + Math.floor(Math.random() * 3);
     const finalRotation = rotation + spins * 360 + targetAngle;
     setRotation(finalRotation);
     setTimeout(() => {
-      const won = SEGMENTS[winIndex].coins;
       setResult(won);
       setShowResult(true);
       setSpinning(false);
-      if (won > 0) addCoins(won, 'Spin the Wheel prize');
-      setTotalWon(prev => {
-        const next = prev + won;
-        localStorage.setItem('spin_total_won', String(next));
-        return next;
-      });
+      setTotalWon(prev => prev + won);
     }, 4200);
-  }, [spinning, spinsLeft, coins, rotation, addCoins]);
+  }, [spinning, spinsLeft, coins, rotation, award]);
 
   if (!isLoggedIn) return null;
 
   return (
-    <main style={{ minHeight: '100vh', background: 'var(--mario-bg)' }}>
-      <NavBar pageLabel="Spin the Wheel" />
-      <div style={{ maxWidth: '420px', margin: '0 auto', padding: '20px 16px 80px' }}>
+      <main style={{ minHeight: '100vh', background: 'var(--mario-bg)' }}>
+        <NavBar pageLabel="Spin the Wheel" />
+        <div style={{ maxWidth: '420px', margin: '0 auto', padding: '20px 16px 80px' }}>
+          <DiscordNudge compact />
+          {notice && (
+            <p style={{ color: '#ff9d9d', fontSize: 12, textAlign: 'center', marginBottom: 10 }}>{notice}</p>
+          )}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', gap: '8px' }}>
           {[
             { label: 'Spins', value: `${spinsLeft}/3`, color: spinsLeft > 0 ? 'var(--mario-yellow)' : 'var(--mario-red)' },

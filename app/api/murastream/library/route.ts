@@ -1,25 +1,70 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import UserLibrary from '@/app/lib/models/UserLibrary';
+import UserPreference from '@/app/lib/models/UserPreference';
+import UserActivity from '@/app/lib/models/UserActivity';
+import User from '@/app/lib/models/User';
+import { getSessionUser } from '@/app/lib/session';
 
-// GET /api/murastream/library?email=xxx — load library
+// Murastream library — identity ALWAYS comes from the signed session cookie.
+// The old ?email= parameter trusted whoever typed it (IDOR: any visitor
+// could read or overwrite anyone's watchlist). Unauthenticated devices keep
+// working fully offline via localStorage; nothing syncs until sign-in.
+type Media = {
+  id: number; mediaType?: string; title?: string; posterPath?: string | null;
+  backdropPath?: string | null; voteAverage?: number; year?: string; overview?: string;
+};
+
+function normType(mediaType?: string): 'movie' | 'anime' | 'series' {
+  const t = String(mediaType || '').toLowerCase();
+  if (t === 'anime') return 'anime';
+  if (t === 'movie') return 'movie';
+  return 'series'; // tv and everything else read as series
+}
+
+function snapOf(m: Media) {
+  return {
+    title: String(m.title || '').slice(0, 120),
+    image: String(m.posterPath || m.backdropPath || '').slice(0, 500),
+    subtitle: String(m.year || '').slice(0, 40),
+  };
+}
+
+// Mirror likes/watchlist into the unified preferences table so favorites
+// stay cross-platform (site, dashboard, Discord). Idempotent upserts.
+async function mirrorPreferences(emailLc: string, discordId: string, likes: Media[], myList: Media[]) {
+  const ops: Array<Promise<unknown>> = [];
+  for (const m of likes || []) {
+    if (typeof m?.id !== 'number') continue;
+    ops.push(UserPreference.updateOne(
+      { userEmail: emailLc, contentType: normType(m.mediaType), contentId: String(m.id), action: 'like' },
+      { $setOnInsert: { discordId, snapshot: snapOf(m), createdAt: new Date() } },
+      { upsert: true },
+    ));
+  }
+  for (const m of myList || []) {
+    if (typeof m?.id !== 'number') continue;
+    ops.push(UserPreference.updateOne(
+      { userEmail: emailLc, contentType: normType(m.mediaType), contentId: String(m.id), action: 'save' },
+      { $setOnInsert: { discordId, snapshot: snapOf(m), createdAt: new Date() } },
+      { upsert: true },
+    ));
+  }
+  // Bound the fan-out: likes+list are capped client-side well below this.
+  await Promise.all(ops.slice(0, 400));
+}
+
+// GET /api/murastream/library — own library (session).
 export async function GET(request: NextRequest) {
   try {
+    const viewer = await getSessionUser(request);
+    if (!viewer) return NextResponse.json({ likes: [], myList: [], history: [], episodeProgress: [], settings: {} });
     await dbConnect();
-    const email = request.nextUrl.searchParams.get('email');
-    if (!email) {
-      return NextResponse.json({ error: 'Missing email' }, { status: 400 });
-    }
-
-    const library = await UserLibrary.findOne({ email: email.toLowerCase() }).lean<Record<string, unknown>>();
+    const library = await UserLibrary.findOne({ email: viewer.email.toLowerCase() }).lean<Record<string, unknown>>();
     if (!library) {
       return NextResponse.json({ likes: [], myList: [], history: [], episodeProgress: [], settings: {} });
     }
-
-    // Accept both names when reading legacy docs: episodeProgress (new) or
-    // animeProgress (old field written before the rename).
     const progress = (library.episodeProgress || library.animeProgress || []) as unknown[];
-
     return NextResponse.json({
       likes: library.likes || [],
       myList: library.myList || [],
@@ -33,29 +78,32 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/murastream/library — save/merge library
+// POST /api/murastream/library — save/merge own library (session).
 export async function POST(request: NextRequest) {
   try {
+    const viewer = await getSessionUser(request);
+    if (!viewer) return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     await dbConnect();
     const body = await request.json();
-    const { email, likes, myList, history, episodeProgress, settings } = body;
-
-    if (!email) {
-      return NextResponse.json({ error: 'Missing email' }, { status: 400 });
-    }
+    const { likes, myList, history, episodeProgress, settings } = body;
 
     const update: Record<string, unknown> = { updatedAt: new Date() };
-    if (likes !== undefined) update.likes = likes;
-    if (myList !== undefined) update.myList = myList;
-    if (history !== undefined) update.history = history;
-    if (episodeProgress !== undefined) update.episodeProgress = episodeProgress;
-    if (settings !== undefined) update.settings = settings;
+    if (likes !== undefined) update.likes = Array.isArray(likes) ? likes.slice(0, 500) : [];
+    if (myList !== undefined) update.myList = Array.isArray(myList) ? myList.slice(0, 500) : [];
+    if (history !== undefined) update.history = Array.isArray(history) ? history.slice(0, 100) : [];
+    if (episodeProgress !== undefined) update.episodeProgress = Array.isArray(episodeProgress) ? episodeProgress.slice(0, 50) : [];
+    if (settings !== undefined && typeof settings === 'object') update.settings = settings;
 
+    const emailLc = viewer.email.toLowerCase();
     const library = await UserLibrary.findOneAndUpdate(
-      { email: email.toLowerCase() },
+      { email: emailLc },
       { $set: update },
-      { upsert: true, new: true }
+      { upsert: true, new: true },
     ).lean();
+    const me = await User.findOne({ email: viewer.email }).select('discord').lean<{
+      discord?: { discordId?: string };
+    } | null>();
+    await mirrorPreferences(emailLc, me?.discord?.discordId || '', (update.likes || []) as Media[], (update.myList || []) as Media[]);
 
     return NextResponse.json({ success: true, updatedAt: library.updatedAt });
   } catch (error) {
@@ -64,20 +112,16 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE /api/murastream/library?email=xxx — clear library
+// DELETE /api/murastream/library — clear own library (session).
 export async function DELETE(request: NextRequest) {
   try {
+    const viewer = await getSessionUser(request);
+    if (!viewer) return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     await dbConnect();
-    const email = request.nextUrl.searchParams.get('email');
-    if (!email) {
-      return NextResponse.json({ error: 'Missing email' }, { status: 400 });
-    }
-
     await UserLibrary.findOneAndUpdate(
-      { email: email.toLowerCase() },
+      { email: viewer.email.toLowerCase() },
       { $set: { likes: [], myList: [], history: [], episodeProgress: [], updatedAt: new Date() } }
     );
-
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('[Library DELETE]', error);

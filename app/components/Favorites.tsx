@@ -15,10 +15,47 @@ export function useFavorites() {
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
 
   useEffect(() => {
+    let cancelled = false;
     const saved = localStorage.getItem('muragoods_favorites');
     if (saved) {
       try { setFavorites(JSON.parse(saved)); } catch { setFavorites([]); }
     }
+    // One-time migration of legacy local favorites into the shared account,
+    // then authoritative reload so site/Discord/dashboard all agree.
+    (async () => {
+      try {
+        if (saved) {
+          const items = JSON.parse(saved) as FavoriteItem[];
+          if (Array.isArray(items) && items.length) {
+            await fetch('/api/favorites/import', {
+              method: 'PUT', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                items: items.map(i => ({
+                  contentType: 'product', contentId: String(i.id), action: 'favorite',
+                  snapshot: { title: i.name, image: i.image },
+                })),
+              }),
+            }).catch(() => undefined);
+          }
+        }
+        const res = await fetch('/api/favorites?type=product&action=favorite');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled || !data.success) return;
+        const rows = (data.rows || []) as Array<{ contentId: string; snapshot?: { title?: string; image?: string } }>;
+        if (rows.length) {
+          const merged: FavoriteItem[] = rows.map(r => ({
+            id: r.contentId,
+            name: r.snapshot?.title || r.contentId,
+            image: r.snapshot?.image || '',
+            addedAt: new Date().toISOString(),
+          }));
+          setFavorites(merged);
+          localStorage.setItem('muragoods_favorites', JSON.stringify(merged));
+        }
+      } catch { /* offline: keep local cache */ }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const saveFavorites = (newFavs: FavoriteItem[]) => {
@@ -29,10 +66,22 @@ export function useFavorites() {
   const addFavorite = (item: Omit<FavoriteItem, 'addedAt'>) => {
     if (favorites.some(f => f.id === item.id)) return;
     saveFavorites([...favorites, { ...item, addedAt: new Date().toISOString() }]);
+    // Dual-write to the shared account (best-effort; local cache already updated).
+    void fetch('/api/favorites', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contentType: 'product', contentId: String(item.id), action: 'favorite',
+        snapshot: { title: item.name, image: item.image },
+      }),
+    }).catch(() => undefined);
   };
 
   const removeFavorite = (id: string) => {
     saveFavorites(favorites.filter(f => f.id !== id));
+    void fetch('/api/favorites', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contentType: 'product', contentId: String(id), action: 'favorite', remove: true }),
+    }).catch(() => undefined);
   };
 
   const isFavorite = (id: string) => favorites.some(f => f.id === id);

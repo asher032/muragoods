@@ -126,9 +126,13 @@ export function useCoins() {
     };
     void sync();
     const onStorage = (e: StorageEvent) => { if (e.key === 'user') void sync(); };
+    const onAward = () => { void sync(); };
     window.addEventListener('storage', onStorage);
+    // Server-backed game awards dispatch this so the badge confirms the
+    // server balance immediately instead of waiting for the next poll.
+    window.addEventListener('muragoods:coins-changed', onAward);
     const iv = setInterval(sync, 30_000);
-    return () => { cancelled = true; clearInterval(iv); window.removeEventListener('storage', onStorage); };
+    return () => { cancelled = true; clearInterval(iv); window.removeEventListener('storage', onStorage); window.removeEventListener('muragoods:coins-changed', onAward); };
   }, [loaded]);
 
   // Persist whenever coins change

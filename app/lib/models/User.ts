@@ -39,6 +39,26 @@ const UserSchema = new mongoose.Schema({
   referralCode: { type: String, unique: true, sparse: true },
   referredBy: { type: String, default: null },
   referralUsed: { type: Boolean, default: false },
+  // Discord account link — the join key between the Muragoods account
+  // (email) and Discord/Murabot identity (snowflake). One Discord account
+  // links to exactly one Muragoods account (unique sparse). Disconnecting
+  // clears these fields only; game/shop/stream data is keyed by email and
+  // is never deleted by an unlink.
+  discord: {
+    discordId: { type: String, unique: true, sparse: true, index: true },
+    username: { type: String, default: '' },
+    avatar: { type: String, default: '' },
+    linkedAt: { type: Date, default: null },
+  },
+  // Privacy controls. Watch history and activity stay private unless the
+  // owner opts out; favorites default private; the game profile defaults
+  // public so leaderboards and the platform feel work out of the box.
+  privacy: {
+    gameProfile: { type: String, enum: ['public', 'private'], default: 'public' },
+    favorites: { type: String, enum: ['public', 'private'], default: 'private' },
+    activity: { type: String, enum: ['private', 'friends', 'public'], default: 'private' },
+    watchHistory: { type: String, enum: ['private', 'public'], default: 'private' },
+  },
 });
 
 export default mongoose.models.User || mongoose.model('User', UserSchema);

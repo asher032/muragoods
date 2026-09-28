@@ -244,25 +244,20 @@ export function useMuraStreamStore() {
   }, []);
 
   // ─── MongoDB Sync ────────────────────────────────────
+  // Identity comes from the signed session cookie server-side — the client
+  // never sends an email (the old ?email= parameter let anyone read or
+  // overwrite anyone else's library). Signed-out devices keep working fully
+  // offline on localStorage; sync is a no-op until sign-in.
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const emailRef = useRef<string | null>(null);
+  const authedRef = useRef<boolean | null>(null);
 
-  // Read user email from localStorage (set by AuthContext)
+  // Load from MongoDB on mount (if signed in)
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('user');
-      if (raw) { const u = JSON.parse(raw); emailRef.current = u?.email || null; }
-    } catch { /* empty */ }
-  }, []);
-
-  // Load from MongoDB on mount (if authenticated)
-  useEffect(() => {
-    const email = emailRef.current;
-    if (!email) return;
     (async () => {
       try {
-        const res = await fetch(`/api/murastream/library?email=${encodeURIComponent(email)}`);
-        if (!res.ok) return;
+        const res = await fetch('/api/murastream/library');
+        if (!res.ok) { authedRef.current = false; return; }
+        authedRef.current = true;
         const data = await res.json();
         if (data.likes?.length) { setLikesState(data.likes); writeJSON(KEYS.likes, data.likes); }
         if (data.myList?.length) { setMyListState(data.myList); writeJSON(KEYS.myList, data.myList); }
@@ -278,16 +273,17 @@ export function useMuraStreamStore() {
 
   // Debounced save to MongoDB
   const saveToMongo = useCallback(() => {
-    const email = emailRef.current;
-    if (!email) return;
+    if (authedRef.current === false) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
       try {
-        await fetch('/api/murastream/library', {
+        const res = await fetch('/api/murastream/library', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, likes, myList, history, episodeProgress, settings }),
+          body: JSON.stringify({ likes, myList, history, episodeProgress, settings }),
         });
+        if (res.status === 401) authedRef.current = false;
+        else authedRef.current = true;
       } catch (err) { console.error('[Library sync save]', err); }
     }, 2000);
   }, [likes, myList, history, episodeProgress, settings]);

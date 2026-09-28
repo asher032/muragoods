@@ -267,15 +267,34 @@ class MediaCommands(commands.Cog):
             item.get("type", "movie"), int(item.get("id", 0)))))
         await interaction.followup.send(embed=e, view=view)
 
-    @app_commands.command(name="watchlist", description="Your MuraStream watchlist lives on the site.")
+    @app_commands.command(name="watchlist", description="Your MuraStream watchlist (shared with the site).")
     async def watchlist(self, interaction: discord.Interaction):
-        e = embeds.embed("🔖 Your Watchlist",
-                         "Watchlists are personal — manage them on MuraStream.\n\n"
-                         "Sign in, open any title and press **Add to Watchlist**.")
+        await interaction.response.defer(ephemeral=True)
+        import database as db_mod
+        import siteprofile
+        try:
+            ok, titles = await siteprofile.watchlist_for(db_mod._db, interaction.user.id)
+        except Exception:
+            log.exception("watchlist read failed")
+            await interaction.followup.send("Could not load your watchlist right now.", ephemeral=True)
+            return
         view = discord.ui.View()
         view.add_item(discord.ui.Button(label="🔖 Open My Space",
                                         url=f"{config.MURASTREAM_URL}/account/my-space", emoji="👤"))
-        await interaction.response.send_message(embed=e, view=view)
+        if not ok:
+            await interaction.followup.send(embed=embeds.embed(
+                "🔖 Your Watchlist",
+                "Link Discord at Muragoods → My Muragoods → Connected Accounts, "
+                "then this command shows the same list as the site."), view=view, ephemeral=True)
+            return
+        if not titles:
+            await interaction.followup.send(embed=embeds.embed(
+                "🔖 Your Watchlist",
+                "Empty — sign in on MuraStream, open any title and press **Add to Watchlist**."),
+                view=view, ephemeral=True)
+            return
+        await interaction.followup.send(embed=embeds.embed(
+            "🔖 Your Watchlist", "\n".join(f"• **{t}**" for t in titles)), view=view, ephemeral=True)
 
     @app_commands.command(name="profile", description="Unified profile: economy, progression and MuraStream links.")
     @app_commands.describe(user="Whose profile (default: you)",
@@ -358,6 +377,22 @@ class MediaCommands(commands.Cog):
                 extra.append("🐾 " + ", ".join(
                     f"**{p.get('name')}** Lv{int(p.get('level', 1))}" for p in pets[:5]))
             extra.append("✨ " + mult_line)
+            try:
+                import siteprofile as site_mod
+                show_games, games_line = await site_mod.site_section_for(
+                    db_mod._db, interaction.user.id, target.id)
+                if show_games:
+                    extra.append("🎮 " + games_line.replace("\n", " · "))
+            except Exception:
+                pass
+            try:
+                _, favs = await site_mod.favorites_for(
+                    db_mod._db, interaction.user.id, target.id)
+                mine = [f for f in favs if f["type"] in ("movie", "anime", "series")][:3]
+                if mine:
+                    extra.append("❤️ " + ", ".join(f["title"] for f in mine))
+            except Exception:
+                pass
             extra.append("🔗 MuraStream: sign in on the site to sync watchlist, points and comments.")
             e.add_field(name="Showcase & More", value="\n".join(extra)[:1024], inline=False)
             if compare_with is not None and int(compare_with.id) != int(target.id) \

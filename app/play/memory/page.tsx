@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
-import { useCoins } from '@/app/hooks/useCoins';
+import { useGameSession } from '@/app/hooks/useGameSession';
+import { DiscordNudge } from '@/app/components/DiscordNudge';
 import { Brain, Cake, CircleHelp, Coffee, Coins, Cookie, Gift, Heart, Milk, Music, Package, PartyPopper, Pizza, Star, Wheat } from 'lucide-react';
 const EMOJIS = [
   <Pizza className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, <Cookie className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, <Coffee className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, <Milk className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />,
@@ -30,7 +31,7 @@ function shuffleArray<T>(array: T[]): T[] {
 
 export default function MemoryGame() {
   const router = useRouter();
-  const { addCoins } = useCoins();
+  const { award } = useGameSession('memory');
   const [loaded, setLoaded] = useState(false);
   const [cards, setCards] = useState<Card[]>([]);
   const [flippedIds, setFlippedIds] = useState<number[]>([]);
@@ -119,17 +120,21 @@ export default function MemoryGame() {
         const totalPairs = (getGridSize() * getGridSize()) / 2;
 
         if (newMatchCount >= totalPairs) {
-          // ALL MATCHES FOUND - Game Over!
+          // ALL MATCHES FOUND - Game Over! Server settles the reward.
           setTimeout(() => {
             const finalMoves = movesRef.current;
             const finalTime = timerRef.current;
             const score = Math.max(5, 50 - finalMoves * 2 - Math.floor(finalTime / 10));
-            addCoins(score);
-            setCoinsEarned(score);
+            setCoinsEarned(-1); // pending until the server confirms
             setGameOver(true);
             setPlaying(false);
             setLocked(false);
             if (!bestScore || finalMoves < bestScore) setBestScore(finalMoves);
+            const diffNum = difficulty === 'hard' ? 2 : difficulty === 'medium' ? 1 : 0;
+            void award({
+              gameId: 'memory', score, moves: finalMoves, timeSec: finalTime,
+              difficulty: diffNum, cleared: 1, playTimeSec: finalTime,
+            }).then(res => setCoinsEarned(res.success ? (res.coins ?? 0) : 0));
           }, 600);
         } else {
           setLocked(false);
@@ -148,7 +153,7 @@ export default function MemoryGame() {
       setCards(newCards);
       setFlippedIds(newFlipped);
     }
-  }, [cards, flippedIds, locked, gameOver, addCoins, bestScore, difficulty]);
+  }, [cards, flippedIds, locked, gameOver, award, bestScore, difficulty]);
 
   const gridSize = getGridSize();
   const totalPairs = (gridSize * gridSize) / 2;
@@ -157,6 +162,7 @@ export default function MemoryGame() {
     <main style={{ minHeight: '100vh', background: '#0a0a18' }}>
       <NavBar pageLabel="Memory Match" />
       <div style={{ maxWidth: '600px', margin: '0 auto', padding: '80px 20px 100px' }}>
+        <DiscordNudge compact />
         <div style={{ textAlign: 'center', marginBottom: '24px', opacity: loaded ? 1 : 0, transition: 'all 0.6s ease' }}>
           <span style={{ fontSize: '40px', display: 'block', marginBottom: '12px' }}><Brain color={'#ff4d8d'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
           <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '20px', color: '#ffd60a', marginBottom: '8px' }}>Memory Match</h1>
@@ -219,6 +225,7 @@ export default function MemoryGame() {
             <h2 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: '#ffd60a', marginBottom: '8px' }}>You Win!</h2>
             <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', marginBottom: '8px' }}>{moves} moves in {Math.floor(timer / 60)}:{String(timer % 60).padStart(2, '0')}</p>
             {coinsEarned > 0 && <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '12px', color: '#06d6a0', marginBottom: '20px' }}>+{coinsEarned} coins earned!</p>}
+            {coinsEarned === -1 && <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '12px', color: '#888', marginBottom: '20px' }}>Confirming reward…</p>}
             {bestScore !== null && <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', marginBottom: '16px' }}>Best: {bestScore} moves</p>}
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
               <button onClick={startGame} style={{ padding: '10px 24px', borderRadius: '10px', border: '1px solid rgba(255,214,10,0.4)', background: 'rgba(255,214,10,0.12)', color: '#ffd60a', fontFamily: 'var(--font-arcade)', fontSize: '10px', cursor: 'pointer' }}>Play Again</button>
