@@ -86,13 +86,6 @@ class MediaCommands(commands.Cog):
         e.add_field(name="📚 Commands", value=str(len(self.bot.tree.get_commands())), inline=True)
         await interaction.followup.send(embed=e)
 
-    @app_commands.command(name="ping", description="Bot latency.")
-    async def ping(self, interaction: discord.Interaction):
-        # NaN-safe: gateway latency can be NaN during (re)connect.
-        ms = gateway_latency_ms(self.bot, 0)
-        await interaction.response.send_message(
-            embed=embeds.embed("🏓 Pong!", f"Latency: **{ms} ms**", embeds.INFO))
-
     @app_commands.command(name="dashboard", description="Open the MuraBot web dashboard.")
     async def dashboard(self, interaction: discord.Interaction):
         e = embeds.embed(
@@ -284,20 +277,119 @@ class MediaCommands(commands.Cog):
                                         url=f"{config.MURASTREAM_URL}/account/my-space", emoji="👤"))
         await interaction.response.send_message(embed=e, view=view)
 
-    @app_commands.command(name="profile", description="Your MuraStream profile.")
-    async def profile(self, interaction: discord.Interaction):
-        user = interaction.user
-        e = embeds.embed("👤 Profile", color=embeds.GOLD)
-        e.set_author(name=str(user), icon_url=user.display_avatar.url if user.display_avatar else None)
-        e.set_thumbnail(url=user.display_avatar.url if user.display_avatar else "")
-        e.add_field(name="Discord", value=f"{user.mention} (`{user.id}`)", inline=False)
-        e.add_field(name="🔗 MuraStream", value=(
-            "Sign in on the site to sync your watchlist, points and comments."), inline=False)
+    @app_commands.command(name="profile", description="Unified profile: economy, progression and MuraStream links.")
+    @app_commands.describe(user="Whose profile (default: you)",
+                           compare_with="Compare against another member (public stats only)")
+    async def profile(self, interaction: discord.Interaction, user: discord.User | None = None,
+                      compare_with: discord.Member | None = None):
+        """Merged profile: Discord identity + full economy card + site links.
+
+        The old site-only card and the economy profile now live here together —
+        one `/profile`, no duplicates, nothing lost.
+        """
+        await interaction.response.defer()
+        import database as db_mod
+        import economy as eco_mod
+        target = user or interaction.user
+        gid = interaction.guild.id
+        try:
+            wallet = await eco_mod.get_wallet(db_mod._db, gid, target.id)
+            cfg = await eco_mod.get_economy_config(db_mod._db, gid)
+            sym = str(cfg.get("currencySymbol", "🪙"))
+            inv = await eco_mod.get_inventory(db_mod._db, gid, target.id)
+            progress = await eco_mod.quest_progress(db_mod._db, gid, target.id)
+            try:
+                await eco_mod.check_economy_achievements(db_mod._db, gid, target.id)
+                achv = await db_mod._db.economy_achv.find_one(
+                    {"guildId": int(gid), "userId": int(target.id)}) or {}
+                achv_n = len(achv.get("done") or [])
+            except Exception:
+                achv_n = 0
+            try:
+                prof = await db_mod._db.economy_profile.find_one(
+                    {"guildId": int(gid), "userId": int(target.id)}) or {}
+                title = str(prof.get("title") or "Newcomer")
+                badges = list(prof.get("badges") or [])[:5]
+            except Exception:
+                title, badges = "Newcomer", []
+            try:
+                showcase = await eco_mod.showcase_get(db_mod._db, gid, target.id)
+            except Exception:
+                showcase = {"slots": []}
+            try:
+                pets = await db_mod._db.economy_pets.find(
+                    {"guildId": int(gid), "userId": int(target.id)}).to_list(5)
+            except Exception:
+                pets = []
+            try:
+                mult = await eco_mod.active_multipliers(db_mod._db, gid, target.id)
+                mult_line = f"Coins x{mult['coins']} · XP x{mult['xp']} · Luck x{mult['luck']}"
+            except Exception:
+                mult_line = "Coins x1.0"
+            e = embeds.embed(f"👤 {getattr(target, 'display_name', target.name)}",
+                             f"**{title}** · {target.mention} (`{target.id}`)", embeds.GOLD)
+            try:
+                if target.display_avatar:
+                    e.set_thumbnail(url=target.display_avatar.url)
+            except Exception:
+                pass
+            e.add_field(name="Balance",
+                        value=f"{sym} **{int(wallet.get('balance', 0)):,}** pocket\n"
+                              f"🏦 **{int(wallet.get('bank', 0)):,}** bank\n"
+                              f"📊 Net **{eco_mod.net_worth(wallet):,}** · "
+                              f"💎 **{int(wallet.get('gems', 0))}**",
+                        inline=True)
+            e.add_field(name="Progression",
+                        value=f"Level **{eco_mod.economy_level(wallet)}** · "
+                              f"🔥 **{int(wallet.get('prestige', 0))}** · "
+                              f"🌀 **{int(wallet.get('omega', 0))}**\n"
+                              f"Streak **{int(wallet.get('streakDaily', 0))}** · "
+                              f"Activities **{progress.get('activities', 0)}** · "
+                              f"Items **{sum(1 for q in inv.values() if q > 0)}** · "
+                              f"Achievements **{achv_n}/{len(eco_mod.ACHIEVEMENTS_FULL)}**",
+                        inline=True)
+            extra = []
+            if badges:
+                extra.append(f"Badges: {' '.join(badges)}")
+            if showcase.get("slots"):
+                names = [eco_mod.ITEMS.get(i, {}).get("name", i) for i in showcase["slots"][:9]]
+                extra.append("🖼️ " + ", ".join(names))
+            if pets:
+                extra.append("🐾 " + ", ".join(
+                    f"**{p.get('name')}** Lv{int(p.get('level', 1))}" for p in pets[:5]))
+            extra.append("✨ " + mult_line)
+            extra.append("🔗 MuraStream: sign in on the site to sync watchlist, points and comments.")
+            e.add_field(name="Showcase & More", value="\n".join(extra)[:1024], inline=False)
+            if compare_with is not None and int(compare_with.id) != int(target.id) \
+                    and not getattr(compare_with, "bot", False):
+                try:
+                    data = await eco_mod.compare_users(
+                        db_mod._db, gid, target.id, compare_with.id)
+                    me = data[str(int(target.id))]
+                    them = data[str(int(compare_with.id))]
+                    rows = []
+                    for label, key in [("Net worth", "net"), ("Level", "level"),
+                                       ("Items", "items"), ("Streak", "streak")]:
+                        a, b = me[key], them[key]
+                        mark = "🟰" if a == b else ("🟩" if a > b else "🟥")
+                        rows.append(f"{mark} **{label}**: **{a:,}** vs **{b:,}**")
+                    e.add_field(name=f"⚖️ vs {getattr(compare_with, 'display_name', 'them')}",
+                                value="\n".join(rows), inline=False)
+                except Exception:
+                    pass
+        except Exception:
+            log.exception("merged profile failed")
+            e = embeds.embed("👤 Profile", color=embeds.GOLD)
+            e.set_author(name=str(target),
+                         icon_url=target.display_avatar.url if target.display_avatar else None)
+            e.add_field(name="Discord", value=f"{target.mention} (`{target.id}`)", inline=False)
+            e.add_field(name="🔗 MuraStream", value=(
+                "Sign in on the site to sync your watchlist, points and comments."), inline=False)
         view = discord.ui.View()
-        view.add_item(discord.ui.Button(label="👤 VIEW PROFILE", url=bridge.profile_url(), emoji="👤"))
+        view.add_item(discord.ui.Button(label="👤 VIEW SITE PROFILE", url=bridge.profile_url(), emoji="👤"))
         view.add_item(discord.ui.Button(label="⭐ MY SPACE",
                                         url=f"{config.MURASTREAM_URL}/account/my-space", emoji="⭐"))
-        await interaction.response.send_message(embed=e, view=view)
+        await interaction.followup.send(embed=e, view=view)
 
 
 async def setup(bot: commands.Bot):

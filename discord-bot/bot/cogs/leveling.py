@@ -230,25 +230,77 @@ class LevelingCog(commands.Cog):
             e.set_thumbnail(url=target.display_avatar.url)
         await interaction.followup.send(embed=e)
 
-    @app_commands.command(name="leaderboard", description="Top members by XP.")
-    @app_commands.describe(page="Leaderboard page")
-    async def leaderboard(self, interaction: discord.Interaction, page: int = 1):
+    board = app_commands.Group(name="leaderboard", description="Ranked boards: XP, wealth, items")
+
+    @board.command(name="stats", description="Leaderboard for XP or wealth (scope: server).")
+    @app_commands.describe(board="Which board", page="Page number", scope="Scope (server)")
+    @app_commands.choices(board=[
+        app_commands.Choice(name="xp", value="xp"),
+        app_commands.Choice(name="net worth", value="net"),
+        app_commands.Choice(name="pocket", value="balance"),
+        app_commands.Choice(name="gems", value="gems"),
+    ])
+    async def board_stats(self, interaction: discord.Interaction, board: str = "xp",
+                          page: int = 1, scope: str = "server"):
         await interaction.response.defer()
         page = max(1, int(page or 1))
-        docs = await levels.top_xp(interaction.guild.id, 10, (page - 1) * 10)
-        if not docs:
-            await interaction.followup.send("No XP earned yet — start chatting!")
+        if board == "xp":
+            docs = await levels.top_xp(interaction.guild.id, 10, (page - 1) * 10)
+            if not docs:
+                await interaction.followup.send("No XP earned yet — start chatting!")
+                return
+            medals = ["🥇", "🥈", "🥉"] + ["▫️"] * 7
+            lines = []
+            for i, d in enumerate(docs):
+                xp = int(d.get("xp", 0))
+                level, into, need = levels.level_from_xp(xp)
+                rank = (page - 1) * 10 + i + 1
+                medal = medals[i] if page == 1 and i < 3 else f"`{rank}.`"
+                lines.append(f"{medal} <@{d.get('userId')}> — **Level {level}** ({xp} XP, {need - into} to go)")
+            await interaction.followup.send(embed=embeds.embed(
+                f"🏆 XP Leaderboard (p{page})", "\n".join(lines), embeds.GOLD))
             return
-        medals = ["🥇", "🥈", "🥉"] + ["▫️"] * 7
+        import economy as eco
+        by = {"balance": "balance", "gems": "gems"}.get(board, "net")
+        rows = await eco.top_wallets(database._db, interaction.guild.id, by, 10, (page - 1) * 10)
+        if not rows:
+            await interaction.followup.send("No holders yet.", ephemeral=True)
+            return
+        medals = ["🥇", "🥈", "🥉"]
         lines = []
-        for i, d in enumerate(docs):
-            xp = int(d.get("xp", 0))
-            level, into, need = levels.level_from_xp(xp)
+        for i, row in enumerate(rows):
             rank = (page - 1) * 10 + i + 1
             medal = medals[i] if page == 1 and i < 3 else f"`{rank}.`"
-            lines.append(f"{medal} <@{d.get('userId')}> — **Level {level}** ({xp} XP, {need - into} to go)")
+            val = (f"💎 {int(row.get('gems', 0))}" if by == "gems"
+                   else f"**{int(row.get('balance', 0)):,}**" if by == "balance"
+                   else f"**{int(row.get('balance', 0)) + int(row.get('bank', 0)):,}**")
+            lines.append(f"{medal} <@{row.get('userId')}> — {val}")
         await interaction.followup.send(embed=embeds.embed(
-            f"🏆 Leaderboard (p{page})", "\n".join(lines), embeds.GOLD))
+            f"🏆 {by} · p{page}", "\n".join(lines), embeds.GOLD))
+
+    @board.command(name="item", description="Item ownership leaderboard.")
+    @app_commands.describe(item="Item ID", page="Page number")
+    async def board_item(self, interaction: discord.Interaction, item: str, page: int = 1):
+        await interaction.response.defer()
+        import economy as eco
+        item_id = (item or "").strip().lower()
+        if item_id not in eco.ITEMS:
+            await interaction.followup.send("Unknown item.", ephemeral=True)
+            return
+        page = max(1, int(page or 1))
+        try:
+            cur = database._db.economy_inv.find(
+                {"guildId": int(interaction.guild.id), f"items.{item_id}": {"$gte": 1}})
+            rows = await cur.sort(f"items.{item_id}", -1).skip((page - 1) * 10).limit(10).to_list(10)
+        except Exception:
+            rows = []
+        if not rows:
+            await interaction.followup.send("Nobody holds that item.", ephemeral=True)
+            return
+        lines = [f"`{i + 1 + (page - 1) * 10}.` <@{r.get('userId')}> — **{(r.get('items') or {}).get(item_id, 0)}x**"
+                 for i, r in enumerate(rows)]
+        await interaction.followup.send(embed=embeds.embed(
+            f"🏆 {eco.ITEMS[item_id]['name']} holders · p{page}", "\n".join(lines), embeds.GOLD))
 
     # ── Economy ───────────────────────────────────────────────────────
     async def _wallet(self, guild_id: int, user_id: int) -> dict:
@@ -257,13 +309,33 @@ class LevelingCog(commands.Cog):
             {"$setOnInsert": {"balance": 100}}, upsert=True, return_document=True,
         )
 
-    @app_commands.command(name="balance", description="Pocket, bank, net worth and gems.")
-    @app_commands.describe(user="Whose balance (default: you)")
-    async def balance(self, interaction: discord.Interaction, user: discord.User | None = None):
+    @app_commands.command(name="balance", description="Pocket, bank, net worth, gems (history flag for log).")
+    @app_commands.describe(user="Whose balance (default: you)",
+                           history="Show recent transactions instead of just totals")
+    async def balance(self, interaction: discord.Interaction, user: discord.User | None = None,
+                      history: bool = False):
         await interaction.response.defer()
         target = user or interaction.user
         try:
             import economy as eco
+            if history:
+                rows = await eco.currency_log(
+                    database._db, interaction.guild.id, target.id, 10, 0)
+                if not rows:
+                    await interaction.followup.send("No transactions yet.", ephemeral=True)
+                    return
+                lines = []
+                for r in rows:
+                    at = r.get("createdAt")
+                    stamp = at.strftime("%m-%d %H:%M") if hasattr(at, "strftime") else "?"
+                    amt = int(r.get("amount", 0))
+                    lines.append(f"`{r.get('txId', '?')[:8]}` {stamp} **{r.get('type')}** "
+                                 f"{'+' if amt > 0 else ''}{amt}")
+                await interaction.followup.send(embed=embeds.embed(
+                    f"🧾 Currency log — {getattr(target, 'display_name', 'you')}",
+                    "\n".join(lines) + "\n\nImmutable audit trail (see also `/profile`).",
+                    embeds.INFO))
+                return
             wallet = await eco.get_wallet(database._db, interaction.guild.id, target.id)
             cfg = await eco.get_economy_config(database._db, interaction.guild.id)
             sym = str(cfg.get("currencySymbol", "🪙"))
@@ -356,15 +428,6 @@ class LevelingCog(commands.Cog):
             {"$inc": {"balance": amount}}, upsert=True)
         await interaction.followup.send(embed=embeds.ok(
             "💸 Payment sent", f"{interaction.user.mention} → {user.mention}: **{amount}** coins."))
-
-    @app_commands.command(name="shop", description="Browse the coin shop.")
-    async def shop(self, interaction: discord.Interaction):
-        e = embeds.embed("🛒 Server Shop", "Buy with `/inventory shop buy:<id>` — `/inventory shop` lists all items.", embeds.GOLD)
-        e.add_field(name="🎟️ Mystery Box", value="500 coins — `/inventory shop buy:mystery_box`", inline=False)
-        e.add_field(name="🎣 Fishing Rod", value="200 coins — `/inventory shop buy:fishing_rod`", inline=False)
-        e.add_field(name="🍀 Lucky Charm", value="500 coins — `/inventory shop buy:lucky_charm`", inline=False)
-        e.set_footer(text="Purchases are tracked per server • MuraStream")
-        await interaction.response.send_message(embed=e)
 
     # ── /level administration + cards ─────────────────────────────────
     level = app_commands.Group(name="level", description="Leveling administration and cards")

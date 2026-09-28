@@ -150,7 +150,7 @@ export default function EconomyPage() {
                 </div>
               )}
               <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--cc-text-faint)' }}>
-                In Discord: /vault leaderboards stats|item (scope: server), /identity leaderboard.
+                In Discord: /leaderboard stats|item — short commands, no prefix needed.
               </p>
             </div>
             <div className="cc-card" style={{ padding: '14px 18px' }}>
@@ -212,26 +212,27 @@ export default function EconomyPage() {
               <div key={s.id}><code>{s.id}</code> — {s.name} · <strong style={{ color: '#fff' }}>{s.price}</strong> {sym} · <em>{s.rarity}</em></div>
             ))}
           </div>
-          <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--cc-text-faint)' }}>Buy/sell in Discord: /inventory shop, /shop, /inventory sell. Prices live in the bot catalog.</p>
+          <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--cc-text-faint)' }}>Buy/sell in Discord: /shop view|buy|sell. Prices live in the bot catalog.</p>
         </div>
         <div className="cc-card" style={{ padding: '14px 18px', fontSize: 13, color: 'var(--cc-text-dim)' }}>
           <strong style={{ color: '#fff' }}>🎟️ Lottery · 🎉 Events</strong>
           <div style={{ marginTop: 6 }}>
             Ticket <strong style={{ color: '#fff' }}>{config?.lotteryTicketPrice ?? 100}</strong> {sym} · max{' '}
             <strong style={{ color: '#fff' }}>{config?.lotteryMaxTickets ?? 10}</strong>/round · daily server-side draw
-            (/vault lottery buy|auto|status, /economy lottery).
-            <br />Server events: donation pool + goal + donor rewards via /vault serverevents donate|pool|status.
+            (/lottery buy|auto|status).
+            <br />Server events: donation pool + goal + donor rewards via /work event action:donate|pool|status.
+            Only <strong style={{ color: '#fff' }}>/economy config</strong> needs the /economy prefix (admins).
           </div>
         </div>
         <div className="cc-card" style={{ padding: '14px 18px', fontSize: 13, color: 'var(--cc-text-dim)' }}>
           <strong style={{ color: '#fff' }}>🏆 Achievements · badges · titles · pets · farm · fishing</strong>
           <div style={{ marginTop: 6 }}>{ACHIEVEMENTS.join(' · ')}</div>
           <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--cc-text-faint)' }}>
-            Discord (all under /vault to respect the 100-command cap): profile, compare, showcase, skins,
-            pets (adopt/rename/equip/feed/play/release), farm, fish, friends, marriage, badges, title,
-            collection, bundles, multipliers, currencylog, vacation, drops, trade, advancements prestige|omega,
-            work shift|stars — plus /economy, /inventory, /identity, /ranch, /minigames groups and
-            /balance, /daily, /pay, /shop, /rank, /leaderboard, /achievements.
+            Discord (short commands, no prefix): /balance, /daily, /weekly, /monthly, /deposit, /withdraw,
+            /pay, /shop view|buy|sell, /inventory, /profile, /achievements, /quests, /calculate,
+            /leaderboard stats|item, /pets, /farm, /fish, /trade, /lottery, /work shift|stars (+ odd jobs,
+            session, vacation, events), /badges, /title, /notifications, /friends (+marry), /advancements,
+            /minigames (incl. crime, rob, bankrob). Only /economy config is prefixed (admins).
           </p>
         </div>
       </div>

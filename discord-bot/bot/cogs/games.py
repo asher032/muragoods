@@ -6,6 +6,7 @@ client-side amounts — the payout math lives in bot/economy.py.
 """
 
 import logging
+import random
 
 import discord
 from discord import app_commands
@@ -156,6 +157,110 @@ class GamesGroup(commands.Cog):
         _, _, stake = pre
         delta, label = eco.play_snakeeyes(stake)
         await self._settle(interaction, stake, delta, f"🎲 {label}")
+
+    @games.command(name="crime", description="Fictional heist minigame (game coins only).")
+    @app_commands.describe(stake="Coins to risk (10-500)")
+    async def crime(self, interaction: discord.Interaction, stake: int = 100):
+        await interaction.response.defer()
+        stake = max(10, min(int(stake or 100), 500))
+        wallet = await eco.get_wallet(database._db, interaction.guild.id, interaction.user.id)
+        if int(wallet.get("balance", 0)) < stake:
+            await interaction.followup.send("Insufficient pocket coins.", ephemeral=True)
+            return
+        cfg = await eco.get_economy_config(database._db, interaction.guild.id)
+        granted, _ = await eco.claim_cooldown(
+            database._db, interaction.guild.id, interaction.user.id,
+            "lastCrime", int(cfg.get("crimeCooldownSec", 1800)))
+        if not granted:
+            await interaction.followup.send("The heat is on — lay low a while.", ephemeral=True)
+            return
+        delta, label = eco.play_crime(stake)
+        ok, _ = await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
+                                      "balance", -stake, "crime_stake", "discord")
+        if not ok:
+            await interaction.followup.send("Insufficient funds.", ephemeral=True)
+            return
+        if delta > 0:
+            await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
+                                  "balance", stake + delta, "crime_win", "discord")
+            await interaction.followup.send(f"🥷 {label} (profit **+{delta}**).")
+        else:
+            await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
+                                  "balance", stake + delta, "crime_push", "discord")
+            await interaction.followup.send(f"{label} — stake partly kept.")
+
+    @games.command(name="rob", description="Attempt to steal pocket coins (fictional game).")
+    @app_commands.describe(user="Target member")
+    async def rob(self, interaction: discord.Interaction, user: discord.Member):
+        await interaction.response.defer()
+        if user.id == interaction.user.id or user.bot:
+            await interaction.followup.send("Pick another member.", ephemeral=True)
+            return
+        cfg = await eco.get_economy_config(database._db, interaction.guild.id)
+        granted, remaining = await eco.claim_cooldown(
+            database._db, interaction.guild.id, interaction.user.id,
+            "lastRob", int(cfg.get("robCooldownSec", 3600)))
+        if not granted:
+            await interaction.followup.send(f"Lay low for {remaining // 60}m.", ephemeral=True)
+            return
+        target = await eco.get_wallet(database._db, interaction.guild.id, user.id)
+        if int(target.get("balance", 0)) < int(cfg.get("robMinTarget", 100)):
+            await interaction.followup.send("Target is too broke to rob.", ephemeral=True)
+            return
+        if random.random() < 0.45:
+            take = max(10, int(int(target.get("balance", 0)) * random.uniform(0.05, 0.2)))
+            ok, _ = await eco.apply_delta(database._db, interaction.guild.id, user.id,
+                                          "balance", -take, "rob_loss", "discord")
+            if ok:
+                await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
+                                      "balance", take, "rob_win", "discord")
+                await interaction.followup.send(f"🥷 You swiped **{take}** coins from {user.mention}!")
+            else:
+                await interaction.followup.send("They slipped away.", ephemeral=True)
+        else:
+            fine = random.randint(50, 200)
+            await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
+                                  "balance", -fine, "rob_fine", "discord")
+            await interaction.followup.send(f"🚨 Caught! You paid a **{fine}** coin fine.")
+
+    @games.command(name="bankrob", description="Join the fictional bank heist pool.")
+    @app_commands.describe(stake="Coins to stake in the heist")
+    async def bankrob(self, interaction: discord.Interaction, stake: int = 100):
+        await interaction.response.defer()
+        stake = max(10, min(int(stake or 100), 1000))
+        ok, _ = await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
+                                      "balance", -stake, "bankrob_stake", "discord")
+        if not ok:
+            await interaction.followup.send("Insufficient funds for that stake.", ephemeral=True)
+            return
+        try:
+            pool = await database._db.economy_heist.find_one_and_update(
+                {"guildId": int(interaction.guild.id), "status": "open"},
+                {"$inc": {"pool": stake, "crew": 1},
+                 "$setOnInsert": {"createdAt": eco._now()}},
+                upsert=True, return_document=True)
+        except Exception:
+            await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
+                                  "balance", stake, "bankrob_refund", "discord")
+            await interaction.followup.send("Heist board unavailable — stake refunded.", ephemeral=True)
+            return
+        crew = int(pool.get("crew", 1))
+        if crew >= 3:
+            total = int(pool.get("pool", 0))
+            winners = crew
+            share = total * 2 // max(1, winners)
+            await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
+                                  "balance", share, "bankrob_win", "discord")
+            try:
+                await database._db.economy_heist.update_one(
+                    {"_id": pool["_id"]}, {"$set": {"status": "done"}})
+            except Exception:
+                pass
+            await interaction.followup.send(
+                f"🏦 HEIST SUCCESS! Crew of {crew} splits **{total * 2}** — your cut: **{share}**!")
+        else:
+            await interaction.followup.send(
+                f"🏦 You're in (stake **{stake}**). Crew: **{crew}/3** — the heist fires at 3.")
 
     @games.command(name="scratch", description="Scratch a free ticket.")
     async def scratch(self, interaction: discord.Interaction):
