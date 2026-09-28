@@ -257,33 +257,65 @@ class LevelingCog(commands.Cog):
             {"$setOnInsert": {"balance": 100}}, upsert=True, return_document=True,
         )
 
-    @app_commands.command(name="balance", description="Your coin balance.")
-    async def balance(self, interaction: discord.Interaction):
-        wallet = await self._wallet(interaction.guild.id, interaction.user.id)
-        bank = int(wallet.get("bank", 0))
-        gems = int(wallet.get("gems", 0))
-        balance = int(wallet.get("balance", 0))
-        await interaction.response.send_message(embed=embeds.embed(
-            "💰 Balance",
-            f"{interaction.user.mention} has **{balance}** coins"
-            f" (+**{bank}** bank = **{balance + bank}** net worth)"
-            f" and 💎 **{gems}** gems.",
-            embeds.GOLD))
+    @app_commands.command(name="balance", description="Pocket, bank, net worth and gems.")
+    @app_commands.describe(user="Whose balance (default: you)")
+    async def balance(self, interaction: discord.Interaction, user: discord.User | None = None):
+        await interaction.response.defer()
+        target = user or interaction.user
+        try:
+            import economy as eco
+            wallet = await eco.get_wallet(database._db, interaction.guild.id, target.id)
+            cfg = await eco.get_economy_config(database._db, interaction.guild.id)
+            sym = str(cfg.get("currencySymbol", "🪙"))
+            name = str(cfg.get("currencyName", "coins"))
+            pocket = int(wallet.get("balance", 0))
+            bank = int(wallet.get("bank", 0))
+            gems = int(wallet.get("gems", 0))
+            net = pocket + bank
+            e = embeds.embed(f"💰 Balance — {getattr(target, 'display_name', target.name)}",
+                             f"{sym} Pocket **{pocket:,}** {name}\n"
+                             f"🏦 Bank **{bank:,}**\n"
+                             f"💎 Gems **{gems}**\n"
+                             f"📊 Net worth **{net:,}** · Level **{eco.economy_level(wallet)}** · "
+                             f"🔥 Prestige **{int(wallet.get('prestige', 0))}** · "
+                             f"Daily streak **{int(wallet.get('streakDaily', 0))}**",
+                             embeds.GOLD)
+            await interaction.followup.send(embed=e)
+        except Exception:
+            wallet = await self._wallet(interaction.guild.id, target.id)
+            await interaction.followup.send(embed=embeds.embed(
+                "💰 Balance",
+                f"{target.mention} has **{int(wallet.get('balance', 0))}** coins"
+                f" (+**{int(wallet.get('bank', 0))}** bank).", embeds.GOLD))
 
-    @app_commands.command(name="daily", description="Claim your daily coins.")
+    @app_commands.command(name="daily", description="Claim your daily coins (streak bonus).")
     async def daily(self, interaction: discord.Interaction):
         await interaction.response.defer()
+        try:
+            import economy as eco
+            cfg = await eco.get_economy_config(database._db, interaction.guild.id)
+            granted, final, streak, remaining = await eco.claim_daily(
+                database._db, interaction.guild.id, interaction.user.id,
+                int(cfg.get("dailyAmount", 250)))
+            if granted:
+                await interaction.followup.send(embed=embeds.ok(
+                    "🎁 Daily claimed!", f"+**{final:,}** coins · streak **{streak}** 🔥"))
+            else:
+                hours, rest = divmod(remaining, 3600)
+                await interaction.followup.send(embed=embeds.embed(
+                    "⏳ Already claimed",
+                    f"Streak **{streak}** — back in {hours}h {rest // 60}m.",
+                    embeds.WARN))
+            return
+        except Exception:
+            pass
         from datetime import timedelta
         now = datetime.now(timezone.utc)
         cutoff = now - timedelta(hours=24)
-        # Ensure the member has an economy row (idempotent, never overwrites
-        # any existing balance). Backdated lastDaily lets brand-new users claim.
         await database._db.economy.update_one(
             {"guildId": interaction.guild.id, "userId": interaction.user.id},
             {"$setOnInsert": {"balance": 100, "lastDaily": now - timedelta(days=2)}},
             upsert=True)
-        # Atomically claim: the bump only applies when there is no lastDaily or
-        # it is older than 24h, so concurrent claims can't double-pay.
         res = await database._db.economy.update_one(
             {"guildId": interaction.guild.id, "userId": interaction.user.id,
              "$or": [{"lastDaily": None}, {"lastDaily": {"$lte": cutoff}}]},

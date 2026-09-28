@@ -88,6 +88,24 @@ class EconomyGroup(commands.Cog):
         await interaction.followup.send(embed=embeds.ok(
             f"🎁 {label} claimed!", f"+**{final:,}** {cfg.get('currencyName', 'coins')}."))
 
+    @eco.command(name="daily", description="Claim your daily reward (streak bonus).")
+    async def daily(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        cfg = await _cfg(interaction.guild.id)
+        granted, final, streak, remaining = await eco.claim_daily(
+            database._db, interaction.guild.id, interaction.user.id,
+            int(cfg.get("dailyAmount", 250)))
+        if not granted:
+            hours, rest = divmod(remaining, 3600)
+            mins = rest // 60
+            await interaction.followup.send(embed=embeds.embed(
+                "⏳ Already claimed",
+                f"Daily streak **{streak}** — back in {hours}h {mins}m." if hours else f"Back in {mins}m.",
+                embeds.WARN))
+            return
+        await interaction.followup.send(embed=embeds.ok(
+            "🎁 Daily claimed!", f"+**{final:,}** {cfg.get('currencyName', 'coins')} · streak **{streak}** 🔥"))
+
     @eco.command(name="weekly", description="Claim your weekly reward.")
     async def weekly(self, interaction: discord.Interaction):
         cfg = await _cfg(interaction.guild.id)
@@ -98,7 +116,80 @@ class EconomyGroup(commands.Cog):
     async def monthly(self, interaction: discord.Interaction):
         cfg = await _cfg(interaction.guild.id)
         await self._timed(interaction, "lastMonthly", 30 * 86400,
-                          int(cfg.get("monthlyAmount", 6000)), "Monthly")
+                          int(cfg.get("monthlyAmount", 6000)), "Monthly", "streakMonthly")
+
+    @eco.command(name="crime", description="Fictional heist minigame (game coins only).")
+    @app_commands.describe(stake="Coins to risk (10-500)")
+    async def crime(self, interaction: discord.Interaction, stake: int = 100):
+        await interaction.response.defer()
+        stake = max(10, min(int(stake or 100), 500))
+        wallet = await eco.get_wallet(database._db, interaction.guild.id, interaction.user.id)
+        if int(wallet.get("balance", 0)) < stake:
+            await interaction.followup.send("Insufficient pocket coins.", ephemeral=True)
+            return
+        cfg = await _cfg(interaction.guild.id)
+        granted, _ = await eco.claim_cooldown(
+            database._db, interaction.guild.id, interaction.user.id,
+            "lastCrime", int(cfg.get("crimeCooldownSec", 1800)))
+        if not granted:
+            await interaction.followup.send("The heat is on — lay low a while.", ephemeral=True)
+            return
+        delta, label = eco.play_crime(stake)
+        # Server-side settle: debit stake guard, credit winnings.
+        ok, _ = await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
+                                      "balance", -stake, "crime_stake", "discord")
+        if not ok:
+            await interaction.followup.send("Insufficient funds.", ephemeral=True)
+            return
+        if delta > 0:
+            await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
+                                  "balance", stake + delta, "crime_win", "discord")
+            await interaction.followup.send(f"🥷 {label} (profit **+{delta}**).")
+        else:
+            await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
+                                  "balance", stake + delta, "crime_push", "discord")
+            await interaction.followup.send(f"{label} — stake partly kept.")
+
+    @eco.command(name="config", description="View or set economy config (Manage Server).")
+    @app_commands.describe(key="Setting name (empty = view all)", value="New value")
+    async def config_cmd(self, interaction: discord.Interaction, key: str = "", value: str = ""):
+        await interaction.response.defer(ephemeral=True)
+        try:
+            is_admin = bool(interaction.user.guild_permissions.manage_guild
+                            or interaction.user.guild_permissions.administrator)
+        except Exception:
+            is_admin = False
+        cfg = await _cfg(interaction.guild.id)
+        if not key:
+            lines = [f"`{k}` = `{v}`" for k, v in sorted(cfg.items()) if k != "multipliers"]
+            lines.append(f"`multipliers` = `{cfg.get('multipliers')}`")
+            await interaction.followup.send(embed=embeds.embed(
+                "⚙️ Economy config", "\n".join(lines)[:1800], embeds.INFO), ephemeral=True)
+            return
+        if not is_admin:
+            await interaction.followup.send("Manage Server only.", ephemeral=True)
+            return
+        key = (key or "").strip()
+        if key not in eco.ECONOMY_DEFAULTS:
+            await interaction.followup.send(
+                "Keys: " + ", ".join(sorted(eco.ECONOMY_DEFAULTS)), ephemeral=True)
+            return
+        default = eco.ECONOMY_DEFAULTS[key]
+        try:
+            parsed: object = int(value) if isinstance(default, int) else value[:60]
+            if isinstance(default, int) and not (0 <= int(value) <= 1000000):
+                raise ValueError()
+        except Exception:
+            await interaction.followup.send("Invalid value for that key.", ephemeral=True)
+            return
+        try:
+            await database.set_guild_config(interaction.guild.id, {"economy": {**cfg, key: parsed}})
+            await database.audit_config_change(
+                interaction.guild.id, str(interaction.user.id), f"economy.{key}={parsed}")
+        except Exception:
+            await interaction.followup.send("Could not save config.", ephemeral=True)
+            return
+        await interaction.followup.send(f"Economy `{key}` → `{parsed}`.", ephemeral=True)
 
     # ── Small activities ──
     @eco.command(name="beg", description="Beg for a few coins.")
@@ -222,11 +313,6 @@ class EconomyGroup(commands.Cog):
                 random.randint(15, 90), "activity", "discord")
             await interaction.followup.send(f"⛏️ You dug up **{final}** coins.")
 
-    @eco.command(name="hunt", description="Hunt fictional critters for rewards.")
-    async def hunt(self, interaction: discord.Interaction):
-        await self._activity(interaction, "hunt", 25, 150,
-                             ["tracked", "🏹 You tracked a moonrabbit:", "🏹 A duskfox crossed your path:"])
-
     @eco.command(name="tidy", description="Tidy up for a small reward.")
     async def tidy(self, interaction: discord.Interaction):
         await self._activity(interaction, "tidy", 10, 60,
@@ -328,16 +414,7 @@ class EconomyGroup(commands.Cog):
             await interaction.followup.send(
                 f"🏦 You're in (stake **{stake}**). Crew: **{crew}/3** — the heist fires at 3.")
 
-    # ── Drops / lottery / session / calculate ──
-    @eco.command(name="drops", description="Active limited drops.")
-    async def drops(self, interaction: discord.Interaction):
-        await interaction.response.send_message(embed=embeds.embed(
-            "🎁 Drops",
-            "Limited stock rotates here.\n• **Mystery Box** — `/inventory shop`\n"
-            "• **Golden Hook** — rare hook, better catches\n"
-            "• **Omega Key** — endgame trials (untradable)",
-            embeds.GOLD))
-
+    # ── Lottery / session / calculate (drops lives at top-level /drops) ──
     @eco.command(name="lottery", description="Buy in-game lottery tickets.")
     @app_commands.describe(tickets="How many tickets")
     async def lottery(self, interaction: discord.Interaction, tickets: int = 1):
