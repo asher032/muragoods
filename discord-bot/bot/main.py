@@ -2224,10 +2224,10 @@ async def _health_server() -> None:
         if not guild:
             return web.json_response({"ok": False, "error": "Bot not in that guild"}, status=404)
         import economy as eco_mod
-        import database as db
+        import database as db_mod
         try:
-            data = await eco_mod.economy_overview(db, guild_id)
-            cfg = await eco_mod.get_economy_config(db, guild_id)
+            data = await eco_mod.economy_overview(db_mod._require_db(), guild_id)
+            cfg = await eco_mod.get_economy_config(db_mod._require_db(), guild_id)
             return web.json_response({"ok": True, "overview": data, "config": {
                 "currencyName": cfg.get("currencyName"), "currencySymbol": cfg.get("currencySymbol"),
                 "startBalance": cfg.get("startBalance"), "dailyAmount": cfg.get("dailyAmount"),
