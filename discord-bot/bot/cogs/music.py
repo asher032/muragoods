@@ -218,6 +218,8 @@ class MusicCog(commands.Cog):
         # break playback.
         music.engine.track_started_handler = self._on_engine_track_started
 
+    queue = app_commands.Group(name="queue", description="Show and manage the music queue")
+
     async def _on_engine_track_started(self, player: music.GuildPlayer) -> None:
         try:
             guild = self.bot.get_guild(player.guild_id)
@@ -435,11 +437,28 @@ class MusicCog(commands.Cog):
         await interaction.followup.send(embed=embeds.music(
             "🔁 Replay", f"**{player.current.title}** from the top."))
 
-    @app_commands.command(name="seek", description="Seek to a timestamp (e.g. 1:30 or 90).")
-    @app_commands.describe(position="Timestamp like 1:30 or seconds")
-    async def seek(self, interaction: discord.Interaction, position: str):
+    @app_commands.command(name="seek", description="Seek to a timestamp, or nudge forward/back.")
+    @app_commands.describe(position="Timestamp like 1:30 or seconds (exact seek)",
+                           direction="Nudge instead of an exact seek (replaces /forward, /rewind)",
+                           seconds="Seconds to nudge (default 10)")
+    @app_commands.choices(direction=[
+        app_commands.Choice(name="forward", value="forward"),
+        app_commands.Choice(name="rewind", value="rewind"),
+    ])
+    async def seek(self, interaction: discord.Interaction, position: str = "",
+                   direction: str = "", seconds: int = 10):
         await interaction.response.defer()
         if not await dj_guard(interaction, "seek"):
+            return
+        if direction in ("forward", "rewind"):
+            delta = max(1, int(seconds or 10))
+            await self._nudge(interaction, delta if direction == "forward" else -delta,
+                              "Forward" if direction == "forward" else "Rewind")
+            return
+        if not (position or "").strip():
+            await interaction.followup.send(
+                "Give a `position` (e.g. `1:30`), or nudge with `direction` + `seconds`.",
+                ephemeral=True)
             return
         player = music.engine.get_player(interaction.guild.id)
         if not player.voice or not player.voice.channel or not player.current:
@@ -488,24 +507,8 @@ class MusicCog(commands.Cog):
         await interaction.followup.send(
             f"{arrow} {label} {abs(delta)}s → `{player.position():.0f}s`.", ephemeral=True)
 
-    @app_commands.command(name="forward", description="Skip forward N seconds (default 10).")
-    @app_commands.describe(seconds="How many seconds")
-    async def forward(self, interaction: discord.Interaction, seconds: int = 10):
-        await interaction.response.defer(ephemeral=True)
-        if not await dj_guard(interaction, "seek"):
-            return
-        await self._nudge(interaction, max(1, seconds), "Forward")
-
-    @app_commands.command(name="rewind", description="Jump back N seconds (default 10).")
-    @app_commands.describe(seconds="How many seconds")
-    async def rewind(self, interaction: discord.Interaction, seconds: int = 10):
-        await interaction.response.defer(ephemeral=True)
-        if not await dj_guard(interaction, "seek"):
-            return
-        await self._nudge(interaction, -max(1, seconds), "Rewind")
-
-    @app_commands.command(name="history", description="Recently played tracks.")
-    async def history(self, interaction: discord.Interaction):
+    @queue.command(name="history", description="Recently played tracks.")
+    async def queue_history(self, interaction: discord.Interaction):
         await interaction.response.defer()
         player = music.engine.get_player(interaction.guild.id)
         if not player.history:
@@ -514,9 +517,9 @@ class MusicCog(commands.Cog):
         lines = [f"**{i}.** {t}" for i, t in enumerate(list(reversed(player.history))[:10], 1)]
         await interaction.followup.send(embed=embeds.music("🕘 History", "\n".join(lines)))
 
-    @app_commands.command(name="savequeue", description="Save the current queue under a name.")
+    @queue.command(name="save", description="Save the current queue under a name.")
     @app_commands.describe(name="A name for this queue")
-    async def savequeue(self, interaction: discord.Interaction, name: str):
+    async def queue_save(self, interaction: discord.Interaction, name: str):
         await interaction.response.defer(ephemeral=True)
         if not await dj_guard(interaction, "savequeue"):
             return
@@ -533,9 +536,9 @@ class MusicCog(commands.Cog):
         await interaction.followup.send(
             embed=embeds.ok("💾 Queue saved", f"**{name}** — {len(tracks)} tracks."), ephemeral=True)
 
-    @app_commands.command(name="loadqueue", description="Load a saved queue.")
+    @queue.command(name="load", description="Load a saved queue.")
     @app_commands.describe(name="Name of the saved queue")
-    async def loadqueue(self, interaction: discord.Interaction, name: str):
+    async def queue_load(self, interaction: discord.Interaction, name: str):
         await interaction.response.defer()
         if not await dj_guard(interaction, "loadqueue"):
             return
@@ -557,13 +560,13 @@ class MusicCog(commands.Cog):
         await interaction.followup.send(embed=embeds.ok(
             "📂 Queue loaded", f"**{name}** — {added} tracks queued."))
 
-    @app_commands.command(name="savedqueues", description="List saved queues for this server.")
-    async def savedqueues(self, interaction: discord.Interaction):
+    @queue.command(name="list", description="List saved queues for this server.")
+    async def queue_list(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         import database
         docs = await database._db.saved_queues.find({"guildId": interaction.guild.id}).to_list(25)
         if not docs:
-            await interaction.followup.send("No saved queues yet — `/savequeue <name>`.", ephemeral=True)
+            await interaction.followup.send("No saved queues yet — `/queue save name:<name>`.", ephemeral=True)
             return
         lines = [f"**{d['name']}** — {len(d.get('tracks', []))} tracks" for d in docs]
         await interaction.followup.send(
@@ -589,9 +592,9 @@ class MusicCog(commands.Cog):
         await interaction.followup.send(
             f"🔁 Queue loop **{'on' if looped else 'off'}**.", ephemeral=True)
 
-    @app_commands.command(name="queuepage", description="Show a specific queue page (10 per page).")
+    @queue.command(name="page", description="Show a specific queue page (10 per page).")
     @app_commands.describe(page="Page number")
-    async def queuepage(self, interaction: discord.Interaction, page: int = 1):
+    async def queue_page(self, interaction: discord.Interaction, page: int = 1):
         await interaction.response.defer()
         player = music.engine.get_player(interaction.guild.id)
         items = list(player.queue)
@@ -644,8 +647,9 @@ class MusicCog(commands.Cog):
         await interaction.edit_original_response(embed=embeds.music(
             f"📻 {genre.name} Radio", f"Now streaming **{track.title}**\nAutoplay enabled — the music never stops."))
 
-    @app_commands.command(name="musicinfo", description="Music subsystem diagnostics.")
-    async def music_info(self, interaction: discord.Interaction):
+    @app_commands.command(name="musicinfo", description="Music diagnostics (add test:true for the staged self-test).")
+    @app_commands.describe(test="Also run the staged audio self-test (was /musictest)")
+    async def music_info(self, interaction: discord.Interaction, test: bool = False):
         """⚙️ Music Diagnostics: audio service, FFmpeg, voice, perms, player."""
         await interaction.response.defer(ephemeral=True)
         snap = music.engine.diagnostics_snapshot()
@@ -724,11 +728,11 @@ class MusicCog(commands.Cog):
                        f"{music.sanitize_for_log(last.get('error_message'), limit=300) or 'no detail'}")[:1024],
                 inline=False)
         await interaction.followup.send(embed=e, ephemeral=True)
+        if test:
+            await self._self_test_send(interaction)
 
-    @app_commands.command(name="musictest", description="Run a staged audio self-test (Test Audio).")
-    async def music_test(self, interaction: discord.Interaction):
+    async def _self_test_send(self, interaction: discord.Interaction):
         """[ ▶ Test Audio ] — report exactly which stage passed or failed."""
-        await interaction.response.defer(ephemeral=True)
         await interaction.followup.send(embed=embeds.music(
             "▶ Test Audio", "Running staged checks…"), ephemeral=True)
         result = await music.engine.run_playback_test()
@@ -847,8 +851,8 @@ class MusicCog(commands.Cog):
             player.playing = False
         await interaction.followup.send(embed=embeds.music("⏹ Stopped", "Queue cleared."))
 
-    @app_commands.command(name="queue", description="Show the current queue.")
-    async def queue(self, interaction: discord.Interaction):
+    @queue.command(name="show", description="Show the current queue.")
+    async def queue_show(self, interaction: discord.Interaction):
         await interaction.response.defer()
         player = music.engine.get_player(interaction.guild.id)
         if not player.queue:
@@ -887,8 +891,8 @@ class MusicCog(commands.Cog):
         player.loop = not player.loop
         await interaction.followup.send(f"🔁 Loop **{'on' if player.loop else 'off'}**.", ephemeral=True)
 
-    @app_commands.command(name="shuffle", description="Shuffle the queue.")
-    async def shuffle(self, interaction: discord.Interaction):
+    @queue.command(name="shuffle", description="Shuffle the queue.")
+    async def queue_shuffle(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         if not await dj_guard(interaction, "shuffle"):
             return
@@ -899,9 +903,9 @@ class MusicCog(commands.Cog):
         count = player.shuffle_queue()
         await interaction.followup.send(f"🔀 Shuffled **{count}** tracks.", ephemeral=True)
 
-    @app_commands.command(name="remove", description="Remove a track from the queue by position.")
+    @queue.command(name="remove", description="Remove a track from the queue by position.")
     @app_commands.describe(position="Queue position to remove (1 = first)")
-    async def remove(self, interaction: discord.Interaction, position: int):
+    async def queue_remove(self, interaction: discord.Interaction, position: int):
         await interaction.response.defer(ephemeral=True)
         if not await dj_guard(interaction, "remove"):
             return
@@ -912,8 +916,8 @@ class MusicCog(commands.Cog):
             return
         await interaction.followup.send(f"🗑 Removed **{track.title}**.", ephemeral=True)
 
-    @app_commands.command(name="clearqueue", description="Clear the music queue.")
-    async def clear_queue(self, interaction: discord.Interaction):
+    @queue.command(name="clear", description="Clear the music queue.")
+    async def queue_clear(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         if not await dj_guard(interaction, "clear"):
             return
@@ -972,7 +976,7 @@ class MusicCog(commands.Cog):
             return
         await interaction.followup.send(f"👋 Joined **{channel.name}**.", ephemeral=True)
 
-    @app_commands.command(name="leave", description="Disconnect and clear the queue.")
+    @app_commands.command(name="leave", description="Disconnect and clear the queue (replaces /disconnect).")
     async def leave(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         if not await dj_guard(interaction, "leave"):
@@ -985,14 +989,10 @@ class MusicCog(commands.Cog):
         music.engine.remove_player(interaction.guild.id)
         await interaction.followup.send("👋 Left the voice channel.", ephemeral=True)
 
-    @app_commands.command(name="disconnect", description="Disconnect the bot from voice (alias of /leave).")
-    async def disconnect(self, interaction: discord.Interaction):
-        await self.leave.callback(self, interaction)
-
-    @app_commands.command(name="move", description="Move a queued track to another position.")
+    @queue.command(name="move", description="Move a queued track to another position.")
     @app_commands.describe(from_position="Current queue position (1 = first)",
                            to_position="New queue position")
-    async def move(self, interaction: discord.Interaction, from_position: int, to_position: int):
+    async def queue_move(self, interaction: discord.Interaction, from_position: int, to_position: int):
         await interaction.response.defer(ephemeral=True)
         if not await dj_guard(interaction, "move"):
             return

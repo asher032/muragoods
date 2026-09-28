@@ -285,26 +285,6 @@ class CommunityCog(commands.Cog):
         await interaction.followup.send(
             embed=embeds.embed(f"📋 Cases — {user.display_name}", "\n".join(lines)), ephemeral=True)
 
-    # ── Achievements ──────────────────────────────────────────────────
-    @app_commands.command(name="achievements", description="Your unlocked achievements.")
-    @app_commands.describe(user="Whose achievements (default: you)")
-    async def achievements(self, interaction: discord.Interaction, user: discord.User | None = None):
-        await interaction.response.defer()
-        target = user or interaction.user
-        keys = await database.get_achievements(interaction.guild.id, target.id)
-        lines = []
-        for key, (name, desc) in database.ACHIEVEMENTS.items():
-            mark = "✅" if key in keys else "⬜"
-            lines.append(f"{mark} **{name}** — {desc}")
-        e = embeds.embed(
-            f"🎖️ Achievements — {target.display_name}",
-            "\n".join(lines),
-            embeds.GOLD)
-        e.add_field(name="Unlocked", value=f"{len(keys)}/{len(database.ACHIEVEMENTS)}", inline=True)
-        if target.display_avatar:
-            e.set_thumbnail(url=target.display_avatar.url)
-        await interaction.followup.send(embed=e)
-
     # ── Background loops ──────────────────────────────────────────────
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):

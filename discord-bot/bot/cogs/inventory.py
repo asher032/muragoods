@@ -22,7 +22,8 @@ class InventoryGroup(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    inv = app_commands.Group(name="inventory", description="Items, shop, crafting and collections")
+    inv = app_commands.Group(name="inventory", description="Items, crafting and collections")
+    shop = app_commands.Group(name="shop", description="Browse, buy and sell items")
 
     @inv.command(name="view", description="Show your inventory.")
     @app_commands.describe(user="Whose inventory (default: you)")
@@ -92,7 +93,7 @@ class InventoryGroup(commands.Cog):
                 {"$inc": {"maxPlots": qty}, "$setOnInsert": {"level": 1}}, upsert=True)
             await interaction.followup.send(f"🌾 **+{qty}** farm plot(s).", ephemeral=True)
         elif item_id == "adventure_ticket":
-            await interaction.followup.send("🎟️ Ticket redeemed — run `/economy adventure`.", ephemeral=True)
+            await interaction.followup.send("🎟️ Ticket redeemed — run `/work adventure`.", ephemeral=True)
             await eco.add_item(database._db, interaction.guild.id, interaction.user.id,
                                "adventure_ticket", qty)
         else:
@@ -109,29 +110,37 @@ class InventoryGroup(commands.Cog):
             return
         await interaction.followup.send(f"🗑 Removed **{item_id}**.", ephemeral=True)
 
-    @inv.command(name="shop", description="Browse and buy shop items.")
-    @app_commands.describe(buy="Item ID to buy immediately", quantity="How many")
-    async def shop(self, interaction: discord.Interaction, buy: str = "", quantity: int = 1):
+    @shop.command(name="view", description="Browse the shop, including limited drops.")
+    async def shop_view(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        if buy:
-            ok, msg = await eco.buy_item(
-                database._db, interaction.guild.id, interaction.user.id,
-                buy.strip().lower(), max(1, int(quantity or 1)))
-            await interaction.followup.send(
-                f"🛒 Purchased **{buy}**!" if ok else f"⚠️ {msg}", ephemeral=True)
-            return
-        e = embeds.embed("🛒 Server Shop", "Buy with `/inventory shop buy:<id>`", embeds.GOLD)
+        e = embeds.embed("🛒 Server Shop", "Buy with `/shop buy item:<id>` · sell with `/shop sell`",
+                         embeds.GOLD)
         for item_id, spec in eco.ITEMS.items():
             if spec.get("locked") or not spec.get("price"):
                 continue
             e.add_field(name=f"{spec['name']} (`{item_id}`)",
                         value=f"**{spec['price']}** · *{spec['rarity']}* — {spec['desc']}",
                         inline=False)
+        e.add_field(name="🎁 Limited drops",
+                    value="• **Golden Hook** (2500) — rarer fish\n"
+                          "• **Adventure Ticket** (300) — `/work adventure`\n"
+                          "• **Omega Key** — endgame trials, untradable, unsellable",
+                    inline=False)
         await interaction.followup.send(embed=e, ephemeral=True)
 
-    @inv.command(name="sell", description="Sell eligible items.")
+    @shop.command(name="buy", description="Purchase items from the shop.")
+    @app_commands.describe(item="Item ID (see /shop view)", quantity="How many (1-99)")
+    async def shop_buy(self, interaction: discord.Interaction, item: str, quantity: int = 1):
+        await interaction.response.defer(ephemeral=True)
+        ok, msg = await eco.buy_item(
+            database._db, interaction.guild.id, interaction.user.id,
+            (item or "").strip().lower(), max(1, min(int(quantity or 1), 99)))
+        await interaction.followup.send(
+            f"🛒 Purchased **{item}**!" if ok else f"⚠️ {msg}", ephemeral=True)
+
+    @shop.command(name="sell", description="Sell eligible items.")
     @app_commands.describe(item="Item ID", quantity="How many")
-    async def sell(self, interaction: discord.Interaction, item: str, quantity: int = 1):
+    async def shop_sell(self, interaction: discord.Interaction, item: str, quantity: int = 1):
         await interaction.response.defer(ephemeral=True)
         ok, msg = await eco.sell_item(
             database._db, interaction.guild.id, interaction.user.id,
@@ -200,6 +209,55 @@ class InventoryGroup(commands.Cog):
             "\n".join(f"**{b['name']}**: " + ", ".join(f"{q}x {i}" for i, q in b["needs"].items())
                       + f" → **{b['reward']}**" for b in eco.COLLECTIONS.values()),
             embeds.INFO), ephemeral=True)
+
+    @inv.command(name="showcase", description="View or add to your cosmetic showcase.")
+    @app_commands.describe(item="Item ID to add (empty = view)")
+    async def showcase(self, interaction: discord.Interaction, item: str = ""):
+        await interaction.response.defer(ephemeral=True)
+        if not (item or "").strip():
+            cur = await eco.showcase_get(database._db, interaction.guild.id, interaction.user.id)
+            if not cur["slots"]:
+                await interaction.followup.send(
+                    f"Showcase empty — **0/{cur['maxSlots']}** slots. "
+                    "Add with `/inventory showcase item:<id>`.", ephemeral=True)
+                return
+            lines = [f"• **{eco.ITEMS.get(i, {}).get('name', i)}**" for i in cur["slots"]]
+            await interaction.followup.send(embed=embeds.embed(
+                f"🖼️ Showcase ({len(cur['slots'])}/{cur['maxSlots']})",
+                "\n".join(lines), embeds.INFO), ephemeral=True)
+            return
+        ok, msg = await eco.showcase_add(
+            database._db, interaction.guild.id, interaction.user.id, item)
+        if ok:
+            await interaction.followup.send("🖼️ Showcased!", ephemeral=True)
+            return
+        if "full" in msg:
+            ok2, msg2 = await eco.showcase_unlock(
+                database._db, interaction.guild.id, interaction.user.id)
+            await interaction.followup.send(
+                "✨ Showcase was full — unlocked an extra slot!" if ok2 else f"⚠️ {msg} {msg2}",
+                ephemeral=True)
+            return
+        await interaction.followup.send(f"⚠️ {msg}", ephemeral=True)
+
+    @inv.command(name="skins", description="View or select cosmetic item skins.")
+    @app_commands.describe(skin="Skin ID to select (empty = view)")
+    async def skins(self, interaction: discord.Interaction, skin: str = ""):
+        await interaction.response.defer(ephemeral=True)
+        if not (skin or "").strip():
+            owned = await eco.skins_owned(database._db, interaction.guild.id, interaction.user.id)
+            lines = []
+            for sid, spec in eco.SKINS_CATALOG.items():
+                mark = "✅" if sid in owned else "🔒"
+                lines.append(f"{mark} **{spec['name']}** (`{sid}`) → {spec['forItem']} — {spec['how']}")
+            await interaction.followup.send(embed=embeds.embed(
+                "🎨 Skins (cosmetic only — never affect balance)", "\n".join(lines),
+                embeds.INFO), ephemeral=True)
+            return
+        ok, msg = await eco.skin_select(
+            database._db, interaction.guild.id, interaction.user.id, skin)
+        await interaction.followup.send(
+            "🎨 Skin equipped!" if ok else f"⚠️ {msg}", ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

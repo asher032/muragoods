@@ -152,7 +152,7 @@ class MuraBot(commands.Bot):
             "cogs.games",
             "cogs.inventory",
             "cogs.profile",
-            "cogs.vault",
+            "cogs.work",
             "cogs.ranch",
             "cogs.help",
             "cogs.debug",
