@@ -122,15 +122,68 @@ class WatchTogetherCog(commands.Cog):
         await interaction.followup.send(
             content=f"{interaction.user.mention} started a Watch Together!", embed=e, view=view)
 
-    @app_commands.command(name="request", description="Request a movie, TV show or anime.")
-    @app_commands.describe(title="What should we add?", kind="Media type")
+    @app_commands.command(name="request", description="Request a movie, TV show or anime — run bare to browse.")
+    @app_commands.describe(title="What should we add? (omit to browse requests)", kind="Media type",
+                           request_id="Optional: change a request's status (mods only)",
+                           action="Admin action")
     @app_commands.choices(kind=[
         app_commands.Choice(name="Movie", value="movie"),
         app_commands.Choice(name="TV Series", value="tv"),
         app_commands.Choice(name="Anime", value="anime"),
     ])
-    async def request_media(self, interaction: discord.Interaction, title: str,
-                            kind: app_commands.Choice[str] | None = None):
+    @app_commands.choices(action=[
+        app_commands.Choice(name="Under Review", value="Under Review"),
+        app_commands.Choice(name="In Progress", value="In Progress"),
+        app_commands.Choice(name="Added", value="Added"),
+        app_commands.Choice(name="Rejected", value="Rejected"),
+        app_commands.Choice(name="Unavailable", value="Unavailable"),
+    ])
+    async def request_media(self, interaction: discord.Interaction,
+                            title: str | None = None,
+                            kind: app_commands.Choice[str] | None = None,
+                            request_id: int | None = None,
+                            action: app_commands.Choice[str] | None = None):
+        if title is None and request_id is None:
+            # Bare /request → browse (was /requests).
+            await interaction.response.defer()
+            guild_id = interaction.guild.id
+            top = await database.top_requests(guild_id, limit=10)
+            if not top:
+                e = embeds.embed("📋 Requests", "No requests yet — be the first with `/request`!")
+                view = discord.ui.View()
+                view.add_item(discord.ui.Button(label="📋 Site requests", url=bridge.requests_url(), emoji="📋"))
+                await interaction.followup.send(embed=e, view=view)
+                return
+            lines = []
+            for req in top:
+                icon = STATUS_EMOJI.get(req["status"], "📋")
+                kind_icon = {"movie": "🎬", "tv": "📺", "anime": "🍥"}.get(req.get("type"), "🎬")
+                lines.append(f"**#{req['requestId']}** {kind_icon} **{req['title']}** — 👍 {req['votes']} • {icon} {req['status']}")
+            e = embeds.embed("📋 Top Requests", "\n".join(lines))
+            view = discord.ui.View()
+            view.add_item(discord.ui.Button(label="📋 Full list on MuraStream", url=bridge.requests_url(), emoji="📋"))
+            await interaction.followup.send(embed=e, view=view)
+            return
+        if title is None:
+            # Admin status change (was /requests request_id action).
+            await interaction.response.defer()
+            guild_id = interaction.guild.id
+            is_admin = (interaction.user.guild_permissions.manage_guild
+                        or interaction.user.id in config.BOT_ADMIN_IDS)
+            if not is_admin:
+                await interaction.followup.send("Only moderators can change request status.", ephemeral=True)
+                return
+            if not action:
+                await interaction.followup.send("Pick an `action` to apply.", ephemeral=True)
+                return
+            ok = await database.set_request_status(guild_id, request_id, action.value)
+            if not ok:
+                await interaction.followup.send(f"Request #{request_id} not found.", ephemeral=True)
+                return
+            await database.log_action(guild_id, interaction.user.id, request_id, "request_status", action.value)
+            await interaction.followup.send(
+                embed=embeds.ok("✅ Request updated", f"#{request_id} → **{action.value}**"))
+            return
         await interaction.response.defer(ephemeral=False)
         if utils.on_cooldown(interaction.user.id, "request", config.REQUEST_COOLDOWN_SECONDS):
             await interaction.followup.send(
@@ -178,55 +231,6 @@ class WatchTogetherCog(commands.Cog):
                          f"**Request #:** {request_id}",
                          color=embeds.GOLD)
         await interaction.followup.send(embed=e, view=RequestButtons(request_id, interaction.guild.id))
-
-    @app_commands.command(name="requests", description="Browse and vote community requests.")
-    @app_commands.describe(request_id="Optional: change a request's status (mods only)", action="Admin action")
-    @app_commands.choices(action=[
-        app_commands.Choice(name="Under Review", value="Under Review"),
-        app_commands.Choice(name="In Progress", value="In Progress"),
-        app_commands.Choice(name="Added", value="Added"),
-        app_commands.Choice(name="Rejected", value="Rejected"),
-        app_commands.Choice(name="Unavailable", value="Unavailable"),
-    ])
-    async def requests_cmd(self, interaction: discord.Interaction,
-                           request_id: int | None = None,
-                           action: app_commands.Choice[str] | None = None):
-        await interaction.response.defer()
-        guild_id = interaction.guild.id
-        if request_id is not None:
-            is_admin = (interaction.user.guild_permissions.manage_guild
-                        or interaction.user.id in config.BOT_ADMIN_IDS)
-            if not is_admin:
-                await interaction.followup.send("Only moderators can change request status.", ephemeral=True)
-                return
-            if not action:
-                await interaction.followup.send("Pick an `action` to apply.", ephemeral=True)
-                return
-            ok = await database.set_request_status(guild_id, request_id, action.value)
-            if not ok:
-                await interaction.followup.send(f"Request #{request_id} not found.", ephemeral=True)
-                return
-            await database.log_action(guild_id, interaction.user.id, request_id, "request_status", action.value)
-            await interaction.followup.send(
-                embed=embeds.ok("✅ Request updated", f"#{request_id} → **{action.value}**"))
-            return
-
-        top = await database.top_requests(guild_id, limit=10)
-        if not top:
-            e = embeds.embed("📋 Requests", "No requests yet — be the first with `/request`!")
-            view = discord.ui.View()
-            view.add_item(discord.ui.Button(label="📋 Site requests", url=bridge.requests_url(), emoji="📋"))
-            await interaction.followup.send(embed=e, view=view)
-            return
-        lines = []
-        for req in top:
-            icon = STATUS_EMOJI.get(req["status"], "📋")
-            kind_icon = {"movie": "🎬", "tv": "📺", "anime": "🍥"}.get(req.get("type"), "🎬")
-            lines.append(f"**#{req['requestId']}** {kind_icon} **{req['title']}** — 👍 {req['votes']} • {icon} {req['status']}")
-        e = embeds.embed("📋 Top Requests", "\n".join(lines))
-        view = discord.ui.View()
-        view.add_item(discord.ui.Button(label="📋 Full list on MuraStream", url=bridge.requests_url(), emoji="📋"))
-        await interaction.followup.send(embed=e, view=view)
 
     @app_commands.command(name="comments", description="Recent community comments for a title.")
     @app_commands.describe(query="Title to check comments for")

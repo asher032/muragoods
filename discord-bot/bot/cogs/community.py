@@ -219,10 +219,20 @@ class CommunityCog(commands.Cog):
         await interaction.followup.send(embed=e, ephemeral=True)
 
     # ── Reputation ────────────────────────────────────────────────────
-    @app_commands.command(name="rep", description="Give reputation to a member.")
-    @app_commands.describe(user="Who deserves it?")
-    async def rep(self, interaction: discord.Interaction, user: discord.Member):
+    @app_commands.command(name="rep", description="Give reputation — run bare to see the leaderboard.")
+    @app_commands.describe(user="Who deserves it? (omit for the leaderboard)")
+    async def rep(self, interaction: discord.Interaction, user: discord.Member | None = None):
         await interaction.response.defer()
+        if user is None:
+            top = await database.top_rep(interaction.guild.id)
+            if not top:
+                await interaction.followup.send("No reputation given yet — use `/rep @user`!")
+                return
+            medals = ["🥇", "🥈", "🥉"] + ["▫️"] * 7
+            lines = [f"{medals[i]} <@{d['userId']}> — **{d['score']}** ⭐" for i, d in enumerate(top[:10])]
+            await interaction.followup.send(embed=embeds.embed(
+                "⭐ Reputation Leaderboard", "\n".join(lines), embeds.GOLD))
+            return
         if isinstance(user, str) or not hasattr(user, "id"):
             await interaction.followup.send("That user couldn't be resolved.", ephemeral=True)
             return
@@ -237,25 +247,27 @@ class CommunityCog(commands.Cog):
         await interaction.followup.send(embed=embeds.ok(
             "⭐ Reputation given", f"{user.mention} now has **{score}** rep."))
 
-    @app_commands.command(name="repleaderboard", description="Most-repped members.")
-    async def repleaderboard(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-        top = await database.top_rep(interaction.guild.id)
-        if not top:
-            await interaction.followup.send("No reputation given yet — use `/rep`!")
-            return
-        medals = ["🥇", "🥈", "🥉"] + ["▫️"] * 7
-        lines = [f"{medals[i]} <@{d['userId']}> — **{d['score']}** ⭐" for i, d in enumerate(top[:10])]
-        await interaction.followup.send(embed=embeds.embed(
-            "⭐ Reputation Leaderboard", "\n".join(lines), embeds.GOLD))
-
     # ── Cases ─────────────────────────────────────────────────────────
-    @app_commands.command(name="case", description="Look up a moderation case.")
-    @app_commands.describe(case_id="Case number")
-    async def case(self, interaction: discord.Interaction, case_id: int):
+    @app_commands.command(name="case", description="Look up a moderation case, or a member's history.")
+    @app_commands.describe(case_id="Case number", user="A member's moderation record instead")
+    async def case(self, interaction: discord.Interaction, case_id: int | None = None,
+                   user: discord.Member | None = None):
         await interaction.response.defer(ephemeral=True)
         if not interaction.user.guild_permissions.manage_messages:
             await interaction.followup.send("Staff only.", ephemeral=True)
+            return
+        if user is not None:
+            entries = await database.user_cases(interaction.guild.id, user.id)
+            if not entries:
+                await interaction.followup.send(f"{user.mention} has a clean record ✨", ephemeral=True)
+                return
+            lines = [f"**#{c['caseId']}** {c['action']} — {c['reason'][:60]}" for c in entries[:10]]
+            await interaction.followup.send(
+                embed=embeds.embed(f"📋 Cases — {user.display_name}", "\n".join(lines)), ephemeral=True)
+            return
+        if case_id is None:
+            await interaction.followup.send(
+                "Give a case number (`/case 12`) or a member (`/case @user`).", ephemeral=True)
             return
         c = await database.get_case(interaction.guild.id, case_id)
         if not c:
@@ -269,21 +281,6 @@ class CommunityCog(commands.Cog):
             embeds.INFO)
         e.timestamp = c.get("createdAt")
         await interaction.followup.send(embed=e, ephemeral=True)
-
-    @app_commands.command(name="cases", description="A member's moderation history.")
-    @app_commands.describe(user="Whose record")
-    async def cases(self, interaction: discord.Interaction, user: discord.Member):
-        await interaction.response.defer(ephemeral=True)
-        if not interaction.user.guild_permissions.manage_messages:
-            await interaction.followup.send("Staff only.", ephemeral=True)
-            return
-        entries = await database.user_cases(interaction.guild.id, user.id)
-        if not entries:
-            await interaction.followup.send(f"{user.mention} has a clean record ✨", ephemeral=True)
-            return
-        lines = [f"**#{c['caseId']}** {c['action']} — {c['reason'][:60]}" for c in entries[:10]]
-        await interaction.followup.send(
-            embed=embeds.embed(f"📋 Cases — {user.display_name}", "\n".join(lines)), ephemeral=True)
 
     # ── Background loops ──────────────────────────────────────────────
     @commands.Cog.listener()
