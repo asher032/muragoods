@@ -3,13 +3,20 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import JobShift from '@/app/lib/models/JobShift';
 import { gameIdentity } from '@/app/lib/gameserver';
-import { JOB_MAP, generateChallenge, DEFAULT_JOB_COOLDOWN_SEC, fmtDuration } from '@/app/lib/jobs';
+import { JOB_MAP, generateChallenge, fmtDuration } from '@/app/lib/jobs';
+import { jobsTuning } from '@/app/lib/jobs-config';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// POST /api/jobs/start { jobId } — opens a shift WITHOUT paying. The payout
-// only happens in /complete after the minigame is actually validated.
+function dayStart(): Date {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+
+// POST /api/jobs/start { jobId } — opens a shift WITHOUT paying. Enforces,
+// server-side: unlocks, daily limits, per-job cooldowns, one live shift.
 export async function POST(req: Request) {
   try {
     const id = await gameIdentity(req);
@@ -19,32 +26,57 @@ export async function POST(req: Request) {
     if (!job) return NextResponse.json({ success: false, error: 'Unknown job' }, { status: 404 });
 
     await dbConnect();
-    const { default: GameDefinition } = await import('@/app/lib/models/GameDefinition');
-    const def = await GameDefinition.findOne({ gameId: 'jobs' }).select('config cooldownSec enabled').lean() as {
-      config?: { cooldownSec?: number }; cooldownSec?: number; enabled?: boolean;
-    } | null;
-    if (def?.enabled === false) {
+    const tuning = await jobsTuning();
+    if (tuning.disabledJobs.has(job.id)) {
+      return NextResponse.json({ success: false, error: 'That job is currently closed' }, { status: 403 });
+    }
+    if (tuning.enabled === false) {
       return NextResponse.json({ success: false, error: 'Jobs are in maintenance' }, { status: 403 });
     }
-    const rawCd = def?.config?.cooldownSec ?? def?.cooldownSec ?? DEFAULT_JOB_COOLDOWN_SEC;
-    const nCd = Math.floor(Number(rawCd));
-    const cooldownSec = Number.isFinite(nCd) ? Math.max(60, Math.min(86400, nCd)) : DEFAULT_JOB_COOLDOWN_SEC;
 
-    // Cooldown is measured from the last COMPLETED shift.
-    const last = await JobShift.findOne({ userEmail: id.emailLc, consumed: true })
-      .sort({ consumedAt: -1 }).select('consumedAt').lean<{ consumedAt?: Date } | null>();
-    if (last?.consumedAt) {
-      const wait = Math.ceil(cooldownSec - (Date.now() - new Date(last.consumedAt).getTime()) / 1000);
+    const consumed = await JobShift.find({ userEmail: id.emailLc, consumed: true })
+      .select('jobId consumedAt').lean() as Array<{ jobId: string; consumedAt: Date }>;
+    const totalCompleted = consumed.length;
+
+    // Unlock: global completed-shift count vs the table requirement.
+    if (totalCompleted < job.unlock) {
+      return NextResponse.json({
+        success: false, code: 'LOCKED',
+        error: `Requires ${job.unlock} completed shifts`,
+        required: job.unlock, progress: totalCompleted,
+      }, { status: 403 });
+    }
+
+    // Daily limit for THIS job (UTC day, server-side).
+    const today = consumed.filter(
+      (s) => s.jobId === job.id && new Date(s.consumedAt).getTime() >= dayStart().getTime(),
+    ).length;
+    if (today >= job.shiftsPerDay) {
+      return NextResponse.json({
+        success: false, code: 'DAILY_DONE',
+        error: 'Daily shifts complete — come back tomorrow',
+        today, limit: job.shiftsPerDay,
+      }, { status: 429 });
+    }
+
+    // Per-job cooldown from the last completed shift of this job.
+    const cooldownSec = tuning.cooldownFor(job);
+    const lastTimes = consumed
+      .filter((s) => s.jobId === job.id)
+      .map((s) => new Date(s.consumedAt).getTime())
+      .sort((a, b) => b - a);
+    if (lastTimes.length) {
+      const wait = Math.ceil(cooldownSec - (Date.now() - lastTimes[0]) / 1000);
       if (wait > 0) {
-        return NextResponse.json(
-          { success: false, error: `You can work again in ${fmtDuration(wait)}`, cooldownRemaining: wait },
-          { status: 429 },
-        );
+        return NextResponse.json({
+          success: false, code: 'COOLDOWN',
+          error: `You can work again in ${fmtDuration(wait)}`,
+          cooldownRemaining: wait,
+        }, { status: 429 });
       }
     }
 
-    // One live shift at a time: an abandoned modal must expire or finish
-    // before a new one opens (prevents shift farming).
+    // One live shift at a time (prevents shift farming across tabs).
     const live = await JobShift.findOne({ userEmail: id.emailLc, consumed: false, expiresAt: { $gt: new Date() } })
       .select('token').lean();
     if (live) {
@@ -52,7 +84,7 @@ export async function POST(req: Request) {
     }
 
     const nowMs = Date.now();
-    const challenge = generateChallenge(job, nowMs, job.timeSec);
+    const challenge = generateChallenge(job, nowMs);
     const token = `job_${crypto.randomBytes(16).toString('hex')}`;
     const shift = await JobShift.create({
       token,
@@ -60,23 +92,24 @@ export async function POST(req: Request) {
       jobId: job.id,
       game: job.game,
       challenge,
-      payMin: job.payMin,
-      payMax: job.payMax,
-      failMin: job.failMin,
-      failMax: job.failMax,
-      expiresAt: new Date(nowMs + job.timeSec * 1000 + 15000),
+      payMin: job.salary,
+      payMax: job.salary,
+      failMin: 0,
+      failMax: 0,
+      expiresAt: new Date(nowMs + 45000),
     });
 
-    // The client gets the display challenge only — the expected answer is
-    // verified server-side in /complete from this same document.
+    // Display payload only — answers (answer/correct) never leave the server.
+    // Memory icons ARE shown (the client hides them before input).
     const { deadlineAt } = challenge;
     const display = (() => {
       switch (job.game) {
-        case 'order': return { game: job.game, sequence: challenge.sequence, deadlineAt };
-        case 'memory': return { game: job.game, icons: challenge.icons, deadlineAt };
-        case 'choice': return { game: job.game, options: challenge.options, deadlineAt };
-        // The zone is shown so the shift is playable; the stop moment is
-        // still validated server-side against this stored zone.
+        case 'order': return {
+          game: job.game, labels: challenge.labels,
+          ticket: (job.flavor.items || []).slice(0, (challenge.answer || []).length), deadlineAt,
+        };
+        case 'memory': return { game: job.game, icons: challenge.icons, pool: challenge.pool, deadlineAt };
+        case 'choice': return { game: job.game, question: challenge.question, options: challenge.options, deadlineAt };
         case 'timing': return { game: job.game, zone: challenge.zone, periodMs: challenge.periodMs, deadlineAt };
         case 'reaction': return { game: job.game, delayMs: challenge.delayMs, windowMs: challenge.windowMs, deadlineAt };
       }

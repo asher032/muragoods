@@ -396,6 +396,23 @@ export async function PATCH(req: NextRequest) {
       gambleMax: num(e.gambleMax, 10, 1000000, 10000),
       workCooldownSec: num(e.workCooldownSec, 60, 86400, 3600),
       jobCooldownSec: num(e.jobCooldownSec, 60, 86400, 3600),
+      jobFailRate: (() => {
+        const n = Number(e.jobFailRate);
+        return Number.isFinite(n) ? Math.max(0.05, Math.min(0.9, n)) : 0.3;
+      })(),
+      jobCooldownOverrides: (() => {
+        const out: Record<string, number> = {};
+        const raw = e.jobCooldownOverrides;
+        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+          for (const [k, v] of Object.entries(raw as Record<string, unknown>).slice(0, 60)) {
+            const n = Math.floor(Number(v));
+            if (/^[a-z0-9]{2,24}$/.test(k) && Number.isFinite(n) && n >= 60 && n <= 86400) out[k] = n;
+          }
+        }
+        return out;
+      })(),
+      disabledJobs: Array.isArray(e.disabledJobs)
+        ? e.disabledJobs.filter((s) => /^[a-z0-9]{2,24}$/.test(String(s))).map(String).slice(0, 60) : [],
       begCooldownSec: num(e.begCooldownSec, 30, 86400, 300),
       lotteryTicketPrice: num(e.lotteryTicketPrice, 1, 100000, 100),
       disabledItems: Array.isArray(e.disabledItems)
