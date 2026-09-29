@@ -24,6 +24,12 @@ export async function POST(req: Request) {
       attempts++;
     }
 
+    try {
+      const { getSessionUser } = await import('@/app/lib/session');
+      const author = await getSessionUser(req);
+      if (author) body.createdBy = author.email.toLowerCase();
+    } catch { /* continue as guest */ }
+
     const song = await SongMessage.create({ ...body, shortId });
     return NextResponse.json({ success: true, data: song }, { status: 201 });
   } catch (error: unknown) {
@@ -73,6 +79,25 @@ export async function DELETE(req: Request) {
     } catch { /* empty */ }
     if (!shortId) {
       return NextResponse.json({ success: false, error: 'id is required' }, { status: 400 });
+    }
+    const song = await SongMessage.findOne({ shortId }).select('createdBy').lean() as {
+      createdBy?: string;
+    } | null;
+    if (!song) {
+      return NextResponse.json({ success: false, error: 'Message not found' }, { status: 404 });
+    }
+    const { getSessionUser } = await import('@/app/lib/session');
+    const { requireAdmin } = await import('@/app/lib/session');
+    const viewer = await getSessionUser(req);
+    const { user: admin } = await requireAdmin(req);
+    const own = Boolean(
+      viewer && song.createdBy && song.createdBy.toLowerCase() === viewer.email.toLowerCase(),
+    );
+    if (!own && !admin) {
+      return NextResponse.json(
+        { success: false, error: song.createdBy ? 'You can only delete your own messages' : 'Sign in required' },
+        { status: viewer ? 403 : 401 },
+      );
     }
     await SongMessage.findOneAndDelete({ shortId });
     return NextResponse.json({ success: true });

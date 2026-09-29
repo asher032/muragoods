@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useGameSession } from '@/app/hooks/useGameSession';
 import { DiscordNudge } from '@/app/components/DiscordNudge';
-import { GameBackground } from '@/app/components/GameBackground';
+import { ThemedGameBackground } from '@/app/components/GameBackgroundSettings';
 import { Icon } from '@/app/components/Icon';
 import { Calendar, Check, PartyPopper, Star } from 'lucide-react';
 const dayRewards = [
@@ -75,7 +75,7 @@ export default function CheckInPage() {
   return (
     <main className="min-h-screen">
       <NavBar pageLabel="Daily Check-In" />
-      <GameBackground theme="campus" level={Math.min(5, 1 + Math.floor(currentStreak / 2))} />
+      <ThemedGameBackground level={Math.min(5, 1 + Math.floor(currentStreak / 2))} />
 
       <section className="px-4 py-10 sm:px-8">
         <div className="deco-container" style={{ maxWidth: '48rem' }}>

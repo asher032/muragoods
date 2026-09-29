@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useGameSession } from '@/app/hooks/useGameSession';
 import { DiscordNudge } from '@/app/components/DiscordNudge';
-import { GameBackground } from '@/app/components/GameBackground';
+import { ThemedGameBackground } from '@/app/components/GameBackgroundSettings';
 import { Bird, Lightbulb, Skull } from 'lucide-react';
 
 const GAME_WIDTH = 320;
@@ -231,7 +231,7 @@ export default function FlappyBird() {
   return (
     <main style={{ minHeight: '100vh', background: '#0a0a18' }}>
       <NavBar pageLabel="Flappy Bird" />
-      <GameBackground theme="space" level={2} />
+      <ThemedGameBackground level={2} />
       <div style={{ maxWidth: '400px', margin: '0 auto', padding: '80px 20px 100px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <div style={{ width: '100%' }}><DiscordNudge compact /></div>
         <div style={{ textAlign: 'center', marginBottom: '20px', opacity: loaded ? 1 : 0, transition: 'all 0.6s ease' }}>

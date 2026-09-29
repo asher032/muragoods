@@ -124,7 +124,7 @@ interface Privacy { gameProfile: string; favorites: string; activity: string; wa
           <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
             <Link href="/games" style={link}>🎮 Game Center</Link>
             <Link href="/account/my-space" style={link}>⭐ My Space</Link>
-            <Link href="/account/profile" style={link}>✏️ Profile</Link>
+            <Link href="/profile" style={link}>✏️ Profile</Link>
           </div>
         </div>
 

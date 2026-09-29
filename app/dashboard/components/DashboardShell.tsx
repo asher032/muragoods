@@ -300,6 +300,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
               </button>
             )}
             <a href="/murastream" className="cc-link" style={{ color: 'rgba(255,255,255,0.55)' }}>MuraStream</a>
+            <a href="/profile" className="cc-link" style={{ color: 'rgba(255,255,255,0.55)' }}>Profile</a>
             <span className={`cc-status-pill ${botOnline ? 'cc-status-online' : 'cc-status-offline'}`}>
               <span className="cc-dot" />
               {botOnline ? 'Bot Online' : 'Bot Offline'}

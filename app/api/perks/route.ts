@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import User from '@/app/lib/models/User';
+import { getSessionUser, requireAdmin } from '@/app/lib/session';
 
-// GET — Fetch a user's perks (by email or userId)
+// Perks & rewards — identity comes from the session, never from ?email=.
+// Reading or mutating another account's perks by passing their email is an
+// IDOR; admin search/grant stays behind the server-side admin guard.
+
+// GET — own perks (session). Admins may search (?query=) or read any account (?email=).
 export async function GET(req: Request) {
   try {
     await dbConnect();
@@ -10,7 +15,12 @@ export async function GET(req: Request) {
     const email = searchParams.get('email');
     const query = searchParams.get('query'); // search by name, email, or userId
 
+    const { user: admin } = await requireAdmin(req);
+
     if (query) {
+      if (!admin) {
+        return NextResponse.json({ success: false, error: 'Admin access required' }, { status: 403 });
+      }
       // Admin search — find user by name, email, or userId
       const users = await User.find({
         $or: [
@@ -22,11 +32,21 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: true, data: users });
     }
 
-    if (!email) {
-      return NextResponse.json({ success: false, error: 'Email is required' }, { status: 400 });
+    if (email) {
+      const viewer = await getSessionUser(req);
+      const own = viewer && viewer.email.toLowerCase() === email.toLowerCase();
+      if (!own && !admin) {
+        return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });
+      }
     }
 
-    const user = await User.findOne({ email }).select('name email userId perks');
+    const viewer = await getSessionUser(req);
+    const target = admin && email ? email : viewer?.email;
+    if (!target) {
+      return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });
+    }
+
+    const user = await User.findOne({ email: target }).select('name email userId perks');
     if (!user) {
       return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
     }
@@ -38,7 +58,9 @@ export async function GET(req: Request) {
   }
 }
 
-// POST — Add a perk to a user (admin action)
+// POST — Add a perk to a user. Admins may grant to anyone; a signed-in user
+// may only self-record a rewards-shop purchase (addedBy 'Self-purchase') on
+// their own account.
 export async function POST(req: Request) {
   try {
     await dbConnect();
@@ -47,6 +69,18 @@ export async function POST(req: Request) {
 
     if (!email || !perkId || !perkName) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
+    }
+
+    const viewer = await getSessionUser(req);
+    const { user: admin } = await requireAdmin(req);
+    const selfPurchase =
+      String(addedBy) === 'Self-purchase' &&
+      viewer && viewer.email.toLowerCase() === String(email).toLowerCase();
+    if (!admin && !selfPurchase) {
+      return NextResponse.json(
+        { success: false, error: 'Sign in required' },
+        { status: viewer ? 403 : 401 },
+      );
     }
 
     const user = await User.findOne({ email });
@@ -81,7 +115,7 @@ export async function POST(req: Request) {
   }
 }
 
-// PATCH — Mark a perk as redeemed
+// PATCH — Mark a perk as redeemed (own perks, or admin)
 export async function PATCH(req: Request) {
   try {
     await dbConnect();
@@ -90,6 +124,13 @@ export async function PATCH(req: Request) {
 
     if (!email || !perkId) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
+    }
+
+    const viewer = await getSessionUser(req);
+    const { user: admin } = await requireAdmin(req);
+    const own = viewer && viewer.email.toLowerCase() === String(email).toLowerCase();
+    if (!own && !admin) {
+      return NextResponse.json({ success: false, error: 'You can only redeem your own perks' }, { status: 403 });
     }
 
     const user = await User.findOne({ email });
@@ -115,8 +156,10 @@ export async function PATCH(req: Request) {
   }
 }
 
-// DELETE — Remove a perk from a user
+// DELETE — Remove a perk from a user (admin action)
 export async function DELETE(req: Request) {
+  const { response } = await requireAdmin(req);
+  if (response) return response;
   try {
     await dbConnect();
     const { searchParams } = new URL(req.url);

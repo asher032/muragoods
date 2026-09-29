@@ -15,6 +15,8 @@ import {
   validateSelection,
   type ValidateCheck,
 } from './selectors';
+import ServerCardPreview from './ServerCardPreview';
+import { resolveServerCardBackground } from '@/app/lib/server-card-backgrounds';
 
 export default function ModuleSettings({ moduleId, title, description }: {
   moduleId: string;
@@ -245,16 +247,24 @@ export default function ModuleSettings({ moduleId, title, description }: {
                     )}
                   </>
                 ) : f.type === 'select' ? (
-                  <select
-                    value={String(value || '')}
-                    onChange={(e) => setField(f.key, e.target.value)}
-                    className="cc-input"
-                    style={{ width: '100%', appearance: 'none' }}
-                  >
-                    {(f.options || []).map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
+                  <>
+                    <select
+                      value={f.preview === 'server-card' ? resolveServerCardBackground(value) : String(value || '')}
+                      onChange={(e) => setField(f.key, e.target.value)}
+                      className="cc-input"
+                      style={{ width: '100%', appearance: 'none' }}
+                    >
+                      {(f.options || []).map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                    {f.preview === 'server-card' && (
+                      <ServerCardPreview
+                        themeId={value}
+                        accent={fieldValue('leveling.cardColor')}
+                      />
+                    )}
+                  </>
                 ) : f.type === 'number' ? (
                   <input
                     type="number"

@@ -7,7 +7,7 @@ import { NavBar } from '@/app/components/NavBar';
 import { useCoins } from '@/app/hooks/useCoins';
 import { useGameSession } from '@/app/hooks/useGameSession';
 import { DiscordNudge } from '@/app/components/DiscordNudge';
-import { GameBackground } from '@/app/components/GameBackground';
+import { ThemedGameBackground } from '@/app/components/GameBackgroundSettings';
 import { Icon } from '@/app/components/Icon';
 import { Coins, Flame, Gift } from 'lucide-react';
 const BOX_COST = 10;
@@ -241,7 +241,7 @@ export default function MysteryBoxPage() {
   return (
     <main className="min-h-screen">
       <NavBar pageLabel="Mystery Box" />
-      <GameBackground theme="underground" level={3} />
+      <ThemedGameBackground level={3} />
 
       <section className="px-4 py-10 sm:px-8">
         <div className="deco-container" style={{ maxWidth: '48rem' }}>

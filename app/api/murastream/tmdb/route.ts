@@ -162,7 +162,7 @@ export async function GET(request: NextRequest) {
         url = `/movie/now_playing?page=${page}&language=${language}`;
         break;
       case 'movie_details':
-        url = `/movie/${searchParams.get('id')}?append_to_response=credits,videos,similar,recommendations&language=${language}`;
+        url = `/movie/${searchParams.get('id')}?append_to_response=credits,videos,similar,recommendations,release_dates&language=${language}`;
         format = 'detail';
         break;
       case 'tv_details':
@@ -229,11 +229,26 @@ export async function GET(request: NextRequest) {
       data.mediaType = data.first_air_date ? 'tv' : 'movie';
       data.year = (data.release_date || data.first_air_date || '').substring(0, 4);
       data.voteAverage = data.vote_average ?? 0;
+      data.voteCount = data.vote_count ?? 0;
       data.posterPath = getImgUrl(data.poster_path);
       data.backdropPath = getImgUrl(data.backdrop_path, 'w1280');
 
       if (data.credits) data.credits = formatCredits(data.credits);
       if (data.videos) data.videos = formatVideos(data.videos);
+      // US theatrical certification (real TMDB release_dates, never guessed).
+      try {
+        const relResults = (data.release_dates as { results?: Array<{
+          iso_3166_1?: string;
+          release_dates?: Array<{ certification?: string; type?: number }>;
+        }> } | undefined)?.results || [];
+        const pick = relResults.find((r) => r.iso_3166_1 === 'US'
+          && (r.release_dates || []).some((d) => d.certification))
+          || relResults.find((r) => (r.release_dates || []).some((d) => d.certification));
+        const cert = (pick?.release_dates || []).map((d) => d.certification).find(Boolean) || '';
+        data.certification = cert;
+      } catch {
+        data.certification = '';
+      }
       if (data.similar?.results) {
         data.similar = { results: data.similar.results.map(formatResult).slice(0, 12) };
       }

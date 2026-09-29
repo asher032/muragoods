@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import UnsentLetter from '@/app/lib/models/UnsentLetter';
+import { getSessionUser, requireAdmin } from '@/app/lib/session';
 
 // POST — Submit a new unsent letter
 export async function POST(req: Request) {
@@ -20,7 +21,9 @@ export async function POST(req: Request) {
     }
 
     const letter = await UnsentLetter.create({
-      authorEmail,
+      // A signed-in author is stamped server-side; guests keep the supplied
+      // address. The client cannot publish on another account.
+      authorEmail: (await getSessionUser(req).catch(() => null))?.email.toLowerCase() || authorEmail,
       authorName: authorName || 'Anonymous',
       recipientName: recipientName.trim(),
       content: content.trim(),
@@ -47,8 +50,14 @@ export async function GET(req: Request) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
 
-    // My submissions
+    // My submissions — session owner or admin only. Browsing stays public.
     if (email && !name) {
+      const viewer = await getSessionUser(req);
+      const { user: admin } = await requireAdmin(req);
+      const own = viewer && viewer.email.toLowerCase() === email.toLowerCase();
+      if (!own && !admin) {
+        return NextResponse.json({ success: false, error: 'Sign in required' }, { status: viewer ? 403 : 401 });
+      }
       const letters = await UnsentLetter.find({ authorEmail: email }).sort({ createdAt: -1 });
       return NextResponse.json({ success: true, data: letters });
     }
@@ -92,11 +101,17 @@ export async function PATCH(req: Request) {
   try {
     await dbConnect();
     const body = await req.json();
-    const { id, action, email } = body;
+    const { id, action } = body;
+    let { email } = body as { email?: string };
 
     if (!id || !action) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
     }
+
+    // Attribution comes from the session when signed in — the client cannot
+    // like/bookmark as another account.
+    const viewer = await getSessionUser(req).catch(() => null);
+    if (viewer) email = viewer.email.toLowerCase();
 
     const letter = await UnsentLetter.findById(id);
     if (!letter) {
@@ -130,6 +145,9 @@ export async function PATCH(req: Request) {
     }
 
     if (action === 'approve') {
+      // Approving publishes to the public browse feed — admin only.
+      const { response } = await requireAdmin(req);
+      if (response) return response;
       letter.approved = true;
       await letter.save();
       return NextResponse.json({ success: true, data: letter });
@@ -142,25 +160,29 @@ export async function PATCH(req: Request) {
   }
 }
 
-// DELETE — Delete a submission
+// DELETE — Delete a submission (author or admin)
 export async function DELETE(req: Request) {
   try {
     await dbConnect();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
-    const email = searchParams.get('email');
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'ID is required' }, { status: 400 });
     }
 
-    // Only allow author to delete their own
+    // Only the author (server-resolved) or an admin may delete.
     const letter = await UnsentLetter.findById(id);
     if (!letter) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     }
-    if (email && letter.authorEmail !== email) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
+    const viewer = await getSessionUser(req);
+    const { user: admin } = await requireAdmin(req);
+    const own = Boolean(
+      viewer && letter.authorEmail && letter.authorEmail.toLowerCase() === viewer.email.toLowerCase(),
+    );
+    if (!own && !admin) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: viewer ? 403 : 401 });
     }
 
     await UnsentLetter.findByIdAndDelete(id);

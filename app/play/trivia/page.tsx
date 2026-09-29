@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useGameSession } from '@/app/hooks/useGameSession';
 import { DiscordNudge } from '@/app/components/DiscordNudge';
-import { GameBackground } from '@/app/components/GameBackground';
+import { ThemedGameBackground } from '@/app/components/GameBackgroundSettings';
 import { Icon } from '@/app/components/Icon';
 import { Brain, Check, CircleX, Coins, Flame, Gamepad2, Heart, PartyPopper, RefreshCw, Skull, Star, Trophy } from 'lucide-react';
 // ─── Question Bank ──────────────────────────────────────────
@@ -282,7 +282,7 @@ export default function TriviaPage() {
     return (
       <main className="min-h-screen">
         <NavBar pageLabel="Trivia Challenge" />
-        <GameBackground theme="campus" level={isLegendaryMode ? 4 : 2} />
+        <ThemedGameBackground level={isLegendaryMode ? 4 : 2} />
         <section className="px-4 py-10 sm:px-8">
           <div className="deco-container" style={{ maxWidth: '48rem' }}>
             <div className="text-center mb-8">
@@ -399,7 +399,7 @@ export default function TriviaPage() {
     return (
       <main className="min-h-screen">
         <NavBar pageLabel="Game Over" />
-        <GameBackground theme="campus" level={isLegendaryMode ? 4 : 2} />
+        <ThemedGameBackground level={isLegendaryMode ? 4 : 2} />
         <section className="px-4 py-10 sm:px-8">
           <div className="deco-container" style={{ maxWidth: '40rem' }}>
             <div className="deco-modal bounce-in rounded-2xl max-w-md mx-auto" style={{ background: 'var(--charcoal)' }}>
@@ -448,7 +448,7 @@ export default function TriviaPage() {
     return (
       <main className="min-h-screen">
         <NavBar pageLabel="Victory!" />
-        <GameBackground theme="campus" level={isLegendaryMode ? 4 : 2} />
+        <ThemedGameBackground level={isLegendaryMode ? 4 : 2} />
         <section className="px-4 py-10 sm:px-8">
           <div className="deco-container" style={{ maxWidth: '40rem' }}>
             <div className="deco-modal bounce-in rounded-2xl max-w-md mx-auto" style={{ background: 'var(--charcoal)' }}>
@@ -505,7 +505,7 @@ export default function TriviaPage() {
   return (
     <main className="min-h-screen">
       <NavBar pageLabel="Trivia Challenge" />
-      <GameBackground theme="campus" level={isLegendaryMode ? 4 : 2} />
+      <ThemedGameBackground level={isLegendaryMode ? 4 : 2} />
       <section className="px-4 py-10 sm:px-8">
         <div className="deco-container" style={{ maxWidth: '48rem' }}>
 

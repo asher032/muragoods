@@ -61,9 +61,127 @@ LEVEL_DEFAULTS: dict = {
     "rewardOnly": False,
     "cardColor": "#5865F2",
     "cardOpacity": 1.0,
-    "serverBackground": "",
+    "serverBackground": "night-campus",
     "rewards": {},
 }
+
+
+# ── Server card backgrounds (built-in themes, zero network) ─────────────
+# The dashboard selector and /level serverbackground write one of these ids
+# into cfg["serverBackground"]. There is deliberately NO URL support: old
+# URL values resolve to the default (never crash, never fetch).
+SERVER_CARD_DEFAULT = "night-campus"
+
+SERVER_CARD_BACKGROUNDS: dict = {
+    "night-campus": {
+        "name": "Night Campus", "emoji": "🌙",
+        "sky": [(10, 10, 36), (20, 20, 54), (42, 42, 94)],
+        "star": (255, 255, 255), "starCount": 44, "glow": (255, 214, 10),
+    },
+    "deep-space": {
+        "name": "Deep Space", "emoji": "🌌",
+        "sky": [(2, 2, 12), (8, 8, 40), (16, 16, 72)],
+        "star": (255, 255, 255), "starCount": 60, "glow": (72, 149, 239),
+    },
+    "mystic-forest": {
+        "name": "Mystic Forest", "emoji": "🌲",
+        "sky": [(4, 20, 14), (10, 42, 28), (22, 78, 48)],
+        "star": (234, 255, 234), "starCount": 36, "glow": (6, 214, 160),
+    },
+    "neon-city": {
+        "name": "Neon City", "emoji": "🏙️",
+        "sky": [(13, 3, 24), (32, 10, 56), (74, 20, 92)],
+        "star": (255, 233, 196), "starCount": 30, "glow": (255, 77, 216),
+    },
+    "fantasy-castle": {
+        "name": "Fantasy Castle", "emoji": "🏰",
+        "sky": [(10, 6, 24), (24, 16, 64), (52, 36, 110)],
+        "star": (230, 220, 255), "starCount": 44, "glow": (150, 110, 255),
+    },
+    "arcade": {
+        "name": "Arcade", "emoji": "🎮",
+        "sky": [(18, 4, 31), (36, 16, 64), (74, 28, 96)],
+        "star": (255, 214, 255), "starCount": 34, "glow": (200, 80, 255),
+    },
+    "sunset": {
+        "name": "Sunset", "emoji": "🌅",
+        "sky": [(28, 11, 38), (110, 40, 60), (214, 110, 50)],
+        "star": (255, 233, 196), "starCount": 22, "glow": (255, 150, 80),
+    },
+    "sky": {
+        "name": "Sky", "emoji": "☁️",
+        "sky": [(18, 57, 94), (44, 110, 170), (110, 175, 210)],
+        "star": (255, 255, 255), "starCount": 16, "glow": (255, 255, 255),
+    },
+    "midnight": {
+        "name": "Midnight", "emoji": "🌑",
+        "sky": [(2, 2, 7), (6, 6, 20), (14, 14, 36)],
+        "star": (207, 224, 255), "starCount": 52, "glow": (72, 149, 239),
+    },
+    "muragoods": {
+        "name": "Muragoods", "emoji": "✨",
+        "sky": [(13, 13, 40), (40, 24, 90), (120, 30, 60)],
+        "star": (255, 255, 255), "starCount": 40, "glow": (88, 101, 242),
+    },
+}
+
+
+def resolve_server_background(value: object) -> str:
+    """Canonical theme id, or the default. Old URL values (and any junk)
+    resolve to the default: never crash, never fetch."""
+    if isinstance(value, str) and value in SERVER_CARD_BACKGROUNDS:
+        return value
+    return SERVER_CARD_DEFAULT
+
+
+def server_background_meta(theme_id: str) -> dict:
+    return SERVER_CARD_BACKGROUNDS.get(theme_id) or SERVER_CARD_BACKGROUNDS[SERVER_CARD_DEFAULT]
+
+
+def render_card_background(theme_id: str, w: int = 900, h: int = 260):
+    """Generate the card backdrop internally (Pillow). Deterministic per
+    theme: gradient sky + seeded stars + accent glow + vignette."""
+    from PIL import Image, ImageDraw  # type: ignore
+    import random as _random
+    import zlib as _zlib
+    t = server_background_meta(resolve_server_background(theme_id))
+    stops = t["sky"]
+    img = Image.new("RGBA", (w, h), stops[0] + (255,))
+    top = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw_top = ImageDraw.Draw(top)
+    for y in range(h):
+        f = y / max(1, h - 1)
+        if f < 0.5:
+            g = f * 2.0
+            a, b = stops[0], stops[1]
+        else:
+            g = (f - 0.5) * 2.0
+            a, b = stops[1], stops[2]
+        draw_top.line([(0, y), (w, y)],
+                      fill=(int(a[0] + (b[0] - a[0]) * g),
+                            int(a[1] + (b[1] - a[1]) * g),
+                            int(a[2] + (b[2] - a[2]) * g), 255))
+    img = Image.alpha_composite(img, top)
+    rng = _random.Random(_zlib.crc32(resolve_server_background(theme_id).encode()))
+    draw = ImageDraw.Draw(img)
+    sr, sg, sb = t["star"]
+    for _ in range(int(t.get("starCount", 40))):
+        x, y = rng.uniform(0, w), rng.uniform(0, h * 0.8)
+        r = rng.choice([1, 1, 1, 2])
+        alpha = rng.randint(60, 200)
+        draw.ellipse([x - r, y - r, x + r, y + r], fill=(sr, sg, sb, alpha))
+    gr, gg, gb = t["glow"]
+    glow_layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    ImageDraw.Draw(glow_layer).ellipse(
+        [int(w * 0.55), int(h * 0.35), w + 60, h + 60],
+        fill=(gr, gg, gb, 46))
+    img = Image.alpha_composite(img, glow_layer)
+    vig = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw_v = ImageDraw.Draw(vig)
+    for y in range(h):
+        a = int(90 * (y / max(1, h - 1)) ** 1.6)
+        draw_v.line([(0, y), (w, y)], fill=(0, 0, 0, a))
+    return Image.alpha_composite(img, vig)
 
 
 async def get_level_config(db, guild_id: int) -> dict:
@@ -102,6 +220,9 @@ async def get_level_config(db, guild_id: int) -> dict:
         cfg["blacklistedRoles"] = []
     if not isinstance(cfg.get("rewards"), dict):
         cfg["rewards"] = {}
+    # Server card background is a built-in theme id. Legacy URL values are
+    # ignored (default) rather than fetched — never crash on old configs.
+    cfg["serverBackground"] = resolve_server_background(cfg.get("serverBackground"))
     return cfg
 
 
@@ -259,11 +380,14 @@ def render_message(template: str, user_mention: str, level: int, xp: int) -> str
 def render_level_card(username: str, avatar_bytes: bytes | None, level: int,
                       xp_into: int, xp_need: int, rank: int,
                       accent: str = "#5865F2", opacity: float = 1.0,
-                      background_bytes: bytes | None = None) -> tuple[str, bytes | None]:
+                      background_bytes: bytes | None = None,
+                      background_id: str | None = None) -> tuple[str, bytes | None]:
     """Returns (kind, payload): ('png', bytes) or ('text', fallback-text).
 
-    Never raises: without Pillow (or on any render error) callers get a
-    styled text card instead of a crash.
+    Backdrop precedence: explicit `background_bytes` (e.g. a member's own
+    image) first, then the built-in `background_id` theme (server default),
+    then the plain base. Never raises: without Pillow (or on any render
+    error) callers get a styled text card instead of a crash.
     """
     progress = min(1.0, max(0.0, (xp_into / xp_need) if xp_need else 0.0))
     try:
@@ -277,15 +401,22 @@ def render_level_card(username: str, avatar_bytes: bytes | None, level: int,
         import io as _io
         W, H = 900, 260
         base = Image.new("RGBA", (W, H), (24, 24, 30, 255))
+        backdrop = None
         if background_bytes:
             try:
-                bg = Image.open(_io.BytesIO(background_bytes)).convert("RGBA").resize((W, H))
-                if opacity < 1.0:
-                    overlay = Image.new("RGBA", (W, H), (18, 18, 24, int(255 * (1.0 - opacity))))
-                    bg = Image.alpha_composite(bg, overlay)
-                base = bg
+                backdrop = Image.open(_io.BytesIO(background_bytes)).convert("RGBA").resize((W, H))
             except Exception:
-                pass
+                backdrop = None
+        if backdrop is None and background_id:
+            try:
+                backdrop = render_card_background(background_id, W, H)
+            except Exception:
+                backdrop = None
+        if backdrop is not None:
+            if opacity < 1.0:
+                overlay = Image.new("RGBA", (W, H), (18, 18, 24, int(255 * (1.0 - opacity))))
+                backdrop = Image.alpha_composite(backdrop, overlay)
+            base = backdrop
         draw = ImageDraw.Draw(base)
         try:
             font_big = ImageFont.truetype("arial.ttf", 56)

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { NavBar } from '@/app/components/NavBar';
 import { useCoins } from '@/app/hooks/useCoins';
+import { GameBackgroundSettings } from '@/app/components/GameBackgroundSettings';
 
 interface GameDef {
   gameId: string; title: string; description: string; category: string;
@@ -191,6 +192,12 @@ export default function GameCenterPage() {
             ))}
             <Link href="/games/leaderboards" style={linkBtn}>Full leaderboards →</Link>
           </div>
+        </div>
+
+        {/* Level background */}
+        <h2 style={h2}>🎨 Level Background</h2>
+        <div style={{ ...card, marginBottom: 22 }}>
+          <GameBackgroundSettings />
         </div>
 
         {/* Favorite games */}
