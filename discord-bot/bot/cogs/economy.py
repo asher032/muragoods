@@ -185,9 +185,12 @@ class EconomyCore(commands.Cog):
         if user.id == interaction.user.id or user.bot:
             await interaction.followup.send("Pick another member.", ephemeral=True)
             return
-        tid = await eco.trade_create(database._db, interaction.guild.id, interaction.user.id,
-                                     user.id, {"coins": max(0, int(coins or 0)),
-                                               "items": self._parse_items(items)})
+        ok, tid = await eco.trade_create(database._db, interaction.guild.id, interaction.user.id,
+                                         user.id, {"coins": max(0, eco.safe_int(coins, 0)),
+                                                   "items": self._parse_items(items)})
+        if not ok:
+            await interaction.followup.send(f"⚠️ {tid}", ephemeral=True)
+            return
         await interaction.followup.send(
             f"🤝 Trade **{tid}** opened with {user.mention} — they run "
             f"`/trade accept trade_id:{tid}`, then either side `/trade confirm`. (5 min)",
@@ -200,7 +203,7 @@ class EconomyCore(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         ok, msg = await eco.trade_accept(
             database._db, interaction.guild.id, trade_id.strip(), interaction.user.id,
-            {"coins": max(0, int(coins or 0)), "items": self._parse_items(items)})
+            {"coins": max(0, eco.safe_int(coins, 0)), "items": self._parse_items(items)})
         await interaction.followup.send(
             "✅ Locked — confirm with `/trade confirm`." if ok else f"⚠️ {msg}",
             ephemeral=True)

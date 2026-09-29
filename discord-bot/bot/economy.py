@@ -24,6 +24,8 @@ import random
 import uuid
 from datetime import datetime, timedelta, timezone
 
+import items
+
 log = logging.getLogger("bot.economy")
 
 
@@ -37,6 +39,32 @@ def _gid(guild_id) -> int:
 
 def _uid(user_id) -> int:
     return int(user_id)
+
+
+def safe_int(value, default: int = 0) -> int:
+    """Never-raise int coercion for stored values.
+
+    Guild config, wallet rows and item rows are all written by the dashboard,
+    by older bot versions and by hand, so any of them can hold `None`, `""`,
+    `"undefined"`, a float or a numeric string. Returns `default` instead of
+    raising.
+
+    `float("inf")` and `float("nan")` are handled explicitly: `int(float(x))`
+    raises OverflowError on infinity, which would escape a `ValueError`-only
+    handler and crash the command with no user-facing message.
+    """
+    try:
+        if isinstance(value, bool):
+            return int(value)
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    if number != number or number in (float("inf"), float("-inf")):
+        return default
+    try:
+        return int(number)
+    except (OverflowError, ValueError):
+        return default
 
 
 # ── Server configuration (guild_config.economy merged over defaults) ──
@@ -227,18 +255,10 @@ async def claim_cooldown(db, guild_id: int, user_id: int, field: str,
 
 
 # ── Items / shop / inventory ──────────────────────────────────────────
-ITEMS: dict[str, dict] = {
-    "bread":      {"name": "Bread", "price": 25, "sell": 10, "rarity": "common", "kind": "food", "usable": True, "desc": "+50 coins when eaten"},
-    "fishing_rod": {"name": "Fishing Rod", "price": 200, "sell": 80, "rarity": "common", "kind": "tool", "usable": False, "desc": "Unlocks better catches"},
-    "lucky_charm": {"name": "Lucky Charm", "price": 500, "sell": 200, "rarity": "rare", "kind": "charm", "usable": False, "desc": "+10% activity rewards while held"},
-    "mystery_box": {"name": "Mystery Box", "price": 500, "sell": 0, "rarity": "rare", "kind": "box", "usable": True, "desc": "Random reward inside"},
-    "gem_shard":   {"name": "Gem Shard", "price": 0, "sell": 150, "rarity": "epic", "kind": "loot", "usable": False, "desc": "Crafts into gems"},
-    "golden_hook": {"name": "Golden Hook", "price": 2500, "sell": 1000, "rarity": "epic", "kind": "tool", "usable": False, "desc": "Rare fish bite more often"},
-    "adventure_ticket": {"name": "Adventure Ticket", "price": 300, "sell": 0, "rarity": "rare", "kind": "ticket", "usable": True, "desc": "Starts an adventure"},
-    "farm_plot_deed": {"name": "Farm Plot Deed", "price": 400, "sell": 0, "rarity": "common", "kind": "deed", "usable": True, "desc": "+1 farm plot"},
-    "speed_fertilizer": {"name": "Speed Fertilizer", "price": 150, "sell": 50, "rarity": "common", "kind": "boost", "usable": True, "desc": "Halves current crop timers"},
-    "omega_key":   {"name": "Omega Key", "price": 0, "sell": 0, "rarity": "legendary", "kind": "key", "usable": False, "desc": "Proof of endgame trials", "locked": True},
-}
+# The catalog lives in `items.py`, which is the single source of truth for
+# rarities, categories, loot tables and effects. `ITEMS` is the legacy flat
+# projection of that catalog so older call sites keep working unchanged.
+ITEMS: dict[str, dict] = items.legacy_items()
 
 RECIPES: dict[str, dict] = {
     "gem": {"needs": {"gem_shard": 3}, "cost": 200, "result": "gems+1",
@@ -253,14 +273,14 @@ CROPS: dict[str, dict] = {
 
 FISH: list[tuple[str, str, int]] = [
     ("Old Boot", "common", 10), ("Sunny", "common", 25), ("Bubbles", "common", 30),
-    ("Reef King", "rare", 120), ("Abyssal Eel", "epic", 400), ("Golden Koi", "legendary", 1500),
+    ("Reef King", "rare", 120), ("Abyssal Eel", "epic", 400), ("Golden Koi", "godly", 1500),
 ]
 
 PET_SPECIES: dict[str, dict] = {
     "slime": {"name": "Slime", "rarity": "common", "bonus": {"coins": 0.05}},
     "owl": {"name": "Owl", "rarity": "rare", "bonus": {"xp": 0.10}},
     "fox": {"name": "Fox", "rarity": "epic", "bonus": {"luck": 0.10, "coins": 0.05}},
-    "dragon": {"name": "Dragon", "rarity": "legendary", "bonus": {"coins": 0.15, "xp": 0.15}},
+    "dragon": {"name": "Dragon", "rarity": "godly", "bonus": {"coins": 0.15, "xp": 0.15}},
 }
 
 
@@ -271,7 +291,9 @@ async def get_inventory(db, guild_id: int, user_id: int) -> dict[str, int]:
 
 
 async def add_item(db, guild_id: int, user_id: int, item_id: str, qty: int = 1) -> bool:
-    if qty < 1 or item_id not in ITEMS:
+    """Grant items. The id is resolved against the centralized catalog, so a
+    caller can never invent an item, a rarity, a price or an effect."""
+    if qty < 1 or items.get_item(item_id) is None:
         return False
     await db.economy_inv.update_one(
         {"guildId": _gid(guild_id), "userId": _uid(user_id)},
@@ -294,10 +316,10 @@ async def remove_item(db, guild_id: int, user_id: int, item_id: str, qty: int = 
 
 
 async def buy_item(db, guild_id: int, user_id: int, item_id: str, qty: int = 1) -> tuple[bool, str]:
-    item = ITEMS.get(item_id)
-    if not item:
+    row = items.get_item(item_id)
+    if not row:
         return False, "Unknown item."
-    if item.get("locked"):
+    if not row["active"] or row["buy_price"] <= 0:
         return False, "That item can't be bought."
     if qty < 1 or qty > 99:
         return False, "Quantity must be 1–99."
@@ -307,7 +329,7 @@ async def buy_item(db, guild_id: int, user_id: int, item_id: str, qty: int = 1) 
             return False, "That item is disabled on this server."
     except Exception:
         pass
-    total = int(item["price"]) * qty
+    total = row["buy_price"] * qty
     ok, _ = await apply_delta(db, guild_id, user_id, "balance", -total, "shop_buy", "discord", item_id)
     if not ok:
         return False, "Insufficient funds."
@@ -316,18 +338,95 @@ async def buy_item(db, guild_id: int, user_id: int, item_id: str, qty: int = 1) 
 
 
 async def sell_item(db, guild_id: int, user_id: int, item_id: str, qty: int = 1) -> tuple[bool, str]:
-    item = ITEMS.get(item_id)
-    if not item:
+    row = items.get_item(item_id)
+    if not row:
         return False, "Unknown item."
-    if int(item.get("sell", 0)) <= 0:
+    if not row["sellable"] or row["sell_price"] <= 0:
         return False, "That item can't be sold."
     if qty < 1 or qty > 99:
         return False, "Quantity must be 1–99."
+    # remove_item is a guarded atomic decrement, so two concurrent sells can
+    # never both succeed against the same stock.
     if not await remove_item(db, guild_id, user_id, item_id, qty):
         return False, "You don't have that many."
-    await apply_delta(db, guild_id, user_id, "balance", int(item["sell"]) * qty,
+    await apply_delta(db, guild_id, user_id, "balance", row["sell_price"] * qty,
                       "shop_sell", "discord", item_id)
     return True, "ok"
+
+
+# ── Item effects ──────────────────────────────────────────────────────
+# One shared implementation for every surface. Nothing downstream may read
+# an effect value from a request: the type, the magnitude and the expiry all
+# come from the catalog row in `items.py`.
+#
+# Records are keyed by (guild, user, item_id) and written with `$set`, so
+# re-using an item refreshes its window instead of compounding it. That is
+# what makes the system non-stacking and idempotent: a double click, a
+# Discord retry or two tabs open at once can only ever produce the one
+# effect that item is defined to give.
+async def activate_item_effect(db, guild_id: int, user_id: int, item_id: str) -> tuple[bool, str]:
+    """Start (or refresh) one item's effect. Server-side only.
+
+    Duration 0 means "while held" — the effect is implied by owning the item
+    and is not written to the collection at all.
+    """
+    row = items.get_item(item_id)
+    if not row or not row["effect_type"]:
+        return False, "That item has no effect."
+    etype, value, duration = items.validate_effect(
+        row["effect_type"], row["effect_value"], row["effect_duration"])
+    if not etype:
+        return False, "That item's effect is not configured correctly."
+    if duration <= 0:
+        return True, "held"
+    await db.economy_item_effects.update_one(
+        {"guildId": _gid(guild_id), "userId": _uid(user_id), "itemId": item_id},
+        {"$set": {"effectType": etype, "value": value,
+                  "until": _now() + timedelta(seconds=duration),
+                  "at": _now()}},
+        upsert=True)
+    await record_txn(db, guild_id, user_id, "item_effect", int(value * 1000), "discord", item_id,
+                     {"effect": etype, "seconds": duration})
+    return True, "activated"
+
+
+async def active_item_effects(db, guild_id: int, user_id: int) -> dict[str, float]:
+    """Best (not summed) value per effect type across held gear and live buffs."""
+    out: dict[str, float] = {}
+    try:
+        gid, uid = _gid(guild_id), _uid(user_id)
+
+        # Effects with a duration are written on use and expire on their own.
+        try:
+            now = _now()
+            live = await db.economy_item_effects.find(
+                {"guildId": gid, "userId": uid, "until": {"$gt": now}}).to_list(50)
+        except Exception:
+            live = []
+        for doc in live or []:
+            etype = str(doc.get("effectType") or "").strip().lower()
+            if etype not in items.EFFECT_TYPES:
+                continue
+            try:
+                value = float(doc.get("value") or 0.0)
+            except (TypeError, ValueError):
+                continue
+            out[etype] = max(out.get(etype, 0.0), value)
+
+        # Effects with no duration are granted simply by holding the item, so
+        # they are derived from the inventory rather than stored.
+        held = await get_inventory(db, gid, uid)
+        for item_id, qty in (held or {}).items():
+            if safe_int(qty) <= 0:
+                continue
+            row = items.get_item(item_id)
+            if not row or not row["effect_type"] or row["effect_duration"] > 0:
+                continue
+            out[row["effect_type"]] = max(out.get(row["effect_type"], 0.0),
+                                           float(row["effect_value"]))
+    except Exception:
+        log.warning("active_item_effects failed", exc_info=True)
+    return out
 
 
 # ── Rewards with pet/config multipliers (non-stacking: best bonus wins) ─
@@ -354,9 +453,27 @@ async def active_bonuses(db, guild_id: int, user_id: int) -> dict:
                     mult[key] = round(mult[key] * float(value), 3)
                 except (TypeError, ValueError):
                     pass
+        # Item effects: held equipment grants passively, used buffs are
+        # already time-limited in the collection. Both take max, never sum.
+        effects = await active_item_effects(db, guild_id, user_id)
+        for etype, value in effects.items():
+            if etype == "coin_multiplier" and "coins" in mult:
+                mult["coins"] = round(mult["coins"] * (1.0 + value), 3)
+            elif etype == "xp_multiplier" and "xp" in mult:
+                mult["xp"] = round(mult["xp"] * (1.0 + value), 3)
+            elif etype == "luck_bonus" and "luck" in mult:
+                mult["luck"] = round(mult["luck"] * (1.0 + value), 3)
     except Exception:
         pass
     return mult
+
+
+def multiplier_for(bonuses: dict, effect_type: str) -> float:
+    """Map an item effect onto a payout multiplier. Pure, so it is testable."""
+    value = float(bonuses.get(effect_type, 0.0) or 0.0)
+    if value != value or value <= 0:  # NaN / non-positive
+        return 1.0
+    return round(1.0 + min(value, items.MAX_EFFECT_VALUE), 3)
 
 
 async def grant_coins(db, guild_id: int, user_id: int, base: int, kind: str,
@@ -753,6 +870,14 @@ async def farm_harvest(db, guild_id: int, user_id: int) -> tuple[int, int]:
         {"guildId": gid, "userId": uid}, {"$set": {"plots": waiting}})
     if total:
         await apply_delta(db, gid, uid, "balance", total, "farm_harvest", "discord")
+    # Harvests can also yield a sellable/collectible item, from the
+    # centralized catalog's farm pool only.
+    try:
+        drop = items.roll_drop("farm")
+        if drop:
+            await add_item(db, gid, uid, drop["item_id"], 1)
+    except Exception:
+        log.warning("farm item drop failed", exc_info=True)
     return total, len(ripe)
 
 
@@ -770,7 +895,7 @@ async def fish_catch(db, guild_id: int, user_id: int, rng=None) -> tuple[str, st
     table = [FISH[0], FISH[1], FISH[2], FISH[3], FISH[4], FISH[5]]
     pool = table[:4] + table[4:] if sum(weights) else table
     # Weighted pick across rarity bands.
-    bands = [("common", 3), ("rare", 1), ("epic", 1), ("legendary", 1)]
+    bands = [("common", 3), ("rare", 1), ("epic", 1), ("godly", 1)]
     flat, band_weights = [], []
     for (band, count), weight in zip(bands, weights):
         for fish in [f for f in FISH if f[1] == band][:count]:
@@ -781,6 +906,14 @@ async def fish_catch(db, guild_id: int, user_id: int, rng=None) -> tuple[str, st
         {"guildId": gid, "userId": uid},
         {"$inc": {"fishBuckets": 1}}, upsert=True)
     await record_txn(db, gid, uid, "fish_catch", value, "discord", None, {"fish": name})
+    # Fishing can also yield a sellable/collectible item. The pool and the
+    # probability both come from the centralized catalog, server-side.
+    try:
+        drop = items.roll_drop("fish", rng)
+        if drop:
+            await add_item(db, gid, uid, drop["item_id"], 1)
+    except Exception:
+        log.warning("fish item drop failed", exc_info=True)
     return name, rarity, value
 
 
@@ -848,21 +981,53 @@ async def maybe_draw_lottery(db, guild_id: int, rng=None) -> dict | None:
 TRADE_TTL_SEC = 300
 
 
+def validate_offer_items(raw: dict | None) -> tuple[dict, str]:
+    """Validate a trade's item side against the centralized catalog.
+
+    Returns `(clean_items, error)`. `clean_items` is empty when `error` is
+    set. This is the server-side gate that stops a client from offering an
+    item that does not exist, a non-positive quantity, or an item that is not
+    tradeable (Godly items are deliberately locked).
+    """
+    clean: dict[str, int] = {}
+    for item_id, raw_qty in (raw or {}).items():
+        row = items.get_item(item_id)
+        if not row:
+            return {}, "Unknown item in the offer."
+        if not row["tradeable"]:
+            return {}, f"**{row['name']}** can't be traded."
+        qty = safe_int(raw_qty, 0)
+        if qty <= 0:
+            return {}, "Offer quantities must be positive."
+        if qty > 9999:
+            return {}, "That's more of that item than anyone can carry."
+        clean[row["item_id"]] = qty
+    return clean, ""
+
+
 async def trade_create(db, guild_id: int, a_id: int, b_id: int,
-                       a_offer: dict, b_wants: dict | None = None) -> str:
-    """Create a trade in Created state. Offers lock funds/items at accept."""
+                       a_offer: dict, b_wants: dict | None = None) -> tuple[bool, str]:
+    """Create a trade in Created state. Offers lock funds/items at accept.
+
+    Returns `(ok, trade_id_or_error)` — the offer is validated against the
+    catalog before anything is written, so an unknown, non-positive or
+    untradeable item is refused with a readable message rather than raising.
+    """
+    items_map, err = validate_offer_items((a_offer or {}).get("items"))
+    if err:
+        return False, err
     trade_id = uuid.uuid4().hex[:12]
     await db.economy_trades.insert_one({
         "tradeId": trade_id, "guildId": _gid(guild_id),
         "a": _uid(a_id), "b": _uid(b_id),
-        "aOffer": {"coins": max(0, int(a_offer.get("coins", 0))),
-                   "items": dict(a_offer.get("items") or {})},
+        "aOffer": {"coins": max(0, safe_int((a_offer or {}).get("coins"), 0)),
+                   "items": items_map},
         "bOffer": {"coins": 0, "items": {}},
         "state": "created",
         "expiresAt": _now() + timedelta(seconds=TRADE_TTL_SEC),
         "createdAt": _now(),
     })
-    return trade_id
+    return True, trade_id
 
 
 async def trade_expire_sweep(db, guild_id: int) -> int:
@@ -884,17 +1049,24 @@ async def trade_accept(db, guild_id: int, trade_id: str, user_id: int,
     if _uid(user_id) != int(doc["b"]):
         return False, "Only the invited user can accept."
     a, b = int(doc["a"]), int(doc["b"])
-    a_coins = int((doc.get("aOffer") or {}).get("coins", 0))
-    b_coins = max(0, int((b_offer or {}).get("coins", 0)))
-    b_items = dict((b_offer or {}).get("items") or {})
+    a_coins = safe_int((doc.get("aOffer") or {}).get("coins"), 0)
+    b_coins = max(0, safe_int((b_offer or {}).get("coins"), 0))
+    # Re-validate BOTH sides here, not just at creation: a row written before
+    # this rule existed (or an item retired since) must not slip through.
+    b_items, b_err = validate_offer_items((b_offer or {}).get("items"))
+    if b_err:
+        return False, b_err
+    a_items, a_err = validate_offer_items((doc.get("aOffer") or {}).get("items"))
+    if a_err:
+        return False, f"This offer can no longer be completed: {a_err}"
     # Lock A's offer: guarded debit, else abort (no partial state).
     if a_coins:
         ok, _ = await apply_delta(db, guild_id, a, "balance", -a_coins,
                                   "trade_lock", "discord", {"trade": trade_id})
         if not ok:
             return False, "Offerer can no longer cover their coins."
-    for item, qty in (doc.get("aOffer") or {}).get("items", {}).items():
-        if not await remove_item(db, guild_id, a, item, int(qty)):
+    for item, qty in a_items.items():
+        if not await remove_item(db, guild_id, a, item, qty):
             if a_coins:
                 await apply_delta(db, guild_id, a, "balance", a_coins,
                                   "trade_unlock", "discord", {"trade": trade_id})
@@ -906,7 +1078,7 @@ async def trade_accept(db, guild_id: int, trade_id: str, user_id: int,
             await _trade_unlock_a(db, guild_id, doc)
             return False, "You can't cover your coin offer."
     for item, qty in b_items.items():
-        if not await remove_item(db, guild_id, b, item, int(qty)):
+        if not await remove_item(db, guild_id, b, item, qty):
             await _trade_unlock_a(db, guild_id, doc)
             if b_coins:
                 await apply_delta(db, guild_id, b, "balance", b_coins,
@@ -915,7 +1087,7 @@ async def trade_accept(db, guild_id: int, trade_id: str, user_id: int,
     await db.economy_trades.update_one(
         {"_id": doc["_id"], "state": "created"},
         {"$set": {"state": "accepted",
-                  "bOffer": {"coins": b_coins, "items": {k: int(v) for k, v in b_items.items()}},
+                  "bOffer": {"coins": b_coins, "items": {k: safe_int(v, 0) for k, v in b_items.items()}},
                   "expiresAt": _now() + timedelta(seconds=TRADE_TTL_SEC)}})
     return True, "ok"
 

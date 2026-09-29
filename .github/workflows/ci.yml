@@ -64,6 +64,14 @@ jobs:
       - name: Jobs table parity
         run: node scripts/check-jobs-parity.mjs
 
+      # The bot item catalog is the single source of truth for items,
+      # rarities, categories and loot tables; the site reads a generated
+      # snapshot. This fails when the snapshot is stale, when a sixth
+      # "legendary" tier reappears, when a per-rarity minimum drops, or when
+      # the catalog stops being original.
+      - name: Item catalog parity (five rarities, no Legendary, snapshot fresh)
+        run: node scripts/check-items-parity.mjs
+
       - name: Typecheck
         run: npx tsc --noEmit
 
@@ -138,6 +146,13 @@ jobs:
       # Error Center persists the MS- id shown to the user, and redacts secrets.
       - name: Leveling config normalization (/level ValueError guard)
         run: python discord-bot/scripts/test_level_config_normalization.py
+
+      # Item system: the five-rarity rule, the per-rarity minimums, full
+      # typing of every catalog row, exact preservation of the migrated
+      # originals' prices, effect validation, server-side loot, and the
+      # buy/sell/trade gate that refuses forged or untradeable input.
+      - name: Item system (rarity, catalog, effects, loot, security)
+        run: python discord-bot/scripts/test_item_system.py
 
       # Executes the real /level, /rank, /leaderboard, /balance and
       # /leveling handlers against adversarial stored documents. The source
