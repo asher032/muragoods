@@ -96,6 +96,12 @@ def _matches(doc: dict, flt: dict) -> bool:
             if got is None or got < want["$gte"]:
                 return False
             continue
+        if isinstance(want, dict) and "$in" in want:
+            # rewards.reserved_item_ids locks items in both `open` and
+            # `settling` listings, so the stub must understand $in.
+            if got not in want["$in"]:
+                return False
+            continue
         if got != want:
             return False
     return True

@@ -156,13 +156,17 @@ async def reserved_item_ids(db, guild_id: int, user_id: int) -> set[tuple[str, i
     """(item_id, qty) currently locked in a live market offer.
 
     A reserved item must not be sellable, usable or tradeable — otherwise a
-    player could take it out of circulation while it is listed. This is read
-    through a defensive try/except so a missing collection degrades to "no
-    reservations" rather than blocking every reward.
+    player could take it out of circulation while it is listed. `settling` is
+    included alongside `open` because a claimed-but-unfinished trade still holds
+    the items, and treating it as unreserved let a seller spend the very items
+    a buyer had already committed to pay for. This is read through a defensive
+    try/except so a missing collection degrades to "no reservations" rather
+    than blocking every reward.
     """
     try:
         cur = db.economy_market.find(
-            {"guildId": int(guild_id), "seller": int(user_id), "state": "open"},
+            {"guildId": int(guild_id), "seller": int(user_id),
+             "state": {"$in": ["open", "settling"]}},
             {"items": 1, "itemCount": 1})
         rows = await cur.to_list(50)
     except Exception:
