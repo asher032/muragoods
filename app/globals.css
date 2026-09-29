@@ -1419,3 +1419,41 @@ html {
   from { width: 0%; }
   to { width: 100%; }
 }
+
+/* ─── Muragoods level background (GameBackground) ───────────────────
+   Transform/opacity-only animations (GPU cheap). The root layer is
+   pointer-events:none + z-0; game content stays interactive above it. */
+/* Pages hosting <GameBackground/>: lift static content above the fixed
+   layer. Inline-positioned elements (sticky nav, fixed modals) keep their
+   own stacking since inline styles beat this rule. */
+main:has(> .gb-root) > :not(.gb-root) { position: relative; z-index: 1; }
+@keyframes gbTwinkle {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 0.9; }
+}
+.gb-star { animation-name: gbTwinkle; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
+
+@keyframes gbDrift {
+  0% { transform: translateX(-6%); }
+  50% { transform: translateX(6%); }
+  100% { transform: translateX(-6%); }
+}
+.gb-cloud { animation-name: gbDrift; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
+
+@keyframes gbFloat {
+  0% { transform: translateY(0); opacity: 0; }
+  12% { opacity: 0.55; }
+  85% { opacity: 0.45; }
+  100% { transform: translateY(-46px); opacity: 0; }
+}
+.gb-mote { animation-name: gbFloat; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
+
+@keyframes gbPulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+.gb-orb { animation-name: gbPulse; animation-duration: 7s; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .gb-star, .gb-cloud, .gb-mote, .gb-orb { animation: none !important; }
+}

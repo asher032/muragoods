@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useGameSession } from '@/app/hooks/useGameSession';
 import { DiscordNudge } from '@/app/components/DiscordNudge';
+import { GameBackground } from '@/app/components/GameBackground';
 import { Bird, Lightbulb, Skull } from 'lucide-react';
 
 const GAME_WIDTH = 320;
@@ -45,21 +46,9 @@ export default function FlappyBird() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Background
-    const gradient = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
-    gradient.addColorStop(0, '#0a0a2e');
-    gradient.addColorStop(0.5, '#16213e');
-    gradient.addColorStop(1, '#0f0f1a');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-
-    // Stars
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    for (let i = 0; i < 20; i++) {
-      const x = (i * 37 + 10) % GAME_WIDTH;
-      const y = (i * 23 + 5) % (GAME_HEIGHT / 2);
-      ctx.fillRect(x, y, 1.5, 1.5);
-    }
+    // Background: transparent — the shared GameBackground space level
+    // shows through (stars, nebula, parallax). Pipes/bird draw unchanged.
+    ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
     // Pipes
     ctx.fillStyle = '#06d6a0';
@@ -242,6 +231,7 @@ export default function FlappyBird() {
   return (
     <main style={{ minHeight: '100vh', background: '#0a0a18' }}>
       <NavBar pageLabel="Flappy Bird" />
+      <GameBackground theme="space" level={2} />
       <div style={{ maxWidth: '400px', margin: '0 auto', padding: '80px 20px 100px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <div style={{ width: '100%' }}><DiscordNudge compact /></div>
         <div style={{ textAlign: 'center', marginBottom: '20px', opacity: loaded ? 1 : 0, transition: 'all 0.6s ease' }}>

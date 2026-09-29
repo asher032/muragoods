@@ -7,6 +7,7 @@ import { NavBar } from '@/app/components/NavBar';
 import { useCoins } from '@/app/hooks/useCoins';
 import { useGameSession } from '@/app/hooks/useGameSession';
 import { DiscordNudge } from '@/app/components/DiscordNudge';
+import { GameBackground } from '@/app/components/GameBackground';
 
 const SEGMENTS = [
   { label: '5 coins', coins: 5, color: '#e63946', textColor: '#fff' },
@@ -96,6 +97,7 @@ export default function SpinWheelPage() {
   return (
       <main style={{ minHeight: '100vh', background: 'var(--mario-bg)' }}>
         <NavBar pageLabel="Spin the Wheel" />
+        <GameBackground theme="arcade" level={2} />
         <div style={{ maxWidth: '420px', margin: '0 auto', padding: '20px 16px 80px' }}>
           <DiscordNudge compact />
           {notice && (
