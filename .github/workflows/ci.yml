@@ -138,3 +138,10 @@ jobs:
       # Error Center persists the MS- id shown to the user, and redacts secrets.
       - name: Leveling config normalization (/level ValueError guard)
         run: python discord-bot/scripts/test_level_config_normalization.py
+
+      # Executes the real /level, /rank, /leaderboard, /balance and
+      # /leveling handlers against adversarial stored documents. The source
+      # scan above cannot catch a ValueError that only fires at runtime, and a
+      # previous pass missed exactly that in /balance and /leaderboard.
+      - name: Leveling command handlers (runtime ValueError guard)
+        run: python discord-bot/scripts/test_level_handlers_live.py
