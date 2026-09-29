@@ -23,6 +23,7 @@ amount, and no command lets a user change economic values.
 
 import logging
 import random
+import time
 
 import discord
 from discord import app_commands
@@ -43,8 +44,92 @@ from cogs import jobs as shift_views
 log = logging.getLogger("bot.work")
 
 
+def datetime_now() -> int:
+    return int(time.time())
+
+
+def _safe(value, default: int = 0) -> int:
+    return lv.safe_int(value, default)
+
+
+def safe_list(value) -> list:
+    """A stored setting that should be a list, without trusting it."""
+    return list(value) if isinstance(value, list) else []
+
+
 async def _cfg(guild_id: int) -> dict:
     return await eco.get_economy_config(database._db, guild_id)
+
+
+class JobApplySelect(discord.ui.View):
+    """`/work apply` job picker.
+
+    The select's VALUE is an internal job id, but it is never trusted: the
+    callback re-resolves it against the authoritative catalog and re-checks
+    the unlock requirement server-side, so a forged or stale value cannot
+    grant employment in a job the member has not earned.
+    """
+
+    def __init__(self, guild_id: int, user_id: int,
+                 options: list[discord.SelectOption]):
+        super().__init__(timeout=120.0)
+        self.guild_id = guild_id
+        self.user_id = user_id
+        select = discord.ui.Select(placeholder="Choose a job to apply for…",
+                                   min_values=1, max_values=1, options=options)
+        select.callback = self._on_select  # type: ignore[method-assign]
+        self.add_item(select)
+
+    async def _on_select(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
+        if interaction.user.id != self.user_id:
+            await interaction.followup.send(
+                "That application isn't yours — run `/work apply` yourself.",
+                ephemeral=True)
+            return
+        raw = self.children[0].values[0]
+        # Server-side re-resolution: never trust the client-supplied value.
+        job, problem = jb.resolve_job(raw)
+        if job is None:
+            log.error("[work] apply rejected unknown job %r: %s", raw, problem)
+            await interaction.followup.send(
+                "⚠️ That job isn't available any more. Please pick another.",
+                ephemeral=True)
+            return
+        state = await jb.employment_state(database._db, self.guild_id, self.user_id)
+        if state["job"] and state["job"]["id"] != job["id"]:
+            await interaction.followup.send(
+                f"💼 Already Employed\n\nYou currently work as "
+                f"**{state['job']['name']}**.\n\n"
+                "Use `/work resign` first if you want to change jobs.",
+                ephemeral=True)
+            return
+        cfg = await _cfg(self.guild_id)
+        disabled = {str(x) for x in safe_list(cfg.get("disabledJobs"))}
+        ok, res = await jb.apply_for_job(database._db, self.guild_id, self.user_id,
+                                         job["id"], disabled)
+        if not ok:
+            err = str(res.get("error") or "")
+            if err == "locked":
+                err = (f"🔒 Locked — requires {res.get('required')} completed "
+                       f"shifts ({res.get('progress')} so far).")
+            elif err == "config":
+                err = f"⚠️ That job's configuration is invalid: {res.get('detail')}"
+            else:
+                err = err or "Could not apply."
+            await interaction.followup.send(f"❌ Application refused\n\n{err}",
+                                            ephemeral=True)
+            return
+        for child in self.children:
+            child.disabled = True
+        try:
+            await interaction.original_response().edit(view=self)
+        except discord.HTTPException:
+            pass
+        await interaction.followup.send(
+            "💼 Application Submitted\n\n"
+            f"You applied for **{job['icon']} {job['name']}**.\n\n"
+            "You can now start working with:\n`/work shift`", ephemeral=True)
 
 
 class WorkCog(commands.Cog):
@@ -188,7 +273,10 @@ class WorkCog(commands.Cog):
             err = str(payload.get("error") or "Try again.")
             if err == "cooldown":
                 err = (f"You can work again in "
-                       f"{jb.fmt_duration(int(payload.get('remaining', 0)))}.")
+                       f"{jb.fmt_duration(lv.safe_int(payload.get('remaining'), 0))}.")
+            elif err == "config":
+                err = (f"⚠️ This job's configuration is invalid and was not "
+                       f"paid out: {payload.get('detail') or 'see the bot logs'}")
             elif err == "locked":
                 err = (f"🔒 Locked — requires {payload.get('required')} completed shifts "
                        f"({payload.get('progress')} so far).")
@@ -228,9 +316,139 @@ class WorkCog(commands.Cog):
                 interaction,
                 f"{payload['job']['icon']} **{payload['job']['name']} shift** — "
                 f"tap the instant it turns green (you have "
-                f"{int(challenge.get('windowMs', 900))}ms).")
+                f"{lv.safe_int(challenge.get('windowMs'), 900)}ms).")
         else:
             await view.start(interaction)
+
+    @work.command(name="apply", description="Apply for a job.")
+    async def work_apply(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        if interaction.guild is None:
+            await interaction.followup.send("Work only runs inside a server.", ephemeral=True)
+            return
+        state = await jb.employment_state(database._db, interaction.guild.id,
+                                          interaction.user.id)
+        # A stale record (job removed from the catalog) must be cleared before
+        # anything else, otherwise the member is permanently locked out.
+        if state["stale"]:
+            await jb.mark_stale_employment(database._db, interaction.guild.id,
+                                           interaction.user.id, state["problem"] or "unknown")
+            log.warning("[work] stale employment for guild=%s user=%s jobId=%r: %s",
+                        interaction.guild.id, interaction.user.id,
+                        state["jobId"], state["problem"])
+            await interaction.followup.send(
+                "💼 Job Unavailable\n\n"
+                f"Your previous job (`{state['jobId']}`) is no longer available.\n"
+                "The record was flagged for an admin — please pick a new job below.",
+                ephemeral=True)
+        elif state["job"]:
+            job = state["job"]
+            await interaction.followup.send(
+                f"💼 Already Employed\n\n"
+                f"You currently work as **{job['name']}**.\n\n"
+                "Use `/work shift` to work your current job.\n\n"
+                "If you want to change jobs, use `/work resign` first.",
+                ephemeral=True)
+            return
+        total = await jb.total_completed(database._db, interaction.guild.id,
+                                         interaction.user.id)
+        cfg = await _cfg(interaction.guild.id)
+        disabled = {str(x) for x in (safe_list(cfg.get("disabledJobs")))}
+        options, entries = [], []
+        for job_id in jb.JOB_ORDER:
+            job, problem = jb.resolve_job(job_id)
+            if job is None:
+                # Never surface a misconfigured job to a member.
+                log.error("[work] catalog entry %r is invalid: %s", job_id, problem)
+                continue
+            if job_id in disabled:
+                continue
+            entry = jb.catalog_entry(job)
+            entries.append(entry)
+            if len(options) < 25:
+                # Labels are what the user sees; the VALUE is an internal id
+                # and is re-resolved server-side on selection.
+                options.append(discord.SelectOption(
+                    label=f"{entry['icon']} {entry['name']}"[:100],
+                    value=entry["id"],
+                    description=entry["description"][:100]))
+        if not options:
+            await interaction.followup.send(
+                "💼 No jobs available\n\nNo jobs are currently open in this server. "
+                "An admin can enable them in the dashboard → Economy.", ephemeral=True)
+            return
+        locked = [e for e in entries if total < e["minimum_level"]]
+        view = JobApplySelect(interaction.guild.id, interaction.user.id, options)
+        preview = [
+            f"{e['icon']} **{e['name']}** — {e['description']}\n"
+            f"💰 {jb.fmt_coins(e['reward_min'])}/shift · "
+            f"📋 {e['requirements'][0] if e['requirements'] else 'no requirements'}"
+            for e in entries[:6]
+        ]
+        body = ("Choose a job to apply for:\n\n" + "\n".join(preview)
+                + (f"\n\n🔒 {len(locked)} job(s) still locked at {total} completed shifts."
+                   if locked else ""))
+        await interaction.followup.send(body, view=view, ephemeral=True)
+
+    @work.command(name="status", description="Your work profile: job, level, shifts and earnings.")
+    async def work_status(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        if interaction.guild is None:
+            await interaction.followup.send("Work only runs inside a server.", ephemeral=True)
+            return
+        gid, uid = interaction.guild.id, interaction.user.id
+        state = await jb.employment_state(database._db, gid, uid)
+        if state["stale"]:
+            await interaction.followup.send(
+                "💼 Job Unavailable\n\n"
+                f"Your previous job (`{state['jobId']}`) is no longer available.\n\n"
+                "Please use `/work apply` to choose another available job.",
+                ephemeral=True)
+            return
+        if not state["job"]:
+            await interaction.followup.send(
+                "💼 Work Profile\n\nYou don't currently have a job.\n\n"
+                "Use `/work apply` to apply for one.", ephemeral=True)
+            return
+        job = state["job"]
+        total = await jb.total_completed(database._db, gid, uid)
+        rows = await jb.history(database._db, gid, uid, 25)
+        earned = sum(lv.safe_int(r.get("payout"), 0) for r in rows)
+        successes = 0
+        try:
+            prog = await database._db.job_progress.find_one(
+                {"guildId": lv.safe_int(gid), "userId": lv.safe_int(uid),
+                 "jobId": job["id"]}) or {}
+            successes = lv.safe_int(prog.get("successes"), 0)
+        except Exception:
+            successes = 0
+        job_level = jb.promo_level(successes) + 1
+        last = rows[0].get("consumedAt") if rows else None
+        last_txt = last.strftime("%m-%d %H:%M") if hasattr(last, "strftime") else "Never"
+        cd_sec = _safe(job.get("cooldownMin")) * 60
+        try:
+            raw = (await _cfg(gid)).get("jobCooldownOverrides") or {}
+            if isinstance(raw, dict) and job["id"] in raw:
+                cd_sec = max(60, min(86400, lv.safe_int(raw[job["id"]], cd_sec)))
+        except Exception:
+            pass
+        next_at = await jb.last_completed_at(database._db, gid, uid, job["id"])
+        ready = "Available"
+        if next_at is not None:
+            from datetime import timezone as _tz
+            stamp = next_at if next_at.tzinfo else next_at.replace(tzinfo=_tz.utc)
+            remaining = int(stamp.timestamp() + cd_sec) - int(datetime_now())
+            if remaining > 0:
+                ready = f"in {jb.fmt_duration(remaining)}"
+        await interaction.followup.send(embed=embeds.embed(
+            "💼 Work Profile",
+            f"**Current Job:** {job['icon']} {job['name']}\n"
+            f"**Job Level:** {job_level}\n"
+            f"**Total Shifts:** {total}\n"
+            f"**Total Earned:** {jb.fmt_coins(earned)}\n"
+            f"**Last Shift:** {last_txt}\n"
+            f"**Next Shift:** {ready}",
+            embeds.GOLD), ephemeral=True)
 
     @work.command(name="history", description="Show your recent work shifts.")
     async def work_history(self, interaction: discord.Interaction):
@@ -254,7 +472,7 @@ class WorkCog(commands.Cog):
             reason = "" if r.get("won") else f" — {r.get('reason') or ''}"
             lines.append(
                 f"{mark} {job.get('icon', '💼')} **{job.get('name', r.get('jobId'))}**\n"
-                f"+ {jb.fmt_coins(int(r.get('payout') or 0))} · {result} · "
+                f"+ {jb.fmt_coins(lv.safe_int(r.get('payout'), 0))} · {result} · "
                 f"{r.get('game', '')} mini-game · {stamp}{reason}")
         await interaction.followup.send(embed=embeds.embed(
             "📋 Work History", "\n\n".join(lines), embeds.INFO), ephemeral=True)

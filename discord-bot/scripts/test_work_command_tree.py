@@ -85,8 +85,9 @@ async def main():
     check("/work group is registered",
           "work" in {c.name for c in cog.__cog_app_commands__},
           str(sorted(n for n in names)))
-    required = {"work shift", "work list", "work history", "work resign",
-                "work stars", "work session", "work vacation", "work event"}
+    required = {"work apply", "work status", "work shift", "work list",
+                "work history", "work resign", "work stars", "work session",
+                "work vacation", "work event"}
     missing = required - names
     check("all required /work subcommands exist", not missing, f"missing {sorted(missing)}")
 
@@ -161,6 +162,19 @@ async def main():
     advertised = {cmd for cmd, _cat in helpmod._NAME_OVERRIDES}
     check("help does not advertise /jobs", "/jobs" not in advertised)
     check("help advertises /work", "/work" in advertised)
+    # The apply flow must be a real select menu, and must re-resolve the
+    # selected id server-side rather than trusting the client value.
+    apply_body = src.split('@work.command(name="apply"', 1)[1].split("\n    @work.command", 1)[0]
+    check("/work apply uses a Discord select menu", "discord.ui.Select" in src
+          and "JobApplySelect" in src)
+    check("/work apply re-resolves the chosen id server-side",
+          "jb.resolve_job" in src and "jb.apply_for_job" in src)
+    check("/work apply refuses to silently replace an existing job",
+          "Already Employed" in apply_body)
+    check("/work apply shows no internal ids in user-facing copy",
+          "old_barista" not in apply_body)
+    check("/work apply handles a stale jobId without crashing",
+          "state[\"stale\"]" in apply_body and "mark_stale_employment" in apply_body)
     check("help does not advertise /level shift", "/level shift" not in advertised)
 
     failed = 0
