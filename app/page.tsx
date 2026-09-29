@@ -318,6 +318,14 @@ export default function Home() {
                     <Bot className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> DASHBOARD
                   </AnimatedButton>
                 </Link>
+                <a href="/api/auth/discord/install">
+                  <AnimatedButton
+                    className="px-10 py-3 font-arcade text-sm"
+                    style={{ background: 'rgba(88,101,242,0.2)', borderColor: 'rgba(88,101,242,0.45)', color: '#8b93ff' }}
+                  >
+                    + INVITE BOT
+                  </AnimatedButton>
+                </a>
               </div>
             </Reveal>
 
