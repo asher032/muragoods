@@ -425,7 +425,19 @@ class TimingStopButton(discord.ui.Button):
 
 
 class JobBrowser(utils.SafeView):
-    """39 jobs don't fit in slash choices (25 max) — browse pages of 10."""
+    """39 jobs don't fit in slash choices (25 max) — browse pages of 10.
+
+    Layout is explicit because discord.py caps an action row at 5 components.
+    The job buttons are auto-placed by add_item() into rows 0 and 1 (five
+    each), so the nav buttons cannot share row 1 — forcing them there raised
+    `ValueError: item would not fit at row 1 (6 > 5 width)` in the
+    constructor, before any button existed. That made /work shift fail for
+    every member, every time, regardless of stored data.
+    """
+
+    #: Discord allows at most 5 components per action row and 5 action rows.
+    PER_ROW = 5
+    MAX_ROWS = 5
 
     def __init__(self, guild_id: int, user_id: int, page: int, total: int):
         super().__init__(timeout=120)
@@ -435,11 +447,15 @@ class JobBrowser(utils.SafeView):
         self.total = total
         self.chosen: str | None = None
         start = page * JOBS_PER_PAGE
-        for job_id in jb.JOB_ORDER[start:start + JOBS_PER_PAGE]:
+        page_jobs = jb.JOB_ORDER[start:start + JOBS_PER_PAGE]
+        for index, job_id in enumerate(page_jobs):
             job = jb.JOBS[job_id]
             locked = total < int(job["unlock"])
-            self.add_item(JobButton(job, locked))
-        nav_row = 1 if len(self.children) > 5 else 0
+            self.add_item(JobButton(job, locked, row=index // self.PER_ROW))
+        # Nav goes on the first row the job buttons did not fill.
+        nav_row = -(-len(page_jobs) // self.PER_ROW)
+        if nav_row >= self.MAX_ROWS:
+            nav_row = self.MAX_ROWS - 1
         if page > 0:
             self.add_item(NavButton("◀ Prev", page - 1, nav_row))
         if start + JOBS_PER_PAGE < len(jb.JOB_ORDER):
@@ -474,10 +490,10 @@ class JobBrowser(utils.SafeView):
 
 
 class JobButton(discord.ui.Button):
-    def __init__(self, job: dict, locked: bool):
+    def __init__(self, job: dict, locked: bool, row: int = 0):
         super().__init__(label=f"{job['icon']} {job['name']}"[:80],
                          style=discord.ButtonStyle.secondary,
-                         disabled=locked)
+                         disabled=locked, row=row)
         self.job_id = job["id"]
 
     async def callback(self, interaction: discord.Interaction):
