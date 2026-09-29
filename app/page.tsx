@@ -310,6 +310,14 @@ export default function Home() {
                     <Clapperboard className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> MOVIES
                   </AnimatedButton>
                 </Link>
+                <Link href="/dashboard">
+                  <AnimatedButton
+                    className="px-10 py-3 font-arcade text-sm"
+                    style={{ background: 'rgba(255,214,10,0.15)', borderColor: 'rgba(255,214,10,0.3)', color: '#ffd60a' }}
+                  >
+                    <Bot className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> DASHBOARD
+                  </AnimatedButton>
+                </Link>
               </div>
             </Reveal>
 
