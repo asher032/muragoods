@@ -1,0 +1,480 @@
+{
+  "_source": "Authoritative Jobs table. Exact values (shiftsPerDay, cooldownMin, unlock, salary, workItem) must not be edited by hand for balance — change only via the supplied table. Mini-game flavor (prompt/items/pools/questions) may be extended.",
+  "_failPay": "Failure payout = floor(salary * failRate). failRate default 0.3, admin-configurable 0.05-0.9, always < 1 so it can never meet or exceed salary.",
+  "jobs": [
+    {
+      "id": "cashier", "name": "Cashier", "icon": "🧾",
+      "shiftsPerDay": 1, "cooldownMin": 43, "unlock": 0, "salary": 95000,
+      "workItem": "Cash Register", "game": "order",
+      "flavor": {
+        "prompt": "Scan the items in checkout order: 1 → N",
+        "items": ["Milk", "Bread", "Eggs", "Apples", "Soap", "Rice", "Juice"]
+      }
+    },
+    {
+      "id": "delivery", "name": "Delivery Driver", "icon": "🚚",
+      "shiftsPerDay": 2, "cooldownMin": 46, "unlock": 10, "salary": 105000,
+      "workItem": "Delivery Box", "game": "order",
+      "flavor": {
+        "prompt": "Drop off packages in route order: 1 → N",
+        "items": ["Maple St", "Oak Ave", "Pine Rd", "Cedar Ln", "Elm Dr", "Birch Way"]
+      }
+    },
+    {
+      "id": "janitor", "name": "Janitor", "icon": "🧹",
+      "shiftsPerDay": 2, "cooldownMin": 46, "unlock": 10, "salary": 108000,
+      "workItem": "Cleaning Cart", "game": "memory",
+      "flavor": {
+        "prompt": "Memorize the supply shelf, then restock it exactly.",
+        "pool": ["🧽", "🧴", "🪣", "🧹", "🧻", "🧷", "🪠", "🧺"]
+      }
+    },
+    {
+      "id": "farmer", "name": "Farmer", "icon": "🌾",
+      "shiftsPerDay": 2, "cooldownMin": 46, "unlock": 15, "salary": 112000,
+      "workItem": "Seed Bag", "game": "memory",
+      "flavor": {
+        "prompt": "Memorize the planting row, then replant it exactly.",
+        "pool": ["🌽", "🥕", "🍅", "🥔", "🌻", "🍓", "🥬", "🫘"]
+      }
+    },
+    {
+      "id": "mechanic", "name": "Mechanic", "icon": "🔧",
+      "shiftsPerDay": 3, "cooldownMin": 49, "unlock": 25, "salary": 135000,
+      "workItem": "Wrench", "game": "order",
+      "flavor": {
+        "prompt": "Follow the repair manual steps in order: 1 → N",
+        "items": ["Drain oil", "Remove filter", "Fit gasket", "Torque bolts", "Refill oil", "Test engine"]
+      }
+    },
+    {
+      "id": "photographer", "name": "Photographer", "icon": "📸",
+      "shiftsPerDay": 3, "cooldownMin": 49, "unlock": 35, "salary": 145000,
+      "workItem": "Camera", "game": "memory",
+      "flavor": {
+        "prompt": "Memorize the shot list, then shoot it in order.",
+        "pool": ["🌄", "🐦", "🌸", "🏙️", "🌊", "🐈", "🎆", "🍂"]
+      }
+    },
+    {
+      "id": "journalist", "name": "Journalist", "icon": "📰",
+      "shiftsPerDay": 3, "cooldownMin": 49, "unlock": 45, "salary": 155000,
+      "workItem": "Notebook", "game": "memory",
+      "flavor": {
+        "prompt": "Memorize the interview notes, then file them in order.",
+        "pool": ["🎤", "📝", "📷", "📁", "🔖", "📌", "📞", "🗞️"]
+      }
+    },
+    {
+      "id": "chef", "name": "Chef", "icon": "👨‍🍳",
+      "shiftsPerDay": 3, "cooldownMin": 49, "unlock": 50, "salary": 165000,
+      "workItem": "Chef Hat", "game": "order",
+      "flavor": {
+        "prompt": "Assemble the dish in recipe order: 1 → N",
+        "items": ["Bun", "Patty", "Lettuce", "Cheese", "Sauce", "Tomato", "Onion"]
+      }
+    },
+    {
+      "id": "construction", "name": "Construction Worker", "icon": "🦺",
+      "shiftsPerDay": 3, "cooldownMin": 49, "unlock": 60, "salary": 170000,
+      "workItem": "Hard Hat", "game": "order",
+      "flavor": {
+        "prompt": "Follow the build phases in order: 1 → N",
+        "items": ["Survey", "Foundation", "Framing", "Roofing", "Wiring", "Paint"]
+      }
+    },
+    {
+      "id": "firefighter", "name": "Firefighter", "icon": "🚒",
+      "shiftsPerDay": 3, "cooldownMin": 49, "unlock": 70, "salary": 195000,
+      "workItem": "Fire Helmet", "game": "choice",
+      "flavor": {
+        "prompt": "Choose the correct emergency response.",
+        "questions": [
+          {
+            "q": "Kitchen grease fire reported. First action?",
+            "options": ["Smother with lid", "Throw water on it", "Open all windows", "Move the pan outside"],
+            "correct": 0
+          },
+          {
+            "q": "Alarm sounds during drill. You…",
+            "options": ["Guide everyone to exits", "Finish your coffee", "Take the elevator", "Hide under desk"],
+            "correct": 0
+          },
+          {
+            "q": "Alarm panel shows Zone 3. You…",
+            "options": ["Investigate Zone 3 geared up", "Silence the panel", "Assume false alarm", "Leave the building alone"],
+            "correct": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "architect", "name": "Architect", "icon": "📐",
+      "shiftsPerDay": 4, "cooldownMin": 52, "unlock": 90, "salary": 205000,
+      "workItem": "Blueprint", "game": "order",
+      "flavor": {
+        "prompt": "Stack the blueprint layers in order: 1 → N",
+        "items": ["Site plan", "Floor plan", "Elevation", "Section", "Details", "Cover sheet"]
+      }
+    },
+    {
+      "id": "designer", "name": "Graphic Designer", "icon": "🎨",
+      "shiftsPerDay": 4, "cooldownMin": 52, "unlock": 100, "salary": 215000,
+      "workItem": "Drawing Tablet", "game": "order",
+      "flavor": {
+        "prompt": "Order the design layers correctly: 1 → N",
+        "items": ["Background", "Shapes", "Images", "Text", "Effects", "Export"]
+      }
+    },
+    {
+      "id": "software", "name": "Software Engineer", "icon": "💻",
+      "shiftsPerDay": 4, "cooldownMin": 52, "unlock": 130, "salary": 230000,
+      "workItem": "Laptop", "game": "choice",
+      "flavor": {
+        "prompt": "Pick the correct output. print(2 + 3 * 2)?",
+        "questions": [
+          {
+            "q": "print(2 + 3 * 2) outputs?",
+            "options": ["8", "10", "12", "6"],
+            "correct": 0
+          },
+          {
+            "q": "Which loop runs exactly 3 times? (i from 0)",
+            "options": ["while i < 3", "while i <= 3", "while i < 2", "while True"],
+            "correct": 0
+          },
+          {
+            "q": "len([1, [2, 3], 4]) is?",
+            "options": ["3", "4", "2", "5"],
+            "correct": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "cybersec", "name": "Cybersecurity Analyst", "icon": "🛡️",
+      "shiftsPerDay": 4, "cooldownMin": 52, "unlock": 150, "salary": 240000,
+      "workItem": "Security Key", "game": "choice",
+      "flavor": {
+        "prompt": "Choose the correct incident response.",
+        "questions": [
+          {
+            "q": "Phishing email with a strange attachment arrives. You…",
+            "options": ["Quarantine and report it", "Open it to check", "Forward to a friend", "Delete without a word"],
+            "correct": 0
+          },
+          {
+            "q": "Login alerts from an unknown country appear. You…",
+            "options": ["Force password reset + alert user", "Ignore one alert", "Share the password", "Disable logging"],
+            "correct": 0
+          },
+          {
+            "q": "USB stick found in the parking lot. You…",
+            "options": ["Hand it to security unplugged", "Plug it into your laptop", "Plug it into a server", "Throw it in a drawer"],
+            "correct": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "pilot", "name": "Pilot", "icon": "✈️",
+      "shiftsPerDay": 5, "cooldownMin": 55, "unlock": 175, "salary": 255000,
+      "workItem": "Pilot Wings", "game": "choice",
+      "flavor": {
+        "prompt": "Make the correct flight-deck call.",
+        "questions": [
+          {
+            "q": "Crosswind exceeds limits on final. You…",
+            "options": ["Go around", "Force the landing", "Speed up descent", "Turn off instruments"],
+            "correct": 0
+          },
+          {
+            "q": "Engine gauge flickers amber. First step?",
+            "options": ["Run the checklist", "Ignore it", "Shut everything down", "Climb faster"],
+            "correct": 0
+          },
+          {
+            "q": "Tower says hold short. You…",
+            "options": ["Stop before the runway", "Cross quickly", "Take off anyway", "Switch frequency off"],
+            "correct": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "attendant", "name": "Flight Attendant", "icon": "🧳",
+      "shiftsPerDay": 5, "cooldownMin": 55, "unlock": 190, "salary": 265000,
+      "workItem": "Suitcase", "game": "timing",
+      "flavor": { "prompt": "Brake the beverage cart inside the green zone." }
+    },
+    {
+      "id": "anchor", "name": "News Anchor", "icon": "🎙️",
+      "shiftsPerDay": 5, "cooldownMin": 55, "unlock": 200, "salary": 275000,
+      "workItem": "Microphone", "game": "memory",
+      "flavor": {
+        "prompt": "Memorize the headline rundown, then read it back in order.",
+        "pool": ["🌤️", "🏛️", "⚽", "🎬", "💹", "🚀", "🎭", "🧪"]
+      }
+    },
+    {
+      "id": "director", "name": "Film Director", "icon": "🎬",
+      "shiftsPerDay": 5, "cooldownMin": 55, "unlock": 225, "salary": 285000,
+      "workItem": "Director's Clapper", "game": "order",
+      "flavor": {
+        "prompt": "Order the shoot schedule correctly: 1 → N",
+        "items": ["Rehearsal", "Wide shot", "Close-up", "Retake", "Wrap", "Dailies"]
+      }
+    },
+    {
+      "id": "dreamitect", "name": "Architect of Dreams", "icon": "🌙",
+      "shiftsPerDay": 5, "cooldownMin": 55, "unlock": 250, "salary": 300000,
+      "workItem": "Blueprint Scroll", "game": "choice",
+      "flavor": {
+        "prompt": "Match the client's dream-vision.",
+        "questions": [
+          {
+            "q": "Client dreams of flying over oceans. Design…",
+            "options": ["Open sky atriums", "Windowless bunker", "Underground maze", "Concrete box"],
+            "correct": 0
+          },
+          {
+            "q": "Client fears small dark rooms. Avoid…",
+            "options": ["Cramped corridors", "Glass pavilions", "Sunlit courts", "Open lofts"],
+            "correct": 0
+          },
+          {
+            "q": "Client loves sunrise light. Orient…",
+            "options": ["Bedrooms to the east", "Bedrooms to the north", "No windows", "Blackout everything"],
+            "correct": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "ceo", "name": "CEO", "icon": "💼",
+      "shiftsPerDay": 6, "cooldownMin": 58, "unlock": 300, "salary": 325000,
+      "workItem": "Business Briefcase", "game": "order",
+      "flavor": {
+        "prompt": "Prioritize the board agenda correctly: 1 → N",
+        "items": ["Safety review", "Payroll", "Product launch", "Marketing", "Office party", "Rebrand"]
+      }
+    },
+    {
+      "id": "astronaut", "name": "Astronaut", "icon": "🚀",
+      "shiftsPerDay": 6, "cooldownMin": 58, "unlock": 350, "salary": 350000,
+      "workItem": "Space Helmet", "game": "timing",
+      "flavor": { "prompt": "Time the docking clamp inside the green window." }
+    },
+    {
+      "id": "agent", "name": "Secret Agent", "icon": "🕵️",
+      "shiftsPerDay": 6, "cooldownMin": 58, "unlock": 400, "salary": 375000,
+      "workItem": "Agent Badge", "game": "choice",
+      "flavor": {
+        "prompt": "Pick the correct field cover.",
+        "questions": [
+          {
+            "q": "Cover for a beach-resort stakeout?",
+            "options": ["Tourist photographer", "Bank guard uniform", "Firefighter gear", "Clown costume"],
+            "correct": 0
+          },
+          {
+            "q": "Contact uses codeword 'harbor'. Reply…",
+            "options": ["'The tide is low'", "'Nice weather'", "'Who are you'", "'Loud and clear'"],
+            "correct": 0
+          },
+          {
+            "q": "Safe house compromised. You…",
+            "options": ["Move to backup location", "Stay put", "Call the front desk", "Post about it"],
+            "correct": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "gamedesign", "name": "Game Designer", "icon": "🎮",
+      "shiftsPerDay": 6, "cooldownMin": 58, "unlock": 450, "salary": 400000,
+      "workItem": "Game Controller", "game": "choice",
+      "flavor": {
+        "prompt": "Pick the design call that ships.",
+        "questions": [
+          {
+            "q": "Tutorial level is too hard. You…",
+            "options": ["Ease level 1, teach one skill", "Add ten mechanics", "Remove the tutorial", "Make enemies faster"],
+            "correct": 0
+          },
+          {
+            "q": "Players skip cutscenes. You…",
+            "options": ["Make story skippable + short", "Force 20-minute scenes", "Remove all story", "Lock skipping"],
+            "correct": 0
+          },
+          {
+            "q": "Boss fight feedback says unfair. You…",
+            "options": ["Telegraph attacks clearly", "Double boss health", "Remove checkpoints", "Hide the boss bar"],
+            "correct": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "airesearch", "name": "AI Researcher", "icon": "🤖",
+      "shiftsPerDay": 6, "cooldownMin": 58, "unlock": 500, "salary": 425000,
+      "workItem": "Neural Chip", "game": "choice",
+      "flavor": {
+        "prompt": "Select the sound experiment step.",
+        "questions": [
+          {
+            "q": "Model overfits tiny data. First try…",
+            "options": ["More data + regularization", "Bigger model only", "Train 10x longer", "Delete validation set"],
+            "correct": 0
+          },
+          {
+            "q": "Evaluation must be fair. You…",
+            "options": ["Lock a held-out test set", "Tune on the test set", "Report best seed only", "Skip evaluation"],
+            "correct": 0
+          },
+          {
+            "q": "Results look too good. You…",
+            "options": ["Check for data leakage", "Publish immediately", "Hide the code", "Add more decimals"],
+            "correct": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "meme", "name": "Meme Creator", "icon": "🐸",
+      "shiftsPerDay": 2, "cooldownMin": 46, "unlock": 25, "salary": 120000,
+      "workItem": "Meme Template", "game": "memory",
+      "flavor": {
+        "prompt": "Memorize the meme lineup, then repost it in order.",
+        "pool": ["🐸", "🐕", "😹", "👀", "💀", "🔥", "✨", "👑"]
+      }
+    },
+    {
+      "id": "sleeper", "name": "Professional Sleeper", "icon": "😴",
+      "shiftsPerDay": 2, "cooldownMin": 46, "unlock": 30, "salary": 128000,
+      "workItem": "Pillow", "game": "memory",
+      "flavor": {
+        "prompt": "Memorize the dream symbols, then recall them in order.",
+        "pool": ["🌙", "⭐", "☁️", "🌊", "🦉", "🔮", "💤", "🌌"]
+      }
+    },
+    {
+      "id": "fortune", "name": "Fortune Teller", "icon": "🔮",
+      "shiftsPerDay": 3, "cooldownMin": 49, "unlock": 75, "salary": 175000,
+      "workItem": "Crystal Ball", "game": "memory",
+      "flavor": {
+        "prompt": "Memorize the card spread, then reveal it in order.",
+        "pool": ["🌟", "🌙", "☀️", "⚡", "🌊", "🔥", "🍀", "💎"]
+      }
+    },
+    {
+      "id": "detective", "name": "Detective", "icon": "🔍",
+      "shiftsPerDay": 3, "cooldownMin": 49, "unlock": 90, "salary": 205000,
+      "workItem": "Magnifying Glass", "game": "order",
+      "flavor": {
+        "prompt": "Order the case timeline correctly: 1 → N",
+        "items": ["First clue", "Witness call", "Lab result", "Lineup", "Arrest", "Report"]
+      }
+    },
+    {
+      "id": "magician", "name": "Magician", "icon": "🎩",
+      "shiftsPerDay": 3, "cooldownMin": 49, "unlock": 100, "salary": 215000,
+      "workItem": "Magic Wand", "game": "order",
+      "flavor": {
+        "prompt": "Perform the trick steps in order: 1 → N",
+        "items": ["Flourish", "Palm coin", "Misdirect", "Reveal", "Bow", "Encore"]
+      }
+    },
+    {
+      "id": "treasure", "name": "Treasure Hunter", "icon": "🗺️",
+      "shiftsPerDay": 4, "cooldownMin": 52, "unlock": 140, "salary": 245000,
+      "workItem": "Treasure Map", "game": "timing",
+      "flavor": { "prompt": "Grab the relic while the trap resets — stop in green." }
+    },
+    {
+      "id": "streamer", "name": "Streamer", "icon": "🎥",
+      "shiftsPerDay": 4, "cooldownMin": 52, "unlock": 150, "salary": 250000,
+      "workItem": "Streaming Mic", "game": "memory",
+      "flavor": {
+        "prompt": "Memorize the chat emote rain, then replay it in order.",
+        "pool": ["❤️", "🔥", "😂", "👏", "🎉", "💯", "😮", "🥳"]
+      }
+    },
+    {
+      "id": "coach", "name": "Esports Coach", "icon": "📋",
+      "shiftsPerDay": 4, "cooldownMin": 52, "unlock": 175, "salary": 265000,
+      "workItem": "Coach Whistle", "game": "memory",
+      "flavor": {
+        "prompt": "Memorize the play call, then run it in order.",
+        "pool": ["⬆️", "⬇️", "⬅️", "➡️", "🅰️", "🅱️", "⏺️", "⏭️"]
+      }
+    },
+    {
+      "id": "parkop", "name": "Theme Park Operator", "icon": "🎢",
+      "shiftsPerDay": 5, "cooldownMin": 55, "unlock": 225, "salary": 290000,
+      "workItem": "Park Ticket", "game": "order",
+      "flavor": {
+        "prompt": "Run the opening checklist in order: 1 → N",
+        "items": ["Inspect rails", "Test brakes", "Check restraints", "Clear platform", "Open gates", "First dispatch"]
+      }
+    },
+    {
+      "id": "superhero", "name": "Superhero", "icon": "🦸",
+      "shiftsPerDay": 5, "cooldownMin": 55, "unlock": 300, "salary": 350000,
+      "workItem": "Hero Emblem", "game": "choice",
+      "flavor": {
+        "prompt": "Choose the heroic priority.",
+        "questions": [
+          {
+            "q": "Two calls at once: kitten in tree, runaway bus. First…",
+            "options": ["Stop the bus, then the kitten", "Kitten first", "Ignore both", "Take a selfie"],
+            "correct": 0
+          },
+          {
+            "q": "Villain monologues mid-fight. You…",
+            "options": ["Act while they talk", "Wait politely", "Join the monologue", "Leave"],
+            "correct": 0
+          },
+          {
+            "q": "Civilians filming the battle. You…",
+            "options": ["Move the fight away from crowds", "Pose for cameras", "Fight harder nearby", "Sign autographs mid-fight"],
+            "correct": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "timetravel", "name": "Time Traveler", "icon": "⏳",
+      "shiftsPerDay": 6, "cooldownMin": 58, "unlock": 400, "salary": 400000,
+      "workItem": "Time Machine", "game": "order",
+      "flavor": {
+        "prompt": "Visit the eras in chronological order: 1 → N",
+        "items": ["Stone Age", "Pyramids", "Rome", "Steam Age", "Moon Landing", "Mars Colony"]
+      }
+    },
+    {
+      "id": "pirate", "name": "Space Pirate", "icon": "🏴‍☠️",
+      "shiftsPerDay": 6, "cooldownMin": 58, "unlock": 500, "salary": 450000,
+      "workItem": "Cosmic Compass", "game": "reaction",
+      "flavor": { "prompt": "Fire the grapple the instant the beacon turns green." }
+    },
+    {
+      "id": "multiverse", "name": "Multiverse Explorer", "icon": "🌀",
+      "shiftsPerDay": 6, "cooldownMin": 58, "unlock": 600, "salary": 500000,
+      "workItem": "Portal Key", "game": "reaction",
+      "flavor": { "prompt": "Jump the instant the portal stabilizes green." }
+    },
+    {
+      "id": "reality", "name": "Reality Architect", "icon": "🧬",
+      "shiftsPerDay": 6, "cooldownMin": 58, "unlock": 750, "salary": 600000,
+      "workItem": "Reality Shard", "game": "reaction",
+      "flavor": { "prompt": "Seal the rift the instant it turns green." }
+    },
+    {
+      "id": "dimension", "name": "Dimension Lord", "icon": "👑",
+      "shiftsPerDay": 6, "cooldownMin": 58, "unlock": 1000, "salary": 750000,
+      "workItem": "Dimension Crown", "game": "reaction",
+      "flavor": { "prompt": "Smite the instant the seal turns green." }
+    }
+  ]
+}

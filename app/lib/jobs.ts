@@ -1,89 +1,125 @@
 import crypto from 'crypto';
+import table from '@/app/lib/jobs-table.json';
 
-// ── Jobs catalog (ONE definition for the whole site) ─────────────────────
-// Payouts credit the existing User.coinBalance — no second currency. Amounts
-// follow the Jobs spec; only the shift cooldown is admin-configurable.
+// ── Jobs engine (data-driven from jobs-table.json) ───────────────────────
+// jobs-table.json is the source of truth: exact shifts/day, cooldowns,
+// unlocks, salaries and work items. Payouts credit the existing
+// User.coinBalance — no second currency. Success pays the EXACT salary;
+// failure pays floor(salary * failRate), always lower.
 
 export type JobGame = 'order' | 'reaction' | 'memory' | 'choice' | 'timing';
-export type Difficulty = 'Easy' | 'Medium' | 'Hard';
+
+export interface JobFlavor {
+  prompt: string;
+  items?: string[];
+  pool?: string[];
+  questions?: Array<{ q: string; options: string[]; correct: number }>;
+}
 
 export interface JobDef {
   id: string;
   name: string;
   icon: string;
-  description: string;
-  difficulty: Difficulty;
+  shiftsPerDay: number;
+  cooldownMin: number;
+  unlock: number;
+  salary: number;
+  workItem: string;
   game: JobGame;
-  payMin: number;
-  payMax: number;
-  failMin: number;
-  failMax: number;
-  // Difficulty-tuned minigame parameters.
-  steps: number; // buttons / sequence length / options / zones
-  timeSec: number; // overall shift timer
-  windowMs: number; // reaction window / timing tolerance base / choice time
+  flavor: JobFlavor;
 }
 
-export const JOBS: JobDef[] = [
-  {
-    id: 'fastfood', name: 'Fast Food Worker', icon: '🍔',
-    description: 'Serve customers in order and complete your shift.',
-    difficulty: 'Easy', game: 'order',
-    payMin: 150000, payMax: 220000, failMin: 40000, failMax: 80000,
-    steps: 4, timeSec: 30, windowMs: 0,
-  },
-  {
-    id: 'warehouse', name: 'Warehouse Worker', icon: '📦',
-    description: 'Stop the forklift beacon inside the target zone.',
-    difficulty: 'Medium', game: 'timing',
-    payMin: 180000, payMax: 260000, failMin: 50000, failMax: 90000,
-    steps: 1, timeSec: 20, windowMs: 140,
-  },
-  {
-    id: 'cafe', name: 'Café Worker', icon: '☕',
-    description: 'Memorize the drink order, then remake it exactly.',
-    difficulty: 'Easy', game: 'memory',
-    payMin: 140000, payMax: 210000, failMin: 35000, failMax: 75000,
-    steps: 3, timeSec: 30, windowMs: 0,
-  },
-  {
-    id: 'technician', name: 'Computer Technician', icon: '💻',
-    description: 'React the instant the diagnostic light turns green.',
-    difficulty: 'Hard', game: 'reaction',
-    payMin: 200000, payMax: 300000, failMin: 60000, failMax: 110000,
-    steps: 1, timeSec: 20, windowMs: 900,
-  },
-  {
-    id: 'gametester', name: 'Game Tester', icon: '🎮',
-    description: 'Pick the correct build before the timer runs out.',
-    difficulty: 'Hard', game: 'choice',
-    payMin: 220000, payMax: 320000, failMin: 70000, failMax: 120000,
-    steps: 6, timeSec: 12, windowMs: 0,
-  },
-];
+interface RawJob {
+  id: string; name: string; icon: string;
+  shiftsPerDay: number; cooldownMin: number; unlock: number; salary: number;
+  workItem: string; game: JobGame; flavor: JobFlavor;
+}
+
+const TABLE_JOBS = (table as { jobs: RawJob[] }).jobs;
+
+export const JOBS: JobDef[] = TABLE_JOBS.map((j) => ({
+  id: j.id,
+  name: j.name,
+  icon: j.icon,
+  shiftsPerDay: Math.max(1, Math.floor(j.shiftsPerDay)),
+  cooldownMin: Math.max(1, Math.floor(j.cooldownMin)),
+  unlock: Math.max(0, Math.floor(j.unlock)),
+  salary: Math.max(1, Math.floor(j.salary)),
+  workItem: String(j.workItem),
+  game: j.game,
+  flavor: j.flavor,
+}));
 
 export const JOB_MAP: Record<string, JobDef> = Object.fromEntries(JOBS.map((j) => [j.id, j]));
 
-export const DEFAULT_JOB_COOLDOWN_SEC = 3600;
+// Difficulty tier derived from unlock requirement (higher jobs, tighter).
+function tierOf(job: JobDef): number {
+  if (job.unlock >= 300) return 2;
+  if (job.unlock >= 100) return 1;
+  return 0;
+}
+
+export interface JobParams {
+  steps: number;
+  timeSec: number;
+  windowMs: number;
+  periodMs: number;
+  options: number;
+}
+
+/** Difficulty-tuned parameters per job. Deterministic from table values. */
+export function paramsFor(job: JobDef): JobParams {
+  const t = tierOf(job);
+  switch (job.game) {
+    case 'order': return { steps: Math.min(6, 4 + t), timeSec: 30, windowMs: 0, periodMs: 2000, options: 0 };
+    case 'memory': return { steps: Math.min(5, 3 + t), timeSec: 30, windowMs: 0, periodMs: 2000, options: 0 };
+    case 'choice': return { steps: 0, timeSec: t >= 2 ? 10 : 12, windowMs: 0, periodMs: 2000, options: 4 };
+    case 'timing':
+      return {
+        steps: 1, timeSec: 20, windowMs: Math.max(80, 160 - t * 20),
+        periodMs: 1800 + (tierHash(job.id) % 5) * 100, options: 0,
+      };
+    case 'reaction':
+      return { steps: 1, timeSec: 20, windowMs: Math.max(600, 900 - t * 100), periodMs: 2000, options: 0 };
+  }
+}
+
+function tierHash(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+export const DEFAULT_FAIL_RATE = 0.3;
+
+export function failPayout(salary: number, failRate: number): number {
+  const rate = Number.isFinite(failRate) ? Math.max(0.05, Math.min(0.9, failRate)) : DEFAULT_FAIL_RATE;
+  return Math.max(1, Math.floor(salary * rate));
+}
 
 export interface JobChallenge {
   game: JobGame;
-  // order: display sequence; memory: icon sequence; choice: options+correct;
-  // timing: zone [lo,hi] in ms within a sweep period; reaction: delayMs+windowMs.
-  sequence?: number[];
+  // order: display labels (shuffled) + answer indexes into labels.
+  labels?: string[];
+  answer?: number[];
+  // memory: icon sequence to reproduce (indexes into pool).
   icons?: string[];
+  pool?: string[];
+  // choice: question + shuffled options + correct index.
+  question?: string;
   options?: string[];
   correct?: number;
+  // timing: zone [lo,hi] ms within periodMs.
   zone?: [number, number];
   periodMs?: number;
+  // reaction: server go timestamp.
   delayMs?: number;
   windowMs?: number;
-  goAt?: number; // server timestamp (ms) when reaction turns green
-  deadlineAt?: number; // server timestamp (ms) when the shift expires
+  goAt?: number;
+  deadlineAt?: number;
 }
 
-const MEMORY_ICONS = ['☕', '🍩', '🥐', '🧋', '🍰', '🥤', '🍪', '🥧'];
-const CHOICE_BUILDS = ['v1.0-stable', 'v1.1-beta', 'v1.2-rc', 'v2.0-alpha', 'v2.1-nightly', 'v3.0-stable'];
+const GENERIC_POOL = ['⭐', '🔶', '🔷', '🟢', '🟣', '🔺', '🔻', '⭕'];
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -94,42 +130,49 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-/** Server-side challenge generation. The expected answer stays server-side. */
-export function generateChallenge(job: JobDef, nowMs: number, timeSec: number): JobChallenge {
-  const deadlineAt = nowMs + Math.max(5, timeSec) * 1000;
+/** Server-side challenge generation. Expected answers stay server-side. */
+export function generateChallenge(job: JobDef, nowMs: number): JobChallenge {
+  const p = paramsFor(job);
+  const deadlineAt = nowMs + Math.max(5, p.timeSec) * 1000;
   switch (job.game) {
     case 'order': {
-      const seq = shuffle(Array.from({ length: job.steps }, (_, i) => i + 1));
-      return { game: 'order', sequence: seq, deadlineAt };
+      const items = (job.flavor.items || []).slice(0, Math.max(2, p.steps));
+      const order = items.map((_, i) => i);
+      const display = shuffle(order);
+      return { game: 'order', labels: display.map((i) => items[i]), answer: display.map((_, pos) => display.indexOf(pos)), deadlineAt };
     }
     case 'memory': {
-      const icons = Array.from({ length: job.steps }, () => MEMORY_ICONS[crypto.randomInt(MEMORY_ICONS.length)]);
-      return { game: 'memory', icons, deadlineAt };
+      const pool = job.flavor.pool && job.flavor.pool.length >= 4 ? job.flavor.pool : GENERIC_POOL;
+      const seq = Array.from({ length: p.steps }, () => crypto.randomInt(pool.length));
+      return { game: 'memory', icons: seq.map((i) => pool[i]), pool, deadlineAt };
     }
     case 'choice': {
-      const options = shuffle(CHOICE_BUILDS).slice(0, job.steps);
-      return { game: 'choice', options, correct: crypto.randomInt(options.length), deadlineAt };
+      const bank = job.flavor.questions || [];
+      const q = bank[crypto.randomInt(bank.length)];
+      const order = shuffle(q.options.map((_, i) => i));
+      return {
+        game: 'choice', question: q.q,
+        options: order.map((i) => q.options[i]),
+        correct: order.indexOf(q.correct), deadlineAt,
+      };
     }
     case 'timing': {
-      const periodMs = 2000;
-      const width = Math.max(60, job.windowMs);
-      const lo = crypto.randomInt(0, periodMs - width);
-      return { game: 'timing', zone: [lo, lo + width], periodMs, deadlineAt };
+      const width = Math.max(60, p.windowMs);
+      const lo = crypto.randomInt(0, p.periodMs - width);
+      return { game: 'timing', zone: [lo, lo + width], periodMs: p.periodMs, deadlineAt };
     }
     case 'reaction': {
       const delayMs = 1500 + crypto.randomInt(2500);
-      return { game: 'reaction', delayMs, windowMs: job.windowMs, goAt: nowMs + delayMs, deadlineAt };
+      return { game: 'reaction', delayMs, windowMs: p.windowMs, goAt: nowMs + delayMs, deadlineAt };
     }
-    default:
-      return { game: 'order', sequence: [1], deadlineAt };
   }
 }
 
 export interface JobAttempt {
-  clicks?: number[]; // order: pressed values in order; memory: icon indexes
+  clicks?: number[]; // order: pressed positions in display order; memory: pool indexes
   pick?: number; // choice: option index
-  elapsedMs?: number; // timing: ms the indicator ran before stop; reaction: ms after go
-  reactedEarly?: boolean; // reaction: clicked before green
+  elapsedMs?: number; // timing/reaction advisory ms
+  reactedEarly?: boolean;
 }
 
 export interface JobVerdict {
@@ -137,82 +180,78 @@ export interface JobVerdict {
   reason: string;
 }
 
-/**
- * Server-side attempt validation against the stored challenge. Pure apart
- * from the clock — never trusts a client "won" flag.
- */
+/** Server-side validation. Pure apart from the clock — never trusts "won". */
 export function validateAttempt(job: JobDef, ch: JobChallenge, a: JobAttempt, nowMs: number): JobVerdict {
   if (nowMs > (ch.deadlineAt || 0)) {
     return { won: false, reason: 'you ran out of time' };
   }
+  const p = paramsFor(job);
   const elapsed = Math.max(0, Math.floor(Number(a.elapsedMs ?? 0)));
   switch (job.game) {
     case 'order': {
-      const expected = [...(ch.sequence || [])].sort((x, y) => x - y);
+      const answer = ch.answer || [];
       const clicks = Array.isArray(a.clicks) ? a.clicks.map(Number) : [];
-      if (clicks.length !== expected.length) {
+      if (clicks.length !== answer.length) {
         return { won: false, reason: 'you did not finish the order sequence' };
       }
-      // Anti-instant: nobody taps a real sequence in under 350ms per button.
-      if (elapsed < expected.length * 350) {
+      if (elapsed < answer.length * 350) {
         return { won: false, reason: 'the shift finished impossibly fast' };
       }
-      for (let i = 0; i < expected.length; i++) {
-        if (clicks[i] !== expected[i]) {
+      for (let i = 0; i < answer.length; i++) {
+        if (!Number.isInteger(clicks[i]) || clicks[i] !== answer[i]) {
           return { won: false, reason: 'you clicked the buttons in the wrong order' };
         }
       }
       return { won: true, reason: 'order complete' };
     }
     case 'memory': {
-      const want = (ch.icons || []).length;
+      const want = ch.icons || [];
+      const pool = ch.pool || GENERIC_POOL;
       const clicks = Array.isArray(a.clicks) ? a.clicks.map(Number) : [];
-      if (clicks.length !== want) {
-        return { won: false, reason: 'you did not finish the drink order' };
+      if (clicks.length !== want.length) {
+        return { won: false, reason: 'you did not finish the sequence' };
       }
-      if (elapsed < want * 350) {
+      if (elapsed < want.length * 350) {
         return { won: false, reason: 'the shift finished impossibly fast' };
       }
-      // clicks are indexes into MEMORY_ICONS — compare against stored icons.
-      for (let i = 0; i < want; i++) {
-        if (MEMORY_ICONS[clicks[i]] !== (ch.icons || [])[i]) {
+      for (let i = 0; i < want.length; i++) {
+        if (!Number.isInteger(clicks[i]) || pool[clicks[i]] !== want[i]) {
           return { won: false, reason: 'you entered the sequence incorrectly' };
         }
       }
-      return { won: true, reason: 'order remade perfectly' };
+      return { won: true, reason: 'sequence reproduced perfectly' };
     }
     case 'choice': {
+      const options = ch.options || [];
       const pick = Math.floor(Number(a.pick));
-      if (!Number.isInteger(pick) || pick < 0 || pick >= (ch.options || []).length) {
-        return { won: false, reason: 'you did not pick a valid build' };
+      if (!Number.isInteger(pick) || pick < 0 || pick >= options.length) {
+        return { won: false, reason: 'you did not pick a valid answer' };
       }
       if (pick !== ch.correct) {
-        return { won: false, reason: 'you shipped the wrong build' };
+        return { won: false, reason: 'you picked the wrong answer' };
       }
-      return { won: true, reason: 'correct build shipped' };
+      return { won: true, reason: 'correct call' };
     }
     case 'timing': {
       const [lo, hi] = ch.zone || [0, 0];
-      const period = ch.periodMs || 2000;
+      const period = ch.periodMs || p.periodMs;
       if (elapsed < 200) {
-        return { won: false, reason: 'you stopped the beacon instantly' };
+        return { won: false, reason: 'you stopped the meter instantly' };
       }
       const pos = elapsed % period;
-      if (pos >= lo && pos <= hi) return { won: true, reason: 'beacon stopped in the zone' };
+      if (pos >= lo && pos <= hi) return { won: true, reason: 'meter stopped in the zone' };
       return { won: false, reason: 'you stopped outside the target zone' };
     }
     case 'reaction': {
       if (a.reactedEarly) {
         return { won: false, reason: 'you jumped the gun before green' };
       }
-      const goAt = ch.goAt || 0;
-      const reaction = nowMs - goAt;
-      // Submitted elapsedMs is advisory; the server clock decides.
+      const reaction = nowMs - (ch.goAt || 0);
       void elapsed;
       if (reaction < 80) {
         return { won: false, reason: 'you reacted impossibly fast' };
       }
-      if (reaction > (ch.windowMs || 900)) {
+      if (reaction > (ch.windowMs || p.windowMs)) {
         return { won: false, reason: 'you reacted too slowly' };
       }
       return { won: true, reason: `reacted in ${reaction}ms` };
@@ -222,11 +261,23 @@ export function validateAttempt(job: JobDef, ch: JobChallenge, a: JobAttempt, no
   }
 }
 
-/** Server-side payout roll. min–max inclusive. */
-export function rollPayout(job: JobDef, won: boolean): number {
-  const lo = won ? job.payMin : job.failMin;
-  const hi = won ? job.payMax : job.failMax;
-  return lo + crypto.randomInt(hi - lo + 1);
+// ── Progression (pure helpers; storage lives in callers) ─────────────────
+export const PROMO_EVERY = 10; // successes per promotion level
+export const PROMO_STEP = 0.02; // +2% salary per level
+export const PROMO_CAP = 10; // max level → +20%
+export const FIRED_STREAK = 5; // consecutive fails → fired (promotion reset)
+
+export function promoLevelFor(successes: number): number {
+  return Math.max(0, Math.min(PROMO_CAP, Math.floor(Math.max(0, successes) / PROMO_EVERY)));
+}
+
+export function promoBonusFor(successes: number): number {
+  return promoLevelFor(successes) * PROMO_STEP;
+}
+
+/** Success payout: exact salary + promotion bonus (that job only). */
+export function successPayout(job: JobDef, successes: number): number {
+  return Math.floor(job.salary * (1 + promoBonusFor(successes)));
 }
 
 export function fmtCoins(n: number): string {
@@ -239,5 +290,14 @@ export function fmtDuration(totalSec: number): string {
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
   const p = (n: number) => String(n).padStart(2, '0');
-  return `${p(h)}:${p(m)}:${p(sec)}`;
+  return h > 0 ? `${p(h)}:${p(m)}:${p(sec)}` : `${p(m)}:${p(sec)}`;
+}
+
+export function fmtDateTime(at: string | Date): string {
+  const d = new Date(at);
+  if (Number.isNaN(d.getTime())) return '';
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return sameDay ? `Today, ${time}` : `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${time}`;
 }

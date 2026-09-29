@@ -4,12 +4,30 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useAuth } from '@/app/contexts/AuthContext';
-import { fmtCoins, fmtDuration, type JobDef, type JobGame } from '@/app/lib/jobs';
+import { fmtCoins, fmtDuration, fmtDateTime, type JobDef, type JobGame } from '@/app/lib/jobs';
+
+interface JobState extends JobDef {
+  unlocked: boolean;
+  disabled?: boolean;
+  unlockProgress: number;
+  today: number;
+  dailyDone: boolean;
+  cooldownSec: number;
+  cooldownRemaining: number;
+  cooldownLabel: string;
+  successes: number;
+  promoLevel: number;
+  promoBonusPct: number;
+  firedCount: number;
+}
 
 interface Challenge {
   game: JobGame;
-  sequence?: number[];
+  labels?: string[];
+  ticket?: string[];
   icons?: string[];
+  pool?: string[];
+  question?: string;
   options?: string[];
   zone?: [number, number];
   periodMs?: number;
@@ -22,8 +40,8 @@ interface ActiveShift {
   token: string;
   job: JobDef;
   challenge: Challenge;
-  startedAt: number; // client ms
-  deadline: number; // client ms
+  startedAt: number;
+  deadline: number;
 }
 
 interface HistoryRow {
@@ -37,16 +55,17 @@ interface ResultState {
   payout: number;
   payoutLabel: string;
   balance: number | null;
+  fired?: boolean;
+  promoLevel?: number;
   job: { id: string; name: string; icon: string };
 }
 
 const diffColor: Record<string, string> = { Easy: '#06d6a0', Medium: '#ffd60a', Hard: '#e63946' };
-const MEMO_PAD = ['☕', '🍩', '🥐', '🧋', '🍰', '🥤', '🍪', '🥧'];
 
 export default function JobsPage() {
   const { state } = useAuth();
-  const [jobs, setJobs] = useState<JobDef[]>([]);
-  const [cooldown, setCooldown] = useState(0);
+  const [jobs, setJobs] = useState<JobState[]>([]);
+  const [totalCompleted, setTotalCompleted] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [shift, setShift] = useState<ActiveShift | null>(null);
@@ -54,6 +73,7 @@ export default function JobsPage() {
   const [result, setResult] = useState<ResultState | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [balance, setBalance] = useState<number | null>(null);
+  const [resigning, setResigning] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -64,13 +84,13 @@ export default function JobsPage() {
         fetch('/api/jobs/history?limit=20', { cache: 'no-store' }),
       ]);
       const jd = (await jl.json().catch(() => null)) as {
-        success?: boolean; jobs?: JobDef[]; cooldownSec?: number; cooldownRemaining?: number; error?: string;
+        success?: boolean; jobs?: JobState[]; totalCompleted?: number; error?: string;
       } | null;
       if (!jd?.success) {
         setError(jd?.error || 'Could not load jobs');
       } else {
         setJobs(jd.jobs || []);
-        setCooldown(jd.cooldownRemaining || 0);
+        setTotalCompleted(jd.totalCompleted || 0);
       }
       const hd = (await hl.json().catch(() => null)) as { success?: boolean; history?: HistoryRow[] } | null;
       if (hd?.success) setHistory(hd.history || []);
@@ -85,17 +105,22 @@ export default function JobsPage() {
     if (state === 'authenticated' || state === 'error') void load();
   }, [state, load]);
 
-  // Cooldown ticker.
+  // Per-job cooldown tickers.
   useEffect(() => {
-    if (cooldown <= 0) return;
-    const t = setInterval(() => setCooldown((c) => Math.max(0, c - 1)), 1000);
+    if (!jobs.some((j) => j.cooldownRemaining > 0)) return;
+    const t = setInterval(() => {
+      setJobs((prev) => prev.map((j) => j.cooldownRemaining > 0
+        ? { ...j, cooldownRemaining: j.cooldownRemaining - 1, cooldownLabel: fmtDuration(j.cooldownRemaining - 1) }
+        : j));
+    }, 1000);
     return () => clearInterval(t);
-  }, [cooldown]);
+  }, [jobs.some((j) => j.cooldownRemaining > 0)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startShift = async (jobId: string) => {
-    if (cooldown > 0 || starting) return;
+    if (starting) return;
     setStarting(jobId);
     setResult(null);
+    setError('');
     try {
       const res = await fetch('/api/jobs/start', {
         method: 'POST',
@@ -104,11 +129,16 @@ export default function JobsPage() {
       });
       const data = (await res.json().catch(() => null)) as {
         success?: boolean; token?: string; job?: JobDef; challenge?: Challenge;
-        serverNow?: number; error?: string; cooldownRemaining?: number;
+        serverNow?: number; error?: string; code?: string; required?: number; progress?: number;
+        cooldownRemaining?: number;
       } | null;
       if (!data?.success || !data.token || !data.job || !data.challenge) {
-        setError(data?.error || 'Could not start shift');
-        if (typeof data?.cooldownRemaining === 'number') setCooldown(data.cooldownRemaining);
+        if (data?.code === 'LOCKED') {
+          setError(`🔒 Locked — requires ${data.required} completed shifts (${data.progress} so far)`);
+        } else {
+          setError(data?.error || 'Could not start shift');
+        }
+        void load();
         return;
       }
       const now = Date.now();
@@ -151,6 +181,26 @@ export default function JobsPage() {
     }
   }, [shift, load]);
 
+  const resign = async (jobId: string, jobName: string) => {
+    if (resigning) return;
+    if (!confirm(`Resign from ${jobName}? Promotion progress resets and must be re-earned.`)) return;
+    setResigning(jobId);
+    try {
+      const res = await fetch('/api/jobs/resign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId }),
+      });
+      const data = (await res.json().catch(() => null)) as { success?: boolean; error?: string } | null;
+      if (!data?.success) setError(data?.error || 'Could not resign');
+    } catch {
+      setError('Network error');
+    } finally {
+      setResigning(null);
+      void load();
+    }
+  };
+
   const closeResult = () => {
     setResult(null);
     void load();
@@ -191,10 +241,14 @@ export default function JobsPage() {
       <div style={{ maxWidth: 1080, margin: '0 auto', padding: '24px 16px 90px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 6 }}>
           <h1 style={{ color: '#fff', fontSize: 26, fontWeight: 800, margin: 0 }}>💼 Jobs</h1>
-          {balance !== null && <span style={{ color: '#ffd60a', fontWeight: 800 }}>⏣ {balance.toLocaleString('en-US')}</span>}
+          <div style={{ display: 'flex', gap: 14, fontSize: 13, fontWeight: 700, color: '#aaa' }}>
+            <span>📊 Shifts: <strong style={{ color: '#fff' }}>{totalCompleted}</strong></span>
+            {balance !== null && <span style={{ color: '#ffd60a' }}>⏣ {balance.toLocaleString('en-US')}</span>}
+          </div>
         </div>
         <p style={{ color: '#aaa', fontSize: 13.5, margin: '0 0 18px' }}>
-          Choose a job and complete its shift mini-game to earn ⏣. No mini-game, no payout.
+          Choose an unlocked job and complete its shift mini-game to earn ⏣. No mini-game, no payout.
+          Promotions (+2% salary per 10 wins, up to +20%) apply only to the job they were earned in.
         </p>
 
         {error && (
@@ -203,47 +257,87 @@ export default function JobsPage() {
           </div>
         )}
 
-        {cooldown > 0 && (
-          <div style={{ ...card, marginBottom: 18, textAlign: 'center', borderColor: 'rgba(255,214,10,0.35)' }}>
-            <p style={{ color: '#ffd60a', fontWeight: 800, margin: 0 }}>You can work again in:</p>
-            <p style={{ color: '#fff', fontSize: 30, fontWeight: 800, margin: '6px 0 0', fontVariantNumeric: 'tabular-nums' }}>
-              {fmtDuration(cooldown)}
-            </p>
-          </div>
-        )}
-
         {loading ? (
           <p style={{ color: '#888', textAlign: 'center', padding: 40 }}>Loading jobs…</p>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14, marginBottom: 26 }}>
-            {jobs.map((j) => (
-              <div key={j.id} style={card}>
-                <p style={{ fontSize: 40, margin: '0 0 8px' }}>{j.icon}</p>
-                <p style={{ color: '#fff', fontWeight: 800, fontSize: 16, margin: '0 0 4px' }}>{j.name}</p>
-                <p style={{ color: '#aaa', fontSize: 12.5, margin: '0 0 10px', minHeight: 32 }}>{j.description}</p>
-                <p style={{ fontSize: 12.5, margin: '0 0 4px' }}>
-                  <span style={{ color: '#888' }}>Difficulty: </span>
-                  <strong style={{ color: diffColor[j.difficulty] || '#fff' }}>{j.difficulty}</strong>
-                </p>
-                <p style={{ fontSize: 12.5, margin: '0 0 14px' }}>
-                  <span style={{ color: '#888' }}>Pay: </span>
-                  <strong style={{ color: '#ffd60a' }}>{fmtCoins(j.payMin)}–{fmtCoins(j.payMax).replace('⏣ ', '')}</strong>
-                </p>
-                <button
-                  type="button"
-                  disabled={cooldown > 0 || starting !== null}
-                  onClick={() => void startShift(j.id)}
-                  style={{
-                    width: '100%', padding: '12px', borderRadius: 12, border: 'none',
-                    background: cooldown > 0 ? 'rgba(255,255,255,0.08)' : '#ffd60a',
-                    color: '#111', fontWeight: 800, fontSize: 14,
-                    cursor: cooldown > 0 ? 'not-allowed' : 'pointer', opacity: starting === j.id ? 0.6 : 1,
-                  }}
-                >
-                  {starting === j.id ? 'Clocking in…' : 'Start Shift'}
-                </button>
-              </div>
-            ))}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 14, marginBottom: 26 }}>
+            {jobs.map((j) => {
+              const blocked = !j.unlocked || j.dailyDone || j.cooldownRemaining > 0 || starting !== null;
+              return (
+                <div key={j.id} style={{ ...card, opacity: j.unlocked ? 1 : 0.75 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 38 }}>{j.icon}</span>
+                    <div>
+                      <p style={{ color: '#fff', fontWeight: 800, fontSize: 16, margin: 0 }}>{j.name}</p>
+                      <p style={{ fontSize: 12, margin: '2px 0 0', color: diffColor[j.difficulty] || '#fff', fontWeight: 700 }}>
+                        {j.difficulty} · {j.game} shift
+                      </p>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12.5, color: '#ccc', marginTop: 10, display: 'grid', gap: 3 }}>
+                    <div>Salary: <strong style={{ color: '#ffd60a' }}>{fmtCoins(j.salary)}</strong> / shift</div>
+                    <div>Work Item: <strong style={{ color: '#fff' }}>{j.workItem}</strong></div>
+                    <div>Shifts: <strong style={{ color: '#fff' }}>{Math.min(j.today, j.shiftsPerDay)} / {j.shiftsPerDay}</strong> / day</div>
+                    <div>Cooldown: <strong style={{ color: '#fff' }}>{j.cooldownMin} minutes</strong></div>
+                    <div>Unlock: <strong style={{ color: '#fff' }}>{j.unlock === 0 ? 'Open' : `${j.unlock} shifts`}</strong></div>
+                    {j.promoLevel > 0 && (
+                      <div>Promotion: <strong style={{ color: '#06d6a0' }}>Lv{j.promoLevel} (+{j.promoBonusPct}%)</strong> · {j.successes} wins</div>
+                    )}
+                    {j.firedCount > 0 && (
+                      <div style={{ color: '#888' }}>Fired {j.firedCount}× (promotion reset)</div>
+                    )}
+                  </div>
+
+                  {!j.unlocked ? (
+                    <div style={{ marginTop: 12, padding: '12px', borderRadius: 12, background: 'rgba(255,255,255,0.05)', textAlign: 'center' }}>
+                      <p style={{ margin: 0, fontSize: 14 }}>🔒 Locked</p>
+                      <p style={{ margin: '4px 0 0', fontSize: 12, color: '#aaa' }}>
+                        Requires {j.unlock} completed shifts<br />
+                        Progress: {j.unlockProgress} / {j.unlock}
+                      </p>
+                    </div>
+                  ) : j.disabled ? (
+                    <div style={{ marginTop: 12, padding: '12px', borderRadius: 12, background: 'rgba(255,255,255,0.05)', textAlign: 'center' }}>
+                      <p style={{ margin: 0, fontSize: 13.5, color: '#888', fontWeight: 700 }}>🚧 Temporarily closed</p>
+                    </div>
+                  ) : j.dailyDone ? (
+                    <div style={{ marginTop: 12, padding: '12px', borderRadius: 12, background: 'rgba(6,214,160,0.08)', textAlign: 'center' }}>
+                      <p style={{ margin: 0, fontSize: 13.5, color: '#06d6a0', fontWeight: 700 }}>✓ Daily shifts complete</p>
+                    </div>
+                  ) : j.cooldownRemaining > 0 ? (
+                    <div style={{ marginTop: 12, padding: '12px', borderRadius: 12, background: 'rgba(255,214,10,0.08)', textAlign: 'center' }}>
+                      <p style={{ margin: 0, fontSize: 12.5, color: '#ffd60a' }}>⏱️ Next shift available in</p>
+                      <p style={{ margin: '2px 0 0', fontSize: 20, fontWeight: 800, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>
+                        {j.cooldownLabel}
+                      </p>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={blocked}
+                      onClick={() => void startShift(j.id)}
+                      style={{
+                        width: '100%', marginTop: 12, padding: '12px', borderRadius: 12, border: 'none',
+                        background: '#ffd60a', color: '#111', fontWeight: 800, fontSize: 14,
+                        cursor: 'pointer', opacity: starting === j.id ? 0.6 : 1,
+                      }}
+                    >
+                      {starting === j.id ? 'Clocking in…' : 'Start Shift'}
+                    </button>
+                  )}
+                  {j.unlocked && j.successes > 0 && (
+                    <button
+                      type="button"
+                      disabled={resigning !== null}
+                      onClick={() => void resign(j.id, j.name)}
+                      style={{ width: '100%', marginTop: 8, background: 'none', border: 'none', color: '#666', fontSize: 11.5, cursor: 'pointer', textDecoration: 'underline' }}
+                    >
+                      {resigning === j.id ? 'Resigning…' : `Resign (reset Lv${j.promoLevel} promotion)`}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -257,10 +351,10 @@ export default function JobsPage() {
                 <span style={{ fontSize: 28 }}>{h.icon}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ color: '#fff', fontWeight: 700, fontSize: 14, margin: 0 }}>
-                    {h.jobName} {h.won ? '✓ Successful' : '✕ Failed'}
+                    {h.won ? '✓' : '✕'} {h.jobName} — {h.won ? 'Successful shift' : 'Sub-par shift'}
                   </p>
                   <p style={{ color: '#888', fontSize: 12, margin: '2px 0 0' }}>
-                    {new Date(h.at).toLocaleString()} · {h.game} mini-game{h.won ? '' : ` · ${h.reason}`}
+                    {h.game} mini-game · {fmtDateTime(h.at)}{h.won ? '' : ` · ${h.reason}`}
                   </p>
                 </div>
                 <strong style={{ color: h.won ? '#06d6a0' : '#ffd60a', fontSize: 15 }}>
@@ -292,6 +386,11 @@ export default function JobsPage() {
                 ? 'You completed your shift successfully.'
                 : `You lost the mini-game because ${result.reason}.`}
             </p>
+            {result.fired && (
+              <p style={{ color: '#e63946', fontSize: 13, fontWeight: 700, margin: '8px 0 0' }}>
+                Fired after 5 straight failures — promotion progress reset.
+              </p>
+            )}
             <p style={{ color: '#aaa', fontSize: 13, fontWeight: 700, margin: '14px 0 4px' }}>You were given:</p>
             <p style={{ color: '#ffd60a', fontSize: 30, fontWeight: 800, margin: 0 }}>
               {result.payoutLabel}
@@ -322,7 +421,6 @@ const overlay: React.CSSProperties = {
   backdropFilter: 'blur(6px)',
 };
 
-// ── Shift modal + mini-games ─────────────────────────────────────────────
 function useCountdown(deadline: number, onExpire: () => void) {
   const [left, setLeft] = useState(() => Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
   const fired = useRef(false);
@@ -362,6 +460,7 @@ function ShiftModal({ shift, onDone, onAbandon }: {
   const expire = useCallback(() => submit({ expired: true }), [submit]);
   const left = useCountdown(shift.deadline, expire);
   const startedAt = shift.startedAt;
+  const timeSec = Math.max(1, Math.round((shift.deadline - shift.startedAt) / 1000));
 
   return (
     <div role="dialog" aria-modal="true" aria-label={`${shift.job.name} shift`} style={overlay}>
@@ -379,21 +478,21 @@ function ShiftModal({ shift, onDone, onAbandon }: {
         <div style={{ height: 6, borderRadius: 4, background: 'rgba(255,255,255,0.1)', overflow: 'hidden', marginBottom: 18 }}>
           <div style={{
             height: '100%', borderRadius: 4, transition: 'width 0.25s linear',
-            width: `${Math.max(0, Math.min(100, (left / Math.max(1, shift.job.timeSec)) * 100))}%`,
+            width: `${Math.max(0, Math.min(100, (left / timeSec) * 100))}%`,
             background: left <= 5 ? '#e63946' : 'linear-gradient(90deg,#7b2ff7,#ffd60a)',
           }} />
         </div>
 
         {shift.challenge.game === 'order' && (
-          <OrderGame sequence={shift.challenge.sequence || []} startedAt={startedAt} onDone={submit} />
+          <OrderGame ticket={shift.challenge.ticket || []} labels={shift.challenge.labels || []} startedAt={startedAt} onDone={submit} />
         )}
         {shift.challenge.game === 'memory' && (
-          <MemoryGame icons={shift.challenge.icons || []} startedAt={startedAt} onDone={submit} />
+          <MemoryGame icons={shift.challenge.icons || []} pool={shift.challenge.pool || []} startedAt={startedAt} onDone={submit} />
         )}
         {shift.challenge.game === 'choice' && (
           <ChoiceGame
-            options={shift.challenge.options || []} startedAt={startedAt} onDone={submit}
-            timeSec={shift.job.timeSec}
+            question={shift.challenge.question || ''} options={shift.challenge.options || []}
+            startedAt={startedAt} onDone={submit}
           />
         )}
         {shift.challenge.game === 'timing' && (
@@ -420,40 +519,49 @@ function ShiftModal({ shift, onDone, onAbandon }: {
 }
 
 const gameBtn: React.CSSProperties = {
-  padding: '16px 0', borderRadius: 14, border: '1px solid rgba(255,255,255,0.14)',
-  background: 'rgba(255,255,255,0.06)', color: '#fff', fontSize: 22, fontWeight: 800,
-  cursor: 'pointer', flex: '1 1 60px',
+  padding: '14px 8px', borderRadius: 14, border: '1px solid rgba(255,255,255,0.14)',
+  background: 'rgba(255,255,255,0.06)', color: '#fff', fontSize: 13, fontWeight: 700,
+  cursor: 'pointer', flex: '1 1 90px',
 };
 
-function OrderGame({ sequence, startedAt, onDone }: {
-  sequence: number[]; startedAt: number; onDone: (p: Record<string, unknown>) => void;
+function OrderGame({ ticket, labels, startedAt, onDone }: {
+  ticket: string[]; labels: string[]; startedAt: number; onDone: (p: Record<string, unknown>) => void;
 }) {
   const [pressed, setPressed] = useState<number[]>([]);
-  const expected = [...sequence].sort((a, b) => a - b);
-  const press = (n: number) => {
-    if (pressed.includes(n)) return;
-    const next = [...pressed, n];
+  // Canonical order is 0..n-1 over the ticket; buttons show shuffled labels.
+  // Tapping must follow the ticket sequence.
+  const press = (pos: number) => {
+    if (pressed.includes(pos)) return;
+    const next = [...pressed, pos];
     setPressed(next);
-    if (next.length === expected.length) {
+    if (next.length === ticket.length) {
       onDone({ clicks: next, elapsedMs: Date.now() - startedAt });
-    } else if (n !== expected[next.length - 1]) {
-      // Wrong button: fail immediately with the actual (wrong) sequence.
-      onDone({ clicks: next, elapsedMs: Date.now() - startedAt });
+    } else {
+      // Immediate fail the moment the sequence breaks: ticket[pos] must equal
+      // labels[next[pos]] at every step.
+      const step = next.length - 1;
+      const labelIdx = labels.indexOf(ticket[step]);
+      if (next[step] !== labelIdx) {
+        onDone({ clicks: next, elapsedMs: Date.now() - startedAt });
+      }
     }
   };
   return (
     <div>
-      <p style={hint}>Tap the tickets in order: 1 → {expected.length}</p>
-      <p style={{ color: '#888', fontSize: 12, margin: '0 0 12px' }}>Progress: {pressed.length}/{expected.length}</p>
+      <p style={hint}>Follow the ticket in order:</p>
+      <p style={{ color: '#ffd60a', fontSize: 13, fontWeight: 700, margin: '0 0 12px' }}>
+        🎟 {ticket.join(' → ')}
+      </p>
+      <p style={{ color: '#888', fontSize: 12, margin: '0 0 12px' }}>Progress: {pressed.length}/{ticket.length}</p>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        {sequence.map((n) => {
-          const done = pressed.includes(n);
+        {labels.map((label, pos) => {
+          const done = pressed.includes(pos);
           return (
             <button
-              key={n} type="button" disabled={done} onClick={() => press(n)}
+              key={pos} type="button" disabled={done} onClick={() => press(pos)}
               style={{ ...gameBtn, opacity: done ? 0.35 : 1, borderColor: done ? 'rgba(6,214,160,0.5)' : undefined }}
             >
-              {n}
+              {label}
             </button>
           );
         })}
@@ -462,8 +570,8 @@ function OrderGame({ sequence, startedAt, onDone }: {
   );
 }
 
-function MemoryGame({ icons, startedAt, onDone }: {
-  icons: string[]; startedAt: number; onDone: (p: Record<string, unknown>) => void;
+function MemoryGame({ icons, pool, startedAt, onDone }: {
+  icons: string[]; pool: string[]; startedAt: number; onDone: (p: Record<string, unknown>) => void;
 }) {
   const [phase, setPhase] = useState<'show' | 'input'>('show');
   const [picked, setPicked] = useState<number[]>([]);
@@ -478,11 +586,12 @@ function MemoryGame({ icons, startedAt, onDone }: {
       onDone({ clicks: next, elapsedMs: Date.now() - startedAt });
     }
   };
+  const pad = pool.length >= 4 ? pool : ['⭐', '🔶', '🔷', '🟢', '🟣', '🔺', '🔻', '⭕'];
   if (phase === 'show') {
     return (
       <div style={{ textAlign: 'center' }}>
-        <p style={hint}>Memorize this drink order…</p>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', fontSize: 40, margin: '12px 0' }}>
+        <p style={hint}>Memorize this lineup…</p>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', fontSize: 40, margin: '12px 0', flexWrap: 'wrap' }}>
           {icons.map((ic, i) => <span key={i}>{ic}</span>)}
         </div>
       </div>
@@ -490,12 +599,12 @@ function MemoryGame({ icons, startedAt, onDone }: {
   }
   return (
     <div>
-      <p style={hint}>Remake the order — tap the drinks in sequence ({picked.length}/{icons.length})</p>
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'center', fontSize: 30, minHeight: 48, marginBottom: 12 }}>
-        {picked.map((idx, i) => <span key={i}>{MEMO_PAD[idx]}</span>)}
+      <p style={hint}>Replay the lineup in order ({picked.length}/{icons.length})</p>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'center', fontSize: 30, minHeight: 48, marginBottom: 12, flexWrap: 'wrap' }}>
+        {picked.map((idx, i) => <span key={i}>{pad[idx]}</span>)}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-        {MEMO_PAD.map((ic, idx) => (
+        {pad.map((ic, idx) => (
           <button key={idx} type="button" onClick={() => pick(idx)} style={{ ...gameBtn, fontSize: 26 }}>
             {ic}
           </button>
@@ -505,12 +614,12 @@ function MemoryGame({ icons, startedAt, onDone }: {
   );
 }
 
-function ChoiceGame({ options, startedAt, onDone, timeSec }: {
-  options: string[]; startedAt: number; onDone: (p: Record<string, unknown>) => void; timeSec: number;
+function ChoiceGame({ question, options, startedAt, onDone }: {
+  question: string; options: string[]; startedAt: number; onDone: (p: Record<string, unknown>) => void;
 }) {
   return (
     <div>
-      <p style={hint}>Ship the correct build — QA ends when the timer does.</p>
+      <p style={hint}>{question}</p>
       <div style={{ display: 'grid', gap: 10 }}>
         {options.map((o, i) => (
           <button
@@ -518,15 +627,14 @@ function ChoiceGame({ options, startedAt, onDone, timeSec }: {
             onClick={() => onDone({ pick: i, elapsedMs: Date.now() - startedAt })}
             style={{
               padding: '14px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.14)',
-              background: 'rgba(255,255,255,0.06)', color: '#fff', fontSize: 15,
-              fontWeight: 700, cursor: 'pointer', fontFamily: 'monospace',
+              background: 'rgba(255,255,255,0.06)', color: '#fff', fontSize: 14,
+              fontWeight: 600, cursor: 'pointer', textAlign: 'left',
             }}
           >
             {o}
           </button>
         ))}
       </div>
-      <p style={{ color: '#666', fontSize: 11.5, margin: '10px 0 0' }}>Wrong build = failed shift. {timeSec}s on the clock.</p>
     </div>
   );
 }
@@ -545,12 +653,13 @@ function TimingGame({ zone, periodMs, startedAt, onDone }: {
     raf.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf.current);
   }, [periodMs]);
+  void startedAt;
   const lo = (zone[0] / periodMs) * 100;
   const hi = (zone[1] / periodMs) * 100;
   const cur = (pos / periodMs) * 100;
   return (
     <div>
-      <p style={hint}>Stop the beacon inside the green zone.</p>
+      <p style={hint}>Stop the meter inside the green zone.</p>
       <div style={{ position: 'relative', height: 44, borderRadius: 12, background: 'rgba(255,255,255,0.07)', overflow: 'hidden', margin: '8px 0 16px' }}>
         <div style={{ position: 'absolute', left: `${lo}%`, width: `${Math.max(2, hi - lo)}%`, top: 0, bottom: 0, background: 'rgba(6,214,160,0.45)' }} />
         <div style={{ position: 'absolute', left: `calc(${cur}% - 3px)`, top: 0, bottom: 0, width: 6, background: '#ffd60a', borderRadius: 3 }} />

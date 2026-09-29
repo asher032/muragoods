@@ -60,6 +60,10 @@ jobs:
       - name: Secret scan
         run: node scripts/secret-scan.mjs
 
+      # The bot jobs catalog must mirror the authoritative site jobs table.
+      - name: Jobs table parity
+        run: node scripts/check-jobs-parity.mjs
+
       - name: Typecheck
         run: npx tsc --noEmit
 

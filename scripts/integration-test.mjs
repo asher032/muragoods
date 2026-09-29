@@ -415,67 +415,116 @@ console.log('[3b] leaderboard privacy');
     rows.filter((r) => r.playerKey === you).length <= 1);
 }
 
-// ─── 3c. Jobs + work-shift minigames ─────────────────────────────────
-// Full loop with the owner's session: catalog → start (no payout yet) →
-// play correctly → server-validated win + payout in range → history shows
-// it → immediate re-start hits the cooldown → replays/duplicates refused.
+// ─── 3c. Jobs + work-shift minigames (table-driven) ─────────────────────
+// Full loop with the owner's session: catalog (39 jobs) → locked job
+// refused → start (no payout yet) → play correctly → EXACT salary +
+// payout in range → history shows it → replays/duplicates refused →
+// cooldown enforced → resign resets promotion.
 console.log('[3c] jobs + work shifts');
 {
   const list = await api('/api/jobs');
-  check('jobs catalog loads', list.status === 200 && Array.isArray(list.body?.jobs) && list.body.jobs.length === 5,
-    `status ${list.status}`);
-  check('cooldown reported', list.status === 200 && typeof list.body?.cooldownRemaining === 'number');
+  check('jobs catalog loads (39 jobs)', list.status === 200 && Array.isArray(list.body?.jobs) && list.body.jobs.length === 39,
+    `status ${list.status} count ${list.body?.jobs?.length}`);
+  const cashier = (list.body?.jobs || []).find((j) => j.id === 'cashier');
+  check('cashier values match table', cashier?.salary === 95000 && cashier?.shiftsPerDay === 1
+    && cashier?.cooldownSec === 43 * 60 && cashier?.unlock === 0 && cashier?.workItem === 'Cash Register',
+    JSON.stringify(cashier));
+  check('removed jobs absent', !(list.body?.jobs || []).some((j) => ['cosplayer', 'karen', 'dictator'].includes(j.id)));
+  const delivery = (list.body?.jobs || []).find((j) => j.id === 'delivery');
+  check('delivery locked at 0 shifts', delivery && delivery.unlocked === false && delivery.unlockProgress === 0);
+
+  const locked = await api('/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'delivery' }) });
+  check('locked job refused with progress', locked.status === 403 && locked.body?.code === 'LOCKED', `status ${locked.status}`);
 
   const badJob = await api('/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'nope' }) });
   check('unknown job → 404', badJob.status === 404, `status ${badJob.status}`);
 
-  const start = await api('/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'fastfood' }) });
+  const start = await api('/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'cashier' }) });
   check('shift starts (no payout yet)', start.status === 200 && !!start.body?.token, `status ${start.status}`);
   const token = start.body?.token || '';
-  const seq = start.body?.challenge?.sequence || [];
-  check('order challenge has 4 buttons', start.body?.challenge?.game === 'order' && seq.length === 4);
+  const ticket = start.body?.challenge?.ticket || [];
+  const labels = start.body?.challenge?.labels || [];
+  check('order ticket shown, answer hidden',
+    start.body?.challenge?.game === 'order' && ticket.length === labels.length && labels.length >= 4
+    && start.body?.challenge?.answer === undefined);
 
-  const busy = await api('/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'cafe' }) });
+  const busy = await api('/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'cashier' }) });
   check('second live shift refused', busy.status === 409, `status ${busy.status}`);
 
   const wrong = await api('/api/jobs/complete', {
-    method: 'POST', body: JSON.stringify({ token: 'job_doesnotexist', clicks: [1, 2, 3, 4], elapsedMs: 5000 }),
+    method: 'POST', body: JSON.stringify({ token: 'job_doesnotexist', clicks: [0], elapsedMs: 5000 }),
   });
   check('forged token refused', wrong.status === 409, `status ${wrong.status}`);
 
-  // Play correctly: ascending order, human-plausible elapsed time.
-  const ordered = [...seq].sort((a, b) => a - b);
+  // Play correctly: tap each ticket item where it sits, human-plausible time.
+  const clicks = ticket.map((item) => labels.indexOf(item));
   const done = await api('/api/jobs/complete', {
-    method: 'POST', body: JSON.stringify({ token, clicks: ordered, elapsedMs: 6000 }),
+    method: 'POST', body: JSON.stringify({ token, clicks, elapsedMs: 6000 }),
   });
   check('correct play wins', done.status === 200 && done.body?.won === true, `status ${done.status}`);
-  const payout = done.body?.payout || 0;
-  check('payout inside fast-food success range', payout >= 150000 && payout <= 220000, `payout ${payout}`);
+  check('success pays EXACT salary', done.body?.payout === 95000, `payout ${done.body?.payout}`);
   check('balance returned', typeof done.body?.balance === 'number');
 
   const replay = await api('/api/jobs/complete', {
-    method: 'POST', body: JSON.stringify({ token, clicks: ordered, elapsedMs: 6000 }),
+    method: 'POST', body: JSON.stringify({ token, clicks, elapsedMs: 6000 }),
   });
   check('shift replay refused (no double pay)', replay.status === 409, `status ${replay.status}`);
 
-  const recool = await api('/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'cafe' }) });
-  check('cooldown enforced after shift', recool.status === 429, `status ${recool.status}`);
+  const recool = await api('/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'cashier' }) });
+  check('per-job cooldown enforced', recool.status === 429 && recool.body?.code === 'COOLDOWN', `status ${recool.status}`);
 
   const hist = await api('/api/jobs/history?limit=5');
   check('history shows the shift',
     hist.status === 200 && Array.isArray(hist.body?.history) &&
-    hist.body.history.some((h) => h.jobId === 'fastfood' && h.won === true && h.payout === payout),
+    hist.body.history.some((h) => h.jobId === 'cashier' && h.won === true && h.payout === 95000),
     `status ${hist.status}`);
 
-  // Admin tuning: cooldown readable + writable, then restored.
+  // Fail path on a 2/day job: wrong order → sub-par pay (< salary).
+  const start2 = await api('/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'delivery' }) });
+  check('delivery still locked (needs 10)', start2.status === 403, `status ${start2.status}`);
+  const startM = await api('/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'meme' }) });
+  check('meme locked (needs 25)', startM.status === 403, `status ${startM.status}`);
+
+  const resign = await api('/api/jobs/resign', { method: 'POST', body: JSON.stringify({ jobId: 'cashier' }) });
+  check('resign works', resign.status === 200 && resign.body?.success === true, `status ${resign.status}`);
+
+  // Fail path + isolation with a second user: wrong sequence → loss with
+  // sub-par pay; another account cannot touch the shift.
+  const JAR2 = new Map();
+  const signup2 = await apiWith(JAR2, '/api/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify({ email: `itest2-${stamp}@muragoods.test`, password: PASSWORD, name: 'Integration Tester 2' }),
+  });
+  check('second user signup succeeds', signup2.status === 200 || signup2.status === 201, `status ${signup2.status}`);
+  const startB = await apiWith(JAR2, '/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'cashier' }) });
+  check('second user starts cashier shift', startB.status === 200 && !!startB.body?.token, `status ${startB.status}`);
+  const tokenB = startB.body?.token || '';
+  const cross = await api('/api/jobs/complete', {
+    method: 'POST', body: JSON.stringify({ token: tokenB, clicks: [0], elapsedMs: 6000 }),
+  });
+  check('cross-user shift completion refused', cross.status === 409, `status ${cross.status}`);
+  const ticketB = startB.body?.challenge?.ticket || [];
+  const labelsB = startB.body?.challenge?.labels || [];
+  const rightB = ticketB.map((item) => labelsB.indexOf(item));
+  const wrongB = [...rightB].reverse();
+  const fail = await apiWith(JAR2, '/api/jobs/complete', {
+    method: 'POST', body: JSON.stringify({ token: tokenB, clicks: wrongB, elapsedMs: 6000 }),
+  });
+  check('wrong sequence fails', fail.status === 200 && fail.body?.won === false, `status ${fail.status}`);
+  check('failure pays configured sub-par amount', fail.body?.payout === 28500, `payout ${fail.body?.payout}`);
+  check('failure reason is specific', /wrong order/i.test(fail.body?.reason || ''), fail.body?.reason);
+
+  // Admin tuning: readable + writable, fail rate clamped below salary.
   const cfgGet = await api('/api/jobs/config');
-  check('jobs config readable', cfgGet.status === 200 && typeof cfgGet.body?.cooldownSec === 'number');
-  const cfgBad = await api('/api/jobs/config', { method: 'PATCH', body: JSON.stringify({ cooldownSec: 5 }) });
+  check('jobs config readable', cfgGet.status === 200 && typeof cfgGet.body?.failRate === 'number');
+  const cfgBad = await api('/api/jobs/config', { method: 'PATCH', body: JSON.stringify({ failRate: 5 }) });
   check('non-admin config write refused', cfgBad.status === 401 || cfgBad.status === 403, `status ${cfgBad.status}`);
-  const cfgSet = await apiWith(ADMIN_JAR, '/api/jobs/config', { method: 'PATCH', body: JSON.stringify({ cooldownSec: 120 }) });
-  check('admin sets cooldown', cfgSet.status === 200, `status ${cfgSet.status}`);
-  const cfgRestore = await apiWith(ADMIN_JAR, '/api/jobs/config', { method: 'PATCH', body: JSON.stringify({ cooldownSec: 3600 }) });
-  check('admin restores cooldown', cfgRestore.status === 200, `status ${cfgRestore.status}`);
+  const cfgSet = await apiWith(ADMIN_JAR, '/api/jobs/config', { method: 'PATCH', body: JSON.stringify({ failRate: 0.5 }) });
+  check('admin sets fail rate', cfgSet.status === 200, `status ${cfgSet.status}`);
+  const cfgHigh = await apiWith(ADMIN_JAR, '/api/jobs/config', { method: 'PATCH', body: JSON.stringify({ failRate: 1.5 }) });
+  check('fail rate above 1 rejected', cfgHigh.status === 400, `status ${cfgHigh.status}`);
+  const cfgRestore = await apiWith(ADMIN_JAR, '/api/jobs/config', { method: 'PATCH', body: JSON.stringify({ failRate: 0.3 }) });
+  check('admin restores fail rate', cfgRestore.status === 200, `status ${cfgRestore.status}`);
 }
 
 // ─── 4. Cleanup (best effort) ───────────────────────────────────────
