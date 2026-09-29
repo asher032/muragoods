@@ -108,7 +108,8 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           color: inherit;
         }
         .ms-card:hover {
-          transform: translateY(-8px) scale(1.02);
+          transform: translateY(-5px);
+          box-shadow: 0 14px 30px rgba(0,0,0,0.55);
           z-index: 10;
         }
         .ms-card-image {
@@ -273,6 +274,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           align-items: center;
           gap: 8px;
           margin-top: 3px;
+          min-height: 15px;
           font-size: 12px;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
           color: var(--ms-text-faint);
@@ -311,13 +313,35 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
         .ms-row-more:hover { opacity: 1; }
         .ms-row-items {
           display: flex;
-          gap: 28px;
+          gap: 24px;
           overflow-x: auto;
+          overflow-y: hidden;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
           padding: 8px 4px 22px;
           scroll-behavior: smooth;
           scroll-snap-type: x proximity;
         }
-        .ms-row-items > * { width: 190px; scroll-snap-align: start; }
+        .ms-row-items::-webkit-scrollbar { display: none; }
+        .ms-row-items > * { width: clamp(150px, 24vw, 190px); flex-shrink: 0; scroll-snap-align: start; }
+        .ms-row-tools { display: flex; align-items: center; gap: 8px; }
+        .ms-row-nav {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          border: 1px solid var(--ms-border);
+          background: rgba(255,255,255,0.06);
+          color: var(--ms-text);
+          font-size: 16px;
+          line-height: 1;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.2s;
+          flex-shrink: 0;
+        }
+        .ms-row-nav:hover { background: rgba(229,9,20,0.35); }
         /* ─── Keyboard focus (accessibility) ─────────────── */
         .ms-card:focus-visible {
           outline: 2px solid #E50914;
@@ -366,7 +390,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
         .ms-page-transition-exit {
           animation: msPageExit 0.15s ease-in forwards;
         }        /* ─── Root / settings-driven appearance ─────────── */
-        .ms-root { background: var(--ms-bg); min-height: 100vh; }
+        .ms-root { background: var(--ms-bg); min-height: 100vh; overflow-x: clip; }
         html.ms-compact .ms-card { max-width: 150px; }
         html.ms-compact .ms-row-items > * { width: 150px; }
         /* ─── Shared page container: full-bleed, centered ── */
@@ -390,41 +414,43 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           to { transform: rotate(360deg); }
         }
         /* ─── Top-10 ranked row (home trending) ────────────
-            Cards are pinned to 190px so the poster height is deterministic
-            (285px), and numerals are anchored from the wrapper TOP to the
-            poster's bottom edge — title wrapping can never shift them. */
+            Rank numeral sits in normal flow LEFT of the poster (never
+            overlaid on titles/ratings): flex-end aligns its baseline with
+            the poster's bottom edge, and the 44px bottom lift equals the
+            deterministic info-block height below the poster (10px padding
+            + single-line ellipsis title + 3px + 15px min-height meta), so
+            title wrapping can never shift it. The negative right margin
+            tucks it slightly behind the poster edge; the positioned poster
+            paints above it. No pixel coupling to card width anywhere. */
         .ms-rank-item {
-          position: relative;
+          display: flex;
+          align-items: flex-end;
           flex-shrink: 0;
-          width: fit-content;
-        }
-        .ms-rank-item .ms-card {
-          width: 190px;
-          max-width: 190px;
+          scroll-snap-align: start;
         }
         .ms-rank-row .ms-row-items {
-          padding-left: 44px;
+          gap: 20px;
+          padding-left: 4px;
+        }
+        .ms-rank-row .ms-card {
+          width: clamp(148px, 24vw, 180px);
+          max-width: 180px;
         }
         .ms-rank {
-          position: absolute;
-          left: -18px;
-          top: 193px; /* numeral box bottom lands on the poster's bottom edge */
-          z-index: 2;
+          flex-shrink: 0;
           font-family: 'Arial Black', -apple-system, 'Segoe UI', sans-serif;
           font-weight: 900;
-          font-size: 118px;
-          line-height: 0.78;
+          font-size: clamp(64px, 7vw, 100px);
+          line-height: 0.8;
+          letter-spacing: -0.04em;
           color: #0d0d12;
-          -webkit-text-stroke: 3px #E50914;
+          -webkit-text-stroke: 2.5px #E50914;
           paint-order: stroke fill;
+          margin: 0 -0.24em 44px 0;
           pointer-events: none;
           user-select: none;
         }
-        .ms-rank.ms-rank-wide {
-          font-size: 96px;
-          left: -12px;
-          top: 210px; /* same bottom edge as the regular numerals */
-        }
+        html.ms-compact .ms-rank-row .ms-card { width: 140px; max-width: 140px; }
       `}</style>
       {/* What's New toast (one-time per changelog entry) */}
       {toast && (
