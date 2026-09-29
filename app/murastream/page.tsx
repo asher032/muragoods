@@ -255,6 +255,11 @@ function WatchPartyCard({ partyCode, hero }: { partyCode: string | null; hero: M
 function MediaRow({ title, items, loading, viewAllHref, ranked, icon: RowIcon }: {
   title: string; items: MediaItem[]; loading: boolean; viewAllHref?: string; ranked?: boolean; icon?: React.ComponentType<{ size?: number | string; color?: string; 'aria-hidden'?: boolean | 'true' | 'false'; style?: React.CSSProperties }>;
 }) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const nudge = (dir: 1 | -1) => {
+    const el = scroller.current;
+    if (el) el.scrollBy({ left: dir * Math.max(320, el.clientWidth * 0.8), behavior: 'smooth' });
+  };
   if (loading) {
     return (
       <div className="ms-row">
@@ -264,7 +269,7 @@ function MediaRow({ title, items, loading, viewAllHref, ranked, icon: RowIcon }:
         <div className="ms-row-items">
           {[1, 2, 3, 4, 5, 6].map(i => (
             <div key={i} style={{
-              width: '190px', height: '300px', borderRadius: '12px',
+              width: 'clamp(150px, 24vw, 190px)', height: '300px', borderRadius: '12px',
               background: 'linear-gradient(90deg, #141414 0%, var(--ms-border) 50%, #141414 100%)',
               backgroundSize: '200% 100%', animation: 'msShimmer 1.5s infinite',
               flexShrink: 0,
@@ -282,14 +287,18 @@ function MediaRow({ title, items, loading, viewAllHref, ranked, icon: RowIcon }:
           {RowIcon && <RowIcon size={15} color="#E50914" aria-hidden style={{ verticalAlign: '-0.15em', marginRight: '6px', flexShrink: 0 }} />}
           {title}
         </p>
-        {viewAllHref && (
-          <Link href={viewAllHref} className="ms-row-more">View All →</Link>
-        )}
+        <div className="ms-row-tools">
+          <button type="button" className="ms-row-nav" aria-label={`Scroll ${title} backward`} onClick={() => nudge(-1)}>‹</button>
+          <button type="button" className="ms-row-nav" aria-label={`Scroll ${title} forward`} onClick={() => nudge(1)}>›</button>
+          {viewAllHref && (
+            <Link href={viewAllHref} className="ms-row-more">View All →</Link>
+          )}
+        </div>
       </div>
-      <div className="ms-row-items">
+      <div className="ms-row-items" ref={scroller}>
         {items.map((item, i) => ranked ? (
           <div key={item.id} className="ms-rank-item">
-            <span className={`ms-rank${i === 9 ? ' ms-rank-wide' : ''}`} aria-hidden>{i + 1}</span>
+            <span className="ms-rank" aria-hidden>{i + 1}</span>
             <MuraStreamCard item={item} />
           </div>
         ) : (
