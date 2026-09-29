@@ -20,22 +20,120 @@ def _now():
     return datetime.now(timezone.utc)
 
 
+# ── Safe coercion (every value here arrives from Mongo, never from Discord) ──
+# Guild config and XP rows are written by the dashboard, by older bot versions
+# and by hand. That means a field typed `int` in Python can be sitting in the
+# database as None, "", "undefined", a float, or a string. Every one of those
+# reaches `int()`/`float()` somewhere downstream, and the previous code did
+# that conversion bare, so a single malformed row turned a slash command into
+# an unhandled ValueError with no indication of which field was bad. These
+# helpers never raise: they return a usable default so the command degrades to
+# "no XP yet" instead of erroring out.
+_TRUE = {"1", "true", "yes", "on", "t", "y"}
+
+
+def safe_int(value: object, default: int = 0, *, low: int | None = None,
+             high: int | None = None) -> int:
+    """int(value) that never raises. Floats truncate; junk returns `default`."""
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        out = value
+    elif isinstance(value, float):
+        out = int(value)
+    elif isinstance(value, str):
+        text = value.strip()
+        try:
+            out = int(text)
+        except ValueError:
+            try:
+                number = float(text)  # "12.0" / "1e3"
+            except (ValueError, OverflowError):
+                out = default
+            else:
+                # "1e400" parses to inf, and int(inf) raises OverflowError, so
+                # the non-finite check has to happen before the conversion.
+                if number != number or number in (float("inf"), float("-inf")):
+                    out = default
+                else:
+                    out = int(number)
+    else:
+        out = default
+    if low is not None:
+        out = max(low, out)
+    if high is not None:
+        out = min(high, out)
+    return out
+
+
+def safe_float(value: object, default: float = 0.0, *, low: float | None = None,
+               high: float | None = None) -> float:
+    """float(value) that never raises. Junk returns `default`."""
+    if isinstance(value, bool):
+        out = float(value)
+    elif isinstance(value, (int, float)):
+        try:
+            out = float(value)
+        except (OverflowError, ValueError):
+            out = default
+    elif isinstance(value, str):
+        try:
+            out = float(value.strip())
+        except ValueError:
+            out = default
+    else:
+        out = default
+    if out != out or out in (float("inf"), float("-inf")):  # NaN / inf
+        out = default
+    if low is not None:
+        out = max(low, out)
+    if high is not None:
+        out = min(high, out)
+    return out
+
+
+def safe_bool(value: object, default: bool = False) -> bool:
+    """bool() that treats the string forms a dashboard form actually posts."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in _TRUE:
+            return True
+        if text in {"0", "false", "no", "off", "f", "n", ""}:
+            return False
+        return default
+    return default
+
+
+def safe_snowflake(value: object, default: int = 0) -> int:
+    """Discord IDs arrive as int in Mongo and as str from the dashboard.
+    Anything unparseable becomes `default` rather than raising ValueError."""
+    return safe_int(value, default)
+
+
 # ── Formula (pure — hermetic unit tests) ──────────────────────────────
 def need_for_level(n: int) -> int:
     """XP required to go from level n-1 to level n (n >= 1)."""
-    n = max(1, int(n))
+    n = max(1, safe_int(n, 1))
     return 5 * n * n + 50 * n + 100
 
 
 def total_for_level(level: int) -> int:
     """Cumulative XP required to HAVE reached `level`."""
-    level = max(0, int(level))
+    level = max(0, safe_int(level, 0))
     return sum(need_for_level(k) for k in range(1, level + 1))
 
 
 def level_from_xp(xp: int) -> tuple[int, int, int]:
-    """(level, xp_into_level, xp_needed_for_next). Monotonic, no gaps."""
-    xp = max(0, int(xp))
+    """(level, xp_into_level, xp_needed_for_next). Monotonic, no gaps.
+
+    `xp` is normalized with safe_int so a row storing XP as a string (or as
+    None/absent) is still ranked instead of raising ValueError.
+    """
+    xp = max(0, safe_int(xp, 0))
     level = 0
     while xp >= total_for_level(level + 1):
         level += 1
@@ -213,9 +311,10 @@ async def get_level_config(db, guild_id: int) -> dict:
         cfg["blacklistedRoles"] = []
     if not isinstance(cfg.get("rewards"), dict):
         cfg["rewards"] = {}
-    # Server card background is an imported asset id. Legacy theme ids and
-    # URL values resolve to the default asset — never crash, never fetch.
-    cfg["serverBackground"] = resolve_server_background(cfg.get("serverBackground"))
+    # Re-type every field. Merging defaults above only covers ABSENT keys, so a
+    # present-but-wrongly-typed value (dashboard wrote 0, an old record holds a
+    # URL, a hand edit holds a theme id) still reached int()/float() downstream.
+    cfg = normalize_level_config(cfg)
     return cfg
 
 
@@ -239,19 +338,19 @@ async def add_xp(db, guild_id: int, user_id: int, amount: int) -> tuple[int, int
     `leveled_up` compares against the stored level so repeat calls cannot
     double-announce: the stored level only moves forward on real crossings.
     """
-    gid, uid = int(guild_id), int(user_id)
-    amount = max(0, int(amount))
+    gid, uid = safe_int(guild_id, 0), safe_int(user_id, 0)
+    amount = max(0, safe_int(amount, 0))
     doc = await db.xp.find_one_and_update(
         {"guildId": gid, "userId": uid},
         {"$inc": {"xp": amount}, "$set": {"lastXp": _now()},
          "$setOnInsert": {"level": 0}},
         upsert=True, return_document=True,
     )
-    xp = max(0, int(doc.get("xp", 0)))
+    xp = max(0, safe_int(doc.get("xp", 0), 0))
     if xp != doc.get("xp", 0):
         await db.xp.update_one({"_id": doc["_id"]}, {"$set": {"xp": xp}})
     level, into, _ = level_from_xp(xp)
-    old_level = int(doc.get("level", 0) or 0)
+    old_level = safe_int(doc.get("level", 0), 0)
     leveled = level > old_level
     if leveled:
         await db.xp.update_one({"_id": doc["_id"]}, {"$set": {"level": level}})
@@ -259,34 +358,35 @@ async def add_xp(db, guild_id: int, user_id: int, amount: int) -> tuple[int, int
 
 
 async def set_xp(db, guild_id: int, user_id: int, xp: int) -> tuple[int, int]:
-    xp = max(0, min(int(xp), 10_000_000))
+    xp = max(0, min(safe_int(xp, 0), 10_000_000))
     level, _, _ = level_from_xp(xp)
     await db.xp.update_one(
-        {"guildId": int(guild_id), "userId": int(user_id)},
+        {"guildId": safe_int(guild_id, 0), "userId": safe_int(user_id, 0)},
         {"$set": {"xp": xp, "level": level, "lastXp": _now()}}, upsert=True)
     return xp, level
 
 
 async def set_level(db, guild_id: int, user_id: int, level: int) -> tuple[int, int]:
-    level = max(0, min(int(level), 100))
+    level = max(0, min(safe_int(level, 0), 100))
     xp = total_for_level(level)
     await db.xp.update_one(
-        {"guildId": int(guild_id), "userId": int(user_id)},
+        {"guildId": safe_int(guild_id, 0), "userId": safe_int(user_id, 0)},
         {"$set": {"xp": xp, "level": level, "lastXp": _now()}}, upsert=True)
     return xp, level
 
 
 async def reset_member(db, guild_id: int, user_id: int) -> bool:
-    res = await db.xp.delete_one({"guildId": int(guild_id), "userId": int(user_id)})
+    res = await db.xp.delete_one(
+        {"guildId": safe_int(guild_id, 0), "userId": safe_int(user_id, 0)})
     return res.deleted_count > 0
 
 
 async def backup_guild(db, guild_id: int) -> int:
     """Snapshot all XP rows (capped). Returns entry count."""
-    gid = int(guild_id)
+    gid = safe_int(guild_id, 0)
     rows = await db.xp.find({"guildId": gid}).to_list(20000)
-    entries = [{"userId": r.get("userId"), "xp": int(r.get("xp", 0)),
-                "level": int(r.get("level", 0) or 0)} for r in rows]
+    entries = [{"userId": r.get("userId"), "xp": safe_int(r.get("xp", 0), 0),
+                "level": safe_int(r.get("level", 0), 0)} for r in rows]
     await db.xp_backups.insert_one(
         {"guildId": gid, "takenAt": _now(), "entries": entries})
     await db.xp_backups.delete_many({
@@ -298,13 +398,13 @@ async def backup_guild(db, guild_id: int) -> int:
 
 async def reset_guild(db, guild_id: int) -> int:
     await backup_guild(db, guild_id)
-    res = await db.xp.delete_many({"guildId": int(guild_id)})
+    res = await db.xp.delete_many({"guildId": safe_int(guild_id, 0)})
     return res.deleted_count
 
 
 async def restore_guild(db, guild_id: int) -> tuple[bool, int]:
     """Restore the most recent backup (idempotent per backup doc)."""
-    gid = int(guild_id)
+    gid = safe_int(guild_id, 0)
     snap = await db.xp_backups.find({"guildId": gid}).sort("takenAt", -1).limit(1).to_list(1)
     if not snap:
         return False, 0
@@ -314,9 +414,9 @@ async def restore_guild(db, guild_id: int) -> tuple[bool, int]:
     for entry in snap.get("entries") or []:
         try:
             await db.xp.update_one(
-                {"guildId": gid, "userId": int(entry["userId"])},
-                {"$set": {"xp": int(entry.get("xp", 0)),
-                          "level": int(entry.get("level", 0) or 0)}},
+                {"guildId": gid, "userId": safe_int(entry.get("userId"), 0)},
+                {"$set": {"xp": safe_int(entry.get("xp", 0), 0),
+                          "level": safe_int(entry.get("level", 0), 0)}},
                 upsert=True)
         except Exception:
             continue
@@ -327,8 +427,8 @@ async def restore_guild(db, guild_id: int) -> tuple[bool, int]:
 async def log_level_up(db, guild_id: int, user_id: int, old: int, new: int) -> None:
     try:
         await db.level_events.insert_one({
-            "guildId": int(guild_id), "userId": int(user_id),
-            "oldLevel": old, "newLevel": new, "at": _now()})
+            "guildId": safe_int(guild_id, 0), "userId": safe_int(user_id, 0),
+            "oldLevel": safe_int(old, 0), "newLevel": safe_int(new, 0), "at": _now()})
     except Exception:
         pass
 
@@ -350,10 +450,89 @@ async def top_xp(db, guild_id: int, limit: int = 10, skip: int = 0) -> list[dict
         return []
 
 
-def should_announce(level: int, cfg: dict, has_reward: bool) -> bool:
-    if level < int(cfg.get("announceMinLevel", 1) or 1):
+def normalize_level_config(cfg: dict) -> dict:
+    """Coerce a guild's stored leveling block into the types the math expects.
+
+    This is the single gate every consumer of guild leveling config goes
+    through. `get_level_config` already merged defaults in, but merging only
+    fills in *absent* keys — a key that IS present with the wrong type (the
+    dashboard's `Number(x) || 0` writes 0, older records hold URLs, a hand edit
+    holds a theme id) sailed straight through into `int()`/`float()`. Every
+    field is re-typed here so the calculation layer below can treat the values
+    as numbers without re-checking them at each call site.
+    """
+    out = dict(cfg) if isinstance(cfg, dict) else {}
+    defaults = LEVEL_DEFAULTS
+
+    # Numeric tuning.
+    out["xpMin"] = safe_int(out.get("xpMin"), defaults["xpMin"], low=1, high=100)
+    out["xpMax"] = safe_int(out.get("xpMax"), defaults["xpMax"], low=1, high=100)
+    if out["xpMax"] < out["xpMin"]:
+        out["xpMax"] = out["xpMin"]
+    out["xpCooldownSec"] = safe_int(out.get("xpCooldownSec"),
+                                   defaults["xpCooldownSec"], low=5, high=3600)
+    out["voiceXpAmount"] = safe_int(out.get("voiceXpAmount"),
+                                    defaults["voiceXpAmount"], low=0, high=1000)
+    out["announceMinLevel"] = safe_int(out.get("announceMinLevel"),
+                                       defaults["announceMinLevel"], low=1, high=10000)
+    out["announceMod"] = safe_int(out.get("announceMod"), defaults["announceMod"],
+                                  low=0, high=10000)
+    # Booleans. A dashboard form posts "true"/"false"/1/0, not real bools.
+    for key in ("voiceXp", "dmNotify", "rewardReplace", "rewardOnly"):
+        out[key] = safe_bool(out.get(key), defaults[key])
+
+    # Text.
+    for key in ("levelUpMessage", "levelUpChannelId", "cardColor"):
+        value = out.get(key)
+        out[key] = value.strip()[:300] if isinstance(value, str) else defaults[key]
+    # Only a #rrggbb accent is meaningful; render_level_card falls back safely
+    # anyway, but keeping junk out of the config means the card and the
+    # /leveling config view can never disagree.
+    if not _is_hex_color(out["cardColor"]):
+        out["cardColor"] = defaults["cardColor"]
+    out["cardOpacity"] = safe_float(out.get("cardOpacity"), defaults["cardOpacity"],
+                                   low=0.0, high=1.0)
+
+    # Collections.
+    for key in ("blacklistedChannels", "blacklistedRoles"):
+        value = out.get(key)
+        out[key] = [str(v) for v in value] if isinstance(value, list) else []
+
+    # Level rewards: {level_str: role_id_str}. Level keys are parsed with
+    # safe_int so a non-numeric key can never crash a lookup by level.
+    raw_rewards = out.get("rewards")
+    rewards: dict[str, str] = {}
+    if isinstance(raw_rewards, dict):
+        for level_key, role_id in raw_rewards.items():
+            level = safe_int(level_key, 0)
+            if level > 0 and isinstance(role_id, (str, int)) and str(role_id).strip():
+                rewards[str(level)] = str(role_id).strip()
+    out["rewards"] = rewards
+
+    # Server card background is an imported asset id — never a number, never a
+    # URL. resolve_server_background maps legacy theme ids and old URL values
+    # to the default, so a pre-migration record cannot reach float()/int().
+    out["serverBackground"] = resolve_server_background(out.get("serverBackground"))
+    return out
+
+
+def _is_hex_color(value: object) -> bool:
+    if not isinstance(value, str) or not value.startswith("#") or len(value) != 7:
         return False
-    mod = int(cfg.get("announceMod", 0) or 0)
+    try:
+        int(value[1:], 16)
+    except ValueError:
+        return False
+    return True
+
+
+def should_announce(level: int, cfg: dict, has_reward: bool) -> bool:
+    """Whether a level-up crossing should be announced. Reads the normalized
+    config, so every value here is already a real number."""
+    level = safe_int(level, 0)
+    if level < safe_int(cfg.get("announceMinLevel"), 1, low=1):
+        return False
+    mod = safe_int(cfg.get("announceMod"), 0, low=0)
     if mod > 1 and level % mod != 0:
         return False
     if cfg.get("rewardOnly") and not has_reward:
@@ -382,6 +561,15 @@ def render_level_card(username: str, avatar_bytes: bytes | None, level: int,
     base. Never raises: without Pillow (or on any render error) callers get
     a styled text card instead of a crash.
     """
+    # Normalize every input here. These arrive from the DB (xp_into/xp_need)
+    # and from guild config (accent/opacity), and the previous bare
+    # `xp_into / xp_need` raised ValueError on a string row.
+    level = safe_int(level, 0)
+    rank = safe_int(rank, 0)
+    xp_into = max(0, safe_int(xp_into, 0))
+    xp_need = max(0, safe_int(xp_need, 0))
+    opacity = safe_float(opacity, 1.0, low=0.0, high=1.0)
+    accent = accent if _is_hex_color(accent) else LEVEL_DEFAULTS["cardColor"]
     progress = min(1.0, max(0.0, (xp_into / xp_need) if xp_need else 0.0))
     try:
         from PIL import Image, ImageDraw, ImageFont  # type: ignore
@@ -446,7 +634,7 @@ def render_level_card(username: str, avatar_bytes: bytes | None, level: int,
                 pass
         try:
             r, g, b = int(accent[1:3], 16), int(accent[3:5], 16), int(accent[5:7], 16)
-        except Exception:
+        except (ValueError, IndexError, TypeError):
             r, g, b = 88, 101, 242
         draw.text((220, 40), username[:24], font=font_big, fill=(255, 255, 255, 255),
                   stroke_width=2, stroke_fill=(0, 0, 0, 200))

@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import traceback
 import os
 import sys
 import time
@@ -644,26 +645,89 @@ def describe_error(error: Exception) -> tuple[str, str | None]:
         return (f"Discord rejected the request (HTTP {original.status}).", None)
     if isinstance(original, asyncio.TimeoutError):
         return ("A request timed out before it finished.", "Please try again.")
+    # A bad stored value reaching a conversion is a data problem, not a crash
+    # in front of the user. The leveling layer normalizes these, so a ValueError
+    # here means an unhandled code path and is still logged in full — but the
+    # user gets a message they can act on rather than a bare exception name.
+    if isinstance(original, ValueError):
+        return ("The value stored for this option isn't valid.",
+                "Please check the command options and try again. "
+                "If it keeps happening, an admin can check the server's "
+                "settings in the dashboard → Leveling.")
     return (f"An unexpected error occurred ({name}).",
             "The details are in the bot logs and the dashboard Error Center.")
+
+
+def _origin_file(exc: BaseException) -> str:
+    """Source file of the deepest frame in an exception's traceback."""
+    tb = exc.__traceback__
+    path = None
+    while tb is not None:
+        path = tb.tb_frame.f_code.co_filename
+        tb = tb.tb_next
+    return path or "<unknown>"
+
+
+def _origin_line(exc: BaseException) -> int | None:
+    """Line number of the deepest frame in an exception's traceback."""
+    tb = exc.__traceback__
+    line = None
+    while tb is not None:
+        line = tb.tb_lineno
+        tb = tb.tb_next
+    return line
 
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: Exception) -> None:
     """Central error handler: user gets error ID, logs get the real exception,
-    and the dashboard Error Center receives a persistent record."""
+    and the dashboard Error Center receives a persistent record.
+
+    The record carries the SAME MS-XXXXXX id the user was shown, plus command,
+    subcommand, guild, user, exception type/message, file, line and the full
+    traceback, so a user reporting an id like MS-A98DE3 maps to exactly one
+    record. `record_bot_error` redacts secrets before any of it is stored.
+    """
     if isinstance(error, discord.app_commands.CheckFailure):
         return
     error_id = embeds.new_error_id()
     command_name = interaction.command.qualified_name if interaction.command else "unknown"
+    subcommand_name = ""
+    try:
+        if interaction.command is not None and interaction.command.parent is not None:
+            subcommand_name = interaction.command.name
+    except Exception:
+        subcommand_name = ""
+
+    # Unwrap to the real cause so the stored file/line point at the line that
+    # actually raised, not at discord.py's CommandInvokeError wrapper.
+    original = getattr(error, "original", error) or error
+    for _ in range(3):
+        nxt = getattr(original, "original", None)
+        if nxt is None:
+            break
+        original = nxt
+    tb = "".join(traceback.format_exception(type(original), original,
+                                             original.__traceback__))
+
     log.error("[ERROR] command=/%s [ERROR_ID]=%s [EXCEPTION]=%r",
               command_name, error_id, error)
+    log.error("[ERROR] traceback for %s:\n%s", error_id,
+              database.redact_secrets(tb))
     # Relay to the dashboard Error Center (database on the shared cluster).
     try:
         await database.record_bot_error(
-            "command", f"/{command_name}: {type(error).__name__}: {error}",
+            "command", f"/{command_name}: {type(original).__name__}: {original}",
             guild_id=interaction.guild_id if interaction.guild_id else None,
             command=command_name,
+            subcommand=subcommand_name,
+            user_id=interaction.user.id if interaction.user else None,
+            error_id=error_id,
+            exc_type=type(original).__name__,
+            exc_message=str(original),
+            file=_origin_file(original),
+            line=_origin_line(original),
+            traceback_text=tb,
             detail=repr(error)[:2000])
     except Exception:
         log.debug("error relay failed (non-fatal)")

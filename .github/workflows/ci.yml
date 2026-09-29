@@ -128,3 +128,13 @@ jobs:
       # member (bare /level) with admin under /leveling and no duplicates.
       - name: Jobs employment gates + /level command contract
         run: python discord-bot/scripts/test_jobs_employment.py
+
+      # Root cause of the /level failure reported as Error ID MS-A98DE3:
+      # unguarded numeric coercion on stored leveling data. Guild config and
+      # XP rows are written by the dashboard, older bot versions and by hand,
+      # so a field can be None, "", "undefined", a float, a numeric string, a
+      # legacy background URL or a theme id. Every one of those reached a bare
+      # int()/float() and became an unhandled ValueError. This also asserts the
+      # Error Center persists the MS- id shown to the user, and redacts secrets.
+      - name: Leveling config normalization (/level ValueError guard)
+        run: python discord-bot/scripts/test_level_config_normalization.py
