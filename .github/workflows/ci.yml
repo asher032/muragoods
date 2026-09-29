@@ -158,3 +158,10 @@ jobs:
       # remaining MS-B8A02F conversions that a source scan declared clean.
       - name: /work handlers + job catalog (runtime ValueError guard)
         run: python discord-bot/scripts/test_work_handlers_live.py
+
+      # /work shift's real blocker: JobBrowser packed 11 components into two
+      # action rows and the nav button overflowed row 1, raising ValueError in
+      # the constructor before any button existed. Runs the real command
+      # through every branch and asserts every browser page lays out.
+      - name: /work shift branches + job browser layout
+        run: python discord-bot/scripts/test_work_shift_live.py
