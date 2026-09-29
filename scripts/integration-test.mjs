@@ -28,8 +28,16 @@ function jarHeader() {
 }
 
 async function api(path, opts = {}) {
+  return apiWith(COOKIE_JAR, path, opts);
+}
+
+// Second jar for the admin session: order status advances are admin-only, so
+// the delivery chain below elevates where the old suite reused the owner.
+const ADMIN_JAR = new Map();
+
+async function apiWith(jar, path, opts = {}) {
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(COOKIE_JAR.size ? { cookie: jarHeader() } : {}), ...(opts.headers || {}) },
+    headers: { 'Content-Type': 'application/json', ...(jar.size ? { cookie: [...jar.entries()].map(([k, v]) => `${k}=${v}`).join('; ') } : {}), ...(opts.headers || {}) },
     ...opts,
   });
   for (const raw of res.headers.getSetCookie?.() || []) {
@@ -38,7 +46,7 @@ async function api(path, opts = {}) {
     if (eq > 0) {
       const name = pair.slice(0, eq).trim();
       const value = pair.slice(eq + 1).trim();
-      if (value && value !== '') COOKIE_JAR.set(name, value);
+      if (value && value !== '') jar.set(name, value);
     }
   }
   let body = null;
@@ -199,7 +207,20 @@ let orderId = '';
   const early = await api('/api/orders/award-coins', { method: 'POST', body: JSON.stringify({ orderId }) });
   check('award-coins on non-delivered → 400', early.status === 400, JSON.stringify(early.body));
 
-  const patch = await api(`/api/orders?id=${orderId}`, {
+  const patchDenied = await api(`/api/orders?id=${orderId}`, {
+    method: 'PATCH', body: JSON.stringify({ status: 'Delivered' }),
+  });
+  check('PATCH status → Delivered as owner (non-admin) → 403', patchDenied.status === 403, `status ${patchDenied.status}`);
+
+  // Status advances are admin-only (they award coins + notify). Elevate with
+  // a throwaway admin allowlist account and run the delivery chain as admin.
+  const adminSignup = await apiWith(ADMIN_JAR, '/api/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify({ email: 'muragoods0@gmail.com', password: PASSWORD, name: 'Integration Admin' }),
+  });
+  check('admin signup succeeds', adminSignup.status === 200 || adminSignup.status === 201, `status ${adminSignup.status}`);
+
+  const patch = await apiWith(ADMIN_JAR, `/api/orders?id=${orderId}`, {
     method: 'PATCH', body: JSON.stringify({ status: 'Delivered' }),
   });
   check('PATCH status → Delivered', patch.status === 200 && patch.body?.data?.status === 'Delivered');
@@ -398,8 +419,8 @@ console.log('[3b] leaderboard privacy');
 console.log('[4] cleanup');
 {
   if (orderId) {
-    const del = await fetch(`${BASE}/api/orders?id=${orderId}`, { method: 'DELETE' });
-    check('test order deleted', del.ok || del.status === 404);
+    const del = await apiWith(ADMIN_JAR, `/api/orders?id=${orderId}`, { method: 'DELETE' });
+    check('test order deleted', del.status === 200 || del.status === 404);
   }
 }
 
