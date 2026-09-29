@@ -17,12 +17,17 @@ type Channel = { id: string; type: number; name: string; permission_overwrites?:
 type Role = { id: string; permissions: string };
 type Member = { roles: string[] };
 
-async function get<T>(path: string, token: string, bot = false): Promise<T | null> {
-  const response = await fetch(`${API}${path}`, {
-    headers: { Authorization: `${bot ? 'Bot' : 'Bearer'} ${token}` },
-    next: { revalidate: 0 },
-  });
-  return response.ok ? response.json() as Promise<T> : null;
+async function get<T>(path: string, token: string, bot = false): Promise<{ status: number; data: T | null }> {
+  try {
+    const response = await fetch(`${API}${path}`, {
+      headers: { Authorization: `${bot ? 'Bot' : 'Bearer'} ${token}` },
+      next: { revalidate: 0 },
+      signal: AbortSignal.timeout(10000),
+    });
+    return { status: response.status, data: response.ok ? await response.json().catch(() => null) as T : null };
+  } catch {
+    return { status: 0, data: null };
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -34,22 +39,44 @@ export async function POST(req: NextRequest) {
   }
   if (!botToken) return NextResponse.json({ success: false, error: 'DISCORD_BOT_TOKEN is not configured in Vercel' }, { status: 503 });
 
-  const guilds = await get<Guild[]>('/users/@me/guilds', userToken);
-  const guild = guilds?.find((item) => item.id === body.guildId);
+  const guildsRes = await get<Guild[]>('/users/@me/guilds', userToken);
+  const guild = guildsRes.data?.find((item) => item.id === body.guildId);
   if (!guild || (!guild.owner && (BigInt(guild.permissions) & BigInt(0x20)) === BigInt(0) && (BigInt(guild.permissions) & BigInt(0x8)) === BigInt(0))) {
     return NextResponse.json({ success: false, error: 'You cannot manage this server' }, { status: 403 });
   }
 
-  const [botUser, channels, roles] = await Promise.all([
+  const [botUserRes, channelsRes, rolesRes] = await Promise.all([
     get<{ id: string }>(`/users/@me`, botToken, true),
     get<Channel[]>(`/guilds/${body.guildId}/channels`, botToken, true),
     get<Role[]>(`/guilds/${body.guildId}/roles`, botToken, true),
   ]);
-  if (!botUser || !channels || !roles) return NextResponse.json({ success: false, error: 'MuraBot cannot read this server' }, { status: 502 });
+  const botUser = botUserRes.data;
+  const channels = channelsRes.data;
+  const roles = rolesRes.data;
+  if (!botUser || !channels || !roles) {
+    const statuses = [botUserRes.status, channelsRes.status, rolesRes.status];
+    const code = statuses.includes(404)
+      ? 'BOT_NOT_INSTALLED'
+      : statuses.includes(401)
+        ? 'BOT_TOKEN_REJECTED'
+        : statuses.includes(429)
+          ? 'RATE_LIMITED'
+          : 'DISCORD_API_UNAVAILABLE';
+    const message = code === 'BOT_NOT_INSTALLED'
+      ? 'MuraBot is not installed on this server — invite it first.'
+      : code === 'BOT_TOKEN_REJECTED'
+        ? 'Discord rejected the dashboard bot credential (HTTP 401). Update DISCORD_BOT_TOKEN on the site host — do not re-invite the bot.'
+        : code === 'RATE_LIMITED'
+          ? 'Discord rate-limited the request — retry in a moment.'
+          : 'Discord did not answer the guild read — retry in a moment.';
+    return NextResponse.json({ success: false, code, error: message }, {
+      status: code === 'BOT_NOT_INSTALLED' ? 404 : code === 'BOT_TOKEN_REJECTED' ? 503 : code === 'RATE_LIMITED' ? 429 : 502,
+    });
+  }
 
   const channel = body.channelId ? channels.find((item) => item.id === body.channelId) : null;
-  const member = await get<Member>(`/guilds/${body.guildId}/members/${botUser.id}`, botToken, true);
-  const botRoleIds = new Set(member?.roles || []);
+  const memberRes = await get<Member>(`/guilds/${body.guildId}/members/${botUser.id}`, botToken, true);
+  const botRoleIds = new Set(memberRes.data?.roles || []);
   let permissions = BigInt(0);
   for (const role of roles) {
     if (role.id === body.guildId || botRoleIds.has(role.id)) permissions |= BigInt(role.permissions);
