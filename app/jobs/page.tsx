@@ -9,6 +9,7 @@ import { fmtCoins, fmtDuration, fmtDateTime, type JobDef, type JobGame } from '@
 interface JobState extends JobDef {
   unlocked: boolean;
   disabled?: boolean;
+  isActive?: boolean;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   unlockProgress: number;
   today: number;
@@ -45,6 +46,14 @@ interface ActiveShift {
   deadline: number;
 }
 
+interface Employment {
+  jobId: string;
+  name: string;
+  icon: string;
+  salary: number;
+  appliedAt?: string | null;
+}
+
 interface HistoryRow {
   jobId: string; jobName: string; icon: string; game: string;
   won: boolean | null; payout: number | null; reason: string; at: string;
@@ -64,11 +73,13 @@ interface ResultState {
 export default function JobsPage() {
   const { state } = useAuth();
   const [jobs, setJobs] = useState<JobState[]>([]);
+  const [employment, setEmployment] = useState<Employment | null>(null);
   const [totalCompleted, setTotalCompleted] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [shift, setShift] = useState<ActiveShift | null>(null);
   const [starting, setStarting] = useState<string | null>(null);
+  const [applying, setApplying] = useState<string | null>(null);
   const [result, setResult] = useState<ResultState | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [balance, setBalance] = useState<number | null>(null);
@@ -83,13 +94,15 @@ export default function JobsPage() {
         fetch('/api/jobs/history?limit=20', { cache: 'no-store' }),
       ]);
       const jd = (await jl.json().catch(() => null)) as {
-        success?: boolean; jobs?: JobState[]; totalCompleted?: number; error?: string;
+        success?: boolean; jobs?: JobState[]; totalCompleted?: number;
+        employment?: Employment | null; error?: string;
       } | null;
       if (!jd?.success) {
         setError(jd?.error || 'Could not load jobs');
       } else {
         setJobs(jd.jobs || []);
         setTotalCompleted(jd.totalCompleted || 0);
+        setEmployment(jd.employment || null);
       }
       const hd = (await hl.json().catch(() => null)) as { success?: boolean; history?: HistoryRow[] } | null;
       if (hd?.success) setHistory(hd.history || []);
@@ -115,6 +128,34 @@ export default function JobsPage() {
     return () => clearInterval(t);
   }, [jobs.some((j) => j.cooldownRemaining > 0)]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const applyForJob = async (jobId: string, jobName: string) => {
+    if (applying) return;
+    setApplying(jobId);
+    setError('');
+    try {
+      const res = await fetch('/api/jobs/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        success?: boolean; error?: string; code?: string; required?: number; progress?: number;
+      } | null;
+      if (!data?.success) {
+        if (data?.code === 'LOCKED') {
+          setError(`🔒 Locked — requires ${data.required} completed shifts (${data.progress} so far)`);
+        } else {
+          setError(data?.error || `Could not apply for ${jobName}`);
+        }
+      }
+    } catch {
+      setError('Network error applying for job');
+    } finally {
+      setApplying(null);
+      void load();
+    }
+  };
+
   const startShift = async (jobId: string) => {
     if (starting) return;
     setStarting(jobId);
@@ -137,6 +178,8 @@ export default function JobsPage() {
         } else {
           setError(data?.error || 'Could not start shift');
         }
+        // Employment/progression may have changed server-side (NO_JOB,
+        // fired, daily) — refresh so the cards reflect the real state.
         void load();
         return;
       }
@@ -166,8 +209,9 @@ export default function JobsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, ...payload }),
       });
-      const data = (await res.json().catch(() => null)) as (ResultState & { success?: boolean; error?: string }) | null;
+      const data = (await res.json().catch(() => null)) as (ResultState & { success?: boolean; error?: string; code?: string }) | null;
       if (!data?.success) {
+        // Includes NO_JOB: employment removed mid-shift → no salary.
         setError(data?.error || 'Shift could not be completed');
       } else {
         setResult(data);
@@ -246,9 +290,37 @@ export default function JobsPage() {
           </div>
         </div>
         <p style={{ color: '#aaa', fontSize: 13.5, margin: '0 0 18px' }}>
-          Choose an unlocked job and complete its shift mini-game to earn ⏣. No mini-game, no payout.
+          Apply for an unlocked job to become employed, then start shifts and complete its mini-game to earn ⏣ — no job, no shift, no payout.
           Promotions (+2% salary per 10 wins, up to +20%) apply only to the job they were earned in.
         </p>
+
+        {employment ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'rgba(6,214,160,0.08)', border: '1px solid rgba(6,214,160,0.35)', borderRadius: 14, padding: '12px 16px', marginBottom: 16 }}>
+            <span style={{ fontSize: 28 }}>{employment.icon}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, color: '#fff', fontWeight: 800, fontSize: 15 }}>
+                💼 {employment.name}
+                <span style={{ color: '#06d6a0', marginLeft: 10, fontSize: 13 }}>Status: ✅ Employed</span>
+              </p>
+              <p style={{ margin: '2px 0 0', color: '#ffd60a', fontSize: 13, fontWeight: 700 }}>
+                ⏣ {employment.salary.toLocaleString('en-US')} / shift
+                <span style={{ color: '#999', fontWeight: 400, marginLeft: 10 }}>
+                  Only your active job can be worked — apply on another card to switch.
+                </span>
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div style={{ background: 'rgba(255,214,10,0.08)', border: '1px solid rgba(255,214,10,0.35)', borderRadius: 14, padding: '14px 16px', marginBottom: 16, textAlign: 'center' }}>
+            <p style={{ margin: 0, color: '#fff', fontWeight: 800, fontSize: 16 }}>💼 Unemployed</p>
+            <p style={{ margin: '4px 0 0', color: '#ccc', fontSize: 13.5 }}>
+              Apply for a job to start working and earn salary.
+            </p>
+            <p style={{ margin: '6px 0 0', color: '#ffd60a', fontSize: 13, fontWeight: 700 }}>
+              👇 Pick an unlocked job below and press “Apply for a Job”.
+            </p>
+          </div>
+        )}
 
         {error && (
           <div role="alert" style={{ background: 'rgba(230,57,70,0.12)', border: '1px solid rgba(230,57,70,0.4)', borderRadius: 12, padding: '12px 16px', color: '#ff8a8a', fontSize: 13.5, marginBottom: 16 }}>
@@ -267,7 +339,10 @@ export default function JobsPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ fontSize: 38 }}>{j.icon}</span>
                     <div>
-                      <p style={{ color: '#fff', fontWeight: 800, fontSize: 16, margin: 0 }}>{j.name}</p>
+                      <p style={{ color: '#fff', fontWeight: 800, fontSize: 16, margin: 0 }}>
+                        {j.name}
+                        {j.isActive && <span style={{ color: '#06d6a0', fontSize: 12, marginLeft: 8 }}>✅ Employed</span>}
+                      </p>
                       <p style={{ fontSize: 12, margin: '2px 0 0', color: '#888', fontWeight: 700 }}>
                         {j.game} shift · {j.workItem}
                       </p>
@@ -299,6 +374,23 @@ export default function JobsPage() {
                     <div style={{ marginTop: 12, padding: '12px', borderRadius: 12, background: 'rgba(255,255,255,0.05)', textAlign: 'center' }}>
                       <p style={{ margin: 0, fontSize: 13.5, color: '#888', fontWeight: 700 }}>🚧 Temporarily closed</p>
                     </div>
+                  ) : !j.isActive ? (
+                    // Not the active job → the ONLY path forward is an
+                    // application (server rejects shifts without one).
+                    <button
+                      type="button"
+                      disabled={applying !== null || starting !== null}
+                      onClick={() => void applyForJob(j.id, j.name)}
+                      style={{
+                        width: '100%', marginTop: 12, padding: '12px', borderRadius: 12,
+                        border: '1px solid rgba(6,214,160,0.5)',
+                        background: 'rgba(6,214,160,0.15)', color: '#06d6a0',
+                        fontWeight: 800, fontSize: 14,
+                        cursor: 'pointer', opacity: applying === j.id ? 0.6 : 1,
+                      }}
+                    >
+                      {applying === j.id ? 'Applying…' : 'Apply for a Job'}
+                    </button>
                   ) : j.dailyDone ? (
                     <div style={{ marginTop: 12, padding: '12px', borderRadius: 12, background: 'rgba(6,214,160,0.08)', textAlign: 'center' }}>
                       <p style={{ margin: 0, fontSize: 13.5, color: '#06d6a0', fontWeight: 700 }}>✓ Daily shifts complete</p>
@@ -324,14 +416,18 @@ export default function JobsPage() {
                       {starting === j.id ? 'Clocking in…' : 'Start Shift'}
                     </button>
                   )}
-                  {j.unlocked && j.successes > 0 && (
+                  {(j.isActive || (j.unlocked && j.successes > 0)) && (
                     <button
                       type="button"
                       disabled={resigning !== null}
                       onClick={() => void resign(j.id, j.name)}
                       style={{ width: '100%', marginTop: 8, background: 'none', border: 'none', color: '#666', fontSize: 11.5, cursor: 'pointer', textDecoration: 'underline' }}
                     >
-                      {resigning === j.id ? 'Resigning…' : `Resign (reset Lv${j.promoLevel} promotion)`}
+                      {resigning === j.id
+                        ? 'Resigning…'
+                        : j.successes > 0
+                          ? `Resign (reset Lv${j.promoLevel} promotion)`
+                          : 'Resign from this job'}
                     </button>
                   )}
                 </div>

@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import JobShift from '@/app/lib/models/JobShift';
+import JobEmployment from '@/app/lib/models/JobEmployment';
 import { gameIdentity } from '@/app/lib/gameserver';
 import { JOB_MAP, generateChallenge, fmtDuration } from '@/app/lib/jobs';
 import { jobsTuning } from '@/app/lib/jobs-config';
@@ -39,11 +40,29 @@ export async function POST(req: Request) {
     const totalCompleted = consumed.length;
 
     // Unlock: global completed-shift count vs the table requirement.
+    // Checked before employment so a locked job still reports LOCKED
+    // (progress) rather than the employment error.
     if (totalCompleted < job.unlock) {
       return NextResponse.json({
         success: false, code: 'LOCKED',
         error: `Requires ${job.unlock} completed shifts`,
         required: job.unlock, progress: totalCompleted,
+      }, { status: 403 });
+    }
+
+    // Employment gate: only the ACTIVE job can be worked — checked here
+    // (before the mini-game can start) and again at completion.
+    const employment = await JobEmployment.findOne({ userEmail: id.emailLc }).select('jobId').lean() as {
+      jobId?: string;
+    } | null;
+    if (!employment?.jobId || employment.jobId !== job.id) {
+      return NextResponse.json({
+        success: false,
+        code: 'NO_JOB',
+        error: employment?.jobId
+          ? `You work as ${JOB_MAP[employment.jobId]?.name || employment.jobId} — apply for ${job.name} to work it.`
+          : "❌ You don't have a job! Apply for a job first before you can start a shift.",
+        activeJobId: employment?.jobId || null,
       }, { status: 403 });
     }
 

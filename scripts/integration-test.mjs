@@ -439,6 +439,24 @@ console.log('[3c] jobs + work shifts');
   const badJob = await api('/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'nope' }) });
   check('unknown job → 404', badJob.status === 404, `status ${badJob.status}`);
 
+  // Employment is required BEFORE any shift (or mini-game) can start.
+  check('owner starts unemployed', !list.body?.employment, JSON.stringify(list.body?.employment));
+  const startNoJob = await api('/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'cashier' }) });
+  check('shift refused without a job',
+    startNoJob.status === 403 && startNoJob.body?.code === 'NO_JOB',
+    `status ${startNoJob.status} code ${startNoJob.body?.code}`);
+  const applyLocked = await api('/api/jobs/apply', { method: 'POST', body: JSON.stringify({ jobId: 'delivery' }) });
+  check('application to locked job refused',
+    applyLocked.status === 403 && applyLocked.body?.code === 'LOCKED',
+    `status ${applyLocked.status} code ${applyLocked.body?.code}`);
+  const apply = await api('/api/jobs/apply', { method: 'POST', body: JSON.stringify({ jobId: 'cashier' }) });
+  check('application accepted', apply.status === 200 && apply.body?.success === true, `status ${apply.status}`);
+  const employedList = await api('/api/jobs');
+  check('employment reported + job marked active',
+    employedList.body?.employment?.jobId === 'cashier'
+    && (employedList.body?.jobs || []).find((j) => j.id === 'cashier')?.isActive === true,
+    JSON.stringify({ employment: employedList.body?.employment }));
+
   const start = await api('/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'cashier' }) });
   check('shift starts (no payout yet)', start.status === 200 && !!start.body?.token, `status ${start.status}`);
   const token = start.body?.token || '';
@@ -455,6 +473,22 @@ console.log('[3c] jobs + work shifts');
     method: 'POST', body: JSON.stringify({ token: 'job_doesnotexist', clicks: [0], elapsedMs: 5000 }),
   });
   check('forged token refused', wrong.status === 409, `status ${wrong.status}`);
+
+  // Payout security: resigning mid-shift voids the payout; re-applying
+  // restores it without opening a second shift.
+  const resignMid = await api('/api/jobs/resign', { method: 'POST', body: JSON.stringify({ jobId: 'cashier' }) });
+  check('resign mid-shift works', resignMid.status === 200 && resignMid.body?.success === true,
+    `status ${resignMid.status}`);
+  const clicksMid = ticket.map((item) => labels.indexOf(item));
+  const noPay = await api('/api/jobs/complete', {
+    method: 'POST', body: JSON.stringify({ token, clicks: clicksMid, elapsedMs: 6000 }),
+  });
+  check('no salary without an active job',
+    noPay.status === 403 && noPay.body?.code === 'NO_JOB',
+    `status ${noPay.status} code ${noPay.body?.code}`);
+  const reapply = await api('/api/jobs/apply', { method: 'POST', body: JSON.stringify({ jobId: 'cashier' }) });
+  check('re-application accepted', reapply.status === 200 && reapply.body?.success === true,
+    `status ${reapply.status}`);
 
   // Play correctly: tap each ticket item where it sits, human-plausible time.
   const clicks = ticket.map((item) => labels.indexOf(item));
@@ -496,6 +530,11 @@ console.log('[3c] jobs + work shifts');
 
   const resign = await api('/api/jobs/resign', { method: 'POST', body: JSON.stringify({ jobId: 'cashier' }) });
   check('resign works', resign.status === 200 && resign.body?.success === true, `status ${resign.status}`);
+  check('resign ends employment', resign.body?.unemployed === true, JSON.stringify(resign.body));
+  const startAfterResign = await api('/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'cashier' }) });
+  check('resigned user cannot start shifts',
+    startAfterResign.status === 403 && startAfterResign.body?.code === 'NO_JOB',
+    `status ${startAfterResign.status} code ${startAfterResign.body?.code}`);
 
   // Fail path + isolation with a second user: wrong sequence → loss with
   // sub-par pay; another account cannot touch the shift.
@@ -505,6 +544,9 @@ console.log('[3c] jobs + work shifts');
     body: JSON.stringify({ email: `itest2-${stamp}@muragoods.test`, password: PASSWORD, name: 'Integration Tester 2' }),
   });
   check('second user signup succeeds', signup2.status === 200 || signup2.status === 201, `status ${signup2.status}`);
+  const applyB = await apiWith(JAR2, '/api/jobs/apply', { method: 'POST', body: JSON.stringify({ jobId: 'cashier' }) });
+  check('second user applies for cashier', applyB.status === 200 && applyB.body?.success === true,
+    `status ${applyB.status}`);
   const startB = await apiWith(JAR2, '/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'cashier' }) });
   check('second user starts cashier shift', startB.status === 200 && !!startB.body?.token, `status ${startB.status}`);
   const tokenB = startB.body?.token || '';

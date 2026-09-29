@@ -122,3 +122,9 @@ jobs:
       # in CI, instead of in production.
       - name: Slash command budget (max 100, no duplicates)
         run: python discord-bot/scripts/test_slash_command_budget.py
+
+      # Employment gating: no job → no mini-game and no salary; resign/firing
+      # clear employment and void mid-shift payouts; /level takes an OPTIONAL
+      # member (bare /level) with admin under /leveling and no duplicates.
+      - name: Jobs employment gates + /level command contract
+        run: python discord-bot/scripts/test_jobs_employment.py
