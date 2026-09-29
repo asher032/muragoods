@@ -33,22 +33,43 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Dashboard resource access is not configured' }, { status: 503 });
   }
 
-  const [botMember, botPerms] = await Promise.all([
+  const [botMemberRes, botPermsRes] = await Promise.all([
     fetch(`https://discord.com/api/v10/guilds/${guildId}/members/@me`, {
       headers: { Authorization: `Bot ${botToken}` },
       next: { revalidate: 0 },
-    }).then((r) => (r.ok ? r.json() : null)),
+      signal: AbortSignal.timeout(10000),
+    }).then(async (r) => ({ status: r.status, data: r.ok ? await r.json().catch(() => null) : null }))
+      .catch(() => ({ status: 0, data: null })),
     fetch(`https://discord.com/api/v10/guilds/${guildId}`, {
       headers: { Authorization: `Bot ${botToken}` },
       next: { revalidate: 0 },
-    }).then((r) => (r.ok ? r.json() : null)),
+      signal: AbortSignal.timeout(10000),
+    }).then(async (r) => ({ status: r.status, data: r.ok ? await r.json().catch(() => null) : null }))
+      .catch(() => ({ status: 0, data: null })),
   ]);
+  const botMember = botMemberRes.data;
+  const botPerms = botPermsRes.data;
 
   if (!botMember || !botPerms) {
-    return NextResponse.json({
-      success: false,
-      error: 'MuraBot cannot read this server. Check that it is still installed and has the required permissions.',
-    }, { status: 502 });
+    const statuses = [botMemberRes.status, botPermsRes.status];
+    const code = statuses.includes(404)
+      ? 'BOT_NOT_INSTALLED'
+      : statuses.includes(401)
+        ? 'BOT_TOKEN_REJECTED'
+        : statuses.includes(429)
+          ? 'RATE_LIMITED'
+          : 'DISCORD_API_UNAVAILABLE';
+    const message = code === 'BOT_NOT_INSTALLED'
+      ? 'MuraBot is not installed on this server — invite it first.'
+      : code === 'BOT_TOKEN_REJECTED'
+        ? 'Discord rejected the dashboard bot credential (HTTP 401). Update DISCORD_BOT_TOKEN on the site host — do not re-invite the bot.'
+        : code === 'RATE_LIMITED'
+          ? 'Discord rate-limited the request — retry in a moment.'
+          : 'Discord did not answer the bot permission read — retry in a moment.';
+    return NextResponse.json(
+      { success: false, code, error: message, retryable: code !== 'BOT_NOT_INSTALLED' && code !== 'BOT_TOKEN_REJECTED' },
+      { status: code === 'BOT_NOT_INSTALLED' ? 404 : code === 'BOT_TOKEN_REJECTED' ? 503 : code === 'RATE_LIMITED' ? 429 : 502 },
+    );
   }
 
   const permissions = BigInt((botPerms as { permissions?: string | number }).permissions || 0);
