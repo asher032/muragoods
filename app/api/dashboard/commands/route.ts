@@ -65,13 +65,15 @@ const COMMANDS: DiscordCommand[] = [
   { name: '!security', description: 'Show security status', type: 'prefix', module: 'Security', status: 'working', usage: '!security', requiredPermissions: ['View Channels'], botPermissions: ['Read Messages'], cooldown: 10 },
 
   // Leveling
-  { name: '/rank', description: 'Check your or another user\'s rank', type: 'slash', module: 'Leveling', status: 'working', usage: '/rank [user]', requiredPermissions: ['View Channels'], botPermissions: ['Read Messages', 'Embed Links'], cooldown: 5 },
-  { name: '/leaderboard', description: 'Show the leveling leaderboard', type: 'slash', module: 'Leveling', status: 'working', usage: '/leaderboard', requiredPermissions: ['View Channels'], botPermissions: ['Read Messages', 'Embed Links'], cooldown: 5 },
-  { name: '/setxp', description: 'Set XP for a user', type: 'slash', module: 'Leveling', status: 'working', usage: '/setxp <user> <amount>', requiredPermissions: ['Manage Roles'], botPermissions: ['Manage Roles'], cooldown: 10 },
-  { name: '/levelup', description: 'Toggle level-up notifications', type: 'slash', module: 'Leveling', status: 'disabled', usage: '/levelup <enable|disable>', requiredPermissions: ['Manage Server'], botPermissions: ['Manage Server'], cooldown: 5 },
-  { name: '!rank', description: 'Check your rank', type: 'prefix', module: 'Leveling', status: 'working', usage: '!rank', requiredPermissions: ['View Channels'], botPermissions: ['Read Messages', 'Embed Links'], cooldown: 5 },
-
-  // Economy — short commands, no prefix required (/economy is admin config only)
+  // Leveling — mirrors the real slash commands (see bot/cogs/leveling.py).
+  { name: '/rank', description: "Your rank card (or another member's)", type: 'slash', module: 'Leveling', status: 'working', usage: '/rank [user]', requiredPermissions: ['View Channels'], botPermissions: ['Read Messages', 'Embed Links'], cooldown: 5 },
+  { name: '/leaderboard stats', description: 'XP and wealth leaderboards', type: 'slash', module: 'Leveling', status: 'working', usage: '/leaderboard stats [board] [page]', requiredPermissions: ['View Channels'], botPermissions: ['Read Messages', 'Embed Links'], cooldown: 5 },
+  { name: '/leaderboard item', description: 'Item ownership leaderboard', type: 'slash', module: 'Leveling', status: 'working', usage: '/leaderboard item <item> [page]', requiredPermissions: ['View Channels'], botPermissions: ['Read Messages', 'Embed Links'], cooldown: 5 },
+  { name: '/level', description: 'Level card — yours by default, or pick a member', type: 'slash', module: 'Leveling', status: 'working', usage: '/level [member]', requiredPermissions: ['View Channels'], botPermissions: ['Read Messages', 'Attach Files', 'Embed Links'], cooldown: 5 },
+  { name: '/leveling background', description: 'Set your personal card background (or empty to reset)', type: 'slash', module: 'Leveling', status: 'working', usage: '/leveling background [link]', requiredPermissions: ['View Channels'], botPermissions: ['Read Messages', 'Send Messages'], cooldown: 5 },
+  { name: '/leveling serverbackground', description: 'Set the server card background (Manage Server)', type: 'slash', module: 'Leveling', status: 'working', usage: '/leveling serverbackground', requiredPermissions: ['Manage Server'], botPermissions: ['Read Messages', 'Send Messages'], cooldown: 5 },
+  { name: '/leveling config', description: 'Show leveling configuration (Manage Server)', type: 'slash', module: 'Leveling', status: 'working', usage: '/leveling config', requiredPermissions: ['Manage Server'], botPermissions: ['Read Messages', 'Embed Links'], cooldown: 5 },
+  // Economy â€” short commands, no prefix required (/economy is admin config only)
   { name: '/balance', description: 'Pocket, bank, net worth and gems (history flag for log)', type: 'slash', module: 'Economy', status: 'working', usage: '/balance [user] [history]', requiredPermissions: ['View Channels'], botPermissions: ['Read Messages', 'Embed Links'], cooldown: 5 },
   { name: '/daily', description: 'Claim your daily reward (streak bonus)', type: 'slash', module: 'Economy', status: 'working', usage: '/daily', requiredPermissions: ['View Channels'], botPermissions: ['Read Messages', 'Send Messages'], cooldown: 86400 },
   { name: '/weekly', description: 'Claim your weekly reward', type: 'slash', module: 'Economy', status: 'working', usage: '/weekly', requiredPermissions: ['View Channels'], botPermissions: ['Read Messages', 'Send Messages'], cooldown: 604800 },
@@ -157,7 +159,7 @@ const COMMANDS: DiscordCommand[] = [
 ];
 
 async function guard(token: string, guildId: string) {
-  // Shared cached manage check — distinct codes instead of a collapsed Set
+  // Shared cached manage check â€” distinct codes instead of a collapsed Set
   // lookup that turned every Discord failure into a false 403.
   const check = await requireGuildManage(token, guildId);
   if (check.ok) return null;

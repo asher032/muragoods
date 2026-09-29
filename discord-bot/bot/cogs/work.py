@@ -16,6 +16,7 @@ from discord.ext import commands
 import database
 import economy as eco
 import embeds
+import jobs as jb
 
 log = logging.getLogger("bot.work")
 
@@ -35,6 +36,16 @@ class WorkCog(commands.Cog):
     @work.command(name="shift", description="Work a shift for coins (hourly).")
     async def work_shift(self, interaction: discord.Interaction):
         await interaction.response.defer()
+        # Employment gate: working (in ANY form) requires an approved job
+        # application first — checked server-side, not in the UI.
+        emp = await jb.get_employment(database._db, interaction.guild.id,
+                                      interaction.user.id)
+        if not emp:
+            await interaction.followup.send(
+                "❌ You don't have a job!\n"
+                "> Apply for a job first before you can start a shift.\n"
+                "Browse jobs and apply with `/jobs shift`.", ephemeral=True)
+            return
         cfg = await _cfg(interaction.guild.id)
         granted, remaining = await eco.claim_cooldown(
             database._db, interaction.guild.id, interaction.user.id,

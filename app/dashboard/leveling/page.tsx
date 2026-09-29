@@ -25,8 +25,12 @@ export default function LevelingPage() {
   const requestId = useRef(0);
   const controllerRef = useRef<AbortController | null>(null);
 
+  // Key on the guild ID STRING: the guild context refreshes its selection
+  // object on live-detection polls, and depending on the object re-fired this
+  // effect (and the overview fetch) on every poll for every mounted page.
+  const guildId = selected?.id ?? null;
   const load = useCallback(async () => {
-    if (!token || !selected) return;
+    if (!token || !guildId) return;
     const id = ++requestId.current;
     controllerRef.current?.abort();
     const controller = new AbortController();
@@ -35,7 +39,7 @@ export default function LevelingPage() {
     setError('');
     setCode('');
     const resp = await apiFetch<{ success: boolean; overview?: LevelingOverview; error?: string; code?: string }>(
-      `/api/dashboard/leveling/overview?guildId=${selected.id}`, { token, signal: controller.signal });
+      `/api/dashboard/leveling/overview?guildId=${guildId}`, { token, signal: controller.signal });
     if (id !== requestId.current) return;
     if (resp.ok && resp.data.success && resp.data.overview) {
       setOverview(resp.data.overview);
@@ -45,7 +49,7 @@ export default function LevelingPage() {
       setCode(resp.ok ? resp.data.code || '' : (resp as { code?: string }).code || '');
     }
     setLoading(false);
-  }, [token, selected]);
+  }, [token, guildId]);
 
   useEffect(() => {
     setOverview(null);
@@ -56,7 +60,7 @@ export default function LevelingPage() {
       requestId.current += 1;
       controllerRef.current?.abort();
     };
-  }, [selected?.id, load]);
+  }, [guildId, load]);
 
   if (!token) {
     return <p style={{ color: 'var(--cc-text-faint)', fontSize: 14 }}>Sign in with Discord to view leveling.</p>;

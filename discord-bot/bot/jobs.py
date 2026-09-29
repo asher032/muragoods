@@ -431,11 +431,54 @@ async def get_progress(db, guild_id: int, user_id: int, job_id: str) -> dict:
         return {}
 
 
+async def get_employment(db, guild_id: int, user_id: int) -> str | None:
+    """The user's ACTIVE job id in this guild — None means unemployed
+    (no shifts, no payouts until they apply again)."""
+    try:
+        doc = await db.job_employment.find_one({"guildId": int(guild_id),
+                                                "userId": int(user_id)})
+        jid = str(doc.get("jobId") or "") if doc else ""
+        return jid or None
+    except Exception:
+        return None
+
+
+async def apply_for_job(db, guild_id: int, user_id: int, job_id: str,
+                        disabled: set | None = None) -> tuple[bool, dict]:
+    """Apply for (and be accepted into) a job. Unlocks mirror start_shift —
+    no job is granted past the catalog's requirements. Switching jobs keeps
+    old progression; only resign/firing wipes it."""
+    job = JOBS.get(str(job_id or ""))
+    if not job:
+        return False, {"error": "Unknown job."}
+    if disabled and job["id"] in disabled:
+        return False, {"error": "That job is currently closed."}
+    gid, uid = int(guild_id), int(user_id)
+    total = await total_completed(db, gid, uid)
+    if total < int(job["unlock"]):
+        return False, {"error": "locked", "required": int(job["unlock"]),
+                       "progress": total}
+    try:
+        await db.job_employment.create_index(
+            [("guildId", 1), ("userId", 1)], unique=True)
+    except Exception:
+        pass
+    previous = await get_employment(db, gid, uid)
+    now = _now()
+    await db.job_employment.update_one(
+        {"guildId": gid, "userId": uid},
+        {"$set": {"jobId": job["id"], "appliedAt": now, "updatedAt": now}},
+        upsert=True)
+    return True, {"job": job, "previous": previous,
+                  "changed": previous != job["id"]}
+
+
 async def start_shift(db, guild_id: int, user_id: int, job_id: str,
                       cooldown_overrides: dict | None = None,
                       disabled: set | None = None) -> tuple[bool, dict]:
-    """Open a shift (no payout). Enforces unlocks, daily limits, per-job
-    cooldowns and one live shift. Returns (ok, shift-or-error)."""
+    """Open a shift (no payout). Requires ACTIVE employment in this exact
+    job, then enforces unlocks, daily limits, per-job cooldowns and one live
+    shift. Returns (ok, shift-or-error)."""
     job = JOBS.get(str(job_id or ""))
     if not job:
         return False, {"error": "Unknown job."}
@@ -445,6 +488,13 @@ async def start_shift(db, guild_id: int, user_id: int, job_id: str,
     total = await total_completed(db, gid, uid)
     if total < int(job["unlock"]):
         return False, {"error": "locked", "required": int(job["unlock"]), "progress": total}
+    # Employment gate: no mini-game launches without an application on file
+    # for THIS job (checked server-side — the UI is not trusted). After the
+    # unlock check so a locked job still reports its progress first.
+    emp = await get_employment(db, gid, uid)
+    if emp != job["id"]:
+        return False, {"error": "no_job" if not emp else "wrong_job",
+                       "activeJobId": emp}
     if await today_count(db, gid, uid, job["id"]) >= int(job["shiftsPerDay"]):
         return False, {"error": "daily", "today": int(job["shiftsPerDay"]),
                        "limit": int(job["shiftsPerDay"])}
@@ -485,12 +535,34 @@ async def start_shift(db, guild_id: int, user_id: int, job_id: str,
         return False, {"error": "Could not open a shift — try again."}
 
 
+def _employment_error(emp: str | None, job: dict) -> str:
+    if not emp:
+        return ("❌ You no longer have a job — this shift paid nothing. "
+                "Apply for a job before working again.")
+    name = JOBS.get(str(emp), {}).get("name", emp)
+    return (f"❌ Employment changed — you now work as {name}. "
+            f"No salary was awarded for this {job['name']} shift.")
+
+
 async def complete_shift(db, guild_id: int, user_id: int, token: str,
                          attempt: dict, credit, fail_rate: float = DEFAULT_FAIL_RATE
                          ) -> tuple[bool, dict]:
     """Atomically consume + validate + pay. Returns (ok, result-or-error)."""
     gid, uid = int(guild_id), int(user_id)
     try:
+        # Employment gate #1 (pre-consume): a resignation, firing or job
+        # change mid-shift is refused with a clear message and the shift is
+        # NOT spent — it can still complete after re-applying, unexpired.
+        probe = await db.job_shifts.find_one(
+            {"token": str(token or ""), "guildId": gid, "userId": uid,
+             "consumed": False})
+        if probe:
+            job_probe = JOBS.get(str(probe.get("jobId") or ""))
+            if job_probe:
+                emp0 = await get_employment(db, gid, uid)
+                if emp0 != job_probe["id"]:
+                    return False, {"error": _employment_error(emp0, job_probe),
+                                   "code": "no_job"}
         doc = await db.job_shifts.find_one_and_update(
             {"token": str(token or ""), "guildId": gid, "userId": uid,
              "consumed": False, "expiresAt": {"$gt": _now()}},
@@ -501,6 +573,13 @@ async def complete_shift(db, guild_id: int, user_id: int, token: str,
         job = JOBS.get(doc.get("jobId") or "")
         if not job:
             return False, {"error": "Unknown job on this shift."}
+        # Employment gate #2 (post-consume): employment may have changed in
+        # the instant between the two gates. The shift is now spent
+        # (replay-proof) and NO salary, promotion or firing credit applies.
+        emp = await get_employment(db, gid, uid)
+        if emp != job["id"]:
+            return False, {"error": _employment_error(emp, job),
+                           "code": "no_job"}
         won, reason = validate_attempt(job, doc.get("challenge") or {},
                                        attempt or {}, int(time.time() * 1000))
         prog = await db.job_progress.find_one_and_update(
@@ -524,6 +603,10 @@ async def complete_shift(db, guild_id: int, user_id: int, token: str,
                     {"guildId": gid, "userId": uid, "jobId": job["id"]},
                     {"$set": {"successes": 0, "consecutiveFails": 0, "updatedAt": _now()},
                      "$inc": {"fails": 1, "totalShifts": 1, "firedCount": 1}})
+                # Fired → employment ends now: no further shifts until they
+                # apply for (and are accepted into) a job again.
+                await db.job_employment.delete_one(
+                    {"guildId": gid, "userId": uid, "jobId": job["id"]})
             else:
                 await db.job_progress.update_one(
                     {"guildId": gid, "userId": uid, "jobId": job["id"]},
@@ -556,8 +639,17 @@ async def resign(db, guild_id: int, user_id: int, job_id: str) -> tuple[bool, di
     try:
         res = await db.job_progress.delete_one(
             {"guildId": int(guild_id), "userId": int(user_id), "jobId": job["id"]})
-        return True, {"resigned": res.deleted_count > 0,
-                      "message": f"Resigned from {job['name']} — promotion progress reset."}
+        # Leaving the ACTIVE job ends employment (an old, non-active job's
+        # leftover progress must not touch the current one).
+        emp = await db.job_employment.delete_one(
+            {"guildId": int(guild_id), "userId": int(user_id), "jobId": job["id"]})
+        unemployed = emp.deleted_count > 0
+        msg = (f"Resigned from {job['name']} — employment ended, promotion "
+               "progress reset. Apply for a job before working again."
+               if unemployed else
+               f"Resigned from {job['name']} — promotion progress reset.")
+        return True, {"resigned": res.deleted_count > 0 or unemployed,
+                      "unemployed": unemployed, "message": msg}
     except Exception:
         return False, {"error": "Could not resign — try again."}
 

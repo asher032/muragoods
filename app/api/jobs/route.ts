@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import JobShift from '@/app/lib/models/JobShift';
 import JobProgress from '@/app/lib/models/JobProgress';
+import JobEmployment from '@/app/lib/models/JobEmployment';
 import { gameIdentity } from '@/app/lib/gameserver';
-import { JOBS, promoLevelFor, fmtDuration, difficultyFor } from '@/app/lib/jobs';
+import { JOBS, JOB_MAP, promoLevelFor, fmtDuration, difficultyFor } from '@/app/lib/jobs';
 import { jobsTuning } from '@/app/lib/jobs-config';
 
 export const dynamic = 'force-dynamic';
@@ -23,13 +24,16 @@ export async function GET(req: Request) {
     if (!id) return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });
     await dbConnect();
 
-    const [shifts, progress] = await Promise.all([
+    const [shifts, progress, employment] = await Promise.all([
       JobShift.find({ userEmail: id.emailLc, consumed: true })
         .select('jobId consumedAt').lean() as unknown as Array<{ jobId: string; consumedAt: Date }>,
       JobProgress.find({ userEmail: id.emailLc }).lean() as unknown as Array<{
         jobId: string; successes: number; fails: number; totalShifts: number;
         consecutiveFails: number; firedCount: number;
       }>,
+      JobEmployment.findOne({ userEmail: id.emailLc }).select('jobId appliedAt').lean() as unknown as {
+        jobId?: string; appliedAt?: Date;
+      } | null,
     ]);
     const progByJob: Record<string, { successes: number; fails: number; totalShifts: number; consecutiveFails: number; firedCount: number }> = {};
     for (const p of progress) {
@@ -58,6 +62,7 @@ export async function GET(req: Request) {
         ...j,
         unlocked,
         disabled: tuning.disabledJobs.has(j.id),
+        isActive: employment?.jobId === j.id,
         difficulty: difficultyFor(j),
         unlockProgress: Math.min(totalCompleted, j.unlock),
         today,
@@ -76,6 +81,15 @@ export async function GET(req: Request) {
       success: true,
       jobs,
       totalCompleted,
+      employment: employment?.jobId
+        ? {
+            jobId: employment.jobId,
+            name: JOB_MAP[employment.jobId]?.name || employment.jobId,
+            icon: JOB_MAP[employment.jobId]?.icon || '💼',
+            salary: JOB_MAP[employment.jobId]?.salary || 0,
+            appliedAt: employment.appliedAt || null,
+          }
+        : null,
       jobIds: JOBS.map((j) => j.id),
     });
   } catch {

@@ -3,6 +3,7 @@ import dbConnect from '@/app/lib/mongodb';
 import User from '@/app/lib/models/User';
 import JobShift from '@/app/lib/models/JobShift';
 import JobProgress from '@/app/lib/models/JobProgress';
+import JobEmployment from '@/app/lib/models/JobEmployment';
 import { gameIdentity } from '@/app/lib/gameserver';
 import {
   JOB_MAP, validateAttempt, failPayout, successPayout,
@@ -26,6 +27,28 @@ export async function POST(req: Request) {
     if (!token) return NextResponse.json({ success: false, error: 'Shift token required' }, { status: 400 });
 
     await dbConnect();
+
+    // Employment gate #1 (pre-consume): a shift opened before a resignation
+    // / firing / job change must not pay out. Refusing BEFORE the atomic
+    // consume keeps the error honest and lets a re-apply finish the shift
+    // while it is still inside its expiry window.
+    const employment = await JobEmployment.findOne({ userEmail: id.emailLc })
+      .select('jobId').lean() as { jobId?: string } | null;
+    const activeJobId = employment?.jobId || null;
+    const shift0 = await JobShift.findOne({ token, userEmail: id.emailLc, consumed: false })
+      .select('jobId').lean() as { jobId: string } | null;
+    if (shift0 && activeJobId !== shift0.jobId) {
+      const wanted = JOB_MAP[shift0.jobId];
+      return NextResponse.json({
+        success: false,
+        code: 'NO_JOB',
+        error: activeJobId
+          ? `You work as ${JOB_MAP[activeJobId]?.name || activeJobId} — apply for ${wanted?.name || shift0.jobId} to work that shift.`
+          : "❌ You don't have a job! Apply for a job first before you can start a shift.",
+        activeJobId,
+      }, { status: 403 });
+    }
+
     const shift = await JobShift.findOneAndUpdate(
       { token, userEmail: id.emailLc, consumed: false, expiresAt: { $gt: new Date() } },
       { $set: { consumed: true, consumedAt: new Date() } },
@@ -43,6 +66,23 @@ export async function POST(req: Request) {
     const job = JOB_MAP[shift.jobId];
     if (!job) {
       return NextResponse.json({ success: false, error: 'Unknown job on this shift' }, { status: 410 });
+    }
+
+    // Employment gate #2 (post-consume, pre-payout): re-read — employment
+    // can change while a mini-game is open. The shift is now spent
+    // (replay-proof) and NO salary, promotion or firing credit applies.
+    const employmentNow = await JobEmployment.findOne({ userEmail: id.emailLc })
+      .select('jobId').lean() as { jobId?: string } | null;
+    const activeNow = employmentNow?.jobId || null;
+    if (activeNow !== job.id) {
+      return NextResponse.json({
+        success: false,
+        code: 'NO_JOB',
+        error: activeNow
+          ? `Employment changed — you now work as ${JOB_MAP[activeNow]?.name || activeNow}. No salary was awarded for this ${job.name} shift.`
+          : "❌ You no longer have a job — this shift paid nothing. Apply for a job before working.",
+        activeJobId: activeNow,
+      }, { status: 403 });
     }
 
     const tuning = await jobsTuning();
@@ -86,6 +126,13 @@ export async function POST(req: Request) {
       }
     }
     const fired = !verdict.won && (prog.consecutiveFails || 0) + 1 >= FIRED_STREAK;
+
+    if (fired) {
+      // Firing ends employment immediately: no further shifts until the
+      // user applies for (and is accepted into) a job again. Promotion
+      // progress for this job was already reset above.
+      await JobEmployment.deleteOne({ userEmail: id.emailLc, jobId: job.id });
+    }
 
     await JobShift.updateOne(
       { token },

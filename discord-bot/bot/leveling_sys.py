@@ -100,7 +100,7 @@ LEVEL_DEFAULTS: dict = {
 
 
 # ── Server card backgrounds (imported picture assets, zero network) ───
-# The dashboard selector and /level serverbackground write one of these ids
+# The dashboard selector and /leveling serverbackground write one of these ids
 # into cfg["serverBackground"]. There is deliberately NO URL support and NO
 # generated-theme fallback: legacy theme ids and old URL values resolve to
 # the default asset. The bot mirrors the site's
@@ -410,6 +410,23 @@ def render_level_card(username: str, avatar_bytes: bytes | None, level: int,
                 overlay = Image.new("RGBA", (W, H), (18, 18, 24, int(255 * (1.0 - opacity))))
                 backdrop = Image.alpha_composite(backdrop, overlay)
             base = backdrop
+            # Readability shade (photographic art only — never the flat base):
+            # scale darkness to the artwork's own luminance so bright imports
+            # get real contrast while dark imports stay visible, then stroke
+            # all text below. Keeps the selected picture, guarantees legibility.
+            try:
+                from PIL import ImageStat as _ImageStat  # type: ignore
+                lum = float(_ImageStat.Stat(backdrop.convert("L")).mean[0])
+            except Exception:
+                lum = 60.0
+            shade_alpha = int(max(70, min(170, 190 - lum)))
+            read = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+            rdraw = ImageDraw.Draw(read)
+            for y in range(H):
+                f = y / max(1, H - 1)
+                a = int(shade_alpha * (0.75 + 0.45 * (f ** 1.3)))
+                rdraw.line([(0, y), (W, y)], fill=(8, 8, 14, min(255, a)))
+            base = Image.alpha_composite(base, read)
         draw = ImageDraw.Draw(base)
         try:
             font_big = ImageFont.truetype("arial.ttf", 56)
@@ -423,20 +440,24 @@ def render_level_card(username: str, avatar_bytes: bytes | None, level: int,
                 mask = Image.new("L", (150, 150), 0)
                 ImageDraw.Draw(mask).ellipse((0, 0, 150, 150), fill=255)
                 base.paste(avatar, (40, 55), mask)
+                draw = ImageDraw.Draw(base)
+                draw.ellipse((40, 55, 190, 205), outline=(255, 255, 255, 110), width=3)
             except Exception:
                 pass
         try:
             r, g, b = int(accent[1:3], 16), int(accent[3:5], 16), int(accent[5:7], 16)
         except Exception:
             r, g, b = 88, 101, 242
-        draw.text((220, 40), username[:24], font=font_big, fill=(255, 255, 255, 255))
+        draw.text((220, 40), username[:24], font=font_big, fill=(255, 255, 255, 255),
+                  stroke_width=2, stroke_fill=(0, 0, 0, 200))
         draw.text((220, 110), f"LEVEL {level}   •   RANK #{rank}", font=font_small,
-                  fill=(r, g, b, 255))
+                  fill=(r, g, b, 255), stroke_width=2, stroke_fill=(0, 0, 0, 200))
+        draw.rounded_rectangle((220, 165, 840, 200), radius=14, outline=(0, 0, 0, 160), width=2)
         draw.rounded_rectangle((220, 165, 840, 200), radius=14, fill=(255, 255, 255, 40))
         draw.rounded_rectangle((220, 165, 220 + int(620 * progress), 200), radius=14,
                                fill=(r, g, b, 255))
         draw.text((220, 210), f"{xp_into} / {xp_need} XP", font=font_small,
-                  fill=(200, 200, 200, 255))
+                  fill=(200, 200, 200, 255), stroke_width=2, stroke_fill=(0, 0, 0, 200))
         buf = _io.BytesIO()
         base.convert("RGB").save(buf, format="PNG")
         return ("png", buf.getvalue())

@@ -305,15 +305,11 @@ export const dashboardApi = {
       `/api/dashboard/servers?guildId=${encodeURIComponent(guildId)}`,
     ),
 
-  config: (token: string, guildId: string) =>
-    apiFetch<{ success: boolean; config: GuildConfigDoc; guild: { id: string; name: string; icon: string | null } }>(
-      `/api/dashboard/config?guildId=${encodeURIComponent(guildId)}`,
-      { token },
-    ),
-
-  saveConfig: (token: string, guildId: string, config: Record<string, unknown>) =>
-    apiFetch<{ success: boolean }>('/api/dashboard/config', { method: 'PATCH', token, body: { guildId, config } }),
-
+  // NOTE: /api/dashboard/config is intentionally NOT exposed here. All
+  // guild-config reads/saves go through the single shared loader in
+  // app/lib/use-guild-config.ts (per-guild cache + in-flight dedup +
+  // 429 backoff) — a second client here is exactly what caused the config
+  // 429 storms.
   status: () =>
     apiFetch<BotStatusResponse>('/api/dashboard/status'),
 

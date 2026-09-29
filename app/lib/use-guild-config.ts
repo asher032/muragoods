@@ -16,142 +16,226 @@ interface GuildConfig {
   [key: string]: unknown;
 }
 
+// ── Centralized guild-config loading ─────────────────────────────────────
+// ONE cache + ONE in-flight request per guild, shared by every hook
+// instance on the page (each dashboard page mounts 2+: the page itself and
+// ModuleSettings). Before this, N mounted instances fired N simultaneous
+// GETs, and every guild-switch/selection-identity change refetched — the
+// burst is what Discord answered with 429s.
+//
+// Rules:
+//   - fresh cache (60s TTL) → served silently, zero HTTP requests
+//   - simultaneous loads → all await the SAME promise (single flight)
+//   - 429/failure with ANY cached data (even stale) → keep showing it,
+//     report the failure once, never auto-retry in a loop
+//   - cache writes only on: successful load, successful save
+//   - hook effects key on the guild ID STRING, never the selection object,
+//     so live-detection object churn cannot retrigger loads
+interface CacheEntry {
+  data: GuildConfig;
+  at: number;
+}
+const CONFIG_TTL_MS = 60_000;
+const configCache = new Map<string, CacheEntry>();
+const inflight = new Map<string, Promise<LoadResult>>();
+
+interface LoadResult {
+  ok: boolean;
+  data?: GuildConfig;
+  error?: string;
+  code?: string;
+  retryAfterSec?: number;
+}
+
+function readRetryAfter(resp: Response): number | undefined {
+  const raw = resp.headers.get('retry-after');
+  if (!raw) return undefined;
+  const secs = Number(raw);
+  if (Number.isFinite(secs) && secs >= 0) return Math.min(120, Math.ceil(secs));
+  return undefined;
+}
+
+async function fetchConfig(guildId: string): Promise<LoadResult> {
+  const endpoint = `/api/dashboard/config?guildId=${guildId}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const resp = await fetch(endpoint, { cache: 'no-store', signal: controller.signal });
+    const data = (await resp.json().catch(() => null)) as {
+      success?: boolean; config?: GuildConfig; error?: string; code?: string; retryAfterMs?: number;
+    } | null;
+    if (resp.ok && data && data.success) {
+      return { ok: true, data: data.config || {} };
+    }
+    const code = typeof data?.code === 'string' ? data.code : '';
+    const retryAfterSec = readRetryAfter(resp)
+      ?? (typeof data?.retryAfterMs === 'number' ? Math.min(120, Math.ceil(data.retryAfterMs / 1000)) : undefined);
+    const serverMessage = typeof data?.error === 'string' && data.error ? ` — ${data.error}` : '';
+    if (resp.status === 429 || code === 'RATE_LIMITED') {
+      const wait = retryAfterSec !== undefined ? ` Retry in ${retryAfterSec}s.` : ' Retry in a moment.';
+      return { ok: false, code: 'RATE_LIMITED', retryAfterSec, error: `Discord rate-limited configuration loading.${wait}` };
+    }
+    return { ok: false, code, error: `Failed to load ${endpoint}: HTTP ${resp.status}${serverMessage}` };
+  } catch (err) {
+    const timedOut = err instanceof DOMException && err.name === 'AbortError';
+    return {
+      ok: false,
+      code: timedOut ? 'REQUEST_TIMEOUT' : 'NETWORK_ERROR',
+      error: timedOut
+        ? 'Failed to load /api/dashboard/config: request timed out after 15s — retry.'
+        : `Failed to load /api/dashboard/config: network error — ${String(err)}`,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function loadShared(guildId: string, force: boolean): Promise<LoadResult> {
+  if (!force) {
+    const hit = configCache.get(guildId);
+    if (hit && Date.now() - hit.at < CONFIG_TTL_MS) {
+      return Promise.resolve({ ok: true, data: hit.data });
+    }
+  }
+  const running = inflight.get(guildId);
+  if (running) return running;
+  const p = fetchConfig(guildId).then((result) => {
+    if (result.ok && result.data) {
+      configCache.set(guildId, { data: result.data, at: Date.now() });
+    }
+    return result;
+  }).finally(() => {
+    if (inflight.get(guildId) === p) inflight.delete(guildId);
+  });
+  inflight.set(guildId, p);
+  return p;
+}
+
 export function useGuildConfig() {
   const { token, selected } = useGuild();
+  // Key on the STABLE id string: guild-context replaces the selection object
+  // on live-detection refreshes, and depending on the object would refetch
+  // on every refresh for every mounted instance.
+  const guildId = selected?.id ?? null;
+  const authed = token !== null;
   const [config, setConfig] = useState<GuildConfig>({});
+  // Always-current draft mirror: save() must send the LATEST edits, but a
+  // setState updater is not guaranteed to run synchronously — reading state
+  // through `setConfig(c => { draft = c; ... })` could serialize {} instead.
+  const configRef = useRef<GuildConfig>({});
+  useEffect(() => { configRef.current = config; }, [config]);
   const [loading, setLoading] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState('');
-  // Stale-response guard: a guild switch or unmount cancels the in-flight
-  // load so Server A's config can never overwrite Server B.
-  const requestId = useRef(0);
-  const controllerRef = useRef<AbortController | null>(null);
+  const currentGuild = useRef<string | null>(null);
 
-  // Hard ceiling per request: a hung config call must resolve to an error
-  // state, never to a permanently-spinning page.
-  const fetchWithTimeout = async (url: string, init: RequestInit, timeoutMs: number): Promise<Response> => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      return await fetch(url, { ...init, signal: controller.signal });
-    } finally {
-      clearTimeout(timer);
-    }
-  };
-
-  /**
-   * Report a failed request with the endpoint, the HTTP status and the server's
-   * own message.
-   *
-   * Previously a failure showed only `data.error || 'Failed to save'`, so a 401,
-   * a 403 and a 500 were indistinguishable — and if the response was not JSON
-   * (a platform error page, say) `resp.json()` threw and the real status was
-   * lost entirely, leaving a JSON parse message that pointed at nothing.
-   */
-  const describeFailure = async (
-    action: 'load' | 'save',
-    endpoint: string,
-    resp: Response | null,
-    thrown: unknown,
-  ): Promise<string> => {
-    if (!resp) {
-      return `Failed to ${action} ${endpoint}: network error — ${String(thrown)}`;
-    }
-    let serverMessage = '';
-    try {
-      const body = await resp.clone().json();
-      serverMessage = typeof body?.error === 'string' ? body.error : '';
-    } catch {
-      try {
-        serverMessage = (await resp.clone().text()).slice(0, 200).trim();
-      } catch {
-        serverMessage = '';
+  const applyResult = useCallback((gid: string, result: LoadResult) => {
+    if (currentGuild.current !== gid) return; // superseded by guild switch
+    if (result.ok && result.data) {
+      setConfig(result.data);
+      setError('');
+    } else {
+      // Failure with cached data (even stale): keep showing it silently.
+      // Only an empty-handed failure surfaces an error, once.
+      const cached = configCache.get(gid);
+      if (!(cached && Object.keys(cached.data).length > 0)) {
+        setError(result.error || 'Could not load configuration.');
       }
     }
-    const suffix = serverMessage ? ` — ${serverMessage}` : '';
-    return `Failed to ${action} ${endpoint}: HTTP ${resp.status}${suffix}`;
-  };
+    setLoading(false);
+  }, []);
 
-  const load = useCallback(async () => {
-    if (!token || !selected) return;
-    const id = ++requestId.current;
-    controllerRef.current?.abort();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    // Bounded: the timer below aborts the fetch; the overall 20s timer
-    // guarantees the loading flag clears even if abort delivery stalls.
-    const abortTimer = setTimeout(() => controller.abort(), 15000);
-    const overallTimer = setTimeout(() => {
-      if (id === requestId.current) {
-        controller.abort();
+  const load = useCallback(async (force = false) => {
+    if (!authed || !guildId) {
+      currentGuild.current = null;
+      setLoading(false);
+      return;
+    }
+    // Fast path: fresh cache serves with no HTTP request at all.
+    if (!force) {
+      const hit = configCache.get(guildId);
+      if (hit && Date.now() - hit.at < CONFIG_TTL_MS) {
+        currentGuild.current = guildId;
+        setConfig(hit.data);
+        setError('');
         setLoading(false);
-        setError((prev) => prev || 'Failed to load /api/dashboard/config: request timed out after 20s — retry.');
+        return;
       }
-    }, 20000);
-    setLoading(true);
-    setError('');
-    const endpoint = `/api/dashboard/config?guildId=${selected.id}`;
-    let resp: Response | null = null;
-    try {
-      resp = await fetchWithTimeout(endpoint, { cache: 'no-store', signal: controller.signal }, 15000);
-      if (id !== requestId.current) return;
-      const data = await resp.json().catch(() => null);
-      if (!data || typeof data !== 'object') {
-        setError(await describeFailure('load', endpoint, resp, 'unreadable response'));
-      } else if ((data as { success?: boolean }).success) {
-        setConfig((data as { config?: GuildConfig }).config || {});
-      } else {
-        setError(await describeFailure('load', endpoint, resp, null));
-      }
-    } catch (err) {
-      if (id !== requestId.current) return;
-      if (err instanceof DOMException && err.name === 'AbortError' && controller.signal.aborted && id !== requestId.current) return;
-      setError(await describeFailure('load', endpoint, resp, err));
-    } finally {
-      clearTimeout(abortTimer);
-      clearTimeout(overallTimer);
-      if (id === requestId.current) setLoading(false);
     }
-  }, [token, selected]);
+    currentGuild.current = guildId;
+    setLoading(true);
+    // Clear a previous error only when actually (re)fetching; a cached
+    // failure notice must not flicker on every render.
+    if (force) setError('');
+    try {
+      const result = await loadShared(guildId, force);
+      applyResult(guildId, result);
+    } catch {
+      if (currentGuild.current === guildId) {
+        const cached = configCache.get(guildId);
+        if (!(cached && Object.keys(cached.data).length > 0)) {
+          setError('Could not load configuration.');
+        }
+        setLoading(false);
+      }
+    }
+  }, [authed, guildId, applyResult]);
 
   const save = useCallback(async () => {
-    if (!token || !selected) return false;
+    if (!authed || !guildId) return false;
     setSaveState('saving');
     setError('');
     const endpoint = '/api/dashboard/config';
-    let resp: Response | null = null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
     try {
-      resp = await fetchWithTimeout(endpoint, {
+      // Snapshot the draft at click time from the ref (kept in lockstep
+      // with state above) — never a stale closure.
+      const draft: GuildConfig = configRef.current;
+      const resp = await fetch(endpoint, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ guildId: selected.id, config }),
-      }, 20000);
-      const data = await resp.json();
-      if (data.success) {
+        body: JSON.stringify({ guildId, config: draft }),
+        signal: controller.signal,
+      });
+      const data = (await resp.json().catch(() => null)) as { success?: boolean; error?: string } | null;
+      if (resp.ok && data && data.success) {
+        // The save is confirmed: this draft IS the server truth now.
+        configCache.set(guildId, { data: draft, at: Date.now() });
         setSaveState('saved');
         setTimeout(() => setSaveState('idle'), 2500);
         return true;
       }
+      const serverMessage = typeof data?.error === 'string' && data.error ? ` — ${data.error}` : '';
       setSaveState('error');
-      setError(await describeFailure('save', endpoint, resp, null));
+      setError(`Failed to save ${endpoint}: HTTP ${resp.status}${serverMessage}`);
       setTimeout(() => setSaveState('idle'), 3000);
       return false;
     } catch (err) {
       setSaveState('error');
-      setError(await describeFailure('save', endpoint, resp, err));
+      const timedOut = err instanceof DOMException && err.name === 'AbortError';
+      setError(timedOut
+        ? `Failed to save ${endpoint}: request timed out after 20s.`
+        : `Failed to save ${endpoint}: network error — ${String(err)}`);
       setTimeout(() => setSaveState('idle'), 3000);
       return false;
+    } finally {
+      clearTimeout(timer);
     }
-  }, [token, selected, config]);
+  }, [authed, guildId]);
 
   useEffect(() => {
-    load();
-    return () => {
-      requestId.current += 1;
-      controllerRef.current?.abort();
-    };
-  }, [load]);
+    currentGuild.current = guildId;
+    configRef.current = {}; // no cross-guild draft bleed on switch
+    if (!authed || !guildId) {
+      setConfig({});
+      setError('');
+      setLoading(false);
+      return;
+    }
+    void load(false);
+  }, [authed, guildId, load]);
 
   const update = useCallback((section: string, key: string, value: unknown) => {
     setConfig((c) => ({
