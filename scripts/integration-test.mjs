@@ -232,10 +232,10 @@ let orderId = '';
   check('coins awarded automatically on Delivered (server PATCH chain)', after.body?.data?.coinBalance === 50, `balance ${after.body?.data?.coinBalance}`);
 
   const award = await api('/api/orders/award-coins', { method: 'POST', body: JSON.stringify({ orderId }) });
-  check('explicit award after auto-award → alreadyAwarded', award.body?.data?.alreadyAwarded === true, JSON.stringify(award.body?.data));
+  check('explicit award after auto-award → alreadyAwarded', award.body?.data?.alreadyAwarded === true, JSON.stringify(award.body));
 
   const again = await api('/api/orders/award-coins', { method: 'POST', body: JSON.stringify({ orderId }) });
-  check('double award stays idempotent', again.body?.data?.alreadyAwarded === true);
+  check('double award stays idempotent', again.body?.data?.alreadyAwarded === true, JSON.stringify(again.body));
 
   const final = await api('/api/account/profile');
   check('balance still exactly 50 after retries', final.body?.data?.coinBalance === 50, `balance ${final.body?.data?.coinBalance}`);
