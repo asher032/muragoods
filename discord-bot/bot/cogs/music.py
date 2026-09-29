@@ -395,9 +395,34 @@ class MusicCog(commands.Cog):
         except discord.HTTPException:
             await interaction.followup.send(embed=embed, view=view)
 
-    @app_commands.command(name="previous", description="Play the previous track again.")
-    async def previous(self, interaction: discord.Interaction):
+    @app_commands.command(name="previous", description="Play the previous track again, or restart the current one.")
+    @app_commands.describe(track="Restart what is playing now instead of going back")
+    @app_commands.choices(track=[
+        app_commands.Choice(name="Previous track", value="previous"),
+        app_commands.Choice(name="Current track (restart)", value="current"),
+    ])
+    async def previous(self, interaction: discord.Interaction, track: str = "previous"):
         await interaction.response.defer()
+        # Replaying the current track used to be a separate `/replay` command.
+        # It is folded in here as a choice: both actions are "play something
+        # again", and Discord caps an application at 100 top-level commands.
+        if track == "current":
+            if not await dj_guard(interaction, "seek"):
+                return
+            player = music.engine.get_player(interaction.guild.id)
+            if not player.current or not player.voice or not player.voice.channel:
+                await interaction.followup.send("Nothing is playing.", ephemeral=True)
+                return
+            try:
+                await music.engine.play_now(player, player.current, player.voice.channel,
+                                            requested_title=player.current.title)
+            except Exception as exc:
+                log.exception("Replay failed")
+                await interaction.followup.send(embed=playback_error_embed(exc), ephemeral=True)
+                return
+            await interaction.followup.send(embed=embeds.music(
+                "🔁 Replay", f"**{player.current.title}** from the top."))
+            return
         if not await dj_guard(interaction, "skip"):
             return
         player = music.engine.get_player(interaction.guild.id)
@@ -417,25 +442,6 @@ class MusicCog(commands.Cog):
             return
         await interaction.followup.send(embed=embeds.music(
             "⏮ Previous", f"**{prev.title}**"))
-
-    @app_commands.command(name="replay", description="Restart the current track.")
-    async def replay(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-        if not await dj_guard(interaction, "seek"):
-            return
-        player = music.engine.get_player(interaction.guild.id)
-        if not player.current or not player.voice or not player.voice.channel:
-            await interaction.followup.send("Nothing is playing.", ephemeral=True)
-            return
-        try:
-            await music.engine.play_now(player, player.current, player.voice.channel,
-                                        requested_title=player.current.title)
-        except Exception as exc:
-            log.exception("Replay failed")
-            await interaction.followup.send(embed=playback_error_embed(exc), ephemeral=True)
-            return
-        await interaction.followup.send(embed=embeds.music(
-            "🔁 Replay", f"**{player.current.title}** from the top."))
 
     @app_commands.command(name="seek", description="Seek to a timestamp, or nudge forward/back.")
     @app_commands.describe(position="Timestamp like 1:30 or seconds (exact seek)",

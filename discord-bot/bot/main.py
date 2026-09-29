@@ -152,6 +152,8 @@ class MuraBot(commands.Bot):
             "cogs.economy",
             "cogs.games",
             "cogs.inventory",
+            "cogs.digging",
+            "cogs.marketplace",
             "cogs.profile",
             "cogs.work",
             "cogs.ranch",

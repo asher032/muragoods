@@ -84,7 +84,13 @@ class WatchTogetherCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(name="watchtogether", description="Start a synced Watch Together room on MuraStream.")
+    # `watchtogether` is a group (start | request | comments) rather than three
+    # separate root commands. Discord caps an application at 100 top-level
+    # slash commands, and these three operations only make sense together.
+    wt = app_commands.Group(name="watchtogether",
+                            description="Synced Watch Together rooms on MuraStream")
+
+    @wt.command(name="start", description="Start a synced Watch Together room on MuraStream.")
     @app_commands.describe(query="Title to watch together")
     async def watchtogether(self, interaction: discord.Interaction, query: str):
         await interaction.response.defer()
@@ -122,7 +128,7 @@ class WatchTogetherCog(commands.Cog):
         await interaction.followup.send(
             content=f"{interaction.user.mention} started a Watch Together!", embed=e, view=view)
 
-    @app_commands.command(name="request", description="Request a movie, TV show or anime — run bare to browse.")
+    @wt.command(name="request", description="Request a movie, TV show or anime — run bare to browse.")
     @app_commands.describe(title="What should we add? (omit to browse requests)", kind="Media type",
                            request_id="Optional: change a request's status (mods only)",
                            action="Admin action")
@@ -232,7 +238,7 @@ class WatchTogetherCog(commands.Cog):
                          color=embeds.GOLD)
         await interaction.followup.send(embed=e, view=RequestButtons(request_id, interaction.guild.id))
 
-    @app_commands.command(name="comments", description="Recent community comments for a title.")
+    @wt.command(name="comments", description="Recent community comments for a title.")
     @app_commands.describe(query="Title to check comments for")
     async def comments(self, interaction: discord.Interaction, query: str):
         await interaction.response.defer()

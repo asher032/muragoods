@@ -861,37 +861,26 @@ PACK_CONTENTS: dict[str, tuple[tuple[str, int], ...]] = {
 }
 
 
-#: How often each activity yields a random item at all.
-SOURCE_DROP_CHANCE: dict[str, float] = {
-    "fish": 0.18, "farm": 0.20, "work": 0.12, "crime": 0.10, "rob": 0.08,
-    "quests": 0.15, "achievements": 0.25, "daily": 0.08,
-    "weekly": 0.30, "monthly": 0.50, "events": 0.20, "shop": 0.0,
-    "lottery": 0.15, "loot_box": 1.0, "murastream": 0.10,
-}
+#: Which activities can award an item at all. The *probability* of a drop
+#: lives in `rewards.DEFAULT_DROP_CHANCES` — chances are economic values and
+#: have exactly one owner, so the bot and the dashboard can never disagree.
+#: This set only records that a source is wired up at all.
+REWARD_SOURCES: tuple[str, ...] = (
+    "fish", "farm", "work", "activity", "beg", "crime", "rob",
+    "quest", "dig", "daily", "weekly", "monthly", "market",
+)
 
 
 def source_pool(source: str) -> list[dict]:
-    """Every active item an activity can award. Server-side only."""
+    """Every active item an activity can award, per its catalog drop_sources.
+
+    This reads the item definitions themselves; it does not carry its own
+    chances. `rewards.roll_item_reward` is what actually grants items.
+    """
     key = (source or "").strip().lower()
     if not key:
         return []
     return [r for r in CATALOG.values() if r["active"] and key in r["drop_sources"]]
-
-
-def roll_drop(source: str, rng=None) -> dict | None:
-    """Pick a random item this activity can award, weighted toward the
-    bottom of the rarity scale so drops stay useful rather than legendary."""
-    import random
-    rng = rng or random
-    pool = [r for r in source_pool(source) if r["category"] not in ("pack",)]
-    if not pool:
-        return None
-    chance = SOURCE_DROP_CHANCE.get((source or "").strip().lower(), 0.10)
-    if chance and rng.random() > chance:
-        return None
-    # Weight: common 10, uncommon 5, rare 2, epic 1, godly 0.2.
-    weights = {"common": 10.0, "uncommon": 5.0, "rare": 2.0, "epic": 1.0, "godly": 0.2}
-    return rng.choices(pool, weights=[weights[r["rarity"]] for r in pool], k=1)[0]
 
 
 def _weighted_band(rng, bands: dict[str, int]) -> str | None:

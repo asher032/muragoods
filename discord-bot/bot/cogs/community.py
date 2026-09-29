@@ -121,7 +121,10 @@ class CommunityCog(commands.Cog):
             await interaction.followup.send(f"Discord rejected the reroll: {exc.status}", ephemeral=True)
 
     # ── Suggestions ───────────────────────────────────────────────────
-    @app_commands.command(name="suggest", description="Submit a server suggestion.")
+    suggestions = app_commands.Group(
+        name="suggestions", description="Submit and manage server suggestions")
+
+    @suggestions.command(name="add", description="Submit a server suggestion.")
     @app_commands.describe(text="Your suggestion")
     async def suggest(self, interaction: discord.Interaction, text: str):
         await interaction.response.defer()
@@ -132,7 +135,7 @@ class CommunityCog(commands.Cog):
         e = embeds.embed(f"💡 Suggestion #{sugg_id}", text[:450], embeds.INFO)
         e.add_field(name="Submitted by", value=interaction.user.mention, inline=True)
         e.add_field(name="Status", value="🗳️ Open", inline=True)
-        e.set_footer(text="Staff: /suggestions <id> approve|deny|review • MuraStream")
+        e.set_footer(text="Staff: /suggestions manage <id> <status> • MuraStream")
         # Post to the configured suggestion channel when one is set.
         target: discord.abc.Messageable = interaction.channel
         try:
@@ -150,7 +153,7 @@ class CommunityCog(commands.Cog):
                 embed=embeds.ok("💡 Suggestion posted", f"Sent to {target.mention} as **#{sugg_id}"),
                 ephemeral=True)
 
-    @app_commands.command(name="suggestions", description="Manage a suggestion (Manage Messages).")
+    @suggestions.command(name="manage", description="Manage a suggestion (Manage Messages).")
     @app_commands.describe(sugg_id="Suggestion number", status="New status")
     @app_commands.choices(status=[
         app_commands.Choice(name="Approved", value="Approved"),

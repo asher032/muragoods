@@ -18,6 +18,8 @@ from discord.ext import commands
 import database
 import economy as eco
 import embeds
+import items as itemdb
+import rewards as rw
 
 log = logging.getLogger("bot.economy")
 
@@ -97,7 +99,8 @@ class EconomyCore(commands.Cog):
 
     # ── Timed rewards ──
     async def _timed(self, interaction: discord.Interaction, field: str,
-                     cooldown: int, amount: int, label: str, streak_field: str | None = None):
+                     cooldown: int, amount: int, label: str,
+                     streak_field: str | None = None, source: str = "daily"):
         await interaction.response.defer()
         granted, remaining = await eco.claim_cooldown(
             database._db, interaction.guild.id, interaction.user.id, field, cooldown)
@@ -120,20 +123,35 @@ class EconomyCore(commands.Cog):
                 pass
         await eco.check_quests(database._db, interaction.guild.id, interaction.user.id)
         cfg = await _cfg(interaction.guild.id)
-        await interaction.followup.send(embed=embeds.ok(
-            f"🎁 {label} claimed!", f"+**{final:,}** {cfg.get('currencyName', 'coins')}."))
+        # The item roll happens only after the coins land, and is keyed on the
+        # cooldown field so a retried claim cannot award a second item.
+        grant = None
+        try:
+            grant = await rw.roll_item_reward(
+                database._db, interaction.guild.id, interaction.user.id, source, cfg,
+                idempotency_key=f"{field}:{int(eco._now().timestamp()) // max(1, cooldown)}")
+        except Exception:
+            log.warning("%s item reward failed", source, exc_info=True)
+        embed = embeds.ok(f"🎁 {label} claimed!",
+                          f"+**{final:,}** {cfg.get('currencyName', 'coins')}.")
+        field_pair = rw.reward_field([grant] if grant else None)
+        if field_pair:
+            embed.add_field(name=field_pair[0], value=field_pair[1], inline=False)
+        await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="weekly", description="Claim your weekly reward.")
     async def weekly(self, interaction: discord.Interaction):
         cfg = await _cfg(interaction.guild.id)
         await self._timed(interaction, "lastWeekly", 7 * 86400,
-                          int(cfg.get("weeklyAmount", 1500)), "Weekly", "streakWeekly")
+                          eco.safe_int(cfg.get("weeklyAmount"), 1500), "Weekly",
+                          "streakWeekly", source="weekly")
 
     @app_commands.command(name="monthly", description="Claim your monthly reward.")
     async def monthly(self, interaction: discord.Interaction):
         cfg = await _cfg(interaction.guild.id)
         await self._timed(interaction, "lastMonthly", 30 * 86400,
-                          int(cfg.get("monthlyAmount", 6000)), "Monthly", "streakMonthly")
+                          eco.safe_int(cfg.get("monthlyAmount"), 6000), "Monthly",
+                          "streakMonthly", source="monthly")
 
     @app_commands.command(name="quests", description="Quest progress — earn rewards for milestones.")
     async def quests(self, interaction: discord.Interaction):
@@ -145,12 +163,17 @@ class EconomyCore(commands.Cog):
         for qid, quest in eco.QUESTS.items():
             have = progress.get(quest["check"], 0)
             done = have >= quest["target"]
+            drops = ", ".join(itemdb.get_item(i)["name"] for i, _q
+                              in (quest.get("items") or []) if itemdb.get_item(i))
+            reward = f"+{quest['reward']}" + (f" · 🎁 {drops}" if drops else "")
             lines.append(f"{'✅' if done else '🔒'} **{quest['name']}** "
                          f"{min(have, quest['target'])}/{quest['target']} — {quest['desc']} "
-                         f"(+{quest['reward']})")
-        extra = f"\n🎉 Just completed: {', '.join(newly)}" if newly else ""
+                         f"({reward})")
+        extra = f"\n🎉 Just completed: {', '.join(eco.QUESTS[q]['name'] for q in newly if q in eco.QUESTS)}" if newly else ""
         await interaction.followup.send(embed=embeds.embed(
-            "📜 Quests", "\n".join(lines) + extra, embeds.GOLD), ephemeral=True)
+            "📜 Quests", "\n".join(lines) + extra + (
+                "\n\nItems were added to `/inventory`." if newly else ""),
+            embeds.GOLD), ephemeral=True)
 
     @app_commands.command(name="calculate", description="Safely evaluate a math expression.")
     @app_commands.describe(equation="e.g. (150*3)+45")

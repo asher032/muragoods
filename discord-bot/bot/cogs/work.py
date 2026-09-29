@@ -33,6 +33,7 @@ import database
 import economy as eco
 import embeds
 import jobs as jb
+import rewards as rw
 
 # safe_int is the shared "coerce a stored value, never raise" helper. It lives
 # in leveling_sys (bot/jobs.py is stdlib-only so it cannot host it).
@@ -532,7 +533,8 @@ class WorkCog(commands.Cog):
 
     # ── shared activity helper ──
     async def _activity(self, interaction: discord.Interaction, kind: str,
-                        low: int, high: int, verbs: list[str]):
+                        low: int, high: int, verbs: list[str],
+                        source: str = "activity"):
         await interaction.response.defer()
         cfg = await _cfg(interaction.guild.id)
         granted, _ = await eco.claim_cooldown(
@@ -548,7 +550,21 @@ class WorkCog(commands.Cog):
             database._db, interaction.guild.id, interaction.user.id,
             random.randint(low, high), "activity", "discord")
         await eco.check_quests(database._db, interaction.guild.id, interaction.user.id)
-        await interaction.followup.send(f"{random.choice(verbs[1:])} **+{final}** coins.")
+        # Item drop via the centralized reward service, only after the coins
+        # have landed, keyed on the activity slot so a retry cannot double it.
+        grant = None
+        try:
+            grant = await rw.roll_item_reward(
+                database._db, interaction.guild.id, interaction.user.id, source, cfg,
+                idempotency_key=f"{kind}:{datetime_now() // 600}")
+        except Exception:
+            log.warning("activity item reward failed", exc_info=True)
+        e = embeds.embed("✨ Activity Complete", f"{random.choice(verbs[1:])} **+{final}** coins.",
+                         embeds.OK)
+        pair = rw.reward_field([grant] if grant else None)
+        if pair:
+            e.add_field(name=pair[0], value=pair[1], inline=False)
+        await interaction.followup.send(embed=e)
 
     @work.command(name="beg", description="Beg for a few coins (short cooldown).")
     async def work_beg(self, interaction: discord.Interaction):
@@ -571,7 +587,18 @@ class WorkCog(commands.Cog):
             return
         final, _ = await eco.grant_coins(
             database._db, interaction.guild.id, interaction.user.id, amount, "beg", "discord")
-        await interaction.followup.send(f"🪙 A kind soul gave you **{final}** coins.")
+        grant = None
+        try:
+            grant = await rw.roll_item_reward(
+                database._db, interaction.guild.id, interaction.user.id, "beg", cfg,
+                idempotency_key=f"beg:{datetime_now() // 300}")
+        except Exception:
+            log.warning("beg item reward failed", exc_info=True)
+        e = embeds.embed("🪙 A kind soul gave you coins", f"**+{final}**", embeds.OK)
+        pair = rw.reward_field([grant] if grant else None)
+        if pair:
+            e.add_field(name="They also handed you", value=pair[1], inline=False)
+        await interaction.followup.send(embed=e)
 
     @work.command(name="tidy", description="Tidy up for a small reward.")
     async def work_tidy(self, interaction: discord.Interaction):

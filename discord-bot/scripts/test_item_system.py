@@ -261,16 +261,15 @@ def test_loot() -> None:
         check(f"open_container target '{container}' is a container",
               itemdb.get_item(container)["category"] in ("loot_box", "pack"))
 
-    # Drop sources resolve to real items and respect a chance.
+    # Drop sources resolve to real items. The *chance* of a drop lives in
+    # rewards.DEFAULT_DROP_CHANCES, not here, so this only checks membership.
     check("fish has a drop pool", len(itemdb.source_pool("fish")) > 0)
     check("farm has a drop pool", len(itemdb.source_pool("farm")) > 0)
     check("unknown source has no pool", itemdb.source_pool("nope") == [])
-    got = [itemdb.roll_drop("fish", rng) for _ in range(200)]
-    check("fish drops are always catalog items",
-          all(d is None or itemdb.get_item(d["item_id"]) for d in got))
-    check("fish drop pool is mostly low rarity (drops stay useful)",
-          sum(1 for d in got if d and d["rarity"] in ("common", "uncommon")) >
-          sum(1 for d in got if d and d["rarity"] in ("epic", "godly")))
+    check("source pools only contain catalog items",
+          all(itemdb.get_item(r["item_id"]) for r in itemdb.source_pool("fish")))
+    check("every reward source is a real wiring point",
+          set(itemdb.REWARD_SOURCES) >= {"dig", "fish", "farm", "work", "quest"})
 
 
 # ── 7. security: buy / sell / trade ────────────────────────────────────

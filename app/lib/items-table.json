@@ -39,6 +39,59 @@
     "rare": 24,
     "uncommon": 42
   },
+  "dropChances": {
+    "activity": {
+      "common": 0.1,
+      "uncommon": 0.02
+    },
+    "beg": {
+      "common": 0.03,
+      "uncommon": 0.005
+    },
+    "crime": {
+      "common": 0.08,
+      "uncommon": 0.02
+    },
+    "daily": {
+      "common": 0.15,
+      "uncommon": 0.03
+    },
+    "dig": {
+      "common": 0.22,
+      "rare": 0.01,
+      "uncommon": 0.08
+    },
+    "farm": {
+      "common": 0.15,
+      "uncommon": 0.05
+    },
+    "fish": {
+      "common": 0.12,
+      "uncommon": 0.04
+    },
+    "market": {},
+    "monthly": {
+      "common": 0.5,
+      "rare": 0.02,
+      "uncommon": 0.25
+    },
+    "quest": {
+      "common": 0.35,
+      "uncommon": 0.15
+    },
+    "rob": {
+      "common": 0.1,
+      "uncommon": 0.03
+    },
+    "weekly": {
+      "common": 0.3,
+      "uncommon": 0.1
+    },
+    "work": {
+      "common": 0.08,
+      "uncommon": 0.02
+    }
+  },
   "effectTypes": [
     "xp_multiplier",
     "work_reward_multiplier",
@@ -3235,22 +3288,87 @@
     "rare": "\ud83d\udd35",
     "uncommon": "\ud83d\udfe2"
   },
-  "sourceDropChance": {
-    "achievements": 0.25,
-    "crime": 0.1,
-    "daily": 0.08,
-    "events": 0.2,
-    "farm": 0.2,
-    "fish": 0.18,
-    "loot_box": 1.0,
-    "lottery": 0.15,
-    "monthly": 0.5,
-    "murastream": 0.1,
-    "quests": 0.15,
-    "rob": 0.08,
-    "shop": 0.0,
-    "weekly": 0.3,
-    "work": 0.12
+  "rewardPools": {
+    "activity": {
+      "common": 34,
+      "rare": 10,
+      "uncommon": 19
+    },
+    "beg": {
+      "common": 34,
+      "rare": 10,
+      "uncommon": 19
+    },
+    "crime": {
+      "common": 34,
+      "rare": 10,
+      "uncommon": 19
+    },
+    "daily": {
+      "common": 36,
+      "rare": 10,
+      "uncommon": 21
+    },
+    "dig": {
+      "common": 34,
+      "rare": 10,
+      "uncommon": 19
+    },
+    "farm": {
+      "common": 36,
+      "rare": 10,
+      "uncommon": 19
+    },
+    "fish": {
+      "common": 34,
+      "rare": 10,
+      "uncommon": 19
+    },
+    "market": {
+      "common": 34,
+      "rare": 10,
+      "uncommon": 19
+    },
+    "monthly": {
+      "common": 34,
+      "rare": 10,
+      "uncommon": 19
+    },
+    "quest": {
+      "common": 34,
+      "rare": 10,
+      "uncommon": 19
+    },
+    "rob": {
+      "common": 34,
+      "rare": 10,
+      "uncommon": 19
+    },
+    "weekly": {
+      "common": 34,
+      "rare": 10,
+      "uncommon": 19
+    },
+    "work": {
+      "common": 36,
+      "rare": 11,
+      "uncommon": 23
+    }
   },
+  "rewardSources": [
+    "fish",
+    "farm",
+    "work",
+    "activity",
+    "beg",
+    "crime",
+    "rob",
+    "quest",
+    "dig",
+    "daily",
+    "weekly",
+    "monthly",
+    "market"
+  ],
   "version": 1
 }
