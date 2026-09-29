@@ -251,8 +251,9 @@ export default function EconomyPage() {
           <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--cc-text-faint)' }}>
             Discord (short commands, no prefix): /balance, /daily, /weekly, /monthly, /deposit, /withdraw,
             /pay, /shop view|buy|sell, /inventory, /profile, /achievements, /quests, /calculate,
-            /leaderboard stats|item, /pets, /farm, /fish, /trade, /lottery, /jobs list|shift|history|resign, /work shift|stars (+ odd jobs,
-            session, vacation, events), /badges, /title, /notifications, /friends (+marry), /advancements,
+            /leaderboard stats|item, /pets, /farm, /fish, /trade, /lottery,
+            /work list|shift|history|resign|stars|session|vacation|event (+ beg, tidy, postmemes, stream, adventure),
+            /badges, /title, /notifications, /friends (+marry), /advancements,
             /minigames (incl. crime, rob, bankrob). Only /economy config is prefixed (admins).
           </p>
         </div>

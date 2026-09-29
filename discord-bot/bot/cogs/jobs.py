@@ -1,11 +1,19 @@
-"""Jobs — clock in, play a shift minigame, earn coins.
+"""Shift minigame VIEWS — the interactive UI behind `/work shift`.
 
-`/jobs list` browses all 39 jobs with salaries, work items, limits and
-unlock progress. `/jobs shift` opens a job browser (39 jobs don't fit in a
-slash-choice list) and starts a REAL playable minigame — never an instant
-payout. Every result is validated server-side in bot/jobs.py against the
-stored challenge, paid once (atomic shift consume), and recorded in work
-history. `/jobs history` and `/jobs resign` round out progression.
+This module holds the Discord UI for the job/shift minigames: the job
+browser, the apply/start gate, and the four playable shift games (order,
+reaction, memory, choice, timing). The COMMANDS themselves live in
+cogs/work.py, which owns the single `/work` group — `/jobs` and `/work`
+were two parallel systems for one feature, and the user-facing surface is
+now just `/work`.
+
+`/work shift` opens a job browser (39 jobs don't fit in a slash-choice
+list) and starts a REAL playable minigame — never an instant payout. Every
+result is validated server-side in bot/jobs.py against the stored challenge,
+paid once (atomic shift consume), and recorded in work history.
+
+The game logic, catalog and payouts live in bot/jobs.py; this file is only
+the presentation layer.
 """
 
 import asyncio
@@ -14,7 +22,6 @@ import time
 
 import discord
 from discord import app_commands
-from discord.ext import commands
 
 import database
 import economy as eco
@@ -69,7 +76,7 @@ class ShiftView(utils.SafeView):
         if interaction.user.id != self.user_id:
             try:
                 await interaction.response.send_message(
-                    "This isn't your shift — start your own with `/jobs shift`.",
+                    "This isn't your shift — start your own with `/work shift`.",
                     ephemeral=True)
             except discord.HTTPException:
                 pass
@@ -442,7 +449,7 @@ class JobBrowser(utils.SafeView):
         if interaction.user.id != self.user_id:
             try:
                 await interaction.response.send_message(
-                    "Browse your own jobs with `/jobs shift`.", ephemeral=True)
+                    "Browse your own jobs with `/work shift`.", ephemeral=True)
             except discord.HTTPException:
                 pass
             return False
@@ -521,7 +528,7 @@ class ApplyStartView(utils.SafeView):
         if interaction.user.id != self.user_id:
             try:
                 await interaction.response.send_message(
-                    "This is your application — browse your own with `/jobs shift`.",
+                    "This is your application — browse your own with `/work shift`.",
                     ephemeral=True)
             except discord.HTTPException:
                 pass
@@ -594,253 +601,3 @@ class CancelButton(discord.ui.Button):
             await interaction.response.defer()
         except discord.HTTPException:
             pass
-
-
-class JobsCog(commands.Cog):
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
-
-    jobs = app_commands.Group(name="jobs", description="Clock in for a paid shift minigame")
-
-    @jobs.command(name="list", description="Browse all jobs, salaries and unlocks.")
-    async def jobs_list(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        if interaction.guild is None:
-            await interaction.followup.send("Jobs only run inside a server.", ephemeral=True)
-            return
-        total = await jb.total_completed(database._db, interaction.guild.id, interaction.user.id)
-        emp = await jb.get_employment(database._db, interaction.guild.id, interaction.user.id)
-        lines = []
-        for job_id in jb.JOB_ORDER:
-            job = jb.JOBS[job_id]
-            mark = "✅ " if emp == job_id else ""
-            if total >= int(job["unlock"]):
-                lines.append(
-                    f"{mark}{job['icon']} **{job['name']}** — {jb.fmt_coins(int(job['salary']))}/shift · "
-                    f"{job['workItem']} · {int(job['shiftsPerDay'])}/day · {int(job['cooldownMin'])}m")
-            else:
-                lines.append(f"🔒 **{job['name']}** — {total}/{int(job['unlock'])} shifts")
-        # 39 rows exceed one embed — chunk into pages of 10.
-        chunks = [lines[i:i + 10] for i in range(0, len(lines), 10)]
-        for i, chunk in enumerate(chunks):
-            await interaction.followup.send(embed=embeds.embed(
-                f"💼 Jobs ({total} shifts worked)" + (f" — {i + 1}/{len(chunks)}" if len(chunks) > 1 else ""),
-                "\n".join(chunk) + ("\n\nStart one with `/jobs shift`." if i == len(chunks) - 1 else ""),
-                embeds.GOLD), ephemeral=True)
-
-    @jobs.command(name="shift", description="Start a paid work shift (plays a minigame).")
-    async def jobs_shift(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        if interaction.guild is None:
-            await interaction.followup.send("Jobs only run inside a server.", ephemeral=True)
-            return
-        total = await jb.total_completed(database._db, interaction.guild.id, interaction.user.id)
-        browser = JobBrowser(interaction.guild.id, interaction.user.id, 0, total)
-        await interaction.followup.send(embed=browser.page_embed(), view=browser, ephemeral=True)
-        await browser.wait()
-        if not browser.chosen:
-            return
-        job_def = jb.JOBS.get(browser.chosen)
-        if not job_def:
-            return
-        cfg = await _cfg(interaction.guild.id)
-        overrides = {}
-        try:
-            raw = cfg.get("jobCooldownOverrides") or {}
-            if isinstance(raw, dict):
-                overrides = {str(k): int(v) for k, v in raw.items()}
-        except (TypeError, ValueError):
-            pass
-        disabled = set()
-        try:
-            raw_d = cfg.get("disabledJobs") or []
-            if isinstance(raw_d, list):
-                disabled = {str(x) for x in raw_d}
-        except (TypeError, ValueError):
-            pass
-
-        # ── Employment gate: apply BEFORE any mini-game can launch ────
-        emp = await jb.get_employment(database._db, interaction.guild.id,
-                                      interaction.user.id)
-        gate_msg: discord.Message | None = None
-        while True:
-            view = ApplyStartView(interaction.guild.id, interaction.user.id,
-                                  job_def, emp == job_def["id"])
-            emb = employment_embed(job_def, emp)
-            if gate_msg is None:
-                gate_msg = await interaction.followup.send(
-                    embed=emb, view=view, ephemeral=True, wait=True)
-            else:
-                await gate_msg.edit(embed=emb, view=view)
-            await view.wait()
-            if view.action == "apply":
-                ok, res = await jb.apply_for_job(
-                    database._db, interaction.guild.id, interaction.user.id,
-                    job_def["id"], disabled)
-                if not ok:
-                    err = str(res.get("error") or "Could not apply.")
-                    if err == "locked":
-                        err = (f"🔒 Locked — requires {res.get('required')} "
-                               f"completed shifts ({res.get('progress')} so far).")
-                    await gate_msg.edit(
-                        embed=embeds.embed("❌ Application refused", err,
-                                           embeds.ERROR), view=None)
-                    return
-                emp = job_def["id"]
-                continue
-            if view.action == "start":
-                if emp != job_def["id"]:
-                    # Start stays disabled unless employed — belt and braces.
-                    await gate_msg.edit(
-                        embed=embeds.embed(
-                            "❌ You don't have a job!",
-                            "> Apply for a job first before you can start a shift.",
-                            embeds.ERROR), view=None)
-                    return
-                try:
-                    await gate_msg.delete()
-                except discord.HTTPException:
-                    pass
-                break
-            # Cancel or 90s timeout — take the dead buttons off the message.
-            try:
-                if view.action is None:
-                    await gate_msg.edit(
-                        embed=embeds.embed("⏱️ Timed out",
-                                           "Run `/jobs shift` to apply or start a shift.",
-                                           embeds.WARN),
-                        view=None)
-                else:
-                    await gate_msg.delete()
-            except discord.HTTPException:
-                pass
-            return
-
-        ok, payload = await jb.start_shift(
-            database._db, interaction.guild.id, interaction.user.id,
-            browser.chosen, overrides, disabled)
-        if not ok:
-            err = str(payload.get("error") or "Try again.")
-            if err == "cooldown":
-                err = (f"You can work again in "
-                       f"{jb.fmt_duration(int(payload.get('remaining', 0)))}.")
-            elif err == "locked":
-                err = (f"🔒 Locked — requires {payload.get('required')} completed shifts "
-                       f"({payload.get('progress')} so far).")
-            elif err == "daily":
-                err = "✓ Daily shifts complete — come back tomorrow."
-            elif err == "no_job":
-                err = ("You don't have a job! Apply for a job first before "
-                       "you can start a shift.")
-            elif err == "wrong_job":
-                active = str(payload.get("activeJobId") or "")
-                active_name = jb.JOBS.get(active, {}).get("name", active)
-                chosen_name = jb.JOBS.get(str(browser.chosen), {}).get(
-                    "name", browser.chosen)
-                err = (f"You work as {active_name} — apply for {chosen_name} "
-                       "to work that shift.")
-            await interaction.followup.send(f"💼 {err}", ephemeral=True)
-            return
-        challenge = payload["challenge"]
-        game = payload["job"]["game"]
-        timeout_s = 48.0
-        view: ShiftView
-        if game == "order":
-            view = OrderShiftView(interaction.guild.id, interaction.user.id,
-                                  payload["token"], payload["job"], challenge, timeout_s)
-            await view.start(interaction)
-        elif game == "reaction":
-            view = ReactionShiftView(interaction.guild.id, interaction.user.id,
-                                     payload["token"], payload["job"], challenge, timeout_s)
-            await view.start(
-                interaction,
-                f"{payload['job']['icon']} **{payload['job']['name']} shift** — "
-                f"tap the instant it turns green (you have "
-                f"{int(challenge.get('windowMs', 900))}ms).")
-        elif game == "memory":
-            view = MemoryShiftView(interaction.guild.id, interaction.user.id,
-                                   payload["token"], payload["job"], challenge, timeout_s)
-            await view.start(interaction)
-        elif game == "choice":
-            view = ChoiceShiftView(interaction.guild.id, interaction.user.id,
-                                   payload["token"], payload["job"], challenge, timeout_s)
-            await view.start(interaction)
-        elif game == "timing":
-            view = TimingShiftView(interaction.guild.id, interaction.user.id,
-                                   payload["token"], payload["job"], challenge, timeout_s)
-            await view.start(interaction)
-        else:
-            await interaction.followup.send("Unknown minigame — try again.", ephemeral=True)
-
-    @jobs.command(name="history", description="Show your recent work shifts.")
-    async def jobs_history(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        if interaction.guild is None:
-            await interaction.followup.send("Jobs only run inside a server.", ephemeral=True)
-            return
-        rows = await jb.history(database._db, interaction.guild.id,
-                                interaction.user.id, 10)
-        if not rows:
-            await interaction.followup.send(
-                "📋 No shifts yet — clock in with `/jobs shift`.", ephemeral=True)
-            return
-        lines = []
-        for r in rows:
-            job = jb.JOBS.get(r.get("jobId") or "", {})
-            mark = "✓" if r.get("won") else "✕"
-            result = "Successful shift" if r.get("won") else "Sub-par shift"
-            when = r.get("consumedAt")
-            stamp = when.strftime("%m-%d %H:%M") if hasattr(when, "strftime") else "?"
-            reason = "" if r.get("won") else f" — {r.get('reason') or ''}"
-            lines.append(
-                f"{mark} {job.get('icon', '💼')} **{job.get('name', r.get('jobId'))}**\n"
-                f"+ {jb.fmt_coins(int(r.get('payout') or 0))} · {result} · "
-                f"{r.get('game', '')} mini-game · {stamp}{reason}")
-        await interaction.followup.send(embed=embeds.embed(
-            "📋 Work History", "\n\n".join(lines), embeds.INFO), ephemeral=True)
-
-    @jobs.command(name="resign", description="Resign from a job (resets its promotion).")
-    @app_commands.describe(job="Job to resign from (only jobs with progress are listed)")
-    async def jobs_resign(self, interaction: discord.Interaction, job: str):
-        await interaction.response.defer(ephemeral=True)
-        if interaction.guild is None:
-            await interaction.followup.send("Jobs only run inside a server.", ephemeral=True)
-            return
-        ok, res = await jb.resign(database._db, interaction.guild.id,
-                                  interaction.user.id, job)
-        await interaction.followup.send(
-            f"💼 {res.get('message') if ok else res.get('error')}", ephemeral=True)
-
-    @jobs_resign.autocomplete("job")
-    async def jobs_resign_ac(self, interaction: discord.Interaction,
-                             current: str) -> list[app_commands.Choice[str]]:
-        try:
-            if interaction.guild is None:
-                return []
-            coll = database._db.job_progress
-            cur = coll.find({"guildId": int(interaction.guild.id),
-                             "userId": int(interaction.user.id),
-                             "successes": {"$gt": 0}}).sort("successes", -1).limit(25)
-            rows = await cur.to_list(25)
-            # The ACTIVE job must always be resignable, even at 0 wins
-            # (fresh application) — it holds the employment slot.
-            emp = await jb.get_employment(database._db, interaction.guild.id,
-                                          interaction.user.id)
-            if emp and not any(r.get("jobId") == emp for r in rows):
-                rows.insert(0, {"jobId": emp, "successes": 0})
-            out = []
-            for r in rows:
-                job = jb.JOBS.get(r.get("jobId") or "")
-                if not job:
-                    continue
-                if current.lower() not in job["name"].lower():
-                    continue
-                out.append(app_commands.Choice(
-                    name=f"{job['icon']} {job['name']}"[:100], value=job["id"]))
-            return out
-        except Exception:
-            return []
-
-
-async def setup(bot: commands.Bot):
-    await bot.add_cog(JobsCog(bot))
