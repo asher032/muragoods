@@ -155,14 +155,27 @@ const actionStyle: CSSProperties = {
 };
 
 async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(url, init);
-  const data = await response.json().catch(() => ({})) as { error?: string; success?: boolean } & T;
-  if (!response.ok) {
-    const error = new Error(data.error || 'Request failed') as ApiError;
-    error.status = response.status;
-    throw error;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(url, { ...init, cache: 'no-store', signal: controller.signal });
+    const data = await response.json().catch(() => ({})) as { error?: string; success?: boolean } & T;
+    if (!response.ok) {
+      const error = new Error(data.error || 'Request failed') as ApiError;
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      const error = new Error('Request timed out — retry.') as ApiError;
+      error.status = 0;
+      throw error;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  return data;
 }
 
 function formatDate(value: string): string {

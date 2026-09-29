@@ -25,6 +25,22 @@ async function probe(url: string, headers: Record<string, string>, timeoutMs = 8
   }
 }
 
+async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  let t: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      p,
+      new Promise<null>((_, rej) => {
+        t = setTimeout(() => rej(new Error('timeout')), ms);
+      }),
+    ]);
+  } catch {
+    return null;
+  } finally {
+    if (t) clearTimeout(t);
+  }
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ guildId: string }> },
@@ -67,8 +83,13 @@ export async function GET(
     })(),
     (async () => {
       try {
-        const collection = await discordConfigCollection();
-        const doc = await collection.findOne({ guildId }, { projection: { _id: 1 } });
+        const collection = await withTimeout(discordConfigCollection(), 6000);
+        if (!collection) return { ok: false as boolean, status: 0 };
+        const doc = await withTimeout(
+          collection.findOne({ guildId }, { projection: { _id: 1 } }),
+          6000,
+        );
+        if (doc === null) return { ok: false as boolean, status: 0 };
         return { ok: true as boolean, status: doc ? 200 : 404 };
       } catch {
         return { ok: false as boolean, status: 0 };

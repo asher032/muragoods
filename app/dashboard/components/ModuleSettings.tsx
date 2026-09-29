@@ -44,8 +44,14 @@ export default function ModuleSettings({ moduleId, title, description }: {
     }
     setValidation((v) => ({ ...v, [fieldKey]: { checking: true, valid: false, checks: [], message: '' } }));
     const require = kind === 'channel' ? ['view', 'send'] : [];
-    const result = await validateSelection(selected.id, kind, id, require);
-    setValidation((v) => ({ ...v, [fieldKey]: { checking: false, ...result } }));
+    try {
+      const result = await validateSelection(selected.id, kind, id, require);
+      setValidation((v) => ({ ...v, [fieldKey]: { checking: false, ...result } }));
+    } catch {
+      // validateSelection is timeout-bounded and should not throw, but a
+      // stuck "Checking bot permissions…" is worse than a wrong message.
+      setValidation((v) => ({ ...v, [fieldKey]: { checking: false, valid: false, checks: [], message: 'Validation failed — retry.' } }));
+    }
   };
 
   useEffect(() => {
@@ -89,6 +95,8 @@ export default function ModuleSettings({ moduleId, title, description }: {
 
   // Save only after every selected channel/role/member re-validates live:
   // existence + bot permissions are checked, never trusted from the UI.
+  // Validation is timeout-bounded (12s/call); a hung validator resolves to
+  // an error row instead of wedging Save forever.
   const saveWithValidation = async () => {
     setValidateError('');
     const checks: Array<{ key: string; kind: 'channel' | 'category' | 'role' | 'member'; id: string }> = [];
@@ -99,14 +107,20 @@ export default function ModuleSettings({ moduleId, title, description }: {
       if (id) checks.push({ key: f.key, kind: f.type, id });
     }
     if (selected && checks.length > 0) {
-      const results = await Promise.all(
-        checks.map(async (c) => ({
-          key: c.key,
-          result: await validateSelection(
-            selected.id, c.kind, c.id, c.kind === 'channel' ? ['view', 'send'] : [],
-          ),
-        })),
-      );
+      let results: Array<{ key: string; result: Awaited<ReturnType<typeof validateSelection>> }>;
+      try {
+        results = await Promise.all(
+          checks.map(async (c) => ({
+            key: c.key,
+            result: await validateSelection(
+              selected.id, c.kind, c.id, c.kind === 'channel' ? ['view', 'send'] : [],
+            ),
+          })),
+        );
+      } catch {
+        setValidateError('Validation failed to complete — check your connection and try again.');
+        return;
+      }
       setValidation((v) => {
         const next = { ...v };
         for (const r of results) next[r.key] = { checking: false, ...r.result };
@@ -136,6 +150,12 @@ export default function ModuleSettings({ moduleId, title, description }: {
       <p style={{ margin: '0 0 22px', color: 'var(--cc-text-faint)', fontSize: 13.5 }}>{resolvedDescription} — server: <strong style={{ color: 'var(--cc-text-dim)' }}>{selected.name}</strong></p>
 
       {loading && <p style={{ color: 'var(--cc-text-faint)', fontSize: 13 }}>Loading configuration…</p>}
+      {!loading && error && (
+        <div className="cc-alert cc-alert-error" role="alert" style={{ fontSize: 13, marginBottom: 12 }}>
+          <strong>⚠️ Could not load configuration.</strong>
+          <div style={{ marginTop: 4 }}>{error}</div>
+        </div>
+      )}
 
       {/* Module enabled toggle */}
       <div className="cc-card" style={{ padding: '14px 18px', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

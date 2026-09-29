@@ -147,8 +147,9 @@ export function GuildProvider({ children }: { children: ReactNode }) {
 
   const refreshServers = useCallback(async (force = false) => {
     if (force) {
-      // POST clears the server cache first (Refresh Servers button).
-      try { await fetch('/api/dashboard/servers', { method: 'POST', cache: 'no-store' }); } catch { /* loadServers reports */ }
+      // POST clears the server cache first (Refresh Servers button). Bounded:
+      // a hung POST must not wedge the button on "Refreshing…" forever.
+      try { await fetchWithTimeout('/api/dashboard/servers', { method: 'POST', cache: 'no-store' }, 12000); } catch { /* loadServers reports */ }
       await loadServers(false);
     } else {
       await loadServers(false);
@@ -219,19 +220,23 @@ export function GuildProvider({ children }: { children: ReactNode }) {
     setSelectedState(g); // optimistic
     if (!g) return;
     void (async () => {
+      let resp: Response | null = null;
       try {
-        const resp = await fetch('/api/auth/discord/logout', {
+        resp = await fetchWithTimeout('/api/auth/discord/logout', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ guildId: g.id }),
-        });
+        }, 12000);
         if (!resp.ok) {
           const data = (await resp.json().catch(() => null)) as { error?: string } | null;
           setError(data?.error || 'Could not switch server');
           void loadMe(); // roll back to the server truth
         }
       } catch {
-        setError('Network error while switching server');
+        // Timeout/network: the optimistic selection may not have persisted.
+        // Re-read the server truth so the UI never sits on a phantom guild.
+        setError('Network error while switching server — re-checking your selection…');
+        void loadMe();
       }
     })();
   }, [loadMe]);

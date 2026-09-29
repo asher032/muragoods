@@ -47,3 +47,6 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# Local service credentials - never commit
+service.json

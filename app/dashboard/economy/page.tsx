@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useGuild } from '@/app/lib/guild-context';
 import { apiFetch } from '../lib/api';
 import { statusMessage } from '../components/selectors';
@@ -58,14 +58,21 @@ export default function EconomyPage() {
   const [error, setError] = useState('');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const requestId = useRef(0);
+  const controllerRef = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
     if (!token || !selected) return;
+    const id = ++requestId.current;
+    controllerRef.current?.abort();
+    const controller = new AbortController();
+    controllerRef.current = controller;
     setLoading(true);
     setError('');
     setCode('');
     const resp = await apiFetch<{ success: boolean; overview?: EconomyOverview; config?: EconomyConfig; error?: string; code?: string }>(
-      `/api/dashboard/economy/overview?guildId=${selected.id}`, { token });
+      `/api/dashboard/economy/overview?guildId=${selected.id}`, { token, signal: controller.signal });
+    if (id !== requestId.current) return;
     if (resp.ok && resp.data.success && resp.data.overview) {
       setOverview(resp.data.overview);
       setConfig(resp.data.config ?? null);
@@ -83,6 +90,10 @@ export default function EconomyPage() {
     setError('');
     setCode('');
     void load();
+    return () => {
+      requestId.current += 1;
+      controllerRef.current?.abort();
+    };
   }, [selected?.id, load]);
 
   if (!token) {
@@ -124,6 +135,14 @@ export default function EconomyPage() {
       )}
       {loading && !overview && (
         <p style={{ color: 'var(--cc-text-faint)', fontSize: 13 }}>Loading economy…</p>
+      )}
+      {!loading && !overview && !mapped && (
+        <div className="cc-card" style={{ padding: 24, textAlign: 'center', marginBottom: 22 }}>
+          <p style={{ margin: 0, color: 'var(--cc-text-faint)', fontSize: 13 }}>No economy data yet — rewards and activity will appear here.</p>
+          <button className="cc-btn" style={{ marginTop: 10, fontSize: 12 }} onClick={() => void load()}>
+            Retry
+          </button>
+        </div>
       )}
       {overview && (
         <>

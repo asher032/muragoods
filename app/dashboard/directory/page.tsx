@@ -44,10 +44,13 @@ export default function DirectoryPage() {
     if (!token || !selected) return;
     setLoading(true);
     setError('');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
     try {
       const resp = await fetch(`/api/dashboard/resources?guildId=${selected.id}`, {
         headers: { 'x-discord-token': token },
         cache: 'no-store',
+        signal: controller.signal,
       });
       const data = await resp.json();
       if (data.success) {
@@ -56,8 +59,10 @@ export default function DirectoryPage() {
         setError(data.error || 'Failed to load server directory');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error');
+      const timedOut = err instanceof DOMException && err.name === 'AbortError';
+      setError(timedOut ? 'Directory request timed out — retry.' : err instanceof Error ? err.message : 'Network error');
     } finally {
+      clearTimeout(timer);
       setLoading(false);
     }
   }, [token, selected]);

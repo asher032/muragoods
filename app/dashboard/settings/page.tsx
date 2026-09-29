@@ -32,7 +32,7 @@ const MODULE_LINKS: { label: string; href: string; hint: string }[] = [
   { label: 'Economy', href: '/dashboard/economy', hint: 'Currency, daily, shop' },
   { label: 'Giveaways', href: '/dashboard/giveaways', hint: 'Duration, winners, requirements' },
   { label: 'Directory', href: '/dashboard/directory', hint: 'Real members, roles and channels' },
-  { label: 'Automations', href: '/dashboard/automations', hint: 'Scheduled messages and jobs' },
+  { label: 'Diagnostics', href: '/dashboard/diagnostics', hint: 'Live service states and retry' },
   { label: 'Audit Log', href: '/dashboard/audit', hint: 'Every dashboard config change' },
 ];
 
@@ -64,10 +64,12 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!selected) return;
     let alive = true;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
     setPrefixState('loading');
     setPrefixErr('');
     setPrefixMsg('');
-    fetch(`/api/dashboard/prefix?guildId=${encodeURIComponent(selected.id)}`, { cache: 'no-store' })
+    fetch(`/api/dashboard/prefix?guildId=${encodeURIComponent(selected.id)}`, { cache: 'no-store', signal: controller.signal })
       .then(async (resp) => {
         const data = (await resp.json().catch(() => null)) as { success?: boolean; prefix?: string; error?: string } | null;
         if (!alive) return;
@@ -80,10 +82,14 @@ export default function SettingsPage() {
         setSavedPrefix(data.prefix || DEFAULT_PREFIX);
         setPrefixState('idle');
       })
-      .catch(() => {
-        if (alive) { setPrefixErr('Network error loading the prefix'); setPrefixState('idle'); }
-      });
-    return () => { alive = false; };
+      .catch((err) => {
+        if (!alive) return;
+        const timedOut = err instanceof DOMException && err.name === 'AbortError';
+        setPrefixErr(timedOut ? 'Prefix request timed out — retry.' : 'Network error loading the prefix');
+        setPrefixState('idle');
+      })
+      .finally(() => clearTimeout(timer));
+    return () => { alive = false; controller.abort(); clearTimeout(timer); };
   }, [selected]);
 
   async function savePrefix(next: string) {
@@ -91,11 +97,15 @@ export default function SettingsPage() {
     setPrefixState('saving');
     setPrefixErr('');
     setPrefixMsg('');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
     try {
       const resp = await fetch('/api/dashboard/prefix', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ guildId: selected.id, prefix: next }),
+        cache: 'no-store',
+        signal: controller.signal,
       });
       const data = (await resp.json().catch(() => null)) as { success?: boolean; prefix?: string; error?: string; botNotified?: boolean } | null;
       if (!resp.ok || !data?.success) {
@@ -111,9 +121,11 @@ export default function SettingsPage() {
           ? `✓ Saved — \`${applied}\` is live in Discord now.`
           : `✓ Saved. The bot will pick it up within ~30s (it did not acknowledge the refresh).`,
       );
-    } catch {
-      setPrefixErr('Network error while saving — your change was NOT saved.');
+    } catch (err) {
+      const timedOut = err instanceof DOMException && err.name === 'AbortError';
+      setPrefixErr(timedOut ? 'Save timed out — your change was NOT saved. Retry.' : 'Network error while saving — your change was NOT saved.');
     } finally {
+      clearTimeout(timer);
       setPrefixState('idle');
     }
   }
@@ -122,8 +134,10 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!selected) return;
     let alive = true;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
     setInstall({ checking: true, installed: null, inviteUrl: null, error: '' });
-    fetch(`/api/auth/discord/install?guildId=${encodeURIComponent(selected.id)}`, { cache: 'no-store' })
+    fetch(`/api/auth/discord/install?guildId=${encodeURIComponent(selected.id)}`, { cache: 'no-store', signal: controller.signal })
       .then(async (resp) => {
         const data = (await resp.json().catch(() => null)) as
           | { success: boolean; inviteUrl?: string; botInstalled?: boolean | null; error?: string }
@@ -140,10 +154,13 @@ export default function SettingsPage() {
           error: '',
         });
       })
-      .catch(() => {
-        if (alive) setInstall({ checking: false, installed: null, inviteUrl: null, error: 'Could not reach the bot service' });
-      });
-    return () => { alive = false; };
+      .catch((err) => {
+        if (!alive) return;
+        const timedOut = err instanceof DOMException && err.name === 'AbortError';
+        setInstall({ checking: false, installed: null, inviteUrl: null, error: timedOut ? 'Bot check timed out — retry.' : 'Could not reach the bot service' });
+      })
+      .finally(() => clearTimeout(timer));
+    return () => { alive = false; controller.abort(); clearTimeout(timer); };
   }, [selected]);
 
   if (!authChecked) {

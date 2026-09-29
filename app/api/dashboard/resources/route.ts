@@ -1,6 +1,7 @@
 import { sessionToken } from '@/app/lib/require-session';
 import { requireGuildManage } from '@/app/lib/discord-guilds';
 import { botToken } from '@/app/lib/discord-bot';
+import { apiFail, logApi } from '@/app/lib/dashboard-response';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -34,17 +35,21 @@ function botDiscordGet<T>(path: string, token: string): Promise<{ data: T | null
 }
 
 export async function GET(req: NextRequest) {
-  const userToken = (await sessionToken());
-  const guildId = req.nextUrl.searchParams.get('guildId');
-  const bToken = botToken();
-  if (!userToken || !guildId || !/^\d{5,25}$/.test(guildId)) {
-    return NextResponse.json({
-      success: false,
-      code: !userToken ? 'AUTH_REQUIRED' : 'INVALID_GUILD_ID',
-      error: !userToken ? 'Sign in with Discord to continue' : 'Valid guildId is required',
-    }, { status: !userToken ? 401 : 400 });
-  }
+  const started = Date.now();
+  try {
+    const userToken = (await sessionToken());
+    const guildId = req.nextUrl.searchParams.get('guildId');
+    const bToken = botToken();
+    if (!userToken || !guildId || !/^\d{5,25}$/.test(guildId)) {
+      logApi('/api/dashboard/resources', 'GET', !userToken ? 401 : 400, Date.now() - started, !userToken ? 'AUTH_REQUIRED' : 'INVALID_GUILD_ID');
+      return NextResponse.json({
+        success: false,
+        code: !userToken ? 'AUTH_REQUIRED' : 'INVALID_GUILD_ID',
+        error: !userToken ? 'Sign in with Discord to continue' : 'Valid guildId is required',
+      }, { status: !userToken ? 401 : 400 });
+    }
   if (!bToken) {
+    logApi('/api/dashboard/resources', 'GET', 503, Date.now() - started, 'BOT_NOT_CONFIGURED');
     return NextResponse.json({
       success: false,
       code: 'BOT_NOT_CONFIGURED',
@@ -57,14 +62,25 @@ export async function GET(req: NextRequest) {
   // requireGuildManage keeps dead tokens (401), non-membership, missing
   // permission and Discord outages as SEPARATE codes — a rate limit is never
   // reported as "no permission".
+  // Any unexpected throw below becomes structured JSON — the frontend
+  // expects JSON exclusively, so a platform HTML error page must never
+  // escape this route (it would surface as an empty "couldn't load").
+  // (Covered by the handler-wide try/catch with request logging below.)
   const manage = await requireGuildManage(userToken, guildId);
   if (!manage.ok) {
+    logApi('/api/dashboard/resources', 'GET', manage.status, Date.now() - started, manage.code);
     return NextResponse.json(
       { success: false, code: manage.code, error: manage.error, retryable: manage.retryable, debug: manage.debug },
       { status: manage.status },
     );
   }
 
+  // One Discord identity (the host's bot token) reads five endpoints. Each
+  // resource is classified SEPARATELY below — a rejected credential (401),
+  // a rate limit (429) and a Discord outage (5xx/timeout) must never again
+  // collapse into "check that it is still installed". Only a real 404
+  // (Discord does not know this guild for this credential) earns
+  // BOT_NOT_INSTALLED.
   const [channelsRes, rolesRes, membersRes, botMemberRes, guildRes] = await Promise.all([
     botDiscordGet<DiscordChannel[]>(`/guilds/${guildId}/channels`, bToken),
     botDiscordGet<DiscordRole[]>(`/guilds/${guildId}/roles`, bToken),
@@ -78,17 +94,59 @@ export async function GET(req: NextRequest) {
   const members = membersRes.data;
   const botMember = botMemberRes.data;
   const guild = guildRes.data;
+  // Per-resource Discord statuses (numbers only — always safe to expose).
+  const detail = {
+    guildId,
+    channelsStatus: channelsRes.status,
+    rolesStatus: rolesRes.status,
+    membersStatus: membersRes.status,
+    botStatus: botMemberRes.status,
+    guildStatus: guildRes.status,
+  };
   if (!channels || !roles) {
-    const botGone = botMemberRes.status === 404;
+    const statuses = [channelsRes.status, rolesRes.status, botMemberRes.status];
+    if (statuses.includes(404)) {
+      logApi('/api/dashboard/resources', 'GET', 404, Date.now() - started, 'BOT_NOT_INSTALLED');
+      return NextResponse.json({
+        success: false,
+        code: 'BOT_NOT_INSTALLED',
+        error: 'MuraBot is not installed on this server — invite it first.',
+        retryable: false,
+        detail,
+      }, { status: 404 });
+    }
+    if (statuses.includes(401)) {
+      // The site host's bot credential is dead (rotated token never updated
+      // on this host is the classic cause). The bot itself can be online
+      // and installed while this is broken — so this must NEVER read as
+      // "not installed" and must never suggest re-inviting.
+      logApi('/api/dashboard/resources', 'GET', 503, Date.now() - started, 'BOT_TOKEN_REJECTED');
+      return NextResponse.json({
+        success: false,
+        code: 'BOT_TOKEN_REJECTED',
+        error: 'Discord rejected the dashboard bot credential (HTTP 401). Update DISCORD_BOT_TOKEN on the site host to the bot\u2019s current token — do not re-invite the bot.',
+        retryable: false,
+        detail,
+      }, { status: 503 });
+    }
+    if (statuses.includes(429)) {
+      logApi('/api/dashboard/resources', 'GET', 429, Date.now() - started, 'RATE_LIMITED');
+      return NextResponse.json({
+        success: false,
+        code: 'RATE_LIMITED',
+        error: 'Discord rate-limited the request — retrying automatically.',
+        retryable: true,
+        detail,
+      }, { status: 429 });
+    }
+    logApi('/api/dashboard/resources', 'GET', 502, Date.now() - started, 'DISCORD_API_UNAVAILABLE');
     return NextResponse.json({
       success: false,
-      code: botGone ? 'BOT_NOT_INSTALLED' : 'DISCORD_API_ERROR',
-      error: botGone
-        ? 'MuraBot is not installed on this server — invite it first.'
-        : 'MuraBot cannot read this server right now. Check that it is still installed and retry.',
-      retryable: !botGone,
-      debug: { guildId, channelsStatus: channelsRes.status, rolesStatus: rolesRes.status, botStatus: botMemberRes.status },
-    }, { status: botGone ? 404 : 502 });
+      code: 'DISCORD_API_UNAVAILABLE',
+      error: 'Discord did not answer the guild read — retry in a moment.',
+      retryable: true,
+      detail,
+    }, { status: 502 });
   }
 
   const roleById = new Map(roles.map((r) => [r.id, r]));
@@ -112,6 +170,7 @@ export async function GET(req: NextRequest) {
 
   const categories = new Map(channels.filter((c) => c.type === 4).map((c) => [c.id, c.name]));
 
+  logApi('/api/dashboard/resources', 'GET', 200, Date.now() - started);
   return NextResponse.json({
     success: true,
     guild: guild ? { id: guild.id, name: guild.name, memberCount: guild.approximate_member_count ?? null } : null,
@@ -150,5 +209,12 @@ export async function GET(req: NextRequest) {
       topRolePosition: botTopRolePosition,
       guildPermissions: botPermissions,
     } : null,
+    // Per-resource read statuses: the UI keeps working sections usable when
+    // only one leg (e.g. the member roster) fails instead of failing all.
+    meta: { membersStatus: membersRes.status, guildStatus: guildRes.status },
   });
+  } catch {
+    logApi('/api/dashboard/resources', 'GET', 500, Date.now() - started, 'INTERNAL_ERROR');
+    return apiFail('INTERNAL_ERROR', 'Server data request failed unexpectedly.', 500, { retryable: true });
+  }
 }

@@ -46,10 +46,14 @@ export default function CommandsPage() {
 
   useEffect(() => {
     if (!token || !selected) return;
+    let alive = true;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
     setLoading(true);
-    fetch(`/api/dashboard/commands?guildId=${encodeURIComponent(selected.id)}`, { headers: { 'x-discord-token': token } })
+    fetch(`/api/dashboard/commands?guildId=${encodeURIComponent(selected.id)}`, { headers: { 'x-discord-token': token }, cache: 'no-store', signal: controller.signal })
       .then((r) => r.json())
       .then((data) => {
+        if (!alive) return;
         if (data.success) {
           setCommands(data.commands || []);
           setStats(data.stats || { total: 0, working: 0, disabled: 0, errors: 0 });
@@ -59,8 +63,13 @@ export default function CommandsPage() {
           setFetchError(data.error || 'Failed to load commands');
         }
       })
-      .catch(() => setFetchError('Network error'))
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        if (!alive) return;
+        const timedOut = err instanceof DOMException && err.name === 'AbortError';
+        setFetchError(timedOut ? 'Commands request timed out — retry.' : 'Network error');
+      })
+      .finally(() => { if (alive) setLoading(false); clearTimeout(timer); });
+    return () => { alive = false; controller.abort(); clearTimeout(timer); };
   }, [token, selected]);
 
   const filteredCommands = useMemo(() => {

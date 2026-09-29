@@ -7,6 +7,7 @@ import { ArrowLeft, Bot, Menu, RefreshCw, Search } from 'lucide-react';
 import Sidebar from './Sidebar';
 import ServerSwitcher from './ServerSwitcher';
 import InitDebugPanel from './InitDebugPanel';
+import ModuleErrorBoundary from './ModuleErrorBoundary';
 
 // ── Dashboard shell ──────────────────────────────────────────────────────
 // Auth is a server-side session (HttpOnly cookie). This shell:
@@ -335,7 +336,11 @@ export default function DashboardShell({ children }: { children: React.ReactNode
               The bot is installed but holds no useful grant. Re-invite it or fix its role.
             </div>
           )}
-          {children}
+          {/* Per-module error boundary: one crashing module resolves to
+              Error + Retry instead of wedging the whole dashboard. */}
+          <ModuleErrorBoundary label="Dashboard module">
+            {children}
+          </ModuleErrorBoundary>
         </main>
       </div>
     </div>

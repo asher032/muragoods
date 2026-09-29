@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/app/lib/require-session';
 import { verifyBotInGuild, fetchBotMember } from '@/app/lib/discord-bot';
-import { fetchUserGuilds, hasManageBits } from '@/app/lib/discord-guilds';
+import { fetchUserGuildsCached, hasManageBits } from '@/app/lib/discord-guilds';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 
 // GET /api/discord/guilds/:guildId/status — authoritative dashboard state
@@ -65,16 +65,32 @@ export async function GET(
   }
 
   // ── User side: live membership + manage right ──
-  const userRes = await fetchUserGuilds(guard.accessToken);
+  // fetchUserGuilds distinguishes dead-token (authFailed) from transient
+  // Discord faults (status) — never collapse a 429/5xx into "sign in again".
+  // Cached (30s) so N dashboard modules do not storm Discord per page load.
+  const userRes = await fetchUserGuildsCached(guard.accessToken);
   if (!userRes.ok) {
-    // Dead session token (not a permission problem) or Discord outage.
+    if (userRes.authFailed) {
+      // Dead session token (not a permission problem).
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'AUTH_REQUIRED',
+          error: 'Discord rejected the session — sign in again',
+        },
+        { status: 401 },
+      );
+    }
     return NextResponse.json(
       {
         success: false,
-        code: 'AUTH_REQUIRED',
-        error: 'Discord rejected the session — sign in again',
+        code: userRes.status === 429 ? 'RATE_LIMITED' : 'DISCORD_API_ERROR',
+        error: userRes.status === 429
+          ? 'Discord is rate-limiting — retry shortly'
+          : 'Discord could not be reached — retry shortly',
+        retryable: true,
       },
-      { status: 401 },
+      { status: userRes.status === 429 ? 429 : 502 },
     );
   }
   const userGuild = userRes.guilds.find((g) => g.id === guildId);
@@ -152,11 +168,20 @@ export async function GET(
   }
 
   // ── Configuration presence (never blocks reads, never leaks content) ──
+  // Bounded: a stalled DB must resolve to unknown, never hang the response.
   let configExists: boolean | null = null;
   try {
-    const collection = await discordConfigCollection();
-    const doc = await collection.findOne({ guildId }, { projection: { _id: 1 } });
-    configExists = doc !== null;
+    const collection = await Promise.race([
+      discordConfigCollection(),
+      new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), 6000)),
+    ]);
+    if (collection) {
+      const doc = await Promise.race([
+        collection.findOne({ guildId }, { projection: { _id: 1 } }),
+        new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout')), 6000)),
+      ]);
+      configExists = doc !== null;
+    }
   } catch {
     configExists = null;
   }

@@ -92,6 +92,7 @@ const ACTION_BLURBS: Record<string, string> = {
 // Three states stay distinct: loading… / no results / failed + retry.
 function MemberFinder({
   guildId, value, onChange, disabled, bulk = [], bulkLoading = false,
+  bulkError = '', bulkCode = '', onRetryBulk, membersStatus = null,
 }: {
   guildId: string;
   value: string;
@@ -99,13 +100,17 @@ function MemberFinder({
   disabled?: boolean;
   bulk?: GuildMember[];
   bulkLoading?: boolean;
+  bulkError?: string;
+  bulkCode?: string;
+  onRetryBulk?: () => void;
+  membersStatus?: number | null;
 }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<SearchedMember | null>(null);
   const q = query.trim();
   const useServerSearch = q.length >= 2;
-  const { results, searching, searchError, searchCode } = useGuildMemberSearch(guildId, open && useServerSearch ? q : '');
+  const { results, searching, searchError, searchCode, retry: retrySearch } = useGuildMemberSearch(guildId, open && useServerSearch ? q : '');
 
   // Local view of the bulk roster (first 100, filtered as you type).
   const bulkShown: SearchedMember[] = (() => {
@@ -156,13 +161,35 @@ function MemberFinder({
             <div style={{ padding: '10px 8px', fontSize: 12.5, color: '#ff8a8a' }}>
               <div><strong>⚠️ {statusMessage(searchCode, searchError).title}</strong></div>
               <div style={{ color: 'var(--cc-text-dim)', marginTop: 2 }}>{statusMessage(searchCode, searchError).hint}</div>
+              <button type="button" className="cc-btn" style={{ marginTop: 8, fontSize: 12 }} onClick={() => retrySearch()}>
+                Retry
+              </button>
             </div>
           )}
           {!searching && !searchError && !bulkLoading && shown.length === 0 && (
             <div style={{ padding: '10px 8px', fontSize: 12.5, color: 'var(--cc-text-faint)' }}>
-              {bulk.length === 0 && !useServerSearch
+              {!useServerSearch && bulkError ? (
+                <>
+                  <div style={{ color: '#ff8a8a' }}>
+                    <strong>⚠️ {statusMessage(bulkCode, bulkError).title}</strong>
+                  </div>
+                  <div style={{ color: 'var(--cc-text-dim)', marginTop: 2 }}>
+                    {statusMessage(bulkCode, bulkError).hint}
+                  </div>
+                  {onRetryBulk && (
+                    <button type="button" className="cc-btn" style={{ marginTop: 8, fontSize: 12 }} onClick={() => onRetryBulk()}>
+                      Retry
+                    </button>
+                  )}
+                </>
+              ) : bulk.length === 0 && !useServerSearch
                 ? 'No members loaded yet — wait a moment or use Refresh above.'
                 : 'No members found.'}
+            </div>
+          )}
+          {membersStatus !== null && membersStatus !== 200 && (
+            <div style={{ padding: '10px 8px', fontSize: 12, color: '#ffd60a' }}>
+              Note: full roster unavailable (Discord status {membersStatus}) - type 2+ characters to use server search.
             </div>
           )}
           {shown.map((m) => (
@@ -695,6 +722,10 @@ export default function ModerationPage() {
               disabled={busy}
               bulk={resources?.members ?? []}
               bulkLoading={resLoading}
+              bulkError={resError}
+              bulkCode={resCode}
+              onRetryBulk={() => void resRefresh()}
+              membersStatus={resources?.meta?.membersStatus ?? null}
             />
           </div>
           <button className="cc-btn cc-btn-primary" onClick={lookup} disabled={busy || !userId}>

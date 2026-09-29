@@ -1,51 +1,66 @@
 'use client';
 
 // Shared dashboard API client. Failure handling rules:
-//  - every request has a timeout
-//  - 429/5xx/network/timeout → retried with exponential backoff (max 4 attempts)
+//  - every request has a timeout (per-attempt 12s, OVERALL 15s deadline)
+//  - 429/5xx/network/timeout → ONE quick retry after 1.5s, then surface
 //  - 400/401/403/404 → permanent, no retry; error surfaced verbatim
 //  - success is NEVER fabricated: non-OK → returned as { ok:false, error, status }
+//  - callers may pass `signal` (guild switch / unmount) — an external abort
+//    is reported immediately as non-retryable, never retried.
+//
+// Auth rides the HttpOnly session cookie (same-origin fetch sends it).
+// The legacy `token` option is accepted for call-site compatibility but is
+// NEVER sent: the browser holds no Discord credential.
 
 export type ApiResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string; status: number; retryable: boolean; code?: string };
 
-const TIMEOUT_MS = 12_000;
-const MAX_ATTEMPTS = 4;
-const BACKOFFS_MS = [0, 5_000, 15_000, 30_000];
+const ATTEMPT_TIMEOUT_MS = 12_000;
+const OVERALL_TIMEOUT_MS = 15_000;
+const RETRY_DELAY_MS = 1_500;
+const MAX_ATTEMPTS = 2;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function devLog(url: string, status: number, ms: number, code?: string, failed?: boolean) {
+  // Development-only request trace: endpoint + status + duration + code.
+  // Never logs tokens, cookies, headers, or bodies.
+  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+    const tag = failed ? 'FAILED' : 'END';
+    // eslint-disable-next-line no-console
+    console.log(`[Dashboard API] ${url} ${tag} ${status} ${ms}ms${code ? ` ${code}` : ''}`);
+  }
+}
 
 function isRetryable(status: number): boolean {
   return status === 429 || status >= 500;
 }
 
+function isExternalAbort(signal?: AbortSignal | null): boolean {
+  return Boolean(signal?.aborted);
+}
+
 async function once(
   url: string,
   init: RequestInit,
-  token?: string,
+  attemptSignal: AbortSignal,
 ): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  try {
-    return await fetch(url, {
-      ...init,
-      cache: 'no-store',
-      signal: controller.signal,
-      headers: {
-        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-        ...(token ? { 'x-discord-token': token } : {}),
-        ...(init.headers || {}),
-      },
-    });
-  } finally {
-    clearTimeout(timer);
-  }
+  return fetch(url, {
+    ...init,
+    cache: 'no-store',
+    credentials: 'same-origin',
+    signal: attemptSignal,
+    headers: {
+      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(init.headers || {}),
+    },
+  });
 }
 
 export async function apiFetch<T>(
   url: string,
-  opts: { method?: string; body?: unknown; token?: string } = {},
+  opts: { method?: string; body?: unknown; token?: string; signal?: AbortSignal | null } = {},
 ): Promise<ApiResult<T>> {
   const method = opts.method ?? 'GET';
   const init: RequestInit = {
@@ -53,41 +68,90 @@ export async function apiFetch<T>(
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
   };
 
+  const overallController = new AbortController();
+  const overallTimer = setTimeout(() => overallController.abort(), OVERALL_TIMEOUT_MS);
+  const onExternalAbort = () => overallController.abort();
+  opts.signal?.addEventListener('abort', onExternalAbort, { once: true });
+
   let lastError = 'Request failed';
   let lastStatus = 0;
+  let lastCode: string | undefined;
 
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    if (BACKOFFS_MS[attempt] > 0) await sleep(BACKOFFS_MS[attempt]);
-    try {
-      const resp = await once(url, init, opts.token);
-
-      if (resp.ok) {
-        const data = (await resp.json()) as T;
-        return { ok: true, data };
+  try {
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      if (attempt > 0) {
+        // Single quick retry only — the old 0/5s/15s/30s backoff held every
+        // module on "Loading…" for up to ~100s per transient blip.
+        await sleep(RETRY_DELAY_MS);
       }
-
-      lastStatus = resp.status;
-      const payload = (await resp.json().catch(() => null)) as { error?: string; code?: string } | null;
-      lastError = payload?.error || `HTTP ${resp.status}`;
-      const failCode = typeof payload?.code === 'string' ? payload.code : undefined;
-
-      // Permanent client errors: surface immediately, never retry.
-      if (!isRetryable(resp.status)) {
-        return { ok: false, error: lastError, status: resp.status, retryable: false, code: failCode };
+      if (isExternalAbort(opts.signal) || overallController.signal.aborted) {
+        return { ok: false, error: 'Request cancelled', status: 0, retryable: false, code: 'ABORTED' };
       }
-      // 429/5xx: fall through to retry.
-    } catch (err) {
-      lastStatus = 0;
-      lastError = err instanceof DOMException && err.name === 'AbortError'
-        ? 'Request timed out'
-        : err instanceof Error
-          ? err.message
-          : 'Network error';
-      // Network/timeout: fall through to retry.
+      const attemptController = new AbortController();
+      const attemptTimer = setTimeout(() => attemptController.abort(), ATTEMPT_TIMEOUT_MS);
+      const forwardOverall = () => attemptController.abort();
+      overallController.signal.addEventListener('abort', forwardOverall, { once: true });
+      const started = Date.now();
+      try {
+        const resp = await once(url, init, attemptController.signal);
+
+        if (resp.ok) {
+          const data = (await resp.json().catch(() => null)) as T | null;
+          if (data === null || typeof data !== 'object') {
+            // HTML error page / empty body: never fabricate success.
+            devLog(url, resp.status, Date.now() - started, 'BAD_JSON', true);
+            lastError = `Unexpected response (HTTP ${resp.status})`;
+            lastStatus = resp.status;
+            lastCode = 'BAD_RESPONSE';
+            if (!isRetryable(resp.status) || attempt === MAX_ATTEMPTS - 1) {
+              return { ok: false, error: lastError, status: lastStatus, retryable: false, code: lastCode };
+            }
+            continue;
+          }
+          devLog(url, resp.status, Date.now() - started);
+          return { ok: true, data: data as T };
+        }
+
+        lastStatus = resp.status;
+        const payload = (await resp.json().catch(() => null)) as { error?: string; code?: string } | null;
+        lastError = payload?.error || `HTTP ${resp.status}`;
+        lastCode = typeof payload?.code === 'string' ? payload.code : undefined;
+        devLog(url, resp.status, Date.now() - started, lastCode, true);
+
+        // Permanent client errors: surface immediately, never retry.
+        if (!isRetryable(resp.status)) {
+          return { ok: false, error: lastError, status: resp.status, retryable: false, code: lastCode };
+        }
+        // 429/5xx: one quick retry, then surface.
+        if (attempt === MAX_ATTEMPTS - 1) {
+          return { ok: false, error: lastError, status: lastStatus, retryable: true, code: lastCode };
+        }
+      } catch (err) {
+        if (isExternalAbort(opts.signal)) {
+          devLog(url, 0, Date.now() - started, 'ABORTED', true);
+          return { ok: false, error: 'Request cancelled', status: 0, retryable: false, code: 'ABORTED' };
+        }
+        const overallExpired = overallController.signal.aborted;
+        lastStatus = 0;
+        lastCode = overallExpired ? 'REQUEST_TIMEOUT' : 'NETWORK_ERROR';
+        lastError = err instanceof DOMException && err.name === 'AbortError'
+          ? overallExpired ? 'Request timed out' : 'Request timed out'
+          : err instanceof Error ? err.message : 'Network error';
+        devLog(url, 0, Date.now() - started, lastCode, true);
+        if (attempt === MAX_ATTEMPTS - 1 || overallExpired) {
+          return { ok: false, error: lastError, status: lastStatus, retryable: !overallExpired, code: lastCode };
+        }
+      } finally {
+        clearTimeout(attemptTimer);
+        overallController.signal.removeEventListener('abort', forwardOverall);
+      }
     }
+  } finally {
+    clearTimeout(overallTimer);
+    opts.signal?.removeEventListener('abort', onExternalAbort);
   }
 
-  return { ok: false, error: lastError, status: lastStatus, retryable: true };
+  return { ok: false, error: lastError, status: lastStatus, retryable: true, code: lastCode };
 }
 export interface GuildSummary {
   id: string;

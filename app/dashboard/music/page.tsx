@@ -130,15 +130,22 @@ function PrefixField({ guildId, token }: { guildId: string; token: string }) {
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
+  const [loadError, setLoadError] = useState('');
   useEffect(() => {
+    let alive = true;
+    const controller = new AbortController();
     setLoaded(false);
     setMsg('');
+    setLoadError('');
     void (async () => {
-      const resp = await apiFetch<{ success: boolean; prefix?: string }>(
-        `/api/dashboard/prefix?guildId=${encodeURIComponent(guildId)}`, { token });
+      const resp = await apiFetch<{ success: boolean; prefix?: string; error?: string }>(
+        `/api/dashboard/prefix?guildId=${encodeURIComponent(guildId)}`, { token, signal: controller.signal });
+      if (!alive) return;
       if (resp.ok && resp.data.success) setPrefix(resp.data.prefix || 'mg!');
+      else setLoadError(resp.ok ? (resp.data as unknown as { error?: string }).error || 'Could not load prefix.' : resp.error);
       setLoaded(true);
     })();
+    return () => { alive = false; controller.abort(); };
   }, [guildId, token]);
   const save = async () => {
     const clean = prefix.trim();
@@ -159,6 +166,7 @@ function PrefixField({ guildId, token }: { guildId: string; token: string }) {
     setSaving(false);
   };
   if (!loaded) return <p style={{ fontSize: 12, color: 'var(--cc-text-faint)', margin: 0 }}>Loading…</p>;
+  if (loadError) return <p style={{ fontSize: 12, color: '#ff8a8a', margin: 0 }}>{loadError}</p>;
   return (
     <div style={{ display: 'flex', gap: 6 }}>
       <input className="cc-input" style={{ flex: 1 }} maxLength={10}
@@ -201,6 +209,10 @@ export default function MusicPage() {
   const { config: guildConfig, update: updateGuildConfig, save: saveGuildConfig, saveState: guildSaveState } = useGuildConfig();
   const { resources, loading: resLoading, error: resError, code: resCode, retryable: resRetryable, refresh: resRefresh } = useGuildResources(selected?.id ?? null);
   const musicCfg = (guildConfig?.music ?? {}) as Record<string, unknown>;
+  // Poll pile-up guard: the 5s player poll must never stack overlapping
+  // apiFetch calls (each up to 15s). A tick while one is in flight is skipped.
+  const playerLoadingRef = useRef(false);
+  const diagLoadingRef = useRef(false);
 
   // Position is measured, not guessed: remember the player's position and the
   // wall-clock instant it was read, then advance from that baseline locally.
@@ -215,28 +227,34 @@ export default function MusicPage() {
 
   const load = useCallback(async () => {
     if (!token || !selected) return;
+    if (playerLoadingRef.current) return;
+    playerLoadingRef.current = true;
     setLoading(true);
-    const resp = await apiFetch<{ success: boolean; state: MusicState; error?: string }>(
-      `/api/dashboard/music?guildId=${encodeURIComponent(selected.id)}`,
-      { token },
-    );
-    if (resp.ok && resp.data.success) {
-      const next = resp.data.state;
-      setState(next);
-      baseline.current = {
-        position: next.position || 0,
-        at: Date.now(),
-        playing: next.state === 'playing',
-      };
-      setLoadError('');
-      setError('');
-    } else {
-      setState(null);
-      setLoadError(resp.ok
-        ? (resp.data as unknown as { error?: string }).error || 'The bot returned no state'
-        : resp.error);
+    try {
+      const resp = await apiFetch<{ success: boolean; state: MusicState; error?: string }>(
+        `/api/dashboard/music?guildId=${encodeURIComponent(selected.id)}`,
+        { token },
+      );
+      if (resp.ok && resp.data.success) {
+        const next = resp.data.state;
+        setState(next);
+        baseline.current = {
+          position: next.position || 0,
+          at: Date.now(),
+          playing: next.state === 'playing',
+        };
+        setLoadError('');
+        setError('');
+      } else {
+        setState(null);
+        setLoadError(resp.ok
+          ? (resp.data as unknown as { error?: string }).error || 'The bot returned no state'
+          : resp.error);
+      }
+    } finally {
+      playerLoadingRef.current = false;
+      setLoading(false);
     }
-    setLoading(false);
   }, [token, selected]);
 
   useEffect(() => {
@@ -259,18 +277,24 @@ export default function MusicPage() {
   // FFmpeg, gateway, last playback failure). No secrets ever leave the bot.
   const loadDiag = useCallback(async () => {
     if (!token || !selected) return;
-    const resp = await apiFetch<{ success: boolean; diagnostics: Diagnostics; error?: string }>(
-      `/api/dashboard/music/diagnostics?guildId=${encodeURIComponent(selected.id)}`,
-      { token },
-    );
-    if (resp.ok && resp.data.success) {
-      setDiag(resp.data.diagnostics);
-      setDiagError('');
-    } else {
-      setDiag(null);
-      setDiagError(resp.ok
-        ? (resp.data as unknown as { error?: string }).error || 'Diagnostics unavailable'
-        : resp.error);
+    if (diagLoadingRef.current) return;
+    diagLoadingRef.current = true;
+    try {
+      const resp = await apiFetch<{ success: boolean; diagnostics: Diagnostics; error?: string }>(
+        `/api/dashboard/music/diagnostics?guildId=${encodeURIComponent(selected.id)}`,
+        { token },
+      );
+      if (resp.ok && resp.data.success) {
+        setDiag(resp.data.diagnostics);
+        setDiagError('');
+      } else {
+        setDiag(null);
+        setDiagError(resp.ok
+          ? (resp.data as unknown as { error?: string }).error || 'Diagnostics unavailable'
+          : resp.error);
+      }
+    } finally {
+      diagLoadingRef.current = false;
     }
   }, [token, selected]);
 
@@ -350,16 +374,21 @@ export default function MusicPage() {
       '/api/dashboard/music/search',
       { method: 'POST', token, body: { guildId: selected.id, query: searchQuery.trim() } },
     );
-    if (mySeq !== searchSeq.current) return; // superseded — drop silently
-    if (resp.ok && resp.data.success) {
-      setSearchResults(resp.data.results);
-      if (resp.data.results.length === 0) setSearchError('No results — try different words.');
-    } else {
-      setSearchError(resp.ok
-        ? (resp.data as unknown as { error?: string }).error || 'Search failed with no reason given'
-        : resp.error);
+    if (mySeq !== searchSeq.current) return; // superseded — the newer search owns the spinner
+    try {
+      if (resp.ok && resp.data.success) {
+        setSearchResults(resp.data.results);
+        if (resp.data.results.length === 0) setSearchError('No results — try different words.');
+      } else {
+        setSearchError(resp.ok
+          ? (resp.data as unknown as { error?: string }).error || 'Search failed with no reason given'
+          : resp.error);
+      }
+    } finally {
+      // Only the newest request clears the spinner; a superseded request
+      // already returned above WITHOUT touching it (its successor owns it).
+      if (mySeq === searchSeq.current) setSearching(false);
     }
-    setSearching(false);
   }, [token, selected, searchQuery]);
 
   const queueUrl = useCallback(async (url: string, front: boolean) => {

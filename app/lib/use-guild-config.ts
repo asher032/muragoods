@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useGuild } from '@/app/lib/guild-context';
 
 interface GuildConfig {
@@ -22,6 +22,10 @@ export function useGuildConfig() {
   const [loading, setLoading] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState('');
+  // Stale-response guard: a guild switch or unmount cancels the in-flight
+  // load so Server A's config can never overwrite Server B.
+  const requestId = useRef(0);
+  const controllerRef = useRef<AbortController | null>(null);
 
   // Hard ceiling per request: a hung config call must resolve to an error
   // state, never to a permanently-spinning page.
@@ -70,22 +74,43 @@ export function useGuildConfig() {
 
   const load = useCallback(async () => {
     if (!token || !selected) return;
+    const id = ++requestId.current;
+    controllerRef.current?.abort();
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    // Bounded: the timer below aborts the fetch; the overall 20s timer
+    // guarantees the loading flag clears even if abort delivery stalls.
+    const abortTimer = setTimeout(() => controller.abort(), 15000);
+    const overallTimer = setTimeout(() => {
+      if (id === requestId.current) {
+        controller.abort();
+        setLoading(false);
+        setError((prev) => prev || 'Failed to load /api/dashboard/config: request timed out after 20s — retry.');
+      }
+    }, 20000);
     setLoading(true);
     setError('');
     const endpoint = `/api/dashboard/config?guildId=${selected.id}`;
     let resp: Response | null = null;
     try {
-      resp = await fetchWithTimeout(endpoint, { headers: { 'x-discord-token': token } }, 20000);
-      const data = await resp.json();
-      if (data.success) {
-        setConfig(data.config || {});
+      resp = await fetchWithTimeout(endpoint, { cache: 'no-store', signal: controller.signal }, 15000);
+      if (id !== requestId.current) return;
+      const data = await resp.json().catch(() => null);
+      if (!data || typeof data !== 'object') {
+        setError(await describeFailure('load', endpoint, resp, 'unreadable response'));
+      } else if ((data as { success?: boolean }).success) {
+        setConfig((data as { config?: GuildConfig }).config || {});
       } else {
         setError(await describeFailure('load', endpoint, resp, null));
       }
     } catch (err) {
+      if (id !== requestId.current) return;
+      if (err instanceof DOMException && err.name === 'AbortError' && controller.signal.aborted && id !== requestId.current) return;
       setError(await describeFailure('load', endpoint, resp, err));
     } finally {
-      setLoading(false);
+      clearTimeout(abortTimer);
+      clearTimeout(overallTimer);
+      if (id === requestId.current) setLoading(false);
     }
   }, [token, selected]);
 
@@ -98,7 +123,8 @@ export function useGuildConfig() {
     try {
       resp = await fetchWithTimeout(endpoint, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-discord-token': token },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({ guildId: selected.id, config }),
       }, 20000);
       const data = await resp.json();
@@ -121,6 +147,10 @@ export function useGuildConfig() {
 
   useEffect(() => {
     load();
+    return () => {
+      requestId.current += 1;
+      controllerRef.current?.abort();
+    };
   }, [load]);
 
   const update = useCallback((section: string, key: string, value: unknown) => {
@@ -133,9 +163,20 @@ export function useGuildConfig() {
   return { config, loading, saveState, error, save, update, load, setConfig };
 }
 
+/** @deprecated Use `useGuildResources` from dashboard/components/selectors.tsx instead.
+ *  Kept for import compatibility; bounded by a 12s timeout so no caller can
+ *  hang on "Loading…" forever. */
 export async function loadGuildResources(token: string, guildId: string) {
-  const resp = await fetch(`/api/dashboard/resources?guildId=${guildId}`, {
-    headers: { 'x-discord-token': token },
-  });
-  return resp.json();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const resp = await fetch(`/api/dashboard/resources?guildId=${encodeURIComponent(guildId)}`, {
+      headers: { 'x-discord-token': token },
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    return resp.json();
+  } finally {
+    clearTimeout(timer);
+  }
 }
