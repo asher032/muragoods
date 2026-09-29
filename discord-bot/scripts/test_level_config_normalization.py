@@ -418,6 +418,16 @@ async def main() -> int:
     main_src = (ROOT / "bot" / "main.py").read_text(encoding="utf-8")
     check("describe_error classifies ValueError with an actionable message",
           "isinstance(original, ValueError)" in main_src)
+    # The hint must name the page that actually holds the command's settings.
+    # It used to hardcode "dashboard → Leveling" for every command, which sent
+    # a /balance user to a page with nothing to do with their problem.
+    check("value-error hint is command-aware, not hardcoded to Leveling",
+          "_value_error_hint(command_name)" in main_src
+          and "_DASHBOARD_FOR_COMMAND" in main_src)
+    check("balance maps to the economy page, not leveling",
+          '("balance", "/dashboard/economy")' in main_src)
+    check("leaderboard still maps to the leveling page",
+          '("leaderboard", "/dashboard/leveling")' in main_src)
     check("error handler still logs the full traceback",
           "traceback.format_exception" in main_src)
     check("error handler persists the error id it showed the user",
@@ -442,6 +452,27 @@ async def main() -> int:
     check("top_xp receives the db handle at every call site",
           cog_src.count("levels.top_xp(database._db,") == 2,
           f"found {cog_src.count('levels.top_xp(database._db,')}")
+
+    # The runtime harness is the real guard against a missed conversion: a
+    # source scan cannot see a ValueError that only fires when the handler
+    # actually runs. It is registered in CI; keep the file present and wired.
+    live = ROOT / "scripts" / "test_level_handlers_live.py"
+    check("runtime handler harness exists", live.exists())
+    if live.exists():
+        live_src = live.read_text(encoding="utf-8")
+        check("runtime harness drives the real handlers",
+              all(t in live_src for t in ("level_card", "board_stats", "balance",
+                                          "level_board", "rank")))
+        ci_src = (ROOT.parent / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        check("runtime harness is registered in CI",
+              "test_level_handlers_live.py" in ci_src)
+
+    # No bare conversion of a DB value may return to this cog. A previous
+    # pass fixed the /level card but left the economy paths in the same file,
+    # which is how a ValueError survived the first fix.
+    for line_no, text in enumerate(cog_src.splitlines(), 1):
+        if re.search(r'(?<![a-z_])int\(\s*(row|wallet|r|cfg)\.get\(', text):
+            check(f"no bare int() on a DB value (line {line_no})", False, text.strip())
 
     failed = 0
     for name, ok_flag, detail in checks:

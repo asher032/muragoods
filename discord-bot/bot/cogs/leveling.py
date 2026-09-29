@@ -155,15 +155,16 @@ class LevelingCog(commands.Cog):
             return
         key = (guild.id, member.id)
         now = time.monotonic()
-        cooldown = max(1, int(cfg.get("xpCooldownSec", XP_COOLDOWN) or XP_COOLDOWN))
+        cooldown = max(1, levels.safe_int(cfg.get("xpCooldownSec"), XP_COOLDOWN,
+                                          low=1, high=3600))
         if now - self._xp_bucket.get(key, 0) < cooldown:
             return
         self._xp_bucket[key] = now
         try:
             before = await database._db.xp.find_one({"guildId": guild.id, "userId": member.id})
-            old_level = int((before or {}).get("level", 0) or 0)
-            lo = max(1, int(cfg.get("xpMin", 15) or 15))
-            hi = max(lo, min(int(cfg.get("xpMax", 25) or 25), 100))
+            old_level = levels.safe_int((before or {}).get("level"), 0)
+            lo = max(1, levels.safe_int(cfg.get("xpMin"), 15, low=1, high=100))
+            hi = max(lo, levels.safe_int(cfg.get("xpMax"), 25, low=lo, high=100))
             _, level, _, leveled = await levels.add_xp(
                 database._db, guild.id, member.id, random.randint(lo, hi))
             if leveled and level > old_level:
@@ -182,7 +183,8 @@ class LevelingCog(commands.Cog):
                     continue
                 if not cfg.get("voiceXp"):
                     continue
-                amount = max(1, int(cfg.get("voiceXpAmount", 10) or 10))
+                amount = max(1, levels.safe_int(cfg.get("voiceXpAmount"), 10,
+                                               low=1, high=1000))
                 for channel in list(getattr(guild, "voice_channels", []) or []):
                     for member in list(getattr(channel, "members", []) or []):
                         try:
@@ -196,7 +198,7 @@ class LevelingCog(commands.Cog):
                                 continue
                             before = await database._db.xp.find_one(
                                 {"guildId": guild.id, "userId": member.id})
-                            old_level = int((before or {}).get("level", 0) or 0)
+                            old_level = levels.safe_int((before or {}).get("level"), 0)
                             _, level, _, leveled = await levels.add_xp(
                                 database._db, guild.id, member.id, amount)
                             if leveled and level > old_level:
@@ -276,9 +278,10 @@ class LevelingCog(commands.Cog):
         for i, row in enumerate(rows):
             rank = (page - 1) * 10 + i + 1
             medal = medals[i] if page == 1 and i < 3 else f"`{rank}.`"
-            val = (f"💎 {int(row.get('gems', 0))}" if by == "gems"
-                   else f"**{int(row.get('balance', 0)):,}**" if by == "balance"
-                   else f"**{int(row.get('balance', 0)) + int(row.get('bank', 0)):,}**")
+            val = (f"💎 {levels.safe_int(row.get('gems'), 0)}" if by == "gems"
+                   else f"**{levels.safe_int(row.get('balance'), 0):,}**"
+                   if by == "balance"
+                   else f"**{levels.safe_int(row.get('balance'), 0) + levels.safe_int(row.get('bank'), 0):,}**")
             name, uid = await levels.display_name_for(interaction.guild, row.get('userId'))
             lines.append(f"{medal} **{name}** (<@{uid}>) — {val}")
         await interaction.followup.send(embed=embeds.embed(
@@ -336,7 +339,7 @@ class LevelingCog(commands.Cog):
                 for r in rows:
                     at = r.get("createdAt")
                     stamp = at.strftime("%m-%d %H:%M") if hasattr(at, "strftime") else "?"
-                    amt = int(r.get("amount", 0))
+                    amt = levels.safe_int(r.get("amount"), 0)
                     lines.append(f"`{r.get('txId', '?')[:8]}` {stamp} **{r.get('type')}** "
                                  f"{'+' if amt > 0 else ''}{amt}")
                 await interaction.followup.send(embed=embeds.embed(
@@ -348,25 +351,28 @@ class LevelingCog(commands.Cog):
             cfg = await eco.get_economy_config(database._db, interaction.guild.id)
             sym = str(cfg.get("currencySymbol", "🪙"))
             name = str(cfg.get("currencyName", "coins"))
-            pocket = int(wallet.get("balance", 0))
-            bank = int(wallet.get("bank", 0))
-            gems = int(wallet.get("gems", 0))
+            pocket = levels.safe_int(wallet.get("balance"), 0)
+            bank = levels.safe_int(wallet.get("bank"), 0)
+            gems = levels.safe_int(wallet.get("gems"), 0)
             net = pocket + bank
             e = embeds.embed(f"💰 Balance — {getattr(target, 'display_name', target.name)}",
                              f"{sym} Pocket **{pocket:,}** {name}\n"
                              f"🏦 Bank **{bank:,}**\n"
                              f"💎 Gems **{gems}**\n"
                              f"📊 Net worth **{net:,}** · Level **{eco.economy_level(wallet)}** · "
-                             f"🔥 Prestige **{int(wallet.get('prestige', 0))}** · "
-                             f"Daily streak **{int(wallet.get('streakDaily', 0))}**",
+                    f"🔥 Prestige **{levels.safe_int(wallet.get('prestige'), 0)}** · "
+                    f"Daily streak **{levels.safe_int(wallet.get('streakDaily'), 0)}**",
                              embeds.GOLD)
             await interaction.followup.send(embed=e)
         except Exception:
+            # The fallback branch re-reads the wallet, so it must coerce too:
+            # a second unhandled ValueError here would replace the original
+            # error with an unrelated one.
             wallet = await self._wallet(interaction.guild.id, target.id)
             await interaction.followup.send(embed=embeds.embed(
                 "💰 Balance",
-                f"{target.mention} has **{int(wallet.get('balance', 0))}** coins"
-                f" (+**{int(wallet.get('bank', 0))}** bank).", embeds.GOLD))
+                f"{target.mention} has **{levels.safe_int(wallet.get('balance'), 0)}** coins"
+                f" (+**{levels.safe_int(wallet.get('bank'), 0)}** bank).", embeds.GOLD))
 
     @app_commands.command(name="daily", description="Claim your daily coins (streak bonus).")
     async def daily(self, interaction: discord.Interaction):
@@ -376,7 +382,7 @@ class LevelingCog(commands.Cog):
             cfg = await eco.get_economy_config(database._db, interaction.guild.id)
             granted, final, streak, remaining = await eco.claim_daily(
                 database._db, interaction.guild.id, interaction.user.id,
-                int(cfg.get("dailyAmount", 250)))
+                levels.safe_int(cfg.get("dailyAmount"), 250, low=0, high=10_000_000))
             if granted:
                 await interaction.followup.send(embed=embeds.ok(
                     "🎁 Daily claimed!", f"+**{final:,}** coins · streak **{streak}** 🔥"))

@@ -594,7 +594,7 @@ async def on_guild_join(guild: discord.Guild):
     await bot._sync_guild_commands(guild)
 
 
-def describe_error(error: Exception) -> tuple[str, str | None]:
+def describe_error(error: Exception, command_name: str = "") -> tuple[str, str | None]:
     """Map a failure to a user-safe reason, so the embed says WHAT broke.
 
     Every failure previously produced the identical "something went wrong"
@@ -650,10 +650,43 @@ def describe_error(error: Exception) -> tuple[str, str | None]:
     # here means an unhandled code path and is still logged in full — but the
     # user gets a message they can act on rather than a bare exception name.
     if isinstance(original, ValueError):
-        return ("The value stored for this option isn't valid.",
-                "Please check the command options and try again. "
-                "If it keeps happening, an admin can check the server's "
-                "settings in the dashboard → Leveling.")
+        return ("A stored value for this server isn't valid.",
+                _value_error_hint(command_name))
+    return (f"An unexpected error occurred ({name}).",
+            "The details are in the bot logs and the dashboard Error Center.")
+
+
+# Which dashboard page holds the settings a given command reads. The previous
+# single hint ("check the dashboard → Leveling") was hardcoded for every
+# command, so a user hitting this on /balance or /leaderboard was sent to a
+# page that has nothing to do with their problem.
+_DASHBOARD_FOR_COMMAND = (
+    ("level", "/dashboard/leveling"),
+    ("rank", "/dashboard/leveling"),
+    ("leaderboard", "/dashboard/leveling"),
+    ("balance", "/dashboard/economy"),
+    ("daily", "/dashboard/economy"),
+    ("pay", "/dashboard/economy"),
+    ("work", "/dashboard/economy"),
+    ("jobs", "/dashboard/jobs"),
+    ("trade", "/dashboard/economy"),
+    ("shop", "/dashboard/economy"),
+    ("inventory", "/dashboard/inventory"),
+    ("pet", "/dashboard/pets"),
+    ("farm", "/dashboard/farm"),
+    ("fish", "/dashboard/fishing"),
+    ("profile", "/dashboard/profile"),
+)
+
+
+def _value_error_hint(command_name: str) -> str:
+    """Actionable, command-accurate next step for a bad stored value."""
+    name = (command_name or "").lower()
+    page = next((p for key, p in _DASHBOARD_FOR_COMMAND if key in name), None)
+    where = f" in the dashboard → {page}" if page else " in the dashboard"
+    return (f"Please try again. If it keeps happening, an admin can check this "
+            f"server's stored settings{where}. The full details are in the "
+            f"Error Center under the Error ID above.")
     return (f"An unexpected error occurred ({name}).",
             "The details are in the bot logs and the dashboard Error Center.")
 
@@ -732,7 +765,7 @@ async def on_app_command_error(interaction: discord.Interaction, error: Exceptio
     except Exception:
         log.debug("error relay failed (non-fatal)")
     try:
-        reason, hint = describe_error(error)
+        reason, hint = describe_error(error, command_name)
         e = embeds.err_embed(error_id, reason=reason, hint=hint)
         if interaction.response.is_done():
             await interaction.followup.send(embed=e, ephemeral=True)
