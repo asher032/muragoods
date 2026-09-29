@@ -61,8 +61,6 @@ interface ResultState {
   job: { id: string; name: string; icon: string };
 }
 
-const diffColor: Record<string, string> = { Easy: '#06d6a0', Medium: '#ffd60a', Hard: '#e63946' };
-
 export default function JobsPage() {
   const { state } = useAuth();
   const [jobs, setJobs] = useState<JobState[]>([]);
@@ -270,8 +268,8 @@ export default function JobsPage() {
                     <span style={{ fontSize: 38 }}>{j.icon}</span>
                     <div>
                       <p style={{ color: '#fff', fontWeight: 800, fontSize: 16, margin: 0 }}>{j.name}</p>
-                      <p style={{ fontSize: 12, margin: '2px 0 0', color: diffColor[j.difficulty] || '#fff', fontWeight: 700 }}>
-                        {j.difficulty} · {j.game} shift
+                      <p style={{ fontSize: 12, margin: '2px 0 0', color: '#888', fontWeight: 700 }}>
+                        {j.game} shift · {j.workItem}
                       </p>
                     </div>
                   </div>

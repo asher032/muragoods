@@ -25,11 +25,11 @@ export async function GET(req: Request) {
 
     const [shifts, progress] = await Promise.all([
       JobShift.find({ userEmail: id.emailLc, consumed: true })
-        .select('jobId consumedAt').lean<Array<{ jobId: string; consumedAt: Date }>>(),
-      JobProgress.find({ userEmail: id.emailLc }).lean<Array<{
+        .select('jobId consumedAt').lean() as unknown as Array<{ jobId: string; consumedAt: Date }>,
+      JobProgress.find({ userEmail: id.emailLc }).lean() as unknown as Array<{
         jobId: string; successes: number; fails: number; totalShifts: number;
         consecutiveFails: number; firedCount: number;
-      }>>(),
+      }>,
     ]);
     const progByJob: Record<string, { successes: number; fails: number; totalShifts: number; consecutiveFails: number; firedCount: number }> = {};
     for (const p of progress) {

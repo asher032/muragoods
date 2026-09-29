@@ -120,8 +120,8 @@ export async function POST(req: Request) {
       },
     );
     const user = await User.findOne({ email: id.email }).select('coinBalance').lean<{ coinBalance?: number } | null>();
-    const fresh = await JobProgress.findOne({ userEmail: id.emailLc, jobId: job.id })
-      .select('successes').lean<{ successes?: number } | null>();
+    const fresh = (await JobProgress.findOne({ userEmail: id.emailLc, jobId: job.id })
+      .select('successes').lean()) as unknown as { successes?: number } | null;
 
     return NextResponse.json({
       success: true,
