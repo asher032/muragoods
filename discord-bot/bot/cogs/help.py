@@ -90,7 +90,7 @@ _NAME_OVERRIDES: tuple[tuple[str, str], ...] = (
     ("/achievements", "economy"), ("/quests", "economy"), ("/calculate", "economy"),
     ("/economy", "economy"), ("/minigames", "economy"), ("/inventory", "economy"),
     ("/fish", "economy"), ("/farm", "economy"),
-    ("/work", "economy"), ("/pets", "economy"), ("/trade", "economy"),
+    ("/work", "economy"), ("/jobs", "economy"), ("/pets", "economy"), ("/trade", "economy"),
     ("/lottery", "economy"), ("/notifications", "economy"), ("/badges", "economy"),
     ("/title", "economy"), ("/friends", "economy"), ("/advancements", "economy"),
     ("/leaderboard", "economy"), ("/queue", "music"),
