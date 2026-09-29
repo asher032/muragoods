@@ -157,7 +157,7 @@ console.log('[1] account profile (session-based — the old ?email= IDOR is clos
   check('signup succeeds', signup.status === 200 || signup.status === 201, `status ${signup.status}`);
 
   const prof = await api('/api/account/profile');
-  check('GET (session) returns the user', prof.status === 200 && prof.body?.data?.email === EMAIL);
+  check('GET (session) returns the user', prof.status === 200 && prof.body?.data?.email === EMAIL.toLowerCase());
   check('new user coinBalance is 0', prof.body?.data?.coinBalance === 0, JSON.stringify(prof.body?.data));
 
   const badName = await api('/api/account/profile', {
