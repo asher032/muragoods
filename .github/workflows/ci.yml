@@ -145,3 +145,10 @@ jobs:
       # previous pass missed exactly that in /balance and /leaderboard.
       - name: Leveling command handlers (runtime ValueError guard)
         run: python discord-bot/scripts/test_level_handlers_live.py
+
+      # /work is the single employment surface. This loads the real cogs and
+      # asserts the registered command tree: /jobs is gone, /level shift was
+      # never real, /work shift is employment-gated, and the help menu cannot
+      # advertise a command that no longer exists.
+      - name: /work command tree (/jobs removed, /level shift absent)
+        run: python discord-bot/scripts/test_work_command_tree.py

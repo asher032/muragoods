@@ -310,12 +310,18 @@ async def main() -> int:
           "https://" not in leveling_sys)
 
     # Gates wired into the command layer (not just the library).
-    jobs_cog = (cogs / "jobs.py").read_text(encoding="utf-8")
+    # The employment/shift commands now live in the /work cog: /jobs was
+    # removed as a duplicate of /work, and cogs/jobs.py is only the minigame
+    # view module, so the gate must be asserted where the command lives.
+    shift_views_mod = (cogs / "jobs.py").read_text(encoding="utf-8")
     work_cog = (cogs / "work.py").read_text(encoding="utf-8")
-    check("jobs cog applies employment before shifting",
-          "get_employment" in jobs_cog and "apply_for_job" in jobs_cog)
+    check("work cog applies employment before shifting",
+          "get_employment" in work_cog and "apply_for_job" in work_cog)
     check("work cog gates /work shift on employment",
           "get_employment" in work_cog)
+    check("cogs/jobs.py is views only (no cog, no /jobs group)",
+          "class JobsCog" not in shift_views_mod
+          and 'Group(name="jobs"' not in shift_views_mod)
 
     failed = 0
     for name, ok_flag, detail in checks:
