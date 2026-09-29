@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Cloudy } from 'lucide-react';
+import Image from 'next/image';
 
 export function LoadingScreen() {
   const [phase, setPhase] = useState<'logo' | 'text' | 'done'>('logo');
@@ -31,7 +31,16 @@ export function LoadingScreen() {
         <div className="loader-ring loader-ring-inner" />
 
         <div className="loader-orb">
-          <span className="loader-mushroom"><Cloudy className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
+          <span className="loader-mushroom">
+            <Image
+              src="/images/muragoods-logo.png"
+              alt="Muragoods"
+              width={112}
+              height={112}
+              priority
+              style={{ borderRadius: '50%', objectFit: 'contain', display: 'block' }}
+            />
+          </span>
           <div className="loader-dot" />
         </div>
       </div>
