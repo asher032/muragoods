@@ -2229,6 +2229,10 @@ async def _health_server() -> None:
         import database as db_mod
         try:
             data = await eco_mod.economy_overview(db_mod._require_db(), guild_id)
+            import leveling_sys as lvl_mod
+            for t in data.get("top", []):
+                name, _uid = await lvl_mod.display_name_for(guild, t.get("userId"))
+                t["displayName"] = name
             cfg = await eco_mod.get_economy_config(db_mod._require_db(), guild_id)
             return web.json_response({"ok": True, "overview": data, "config": {
                 k: cfg.get(k) for k in (
@@ -2237,7 +2241,7 @@ async def _health_server() -> None:
                     "workCooldownSec", "begCooldownSec", "crimeCooldownSec",
                     "activityCooldownSec", "gambleMax", "gambleCooldownSec",
                     "robCooldownSec", "robMinTarget", "lotteryTicketPrice", "lotteryMaxTickets",
-                    "jobCooldownSec",
+                    "jobCooldownSec", "jobFailRate", "jobCooldownOverrides", "disabledJobs",
                 )}})
         except Exception as exc:
             return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
@@ -2259,10 +2263,15 @@ async def _health_server() -> None:
             top = await lvl_mod.top_xp(db, guild_id, 5)
             users = await db.xp.count_documents({"guildId": int(guild_id)})
             cfg = await lvl_mod.get_level_config(db, guild_id)
+            top_rows = []
+            for t in top:
+                xp = int(t.get("xp", 0))
+                name, uid = await lvl_mod.display_name_for(guild, t.get("userId"))
+                top_rows.append({"userId": str(uid), "displayName": name, "xp": xp,
+                                 "level": lvl_mod.level_from_xp(xp)[0]})
             return web.json_response({"ok": True, "overview": {
                 "users": users,
-                "top": [{"userId": str(t.get("userId")), "xp": int(t.get("xp", 0)),
-                         "level": lvl_mod.level_from_xp(int(t.get("xp", 0)))[0]} for t in top],
+                "top": top_rows,
             }, "config": {
                 "xpMin": cfg.get("xpMin"), "xpMax": cfg.get("xpMax"),
                 "xpCooldownSec": cfg.get("xpCooldownSec"), "voiceXp": cfg.get("voiceXp"),

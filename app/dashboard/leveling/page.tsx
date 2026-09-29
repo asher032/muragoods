@@ -12,7 +12,7 @@ import { resolveServerCardBackground } from '@/app/lib/server-card-backgrounds';
 
 interface LevelingOverview {
   users: number;
-  top: Array<{ userId: string; xp: number; level: number }>;
+  top: Array<{ userId: string; displayName?: string; xp: number; level: number }>;
 }
 
 export default function LevelingPage() {
@@ -99,7 +99,7 @@ export default function LevelingPage() {
       {overview && (
         <div className="cc-card" style={{ padding: '14px 18px', marginBottom: 22 }}>
           <div style={{ fontSize: 13, color: 'var(--cc-text-dim)', marginBottom: 8 }}>
-            <strong style={{ color: '#fff' }}>{overview.users}</strong> members earning XP
+            📊 <strong style={{ color: '#fff' }}>{overview.users}</strong> members earning XP
           </div>
           {overview.top.length === 0 ? (
             <p style={{ margin: 0, color: 'var(--cc-text-faint)', fontSize: 13 }}>No XP yet — start chatting.</p>
@@ -107,8 +107,8 @@ export default function LevelingPage() {
             <div style={{ display: 'grid', gap: 4 }}>
               {overview.top.map((t, i) => (
                 <div key={t.userId} style={{ fontSize: 12.5, color: 'var(--cc-text-dim)' }}>
-                  <strong style={{ color: '#fff' }}>#{i + 1}</strong> <code>&lt;@{t.userId}&gt;</code>
-                  {' '}— Level <strong style={{ color: '#fff' }}>{t.level}</strong> ({t.xp.toLocaleString()} XP)
+                  <strong style={{ color: '#fff' }}>#{i + 1}</strong> <strong style={{ color: '#fff' }}>{t.displayName || 'Unknown User'}</strong>
+                  {' '}— Level <strong style={{ color: '#fff' }}>{t.level}</strong> · {t.xp.toLocaleString()} XP
                 </div>
               ))}
             </div>
