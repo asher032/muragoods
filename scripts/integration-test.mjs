@@ -471,7 +471,16 @@ console.log('[3c] jobs + work shifts');
   check('shift replay refused (no double pay)', replay.status === 409, `status ${replay.status}`);
 
   const recool = await api('/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'cashier' }) });
-  check('per-job cooldown enforced', recool.status === 429 && recool.body?.code === 'COOLDOWN', `status ${recool.status}`);
+  // Cashier allows 1/day, so the second start is stopped by the daily
+  // limit; the per-job cooldown is verified via the catalog below.
+  check('repeat shift refused after completion',
+    recool.status === 429 && (recool.body?.code === 'DAILY_DONE' || recool.body?.code === 'COOLDOWN'),
+    `status ${recool.status} code ${recool.body?.code}`);
+  const relist = await api('/api/jobs');
+  const cashierAfter = (relist.body?.jobs || []).find((j) => j.id === 'cashier');
+  check('per-job cooldown ticking after shift',
+    cashierAfter?.cooldownRemaining > 0 && cashierAfter?.cooldownRemaining <= 43 * 60,
+    `remaining ${cashierAfter?.cooldownRemaining}`);
 
   const hist = await api('/api/jobs/history?limit=5');
   check('history shows the shift',
