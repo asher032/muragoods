@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     try {
       const { getSessionUser } = await import('@/app/lib/session');
       const author = await getSessionUser(req);
-      if (author) body.createdBy = author.email.toLowerCase();
+      if (author) body.createdBy = author.email;
     } catch { /* continue as guest */ }
 
     const letter = await LoveLetter.create({ ...body, shortId });
@@ -86,7 +86,7 @@ export async function DELETE(req: Request) {
     const viewer = await getSessionUser(req);
     const { user: admin } = await requireAdmin(req);
     const own = Boolean(
-      viewer && letter.createdBy && letter.createdBy.toLowerCase() === viewer.email.toLowerCase(),
+      viewer && letter.createdBy && letter.createdBy === viewer.email,
     );
     if (!own && !admin) {
       return NextResponse.json(

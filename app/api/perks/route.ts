@@ -34,7 +34,7 @@ export async function GET(req: Request) {
 
     if (email) {
       const viewer = await getSessionUser(req);
-      const own = viewer && viewer.email.toLowerCase() === email.toLowerCase();
+      const own = viewer && viewer.email === email.trim();
       if (!own && !admin) {
         return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });
       }
@@ -75,7 +75,7 @@ export async function POST(req: Request) {
     const { user: admin } = await requireAdmin(req);
     const selfPurchase =
       String(addedBy) === 'Self-purchase' &&
-      viewer && viewer.email.toLowerCase() === String(email).toLowerCase();
+      viewer && viewer.email === String(email).trim();
     if (!admin && !selfPurchase) {
       return NextResponse.json(
         { success: false, error: 'Sign in required' },
@@ -128,7 +128,7 @@ export async function PATCH(req: Request) {
 
     const viewer = await getSessionUser(req);
     const { user: admin } = await requireAdmin(req);
-    const own = viewer && viewer.email.toLowerCase() === String(email).toLowerCase();
+    const own = viewer && viewer.email === String(email).trim();
     if (!own && !admin) {
       return NextResponse.json({ success: false, error: 'You can only redeem your own perks' }, { status: 403 });
     }

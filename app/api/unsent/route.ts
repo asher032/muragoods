@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     const letter = await UnsentLetter.create({
       // A signed-in author is stamped server-side; guests keep the supplied
       // address. The client cannot publish on another account.
-      authorEmail: (await getSessionUser(req).catch(() => null))?.email.toLowerCase() || authorEmail,
+      authorEmail: (await getSessionUser(req).catch(() => null))?.email || authorEmail,
       authorName: authorName || 'Anonymous',
       recipientName: recipientName.trim(),
       content: content.trim(),
@@ -54,7 +54,7 @@ export async function GET(req: Request) {
     if (email && !name) {
       const viewer = await getSessionUser(req);
       const { user: admin } = await requireAdmin(req);
-      const own = viewer && viewer.email.toLowerCase() === email.toLowerCase();
+      const own = viewer && viewer.email === email.trim();
       if (!own && !admin) {
         return NextResponse.json({ success: false, error: 'Sign in required' }, { status: viewer ? 403 : 401 });
       }
@@ -111,7 +111,7 @@ export async function PATCH(req: Request) {
     // Attribution comes from the session when signed in — the client cannot
     // like/bookmark as another account.
     const viewer = await getSessionUser(req).catch(() => null);
-    if (viewer) email = viewer.email.toLowerCase();
+    if (viewer) email = viewer.email;
 
     const letter = await UnsentLetter.findById(id);
     if (!letter) {
@@ -179,7 +179,7 @@ export async function DELETE(req: Request) {
     const viewer = await getSessionUser(req);
     const { user: admin } = await requireAdmin(req);
     const own = Boolean(
-      viewer && letter.authorEmail && letter.authorEmail.toLowerCase() === viewer.email.toLowerCase(),
+      viewer && letter.authorEmail && letter.authorEmail === viewer.email,
     );
     if (!own && !admin) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: viewer ? 403 : 401 });

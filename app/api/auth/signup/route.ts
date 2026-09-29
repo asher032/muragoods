@@ -27,10 +27,19 @@ export async function POST(req: Request) {
 
   try {
     await dbConnect();
-    const { name, email, password, referredBy } = (await req.json()) as { name: string; email: string; password: string; referredBy?: string };
+    const { name, email: rawEmail, password, referredBy } = (await req.json()) as { name: string; email: string; password: string; referredBy?: string };
 
     if (!password || password.length < 6) {
       return NextResponse.json({ success: false, error: 'Password must be at least 6 characters' }, { status: 400 });
+    }
+
+    // Canonical identity: email is stored lowercase so every downstream
+    // lookup (session, orders, game progress, awards) matches exactly.
+    // Mixed-case input previously created records that login's lowercase
+    // lookup could never find again.
+    const email = String(rawEmail || '').trim().toLowerCase();
+    if (!email) {
+      return NextResponse.json({ success: false, error: 'Email is required' }, { status: 400 });
     }
 
     const existingUser = await User.findOne({ email });

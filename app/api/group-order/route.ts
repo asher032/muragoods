@@ -23,7 +23,7 @@ export async function POST(req: Request) {
       const host = await getSessionUser(req).catch(() => null);
       const groupOrder = await GroupOrder.create({
         code: groupCode,
-        hostUserId: host ? host.email.toLowerCase() : hostUserId,
+        hostUserId: host ? host.email : hostUserId,
         hostName: host ? host.name : hostName,
         title: title || `${host ? host.name : hostName}'s Group Order`,
         items: [],
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
 
       const adder = await getSessionUser(req).catch(() => null);
       if (adder && item && typeof item === 'object') {
-        (item as Record<string, unknown>).userId = adder.email.toLowerCase();
+        (item as Record<string, unknown>).userId = adder.email;
         (item as Record<string, unknown>).userName = adder.name;
       }
       groupOrder.items.push(item);
@@ -71,8 +71,8 @@ export async function POST(req: Request) {
         (it: { _id: { toString(): string }; userId?: string }) => it._id.toString() === itemId,
       );
       if (target && remover && !admin) {
-        const ownItem = target.userId && target.userId.toLowerCase() === remover.email.toLowerCase();
-        const isHost = groupOrder.hostUserId && String(groupOrder.hostUserId).toLowerCase() === remover.email.toLowerCase();
+        const ownItem = target.userId && target.userId === remover.email;
+        const isHost = groupOrder.hostUserId && String(groupOrder.hostUserId) === remover.email;
         if (!ownItem && !isHost) {
           return NextResponse.json({ success: false, error: 'Only the item owner or host can remove it' }, { status: 403 });
         }
@@ -89,8 +89,8 @@ export async function POST(req: Request) {
       if (!groupOrder) return NextResponse.json({ success: false, error: 'Group order not found' }, { status: 404 });
       const closer = await getSessionUser(req).catch(() => null);
       const { user: admin } = await requireAdmin(req);
-      const hostClaim = closer ? closer.email.toLowerCase() : String(hostUserId || '').toLowerCase();
-      if (!admin && String(groupOrder.hostUserId).toLowerCase() !== hostClaim) {
+      const hostClaim = closer ? closer.email : String(hostUserId || '').trim();
+      if (!admin && String(groupOrder.hostUserId) !== hostClaim) {
         return NextResponse.json({ success: false, error: 'Only the host can close' }, { status: 403 });
       }
 
@@ -123,7 +123,7 @@ export async function GET(req: Request) {
     if (userId) {
       const viewer = await getSessionUser(req);
       const { user: admin } = await requireAdmin(req);
-      const own = viewer && viewer.email.toLowerCase() === userId.toLowerCase();
+      const own = viewer && viewer.email === userId.trim();
       if (!own && !admin) {
         return NextResponse.json({ success: false, error: 'Sign in required' }, { status: viewer ? 403 : 401 });
       }

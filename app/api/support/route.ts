@@ -40,7 +40,7 @@ export async function GET(req: Request) {
     if (ticketId) {
       const ticket = await SupportTicket.findById(ticketId);
       if (!ticket) return NextResponse.json({ success: false, error: 'Ticket not found' }, { status: 404 });
-      const own = viewer && ticket.userId && String(ticket.userId).toLowerCase() === viewer.email.toLowerCase();
+      const own = viewer && ticket.userId && String(ticket.userId) === viewer.email;
       if (!own && !admin) {
         return NextResponse.json({ success: false, error: 'Sign in required' }, { status: viewer ? 403 : 401 });
       }
@@ -109,7 +109,7 @@ export async function POST(req: Request) {
     if (action === 'message') {
       const ticket = await SupportTicket.findById(ticketId);
       if (!ticket) return NextResponse.json({ success: false, error: 'Ticket not found' }, { status: 404 });
-      const own = viewer && ticket.userId && String(ticket.userId).toLowerCase() === viewer.email.toLowerCase();
+      const own = viewer && ticket.userId && String(ticket.userId) === viewer.email;
       if (!own && !admin) {
         return NextResponse.json({ success: false, error: 'Sign in required' }, { status: viewer ? 403 : 401 });
       }
@@ -132,7 +132,7 @@ export async function POST(req: Request) {
     if (action === 'close') {
       const ticket = await SupportTicket.findById(ticketId);
       if (!ticket) return NextResponse.json({ success: false, error: 'Ticket not found' }, { status: 404 });
-      const own = viewer && ticket.userId && String(ticket.userId).toLowerCase() === viewer.email.toLowerCase();
+      const own = viewer && ticket.userId && String(ticket.userId) === viewer.email;
       if (!own && !admin) {
         return NextResponse.json({ success: false, error: 'Sign in required' }, { status: viewer ? 403 : 401 });
       }

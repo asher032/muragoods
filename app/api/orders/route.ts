@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     try {
       const { getSessionUser: getShopUser } = await import('@/app/lib/session');
       const shopper = await getShopUser(req);
-      if (shopper) body.userId = shopper.email.toLowerCase();
+      if (shopper) body.userId = shopper.email;
     } catch { /* session lookup failed — continue as guest */ }
 
     // Game-reward promo codes are consumed here, server-side, so a code can
@@ -90,7 +90,7 @@ export async function GET(req: Request) {
     const { user: admin } = await requireAdmin(req);
     if (admin) {
       const query: Record<string, unknown> = {};
-      if (userId) query.userId = userId.trim().toLowerCase();
+      if (userId) query.userId = userId.trim();
       const orders = await Order.find(query).sort({ createdAt: -1 });
       return NextResponse.json({ success: true, data: orders });
     }
@@ -98,7 +98,7 @@ export async function GET(req: Request) {
     if (!viewer) {
       return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });
     }
-    const orders = await Order.find({ userId: viewer.email.toLowerCase() }).sort({ createdAt: -1 });
+    const orders = await Order.find({ userId: viewer.email }).sort({ createdAt: -1 });
     return NextResponse.json({ success: true, data: orders });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'An error occurred';
@@ -134,7 +134,7 @@ export async function PATCH(req: Request) {
     if (isOwnerCancel) {
       const { getSessionUser: getShopper } = await import('@/app/lib/session');
       const shopper = await getShopper(req);
-      if (!shopper || !prev.userId || prev.userId.toLowerCase() !== shopper.email.toLowerCase()) {
+      if (!shopper || !prev.userId || prev.userId !== shopper.email) {
         return NextResponse.json({ success: false, error: 'You can only cancel your own orders' }, { status: 403 });
       }
       const order = await Order.findByIdAndUpdate(orderId, { status: 'Cancelled' }, { new: true });
