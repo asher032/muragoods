@@ -52,6 +52,7 @@ export const DASH_SECTIONS: { label: string; items: NavItem[] }[] = [
   {
     label: 'SYSTEM',
     items: [
+      { label: 'Diagnostics', href: '/dashboard/diagnostics', icon: <Activity size={16} /> },
       { label: 'Error Center', href: '/dashboard/errors', icon: <Siren size={16} /> },
       { label: 'Audit Log', href: '/dashboard/audit', icon: <ScrollText size={16} /> },
       { label: 'Settings', href: '/dashboard/settings', icon: <Settings size={16} /> },

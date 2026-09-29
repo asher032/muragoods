@@ -4,8 +4,11 @@ import { discordConfigCollection } from '@/app/lib/discord-config';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const BOT_HEALTH_URL = 'https://murastream-bot-pf11.onrender.com/health';
-const DISCORD_API_URL = 'https://discord.com/api/v10';
+const BOT_BASE = (process.env.BOT_HEALTH_URL?.replace(/\/health$/, '') || 'https://murastream-bot-pf11.onrender.com').trim();
+const BOT_HEALTH_URL = `${BOT_BASE}/health`;
+// /gateway answers 200 without auth; the bare base URL 404s and would pin
+// discordApi to 'degraded' forever while Discord is actually fine.
+const DISCORD_API_URL = 'https://discord.com/api/v10/gateway';
 const DEFAULT_TIMEOUT_MS = 5000;
 
 type HealthStatus = 'ok' | 'degraded' | 'offline';
@@ -242,7 +245,7 @@ async function checkBotGateway(timeoutMs: number): Promise<ServiceHealth> {
 
 async function checkDiscordApi(timeoutMs: number): Promise<ServiceHealth> {
   return checkHttpService(DISCORD_API_URL, timeoutMs, (response) => (
-    response.ok || response.status === 401 ? 'ok' : 'degraded'
+    response.ok ? 'ok' : 'degraded'
   ));
 }
 

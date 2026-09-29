@@ -33,21 +33,31 @@ export default function AuditPage() {
 
   useEffect(() => {
     if (!selected || !token) return;
+    let alive = true;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
     setLoadingData(true);
     setFetchError('');
     fetch(`/api/dashboard/audit?guildId=${selected.id}`, {
       headers: { 'x-discord-token': token },
+      cache: 'no-store',
+      signal: controller.signal,
     })
       .then((r) => r.json())
       .then((data) => {
+        if (!alive) return;
         if (data.success) setAudit(data.audit || []);
         else setFetchError(data.error || 'Failed to load audit log');
         setLoadingData(false);
       })
-      .catch(() => {
-        setFetchError('Network error');
+      .catch((err) => {
+        if (!alive) return;
+        const timedOut = err instanceof DOMException && err.name === 'AbortError';
+        setFetchError(timedOut ? 'Audit request timed out — retry.' : 'Network error');
         setLoadingData(false);
-      });
+      })
+      .finally(() => clearTimeout(timer));
+    return () => { alive = false; controller.abort(); clearTimeout(timer); };
   }, [selected, token]);
 
   if (!token) {

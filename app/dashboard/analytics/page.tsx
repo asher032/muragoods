@@ -111,9 +111,13 @@ export default function AnalyticsPage() {
     if (!token || !selected) return;
     setLoading(true);
     setError('');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
     try {
       const resp = await fetch(`/api/dashboard/analytics?guildId=${selected.id}&range=${r}`, {
         headers: { 'x-discord-token': token },
+        cache: 'no-store',
+        signal: controller.signal,
       });
       const data = await resp.json();
       if (data.success) {
@@ -122,8 +126,10 @@ export default function AnalyticsPage() {
         setError(data.error || 'Failed to load analytics');
       }
     } catch (err) {
-      setError(String(err));
+      const timedOut = err instanceof DOMException && err.name === 'AbortError';
+      setError(timedOut ? 'Analytics request timed out — retry.' : String(err));
     } finally {
+      clearTimeout(timer);
       setLoading(false);
     }
   }, [token, selected]);
@@ -135,11 +141,15 @@ export default function AnalyticsPage() {
   const runTest = async (module: string) => {
     if (!token || !selected) return;
     setTestResults((prev) => ({ ...prev, [module]: { status: 'failed', reason: '', loading: true } }));
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
     try {
       const resp = await fetch('/api/dashboard/feature-test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-discord-token': token },
         body: JSON.stringify({ guildId: selected.id, module }),
+        cache: 'no-store',
+        signal: controller.signal,
       });
       const data = await resp.json();
       if (data.success) {
@@ -159,10 +169,13 @@ export default function AnalyticsPage() {
         }));
       }
     } catch (err) {
+      const timedOut = err instanceof DOMException && err.name === 'AbortError';
       setTestResults((prev) => ({
         ...prev,
-        [module]: { status: 'failed', reason: String(err) },
+        [module]: { status: 'failed', reason: timedOut ? 'Test timed out — retry.' : String(err), loading: false },
       }));
+    } finally {
+      clearTimeout(timer);
     }
   };
 

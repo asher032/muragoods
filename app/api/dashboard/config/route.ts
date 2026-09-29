@@ -3,6 +3,7 @@ import { requireGuildManage } from '@/app/lib/discord-guilds';
 import { NextRequest, NextResponse } from 'next/server';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 import { verifyBotInGuild, botToken } from '@/app/lib/discord-bot';
+import { apiFail, logApi } from '@/app/lib/dashboard-response';
 
 // Dashboard config API — authorization model:
 //   1. The caller presents a Discord access token (from the OAuth flow).
@@ -152,27 +153,43 @@ function friendlyField(section: string, field: string): string {
 }
 
 export async function GET(req: NextRequest) {
-  const token = (await sessionToken());
-  const guildId = req.nextUrl.searchParams.get('guildId') || '';
-  const auth = await authorize(token, guildId);
-  if (!auth.ok) return bad(auth.error, auth.status, auth.code);
-  const guild = auth.guild;
+  const started = Date.now();
+  try {
+    const token = (await sessionToken());
+    const guildId = req.nextUrl.searchParams.get('guildId') || '';
+    const auth = await authorize(token, guildId);
+    if (!auth.ok) {
+      logApi('/api/dashboard/config', 'GET', auth.status, Date.now() - started, auth.code);
+      return bad(auth.error, auth.status, auth.code);
+    }
+    const guild = auth.guild;
 
-  const collection = await discordConfigCollection();
-  const config = await collection.findOne({ guildId }) || {
-    guildId,
-    guildName: guild.name,
-    guildIcon: guild.icon || '',
-  };
-  // Bot presence rides along (never blocks a read — settings remain
-  // viewable while the bot is away); null = could not be determined.
-  const installed = await botInstalled(guildId);
-  return NextResponse.json({
-    success: true,
-    guild: { id: guild.id, name: guild.name, icon: guild.icon },
-    config,
-    bot: { installed },
-  });
+    const collection = await discordConfigCollection();
+    const config = await collection.findOne({ guildId }) || {
+      guildId,
+      guildName: guild.name,
+      guildIcon: guild.icon || '',
+    };
+    // Bot presence rides along (never blocks a read — settings remain
+    // viewable while the bot is away); null = could not be determined.
+    const installed = await botInstalled(guildId);
+    logApi('/api/dashboard/config', 'GET', 200, Date.now() - started);
+    return NextResponse.json({
+      success: true,
+      guild: { id: guild.id, name: guild.name, icon: guild.icon },
+      config,
+      bot: { installed },
+    });
+  } catch {
+    // Never leak HTML: DB/Discord throws resolve to a retryable JSON error.
+    logApi('/api/dashboard/config', 'GET', 502, Date.now() - started, 'DATABASE_ERROR');
+    return apiFail(
+      'DATABASE_ERROR',
+      'Configuration could not be loaded — retry in a moment.',
+      502,
+      { retryable: true },
+    );
+  }
 }
 
 export async function PATCH(req: NextRequest) {

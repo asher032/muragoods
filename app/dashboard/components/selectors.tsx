@@ -55,6 +55,10 @@ export interface GuildResources {
   roles: GuildRole[];
   members: GuildMember[];
   bot: GuildBotInfo | null;
+  // Per-resource read statuses from the backend: lets the UI keep working
+  // sections usable when only one leg fails (e.g. member roster 403 while
+  // channels/roles are fine) instead of disabling the whole dashboard.
+  meta?: { membersStatus: number | null; guildStatus: number | null } | null;
 }
 
 export type ChannelKinds = 'text' | 'voice' | 'category' | 'all';
@@ -115,6 +119,20 @@ function roleColorStyle(color: number): { background: string } {
 // Errors carry the backend `code` so the UI maps each failure to its real
 // message (permission vs Discord outage vs bot offline) instead of one
 // generic "no permission" banner.
+//
+// Shared 30s in-memory cache per guild (stale-while-revalidate): the first
+// mount fetches from Discord; sibling hooks mounting for the same guild
+// paint the cached roster immediately instead of firing duplicate bulk
+// reads that eat the bot-token rate limit.
+const resourcesCache = new Map<string, { at: number; data: GuildResources }>();
+const RESOURCES_CACHE_TTL_MS = 30_000;
+
+function readResourcesCache(guildId: string): GuildResources | null {
+  const hit = resourcesCache.get(guildId);
+  if (hit && Date.now() - hit.at < RESOURCES_CACHE_TTL_MS) return hit.data;
+  if (hit) resourcesCache.delete(guildId);
+  return null;
+}
 export function useGuildResources(guildId: string | null) {
   const [resources, setResources] = useState<GuildResources | null>(null);
   const [loading, setLoading] = useState(false);
@@ -125,7 +143,11 @@ export function useGuildResources(guildId: string | null) {
   const controllerRef = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
-    if (!guildId) return;
+    if (!guildId) {
+      // No guild: never leave a previous load's spinner behind.
+      setLoading(false);
+      return;
+    }
     const id = ++requestId.current;
     controllerRef.current?.abort();
     // Automatic recovery: retryable failures (rate limits, Discord
@@ -165,6 +187,12 @@ export function useGuildResources(guildId: string | null) {
           setError(data?.error || `Couldn't load server data (HTTP ${resp.status}).`);
           setCode(code);
           setRetryable(retryable);
+          // Terminal error (including non-retryable 401/403/404 on the FIRST
+          // attempt): clear loading here, not just in the last-attempt
+          // finally. Without this the flag stays true forever and every
+          // member selector downstream sits on "Loading members…" with its
+          // error state hidden behind the spinner.
+          if (id === requestId.current) setLoading(false);
           return;
         }
         setResources({
@@ -173,7 +201,23 @@ export function useGuildResources(guildId: string | null) {
           roles: data.roles ?? [],
           members: data.members ?? [],
           bot: data.bot ?? null,
+          meta: (data as { meta?: GuildResources['meta'] }).meta ?? null,
         });
+        try {
+          const snapshot: GuildResources = {
+            guild: data.guild ?? null,
+            channels: data.channels ?? [],
+            roles: data.roles ?? [],
+            members: data.members ?? [],
+            bot: data.bot ?? null,
+            meta: (data as { meta?: GuildResources['meta'] }).meta ?? null,
+          };
+          resourcesCache.set(guildId, { at: Date.now(), data: snapshot });
+          if (resourcesCache.size > 20) {
+            const oldest = resourcesCache.keys().next().value;
+            if (oldest) resourcesCache.delete(oldest);
+          }
+        } catch { /* cache is best-effort */ }
         // Success must clear the loading flag on EVERY attempt, not just the
         // last one: the finally below only clears it when
         // attempt === BACKOFFS.length - 1, so a first-attempt success used
@@ -199,7 +243,10 @@ export function useGuildResources(guildId: string | null) {
   }, [guildId]);
 
   useEffect(() => {
-    setResources(null);
+    // Stale-while-revalidate: paint the cached roster instantly so sibling
+    // hooks for the same guild don't each fire a duplicate bulk read.
+    const cached = guildId ? readResourcesCache(guildId) : null;
+    setResources(cached);
     setError('');
     setCode('');
     setRetryable(false);
@@ -243,6 +290,10 @@ export function useGuildMemberSearch(guildId: string | null, query: string, limi
   const [searchError, setSearchError] = useState('');
   const [searchCode, setSearchCode] = useState('');
   const requestId = useRef(0);
+  // Retry nonce: bumping it re-runs the effect with the same query so a
+  // failed search can resolve to success without retyping.
+  const [nonce, setNonce] = useState(0);
+  const retry = () => setNonce((n) => n + 1);
 
   useEffect(() => {
     const q = query.trim();
@@ -297,9 +348,9 @@ export function useGuildMemberSearch(guildId: string | null, query: string, limi
       clearTimeout(timer);
       controller.abort();
     };
-  }, [guildId, query, limit]);
+  }, [guildId, query, limit, nonce]);
 
-  return { results, searching, searchError, searchCode };
+  return { results, searching, searchError, searchCode, retry };
 }
 
 // ── Shared dropdown shell ──────────────────────────────────────────────────
@@ -778,23 +829,37 @@ export async function validateSelection(
   id: string,
   require: string[] = [],
 ): Promise<{ valid: boolean; objectName: string | null; checks: ValidateCheck[]; message: string }> {
-  const resp = await fetch('/api/dashboard/resources/validate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ guildId, kind, id, require }),
-  });
-  const data = (await resp.json().catch(() => null)) as {
-    valid?: boolean; objectName?: string | null; checks?: ValidateCheck[]; message?: string; error?: string;
-  } | null;
-  if (!resp.ok || !data) {
-    return { valid: false, objectName: null, checks: [], message: data && 'error' in data && typeof data.error === 'string' ? data.error : `Validation failed (HTTP ${resp.status}).` };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const resp = await fetch('/api/dashboard/resources/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guildId, kind, id, require }),
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    const data = (await resp.json().catch(() => null)) as {
+      valid?: boolean; objectName?: string | null; checks?: ValidateCheck[]; message?: string; error?: string;
+    } | null;
+    if (!resp.ok || !data) {
+      return { valid: false, objectName: null, checks: [], message: data && 'error' in data && typeof data.error === 'string' ? data.error : `Validation failed (HTTP ${resp.status}).` };
+    }
+    return {
+      valid: Boolean(data.valid),
+      objectName: data.objectName ?? null,
+      checks: data.checks ?? [],
+      message: data.message || '',
+    };
+  } catch (err) {
+    const timedOut = err instanceof DOMException && err.name === 'AbortError';
+    return {
+      valid: false, objectName: null, checks: [],
+      message: timedOut ? 'Validation timed out — the bot service may be slow. Retry.' : 'Validation request failed — check your connection and retry.',
+    };
+  } finally {
+    clearTimeout(timer);
   }
-  return {
-    valid: Boolean(data.valid),
-    objectName: data.objectName ?? null,
-    checks: data.checks ?? [],
-    message: data.message || '',
-  };
 }
 
 export function DiscordPermissionStatus({
@@ -861,6 +926,21 @@ export function statusMessage(code: string, detail: string): { title: string; hi
         title: 'The bot bridge is not configured.',
         hint: detail || 'The server operator needs to configure the bot connection first.',
       };
+    case 'BOT_TOKEN_REJECTED':
+      return {
+        title: 'The dashboard bot credential was rejected by Discord.',
+        hint: detail || 'The bot token on the site host is outdated — update DISCORD_BOT_TOKEN. Do not re-invite the bot.',
+      };
+    case 'BOT_TOKEN_REJECTED':
+      return {
+        title: "The dashboard's bot credential was rejected.",
+        hint: detail || 'Discord refused the site host\u2019s bot token. Update DISCORD_BOT_TOKEN where the site runs to the bot\u2019s current token — do not re-invite the bot.',
+      };
+    case 'DISCORD_API_UNAVAILABLE':
+      return {
+        title: 'Discord is unreachable right now.',
+        hint: detail || 'Discord did not answer the guild read. The bot can still be installed — retry in a moment.',
+      };
     case 'BOT_MISSING_PERMISSION':
     case 'BOT_FORBIDDEN':
       return {
@@ -905,11 +985,18 @@ export function statusMessage(code: string, detail: string): { title: string; hi
         hint: detail || 'Too many requests at once — retrying automatically. If it persists, wait a few seconds and press Retry.',
       };
     case 'DISCORD_API_ERROR':
+    case 'DISCORD_API_UNAVAILABLE':
     case 'ROLE_FETCH_FAILED':
     case 'CHANNEL_FETCH_FAILED':
       return {
         title: "Discord server data couldn't be loaded.",
         hint: detail || 'Discord is temporarily unavailable. Try again.',
+      };
+    case 'INTERNAL_ERROR':
+    case 'BAD_RESPONSE':
+      return {
+        title: 'The dashboard service hiccuped.',
+        hint: detail || 'The request did not return usable data. Retry — if this persists, check Diagnostics.',
       };
     case 'MODERATION_DATA_FAILED':
     case 'DATABASE_ERROR':

@@ -32,10 +32,21 @@ async function dbConnect() {
 
     const opts = {
       bufferCommands: false,
+      // Bounded server selection: without these a dead cluster holds every
+      // dashboard request ~30s (default) instead of resolving to an error.
+      serverSelectionTimeoutMS: 6000,
+      connectTimeoutMS: 6000,
+      socketTimeoutMS: 10000,
     };
 
+    // Reset the cached promise on failure so one bad connect does not poison
+    // the process forever (every later dbConnect would await the same
+    // rejected promise until restart).
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
       return mongoose;
+    });
+    cached.promise.catch(() => {
+      if (cached) cached.promise = null;
     });
   }
   cached.conn = await cached.promise;

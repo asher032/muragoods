@@ -111,6 +111,7 @@ export async function exchangeCode(code: string, redirectUri: string): Promise<{
         redirect_uri: redirectUri,
       }),
       cache: 'no-store',
+      signal: AbortSignal.timeout(10000),
     });
     if (!resp.ok) {
       const text = await resp.text();
@@ -152,6 +153,7 @@ async function refreshSessionToken(session: SessionDoc): Promise<boolean> {
         refresh_token: session.refreshToken,
       }),
       cache: 'no-store',
+      signal: AbortSignal.timeout(10000),
     });
     if (!resp.ok) return false;
     const data = (await resp.json()) as { access_token: string; refresh_token: string; expires_in: number };
@@ -222,6 +224,7 @@ export async function sessionManagesGuild(
     const resp = await fetch('https://discord.com/api/v10/users/@me/guilds?with_counts=true', {
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
     });
     if (resp.status === 401) {
       return { ok: false, error: 'Discord rejected the session token', status: 401 };

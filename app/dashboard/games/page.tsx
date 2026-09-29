@@ -43,7 +43,7 @@ export default function GamesAdminPage() {
 
   const patch = async (gameId: string, p: Record<string, unknown>) => {
     const resp = await apiFetch<{ success: boolean; game?: GameDef; error?: string }>(
-      '/api/admin/games', { token: token ?? undefined, method: 'PATCH', body: JSON.stringify({ gameId, patch: p }) });
+      '/api/admin/games', { token: token ?? undefined, method: 'PATCH', body: { gameId, patch: p } });
     if (resp.ok && resp.data.success && resp.data.game) {
       setGames(gs => gs.map(g => (g.gameId === gameId ? resp.data.game as GameDef : g)));
     } else {
@@ -81,6 +81,11 @@ export default function GamesAdminPage() {
       </p>
       {error && <div className="cc-alert cc-alert-error" role="alert" style={{ marginBottom: 12 }}>{statusMessage('', error)?.hint || error}</div>}
       {loading && <p style={{ color: 'var(--cc-text-faint)', fontSize: 13 }}>Loading…</p>}
+      {!loading && !error && games.length === 0 && (
+        <div className="cc-card" style={{ padding: 24, textAlign: 'center', marginBottom: 12 }}>
+          <p style={{ margin: 0, color: 'var(--cc-text-faint)', fontSize: 13 }}>No games found.</p>
+        </div>
+      )}
 
       <div className="cc-section-label" style={{ marginBottom: 10 }}>Game catalog</div>
       <div style={{ display: 'grid', gap: 10 }}>
