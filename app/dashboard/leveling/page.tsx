@@ -2,9 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useGuild } from '@/app/lib/guild-context';
+import { useGuildConfig } from '@/app/lib/use-guild-config';
 import { apiFetch } from '../lib/api';
 import { statusMessage } from '../components/selectors';
 import ModuleSettings from '../components/ModuleSettings';
+import LevelBackgroundSelector from '../components/LevelBackgroundSelector';
+import ServerCardPreview from '../components/ServerCardPreview';
+import { resolveServerCardBackground } from '@/app/lib/server-card-backgrounds';
 
 interface LevelingOverview {
   users: number;
@@ -13,6 +17,7 @@ interface LevelingOverview {
 
 export default function LevelingPage() {
   const { token, selected } = useGuild();
+  const { config, saveState, error: configError, save, update } = useGuildConfig();
   const [overview, setOverview] = useState<LevelingOverview | null>(null);
   const [error, setError] = useState('');
   const [code, setCode] = useState('');
@@ -110,6 +115,40 @@ export default function LevelingPage() {
           )}
         </div>
       )}
+
+      <div className="cc-section-label" style={{ margin: '22px 0 10px' }}>Level Background</div>
+      <div className="cc-card" style={{ padding: '14px 18px', marginBottom: 6 }}>
+        <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--cc-text-dim)' }}>
+          Pick one of the imported pictures — it renders behind every level card on this server.
+        </p>
+        <LevelBackgroundSelector
+          value={resolveServerCardBackground(
+            (config as Record<string, Record<string, unknown>>)?.leveling?.serverBackground
+          )}
+          onChange={(id) => update('leveling', 'serverBackground', id)}
+        />
+        <ServerCardPreview
+          themeId={resolveServerCardBackground(
+            (config as Record<string, Record<string, unknown>>)?.leveling?.serverBackground
+          )}
+          accent={(config as Record<string, Record<string, unknown>>)?.leveling?.cardColor}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
+          <button
+            onClick={() => { void save(); }}
+            disabled={saveState === 'saving'}
+            className="cc-btn cc-btn-primary"
+          >
+            {saveState === 'saving' ? 'Saving…'
+              : saveState === 'saved' ? '✓ Saved successfully'
+              : saveState === 'error' ? '✕ Save failed'
+              : 'Save Background'}
+          </button>
+          {configError && (
+            <span style={{ color: '#ff6b6b', fontSize: 13 }}>{configError}</span>
+          )}
+        </div>
+      </div>
 
       <div className="cc-section-label" style={{ margin: '22px 0 10px' }}>Configuration</div>
       <ModuleSettings
