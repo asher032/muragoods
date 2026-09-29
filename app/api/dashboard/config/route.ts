@@ -25,10 +25,17 @@ interface DashGuild {
   permissions: string | number;
 }
 
-function bad(message: string, status = 400, code?: string) {
+function bad(message: string, status = 400, code?: string, extra?: Record<string, unknown>) {
+  // 429s advertise when to come back so clients can back off instead of
+  // hammering; the UI reads Retry-After for its next attempt window.
+  const retryAfterMs = extra?.retryAfterMs;
+  const headers: Record<string, string> =
+    status === 429 && typeof retryAfterMs === 'number'
+      ? { 'Retry-After': String(Math.max(1, Math.ceil(retryAfterMs / 1000))) }
+      : {};
   return NextResponse.json(
-    { success: false, error: message, ...(code ? { code } : {}) },
-    { status },
+    { success: false, error: message, ...(code ? { code } : {}), ...(extra || {}) },
+    { status, headers },
   );
 }
 
@@ -38,7 +45,7 @@ function bad(message: string, status = 400, code?: string) {
 // refuses to store settings for a server the bot is not installed on.
 type Authz =
   | { ok: true; guild: DashGuild }
-  | { ok: false; status: number; code: string; error: string };
+  | { ok: false; status: number; code: string; error: string; retryAfterMs?: number };
 
 async function authorize(token: string | null, guildId: string): Promise<Authz> {
   if (!token) {
@@ -52,7 +59,9 @@ async function authorize(token: string | null, guildId: string): Promise<Authz> 
   // turned rate limits/outages into a false "sign in again" 401.
   const check = await requireGuildManage(token, guildId);
   if (!check.ok) {
-    return { ok: false, status: check.status, code: check.code, error: check.error };
+    // Forward Discord's Retry-After so the UI can say "retry in Ns" instead
+    // of hammering the endpoint again immediately.
+    return { ok: false, status: check.status, code: check.code, error: check.error, retryAfterMs: check.retryAfterMs };
   }
   return { ok: true, guild: check.guild };
 }
@@ -84,16 +93,22 @@ interface BotCheck {
 }
 
 async function loadBotCheck(guildId: string, botToken: string): Promise<BotCheck | null> {
+  // Bounded: an untimed Discord stall here would hang the SAVE button with
+  // no feedback. 10s is generous; failure resolves to a 502 with retry.
+  const timeout = (ms: number) => AbortSignal.timeout(ms);
   try {
     const [channelsRes, rolesRes, memberRes] = await Promise.all([
       fetch(`https://discord.com/api/v10/guilds/${guildId}/channels`, {
         headers: { Authorization: `Bot ${botToken}` }, cache: 'no-store',
+        signal: timeout(10000),
       }),
       fetch(`https://discord.com/api/v10/guilds/${guildId}/roles`, {
         headers: { Authorization: `Bot ${botToken}` }, cache: 'no-store',
+        signal: timeout(10000),
       }),
       fetch(`https://discord.com/api/v10/guilds/${guildId}/members/@me`, {
         headers: { Authorization: `Bot ${botToken}` }, cache: 'no-store',
+        signal: timeout(10000),
       }),
     ]);
     if (!channelsRes.ok || !rolesRes.ok || !memberRes.ok) return null;
@@ -128,6 +143,7 @@ async function memberInGuild(guildId: string, userId: string, botToken: string):
   try {
     const resp = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`, {
       headers: { Authorization: `Bot ${botToken}` }, cache: 'no-store',
+      signal: AbortSignal.timeout(10000),
     });
     return resp.ok;
   } catch {
@@ -155,34 +171,75 @@ function friendlyField(section: string, field: string): string {
     .replace(/^./, (c) => c.toUpperCase());
 }
 
+// ── Server-side read cache ───────────────────────────────────────────────
+// GET does authorize (Discord guild-list read) + a DB read + a live bot
+// presence probe per call. A dashboard page mounts several consumers, so a
+// cold client burst still fired N× those Discord calls and tripped Discord's
+// rate limit (surfaced here as 429). Serve identical reads from one short
+// TTL cache with in-flight dedup; PATCH invalidates on every save. Authz is
+// still enforced on every request BEFORE the cache is consulted.
+const GET_TTL_MS = 30_000;
+interface CachedGet {
+  at: number;
+  body: Record<string, unknown>;
+}
+const getCache = new Map<string, CachedGet>();
+const getInflight = new Map<string, Promise<Record<string, unknown>>>();
+
+async function buildGetPayload(guild: DashGuild, guildId: string): Promise<Record<string, unknown>> {
+  const collection = await discordConfigCollection();
+  const config = await collection.findOne({ guildId }) || {
+    guildId,
+    guildName: guild.name,
+    guildIcon: guild.icon || '',
+  };
+  // Bot presence rides along (never blocks a read — settings remain
+  // viewable while the bot is away); null = could not be determined.
+  const installed = await botInstalled(guildId);
+  return {
+    success: true,
+    guild: { id: guild.id, name: guild.name, icon: guild.icon },
+    config,
+    bot: { installed },
+  };
+}
+
 export async function GET(req: NextRequest) {
   const started = Date.now();
   try {
     const token = (await sessionToken());
     const guildId = req.nextUrl.searchParams.get('guildId') || '';
+
+    // Authz FIRST, on every request — the cache is only ever consulted
+    // after this requestor has proven Manage on this guild.
     const auth = await authorize(token, guildId);
     if (!auth.ok) {
       logApi('/api/dashboard/config', 'GET', auth.status, Date.now() - started, auth.code);
-      return bad(auth.error, auth.status, auth.code);
+      return bad(auth.error, auth.status, auth.code,
+        auth.retryAfterMs !== undefined ? { retryAfterMs: auth.retryAfterMs, retryable: true } : { retryable: auth.status === 429 || auth.status >= 500 });
     }
-    const guild = auth.guild;
 
-    const collection = await discordConfigCollection();
-    const config = await collection.findOne({ guildId }) || {
-      guildId,
-      guildName: guild.name,
-      guildIcon: guild.icon || '',
-    };
-    // Bot presence rides along (never blocks a read — settings remain
-    // viewable while the bot is away); null = could not be determined.
-    const installed = await botInstalled(guildId);
+    // Fresh payload → zero DB/Discord work.
+    const hit = getCache.get(guildId);
+    if (hit && Date.now() - hit.at < GET_TTL_MS) {
+      logApi('/api/dashboard/config', 'GET', 200, Date.now() - started, 'CACHE_HIT');
+      return NextResponse.json(hit.body);
+    }
+
+    // Single flight: simultaneous mounts share ONE payload build.
+    let pending = getInflight.get(guildId);
+    if (!pending) {
+      pending = buildGetPayload(auth.guild, guildId).then((body) => {
+        getCache.set(guildId, { at: Date.now(), body });
+        return body;
+      }).finally(() => {
+        if (getInflight.get(guildId) === pending) getInflight.delete(guildId);
+      });
+      getInflight.set(guildId, pending);
+    }
+    const body = await pending;
     logApi('/api/dashboard/config', 'GET', 200, Date.now() - started);
-    return NextResponse.json({
-      success: true,
-      guild: { id: guild.id, name: guild.name, icon: guild.icon },
-      config,
-      bot: { installed },
-    });
+    return NextResponse.json(body);
   } catch {
     // Never leak HTML: DB/Discord throws resolve to a retryable JSON error.
     logApi('/api/dashboard/config', 'GET', 502, Date.now() - started, 'DATABASE_ERROR');
@@ -202,7 +259,8 @@ export async function PATCH(req: NextRequest) {
   if (!body || typeof body !== 'object') return bad('Invalid JSON body');
   const guildId = String((body as Record<string, unknown>).guildId || '');
   const auth = await authorize(token, guildId);
-  if (!auth.ok) return bad(auth.error, auth.status, auth.code);
+  if (!auth.ok) return bad(auth.error, auth.status, auth.code,
+    auth.retryAfterMs !== undefined ? { retryAfterMs: auth.retryAfterMs, retryable: true } : undefined);
   const guild = auth.guild;
 
   // Storing settings for a server without the bot serves nothing and hides
@@ -479,6 +537,9 @@ export async function PATCH(req: NextRequest) {
   );
 
   await collection.updateOne({ guildId }, { $set: update }, { upsert: true });
+  // The write is the truth now — drop the stale GET cache so the next read
+  // (and any other tab) sees the saved settings immediately.
+  getCache.delete(guildId);
 
   // Push music settings to the bot host: the dashboard writes the SITE
   // database, but the player reads the BOT's guild_config store. Without
@@ -506,7 +567,8 @@ export async function PATCH(req: NextRequest) {
   // Audit trail: who changed what (actor = Discord user from token).
   try {
     const meResp = await fetch('https://discord.com/api/v10/users/@me', {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
     });
     let actor = 'unknown';
     if (meResp.ok) {
