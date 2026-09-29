@@ -256,7 +256,8 @@ class LevelingCog(commands.Cog):
                 level, into, need = levels.level_from_xp(xp)
                 rank = (page - 1) * 10 + i + 1
                 medal = medals[i] if page == 1 and i < 3 else f"`{rank}.`"
-                lines.append(f"{medal} <@{d.get('userId')}> — **Level {level}** ({xp} XP, {need - into} to go)")
+                name, uid = await levels.display_name_for(interaction.guild, d.get('userId'))
+                lines.append(f"{medal} **{name}** (<@{uid}>) — **Level {level}** ({xp} XP, {need - into} to go)")
             await interaction.followup.send(embed=embeds.embed(
                 f"🏆 XP Leaderboard (p{page})", "\n".join(lines), embeds.GOLD))
             return
@@ -274,7 +275,8 @@ class LevelingCog(commands.Cog):
             val = (f"💎 {int(row.get('gems', 0))}" if by == "gems"
                    else f"**{int(row.get('balance', 0)):,}**" if by == "balance"
                    else f"**{int(row.get('balance', 0)) + int(row.get('bank', 0)):,}**")
-            lines.append(f"{medal} <@{row.get('userId')}> — {val}")
+            name, uid = await levels.display_name_for(interaction.guild, row.get('userId'))
+            lines.append(f"{medal} **{name}** (<@{uid}>) — {val}")
         await interaction.followup.send(embed=embeds.embed(
             f"🏆 {by} · p{page}", "\n".join(lines), embeds.GOLD))
 
@@ -297,8 +299,10 @@ class LevelingCog(commands.Cog):
         if not rows:
             await interaction.followup.send("Nobody holds that item.", ephemeral=True)
             return
-        lines = [f"`{i + 1 + (page - 1) * 10}.` <@{r.get('userId')}> — **{(r.get('items') or {}).get(item_id, 0)}x**"
-                 for i, r in enumerate(rows)]
+        lines = []
+        for i, r in enumerate(rows):
+            name, uid = await levels.display_name_for(interaction.guild, r.get('userId'))
+            lines.append(f"`{i + 1 + (page - 1) * 10}.` **{name}** (<@{uid}>) — **{(r.get('items') or {}).get(item_id, 0)}x**")
         await interaction.followup.send(embed=embeds.embed(
             f"🏆 {eco.ITEMS[item_id]['name']} holders · p{page}", "\n".join(lines), embeds.GOLD))
 
@@ -668,7 +672,8 @@ class LevelingCog(commands.Cog):
             level, into, need = levels.level_from_xp(xp)
             rank = (page - 1) * 10 + i + 1
             medal = ["🥇", "🥈", "🥉"][i] if page == 1 and i < 3 else f"`{rank}.`"
-            lines.append(f"{medal} <@{d.get('userId')}> — **Lv{level}** ({xp} XP, {need - into} to go)")
+            name, uid = await levels.display_name_for(interaction.guild, d.get('userId'))
+            lines.append(f"{medal} **{name}** (<@{uid}>) — **Lv{level}** ({xp} XP, {need - into} to go)")
         await interaction.followup.send(embed=embeds.embed(
             f"🏆 XP Leaderboard (p{page})", "\n".join(lines), embeds.GOLD))
 
@@ -677,16 +682,18 @@ class LevelingCog(commands.Cog):
         if self._deny(interaction):
             await interaction.response.send_message("Manage Server only.", ephemeral=True)
             return
+        await interaction.response.defer(ephemeral=True)
         rows = await levels.recent_level_ups(database._db, interaction.guild.id, 10)
         if not rows:
-            await interaction.response.send_message("No level-ups recorded yet.", ephemeral=True)
+            await interaction.followup.send("No level-ups recorded yet.", ephemeral=True)
             return
         lines = []
         for r in rows:
             at = r.get("at")
             stamp = at.strftime("%m-%d %H:%M") if hasattr(at, "strftime") else "?"
-            lines.append(f"<@{r.get('userId')}> **{r.get('oldLevel')}→{r.get('newLevel')}** · {stamp}")
-        await interaction.response.send_message(embed=embeds.embed(
+            name, uid = await levels.display_name_for(interaction.guild, r.get('userId'))
+            lines.append(f"**{name}** (<@{uid}>) **{r.get('oldLevel')}→{r.get('newLevel')}** · {stamp}")
+        await interaction.followup.send(embed=embeds.embed(
             "📜 Level-up Log", "\n".join(lines), embeds.INFO), ephemeral=True)
 
     @level.command(name="reward", description="Assign/remove a level role reward (Manage Server).")

@@ -11,7 +11,7 @@ interface EconomyOverview {
   circulation: { pocket: number; bank: number; total: number };
   dau: number;
   transactions: number;
-  top: Array<{ userId: string; balance: number; bank: number }>;
+  top: Array<{ userId: string; displayName?: string; balance: number; bank: number }>;
   recent: Array<{ type: string; amount: number; at: string }>;
 }
 
@@ -163,7 +163,7 @@ export default function EconomyPage() {
                 <div style={{ marginTop: 8, display: 'grid', gap: 4 }}>
                   {overview.top.map((t, i) => (
                     <div key={t.userId} style={{ fontSize: 12.5, color: 'var(--cc-text-dim)' }}>
-                      <strong style={{ color: '#fff' }}>#{i + 1}</strong> <code>&lt;@{t.userId}&gt;</code>
+                      <strong style={{ color: '#fff' }}>#{i + 1}</strong> <strong style={{ color: '#fff' }}>{t.displayName || 'Unknown User'}</strong>
                       {' '}— {(t.balance + t.bank).toLocaleString()} {sym}
                     </div>
                   ))}

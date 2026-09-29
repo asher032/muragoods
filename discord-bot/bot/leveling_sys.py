@@ -45,6 +45,38 @@ def level_from_xp(xp: int) -> tuple[int, int, int]:
     return level, xp - base, need_for_level(level + 1)
 
 
+async def display_name_for(guild, user_id) -> tuple[str, int]:
+    """(display name, user id) for leaderboard lines, resolved LIVE from the
+    guild so nickname changes show up with no database edits.
+
+    Precedence: server nickname → display name → username → "Unknown User".
+    Never raises and never exposes anything but the name; the numeric id is
+    returned alongside only so callers can keep Discord mentions working.
+    """
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return "Unknown User", 0
+    member = None
+    try:
+        member = guild.get_member(uid)
+    except Exception:
+        member = None
+    if member is None and hasattr(guild, "fetch_member"):
+        try:
+            member = await guild.fetch_member(uid)
+        except Exception:
+            member = None
+    if member is None:
+        return "Unknown User", uid
+    name = (getattr(member, "nick", None)
+            or getattr(member, "display_name", None)
+            or getattr(member, "name", None)
+            or getattr(member, "global_name", None)
+            or "Unknown User")
+    return str(name), uid
+
+
 LEVEL_DEFAULTS: dict = {
     "xpMin": 15,
     "xpMax": 25,
