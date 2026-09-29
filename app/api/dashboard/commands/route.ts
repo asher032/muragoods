@@ -142,10 +142,7 @@ const COMMANDS: DiscordCommand[] = [
   { name: '!remind', description: 'Set a reminder', type: 'prefix', module: 'Reminders', status: 'disabled', usage: '!remind <time> <message>', requiredPermissions: ['View Channels'], botPermissions: ['Read Messages', 'Send Messages'], cooldown: 5 },
 
   // Reputation
-  { name: '/rep', description: 'Give reputation to a user', type: 'slash', module: 'Reputation', status: 'working', usage: '/rep <user>', requiredPermissions: ['View Channels'], botPermissions: ['Read Messages', 'Send Messages', 'Embed Links'], cooldown: 21600 },
-  { name: '/reputation', description: 'Check reputation scores', type: 'slash', module: 'Reputation', status: 'working', usage: '/reputation [user]', requiredPermissions: ['View Channels'], botPermissions: ['Read Messages', 'Send Messages', 'Embed Links'], cooldown: 5 },
-  { name: '/rep leaderboard', description: 'Show reputation leaderboard', type: 'slash', module: 'Reputation', status: 'working', usage: '/rep leaderboard', requiredPermissions: ['View Channels'], botPermissions: ['Read Messages', 'Send Messages', 'Embed Links'], cooldown: 5 },
-  { name: '/rep set', description: 'Set reputation for a user (admin)', type: 'slash', module: 'Reputation', status: 'working', usage: '/rep set <user> <amount>', requiredPermissions: ['Manage Roles'], botPermissions: ['Manage Roles', 'Manage Messages'], cooldown: 10 },
+  { name: '/rep', description: 'Give reputation to a user (bare = leaderboard)', type: 'slash', module: 'Reputation', status: 'working', usage: '/rep [user]', requiredPermissions: ['View Channels'], botPermissions: ['Read Messages', 'Send Messages', 'Embed Links'], cooldown: 21600 },
   { name: '!rep', description: 'Give reputation', type: 'prefix', module: 'Reputation', status: 'error', usage: '!rep <user>', requiredPermissions: ['View Channels'], botPermissions: ['Read Messages', 'Send Messages'], cooldown: 21600 },
 
   // Murastream
