@@ -5,6 +5,7 @@ import { useGuild } from '@/app/lib/guild-context';
 import { apiFetch } from '../lib/api';
 import { statusMessage } from '../components/selectors';
 import ModuleSettings from '../components/ModuleSettings';
+import ItemsPanel from '../components/ItemsPanel';
 
 interface EconomyOverview {
   users: number;
@@ -36,16 +37,9 @@ interface EconomyConfig {
   lotteryMaxTickets?: number;
 }
 
-const SHOP = [
-  { id: 'bread', name: 'Bread', price: 25, rarity: 'common' },
-  { id: 'fishing_rod', name: 'Fishing Rod', price: 200, rarity: 'common' },
-  { id: 'lucky_charm', name: 'Lucky Charm', price: 500, rarity: 'rare' },
-  { id: 'mystery_box', name: 'Mystery Box', price: 500, rarity: 'rare' },
-  { id: 'adventure_ticket', name: 'Adventure Ticket', price: 300, rarity: 'rare' },
-  { id: 'farm_plot_deed', name: 'Farm Plot Deed', price: 400, rarity: 'common' },
-  { id: 'speed_fertilizer', name: 'Speed Fertilizer', price: 150, rarity: 'common' },
-  { id: 'golden_hook', name: 'Golden Hook', price: 2500, rarity: 'epic' },
-];
+// The item catalog is NOT defined here. It is generated from the bot's
+// canonical catalog into app/lib/items-table.json and rendered by
+// <ItemsPanel />, so the site can never drift from the bot.
 
 const ACHIEVEMENTS = [
   'First Coin', 'Earner (5k net)', 'Tycoon (25k net)', 'Grinder (25 activities)',
@@ -228,12 +222,14 @@ export default function EconomyPage() {
       <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', marginBottom: 22 }}>
         <div className="cc-card" style={{ padding: '14px 18px', fontSize: 13, color: 'var(--cc-text-dim)' }}>
           <strong style={{ color: '#fff' }}>🛒 Shop management</strong>
-          <div style={{ marginTop: 6, display: 'grid', gap: 3 }}>
-            {SHOP.map((s) => (
-              <div key={s.id}><code>{s.id}</code> — {s.name} · <strong style={{ color: '#fff' }}>{s.price}</strong> {sym} · <em>{s.rarity}</em></div>
-            ))}
+          <div style={{ marginTop: 6 }}>
+            The Murashop is backed by the canonical item catalog — the same {sym} prices the Discord
+            commands use. Buy/sell in Discord: <code>/shop view|buy|sell</code>, inspect with{' '}
+            <code>/item &lt;name&gt;</code>, browse your bag with <code>/inventory view</code>.
           </div>
-          <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--cc-text-faint)' }}>Buy/sell in Discord: /shop view|buy|sell. Prices live in the bot catalog.</p>
+          <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--cc-text-faint)' }}>
+            🔒 Prices and rewards are economic values — Bot Owner only. The full catalog is below.
+          </p>
         </div>
         <div className="cc-card" style={{ padding: '14px 18px', fontSize: 13, color: 'var(--cc-text-dim)' }}>
           <strong style={{ color: '#fff' }}>🎟️ Lottery · 🎉 Events</strong>
@@ -258,6 +254,15 @@ export default function EconomyPage() {
           </p>
         </div>
       </div>
+
+      <div className="cc-section-label" style={{ margin: '22px 0 10px' }}>
+        Items · categories · loot tables · drop sources
+      </div>
+      <ItemsPanel />
+      <p style={{ margin: '18px 0 0', fontSize: 12, color: 'var(--cc-text-faint)' }}>
+        In Discord: <code>/item &lt;name&gt;</code> · <code>/shop view rarity:… category:…</code> ·{' '}
+        <code>/inventory view rarity:… category:…</code> · <code>/inventory use item:&lt;name&gt;</code>.
+      </p>
 
       <div className="cc-section-label" style={{ margin: '22px 0 10px' }}>Configuration</div>
       <ModuleSettings moduleId="economy" />
