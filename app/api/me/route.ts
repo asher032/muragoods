@@ -52,7 +52,11 @@ export async function GET(req: Request) {
       try {
         const ds = await getDiscordSession();
         if (ds) {
-          discordSession = { discordId: ds.discordId, username: ds.username };
+          // IValidatedSession carries { session, accessToken, discordId };
+          // the display name lives on the stored session document.
+          const sessionUsername =
+            (ds.session as unknown as { username?: string; globalName?: string })?.username || '';
+          discordSession = { discordId: ds.discordId, username: sessionUsername };
           user = await User.findOne({ 'discord.discordId': ds.discordId })
             .select('name email userId role avatar bio coinBalance createdAt perks discord')
             .lean<LeanUser | null>();
