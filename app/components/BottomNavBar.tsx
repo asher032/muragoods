@@ -27,7 +27,7 @@ const tabs = [
   { href: '/murastream', label: 'Movies', icon: (active: boolean) => (
     <Film size={22} color={active ? '#ffd60a' : '#888'} strokeWidth={active ? 2.4 : 2} />
   )},
-  { href: '/account/profile', label: 'Profile', icon: (active: boolean) => (
+  { href: '/profile', label: 'Profile', icon: (active: boolean) => (
     <CircleUserRound size={22} color={active ? '#ffd60a' : '#888'} strokeWidth={active ? 2.4 : 2} />
   )},
 ];

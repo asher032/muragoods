@@ -59,6 +59,11 @@ const UserSchema = new mongoose.Schema({
     activity: { type: String, enum: ['private', 'friends', 'public'], default: 'private' },
     watchHistory: { type: String, enum: ['private', 'public'], default: 'private' },
   },
+  // Public profile fields. Added explicitly: with mongoose's default strict
+  // mode, undeclared paths are silently dropped on save, which previously
+  // discarded every bio/preferences write without an error.
+  bio: { type: String, default: '' },
+  preferences: { type: mongoose.Schema.Types.Mixed, default: {} },
 });
 
 export default mongoose.models.User || mongoose.model('User', UserSchema);

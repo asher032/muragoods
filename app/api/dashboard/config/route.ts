@@ -4,6 +4,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 import { verifyBotInGuild, botToken } from '@/app/lib/discord-bot';
 import { apiFail, logApi } from '@/app/lib/dashboard-response';
+import { SERVER_CARD_BACKGROUNDS, SERVER_CARD_DEFAULT } from '@/app/lib/server-card-backgrounds';
+
+const SERVER_CARD_IDS = new Set(SERVER_CARD_BACKGROUNDS.map((b) => b.id));
 
 // Dashboard config API — authorization model:
 //   1. The caller presents a Discord access token (from the OAuth flow).
@@ -369,7 +372,9 @@ export async function PATCH(req: NextRequest) {
       rewardOnly: Boolean(l.rewardOnly),
       cardColor: /^#[0-9a-fA-F]{6}$/.test(String(l.cardColor || '')) ? String(l.cardColor) : '#5865F2',
       cardOpacity: Math.max(0, Math.min(1, Number(l.cardOpacity ?? 1) || 0)),
-      serverBackground: String(l.serverBackground || '').slice(0, 300),
+      serverBackground: SERVER_CARD_IDS.has(String(l.serverBackground || ''))
+        ? String(l.serverBackground)
+        : SERVER_CARD_DEFAULT,
       rewards,
     };
   }

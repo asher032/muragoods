@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
-import { GameBackground } from '@/app/components/GameBackground';
+import { ThemedGameBackground } from '@/app/components/GameBackgroundSettings';
 import { BookOpen, Coins, MessageCircle, Users } from 'lucide-react';
 export default function ReferPage() {
   const router = useRouter();
@@ -47,7 +47,7 @@ export default function ReferPage() {
   return (
     <main className="min-h-screen">
       <NavBar pageLabel="Refer a Friend" />
-      <GameBackground theme="campus" level={1} />
+      <ThemedGameBackground level={1} />
 
       <section className="px-4 py-10 sm:px-8">
         <div className="deco-container" style={{ maxWidth: '48rem' }}>

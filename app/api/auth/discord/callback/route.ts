@@ -97,6 +97,16 @@ export async function GET(req: NextRequest) {
     return linkDiscordAccount(req, user);
   }
 
+  // Unified identity: a signed-in Muragoods user connecting Discord from the
+  // dashboard flow must NOT end up with a second, unlinked identity. Bind
+  // the Discord id to their existing account (same uniqueness guard as link
+  // mode), then continue to the dashboard session below.
+  try {
+    await autoLinkDiscordToShopUser(req, user.id, user.username, user.avatar);
+  } catch (err) {
+    return fail(req, err instanceof Error ? err.message : 'Account linking conflict.');
+  }
+
   // Preselect: explicit ?guild= deep link, else the first manageable guild
   // where the bot is present is decided later by the dashboard's bot check —
   // here we just take the deep link or leave null (UI shows the chooser).
@@ -193,5 +203,77 @@ async function linkDiscordAccount(
     return done(true, `@${user.username}`);
   } catch {
     return done(false, 'Linking failed — please try again.');
+  }
+}
+
+/**
+ * Best-effort auto-link for the dashboard login flow: when the browser
+ * already holds a valid Muragoods shop session, the Discord identity just
+ * authorized is bound to that SAME account instead of floating unlinked.
+ * Never merges: a Discord id taken by another account aborts the login with
+ * a clear account-linking error. No shop session → dashboard-only session,
+ * no User record created.
+ */
+async function autoLinkDiscordToShopUser(
+  req: NextRequest,
+  discordId: string,
+  username: string,
+  avatar: string | null,
+): Promise<void> {
+  try {
+    const { getSessionUser } = await import('@/app/lib/session');
+    const session = await getSessionUser(req);
+    if (!session) return;
+    const [{ default: dbConnect }, { default: User }] = await Promise.all([
+      import('@/app/lib/mongodb'),
+      import('@/app/lib/models/User'),
+    ]);
+    await dbConnect();
+    const me = await User.findOne({ email: session.email }).select('discord').lean() as {
+      discord?: { discordId?: string };
+    } | null;
+    if (!me) return;
+    if (me.discord?.discordId === discordId) return; // already linked
+    if (me.discord?.discordId) return; // linked to a different Discord id — keep explicit link flow
+    const taken = await User.findOne({ 'discord.discordId': discordId }).select('_id').lean();
+    if (taken) {
+      // Linked elsewhere: do NOT silently merge. Surface the conflict at the
+      // dashboard gate instead of creating a duplicate identity.
+      throw new Error(
+        'That Discord account is already linked to another Muragoods account. Sign in with that account, or unlink it first.',
+      );
+    }
+    const avatarUrl = avatar
+      ? `https://cdn.discordapp.com/avatars/${discordId}/${avatar}.png?size=128`
+      : '';
+    await User.updateOne(
+      { email: session.email },
+      {
+        $set: {
+          'discord.discordId': discordId,
+          'discord.username': username,
+          'discord.avatar': avatarUrl,
+          'discord.linkedAt': new Date(),
+        },
+      },
+    );
+    const emailLc = session.email.toLowerCase();
+    const [{ default: GameProgress }, { default: UserPreference }, { default: UserActivity }, { default: GameReward }] =
+      await Promise.all([
+        import('@/app/lib/models/GameProgress'),
+        import('@/app/lib/models/UserPreference'),
+        import('@/app/lib/models/UserActivity'),
+        import('@/app/lib/models/GameReward'),
+      ]);
+    await Promise.all([
+      GameProgress.updateMany({ userEmail: emailLc }, { $set: { discordId } }),
+      UserPreference.updateMany({ userEmail: emailLc }, { $set: { discordId } }),
+      UserActivity.updateMany({ userEmail: emailLc }, { $set: { discordId } }),
+      GameReward.updateMany({ userEmail: emailLc }, { $set: { discordId } }),
+    ]);
+  } catch (err) {
+    // Re-throw linking conflicts so GET can redirect with the message;
+    // anything else is best-effort (dashboard session still works).
+    if (err instanceof Error && err.message.includes('already linked')) throw err;
   }
 }

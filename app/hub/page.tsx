@@ -30,9 +30,9 @@ export default function HubPage() {
       color: 'var(--mario-blue)',
       bgColor: 'rgba(72,149,239,0.1)',
       borderColor: 'rgba(72,149,239,0.2)',
-      href: '/account/profile',
+      href: '/profile',
       items: [
-        { label: 'My Profile', href: '/account/profile', icon: <Icon name="person" size={24} /> },
+        { label: 'My Profile', href: '/profile', icon: <Icon name="person" size={24} /> },
         { label: 'My Orders', href: '/orders', icon: <Icon name="box" size={16} /> },
         { label: 'Order History', href: '/orders', icon: <Icon name="clipboard" size={16} /> },
         { label: 'Support', href: '/support', icon: <Icon name="chat" size={16} /> },

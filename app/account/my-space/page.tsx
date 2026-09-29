@@ -269,7 +269,7 @@ export default function MySpacePage() {
             { href: '/murastream/vault-watch', label: 'Vault', icon: <TrendingUp size={14} aria-hidden /> },
             { href: '/murastream/library', label: 'Library', icon: <Bookmark size={14} aria-hidden /> },
             { href: '/murastream/settings', label: 'Preferences', icon: <User size={14} aria-hidden /> },
-            { href: '/account/profile', label: 'Account', icon: <Shield size={14} aria-hidden /> },
+            { href: '/profile', label: 'Account', icon: <Shield size={14} aria-hidden /> },
           ].map((q) => (
             <Link key={q.href} href={q.href} className="glass-panel rounded-xl p-3 flex items-center gap-2 hover:bg-white/10 transition-colors" style={{
               background: 'rgba(255,255,255,0.21)',

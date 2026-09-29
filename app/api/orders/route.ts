@@ -2,6 +2,7 @@ import { NextResponse, after } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import Order from '@/app/lib/models/Order';
 import PromoCode from '@/app/lib/models/PromoCode';
+import { getSessionUser, requireAdmin } from '@/app/lib/session';
 
 export async function POST(req: Request) {
   try {
@@ -26,6 +27,15 @@ export async function POST(req: Request) {
     if (!body.statusHistory) {
       body.statusHistory = [{ status: body.status || 'Pending Payment', timestamp: new Date() }];
     }
+
+    // Identity: a signed-in user always orders as themselves — the client
+    // cannot place an order (or spend a promo code) on another account.
+    // Guests without a session keep the supplied identifier.
+    try {
+      const { getSessionUser: getShopUser } = await import('@/app/lib/session');
+      const shopper = await getShopUser(req);
+      if (shopper) body.userId = shopper.email;
+    } catch { /* session lookup failed — continue as guest */ }
 
     // Game-reward promo codes are consumed here, server-side, so a code can
     // never be spent twice even if the checkout request is replayed. Only
@@ -72,18 +82,23 @@ export async function GET(req: Request) {
     await dbConnect();
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
-    const isAdmin = searchParams.get('isAdmin') === 'true';
 
-    if (!isAdmin && !userId) {
-      return NextResponse.json({ success: false, error: 'userId or isAdmin=true is required' }, { status: 400 });
+    // Identity comes from the session, never from ?userId=. Admins (server-
+    // verified) may list everything or filter by account; everyone else sees
+    // only their own orders. The old ?isAdmin=true client flag is gone: it
+    // let any visitor list every order in the database.
+    const { user: admin } = await requireAdmin(req);
+    if (admin) {
+      const query: Record<string, unknown> = {};
+      if (userId) query.userId = userId.trim();
+      const orders = await Order.find(query).sort({ createdAt: -1 });
+      return NextResponse.json({ success: true, data: orders });
     }
-
-    let query: Record<string, unknown> = {};
-    if (!isAdmin && userId) {
-      query = { userId };
+    const viewer = await getSessionUser(req);
+    if (!viewer) {
+      return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });
     }
-
-    const orders = await Order.find(query).sort({ createdAt: -1 });
+    const orders = await Order.find({ userId: viewer.email }).sort({ createdAt: -1 });
     return NextResponse.json({ success: true, data: orders });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'An error occurred';
@@ -103,11 +118,33 @@ export async function PATCH(req: Request) {
     }
 
     // Capture the previous status so we only react to real transitions
-    const previous = await Order.findById(orderId).select('status').lean();
+    const previous = await Order.findById(orderId).select('status userId').lean();
     if (!previous) {
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
     }
-    const prevStatus = (previous as { status?: string }).status;
+    const prev = previous as { status?: string; userId?: string };
+    const prevStatus = prev.status;
+
+    // Owner self-cancel: the ONLY non-admin mutation. Anything else (status
+    // advances, coins, notifications) stays behind the admin guard below.
+    const keys = Object.keys(body).filter((k) => k !== '$push');
+    const isOwnerCancel =
+      keys.length === 1 && keys[0] === 'status' && body.status === 'Cancelled' &&
+      prevStatus !== 'Delivered' && prevStatus !== 'Cancelled';
+    if (isOwnerCancel) {
+      const { getSessionUser: getShopper } = await import('@/app/lib/session');
+      const shopper = await getShopper(req);
+      if (!shopper || !prev.userId || prev.userId !== shopper.email) {
+        return NextResponse.json({ success: false, error: 'You can only cancel your own orders' }, { status: 403 });
+      }
+      const order = await Order.findByIdAndUpdate(orderId, { status: 'Cancelled' }, { new: true });
+      return NextResponse.json({ success: true, data: order });
+    }
+
+    // Order mutation is admin-only: status changes award coins/points and
+    // push notifications, so an unauthenticated caller must never reach them.
+    const { response } = await requireAdmin(req);
+    if (response) return response;
 
     // Handle $push operations for statusHistory
     const updateOps: Record<string, unknown> = {};
@@ -168,6 +205,8 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const { response } = await requireAdmin(req);
+  if (response) return response;
   try {
     await dbConnect();
     const { searchParams } = new URL(req.url);

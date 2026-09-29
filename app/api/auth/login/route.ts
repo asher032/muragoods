@@ -40,6 +40,10 @@ export async function POST(req: Request) {
     }
 
     let user = await User.findOne({ email: emailLc });
+    if (!user && email.trim() !== emailLc) {
+      // Legacy mixed-case records predate canonical lowercase signup.
+      user = await User.findOne({ email: email.trim() });
+    }
 
     // Auto-create admin accounts if they don't exist in DB yet. The created
     // record stores a bcrypt hash — never the plaintext.

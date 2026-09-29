@@ -23,6 +23,8 @@ export interface FieldDef {
   placeholder?: string;
   help?: string;
   options?: { value: string; label: string; icon?: string }[];
+  /** Live preview rendered under the field, bound to the draft value. */
+  preview?: 'server-card';
 }
 
 export interface ModuleDef {
@@ -182,7 +184,23 @@ export const MODULES: ModuleDef[] = [
       m('leveling.rewardOnly', 'Only Rewarded Level-Ups', 'toggle', { default: false }),
       m('leveling.cardColor', 'Card Accent Color', 'text', { default: '#5865F2' }),
       m('leveling.cardOpacity', 'Card Background Opacity', 'number', { default: 1.0 }),
-      m('leveling.serverBackground', 'Server Card Background URL', 'text', { default: '' }),
+      m('leveling.serverBackground', 'Server Card Background', 'select', {
+        icon: '🎨',
+        default: 'night-campus',
+        options: [
+          { value: 'night-campus', label: '🌙 Night Campus' },
+          { value: 'deep-space', label: '🌌 Deep Space' },
+          { value: 'mystic-forest', label: '🌲 Mystic Forest' },
+          { value: 'neon-city', label: '🏙️ Neon City' },
+          { value: 'fantasy-castle', label: '🏰 Fantasy Castle' },
+          { value: 'arcade', label: '🎮 Arcade' },
+          { value: 'sunset', label: '🌅 Sunset' },
+          { value: 'sky', label: '☁️ Sky' },
+          { value: 'midnight', label: '🌑 Midnight' },
+          { value: 'muragoods', label: '✨ Muragoods' },
+        ],
+        preview: 'server-card',
+      }),
       m('leveling.reward5', 'Level 5 Reward Role', 'role', { icon: '⭐', default: '' }),
       m('leveling.reward10', 'Level 10 Reward Role', 'role', { icon: '⭐', default: '' }),
       m('leveling.reward25', 'Level 25 Reward Role', 'role', { icon: '⭐', default: '' }),

@@ -757,7 +757,7 @@ class LevelingCog(commands.Cog):
         except Exception:
             rank = 0
         cfg = await levels.get_level_config(database._db, interaction.guild.id)
-        avatar_bytes, bg_bytes = None, None
+        avatar_bytes, personal_bytes = None, None
         try:
             import aiohttp
             timeout = aiohttp.ClientTimeout(total=8)
@@ -785,15 +785,19 @@ class LevelingCog(commands.Cog):
                     {"guildId": interaction.guild.id, "userId": target.id}) or {}).get("backgroundUrl") or "")
             except Exception:
                 personal = ""
-            server_bg = str(cfg.get("serverBackground") or "")
-            bg_bytes = await fetch_bytes(personal or server_bg or "", 2_000_000)
+            personal_bytes = await fetch_bytes(personal, 2_000_000)
         except Exception:
-            pass
+            personal_bytes = None
+        # Member image wins; otherwise the server's built-in theme (an id
+        # like "deep-space" — old URL values resolve to the default and are
+        # never fetched).
+        server_theme = levels.resolve_server_background(cfg.get("serverBackground"))
         kind, payload = levels.render_level_card(
             getattr(target, "display_name", "member"), avatar_bytes, level, into, need, rank,
             accent=str(cfg.get("cardColor") or "#5865F2"),
             opacity=float(cfg.get("cardOpacity", 1.0) or 1.0),
-            background_bytes=bg_bytes)
+            background_bytes=personal_bytes,
+            background_id=None if personal_bytes else server_theme)
         if kind == "png":
             import io as _io
             await interaction.followup.send(
@@ -819,19 +823,30 @@ class LevelingCog(commands.Cog):
             ephemeral=True)
 
     @level.command(name="serverbackground", description="Set the server card background (Manage Server).")
-    @app_commands.describe(link="Direct image URL (empty = reset)")
-    async def serverbackground(self, interaction: discord.Interaction, link: str = ""):
+    @app_commands.describe(theme="Built-in background theme")
+    @app_commands.choices(theme=[
+        app_commands.Choice(name="🌙 Night Campus", value="night-campus"),
+        app_commands.Choice(name="🌌 Deep Space", value="deep-space"),
+        app_commands.Choice(name="🌲 Mystic Forest", value="mystic-forest"),
+        app_commands.Choice(name="🏙️ Neon City", value="neon-city"),
+        app_commands.Choice(name="🏰 Fantasy Castle", value="fantasy-castle"),
+        app_commands.Choice(name="🎮 Arcade", value="arcade"),
+        app_commands.Choice(name="🌅 Sunset", value="sunset"),
+        app_commands.Choice(name="☁️ Sky", value="sky"),
+        app_commands.Choice(name="🌑 Midnight", value="midnight"),
+        app_commands.Choice(name="✨ Muragoods", value="muragoods"),
+    ])
+    async def serverbackground(self, interaction: discord.Interaction, theme: str):
         if self._deny(interaction):
             await interaction.response.send_message("Manage Server only.", ephemeral=True)
             return
-        link = (link or "").strip()[:300]
-        if link and (not link.startswith("http") or len(link) < 12):
-            await interaction.response.send_message("Give a direct image URL, or empty to reset.",
-                                                    ephemeral=True)
-            return
-        await self._save_level_cfg(interaction, {"serverBackground": link})
+        theme_id = levels.resolve_server_background(theme)
+        await self._save_level_cfg(interaction, {"serverBackground": theme_id})
+        meta = levels.server_background_meta(theme_id)
         await interaction.response.send_message(
-            "Server background updated (member backgrounds still win).", ephemeral=True)
+            f"{meta.get('emoji', '🎨')} **{meta.get('name', theme_id)}** — "
+            "server card background updated (member images still win).",
+            ephemeral=True)
 
     async def _save_level_cfg(self, interaction: discord.Interaction, patch: dict) -> None:
         try:

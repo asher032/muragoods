@@ -7,8 +7,85 @@ import { useEffect, useMemo, useRef } from 'react';
 // parallaxed, themed, cheap (CSS transforms + one small inline SVG, no
 // images, no per-game duplication).
 //
-//   <GameBackground theme="campus" level={1} parallax />
+//   <GameBackground theme="nightCampus" level={1} parallax />
 //
+// Built-in theme IDs only — there is deliberately NO backgroundUrl /
+// remoteBackground / externalBackground anywhere in this system. Every
+// backdrop is generated from internal CSS gradients + inline SVG scenery.
+// Adding a background = one entry in THEMES + one entry in
+// BACKGROUND_OPTIONS (previews, selector and level defaults pick it up
+// automatically).
+
+export type BackgroundId =
+  | 'nightCampus' | 'deepSpace' | 'mysticForest' | 'neonCity'
+  | 'fantasyCastle' | 'arcade' | 'sunsetCity' | 'sky' | 'midnight'
+  | 'underground';
+
+/** Legacy ids used by older pages — resolved to canonical themes, never URLs. */
+export type GameTheme = BackgroundId
+  | 'campus' | 'night' | 'space' | 'forest' | 'city' | 'castle';
+
+export interface BackgroundOption {
+  id: BackgroundId;
+  name: string;
+  emoji: string;
+  blurb: string;
+}
+
+// Central configuration: adding a background means adding ONE entry here
+// (plus its THEMES palette + scenery below).
+export const BACKGROUND_OPTIONS: BackgroundOption[] = [
+  { id: 'nightCampus', name: 'Night Campus', emoji: '🌙', blurb: 'Lamplit halls under starlight' },
+  { id: 'deepSpace', name: 'Deep Space', emoji: '🌌', blurb: 'Nebulae and drifting starfields' },
+  { id: 'mysticForest', name: 'Mystic Forest', emoji: '🌲', blurb: 'Fireflies over moonlit hills' },
+  { id: 'neonCity', name: 'Neon City', emoji: '🏙️', blurb: 'Rain-slick towers, electric glow' },
+  { id: 'fantasyCastle', name: 'Fantasy Castle', emoji: '🏰', blurb: 'Sorcerer spires and wisp-light' },
+  { id: 'arcade', name: 'Arcade', emoji: '🎮', blurb: 'Synthwave grid and cabinet glow' },
+  { id: 'sunsetCity', name: 'Sunset City', emoji: '🌆', blurb: 'Golden hour over downtown' },
+  { id: 'sky', name: 'Sky', emoji: '☁️', blurb: 'Bright drifting clouds' },
+  { id: 'midnight', name: 'Midnight', emoji: '⬛', blurb: 'Near-black alpine quiet' },
+];
+
+const THEME_ALIASES: Record<string, BackgroundId> = {
+  campus: 'nightCampus',
+  night: 'midnight',
+  space: 'deepSpace',
+  forest: 'mysticForest',
+  city: 'neonCity',
+  castle: 'fantasyCastle',
+  arcade: 'arcade',
+  underground: 'underground',
+};
+
+/** Resolve any stored id to a real theme. Unknown/deleted ids fall back to
+ *  Night Campus — a broken background is never rendered. */
+export function resolveThemeId(id: unknown): BackgroundId {
+  if (typeof id === 'string') {
+    if ((THEMES as Record<string, unknown>)[id]) return id as BackgroundId;
+    const alias = THEME_ALIASES[id];
+    if (alias) return alias;
+  }
+  return 'nightCampus';
+}
+
+export function backgroundName(id: unknown): string {
+  const resolved = resolveThemeId(id);
+  return BACKGROUND_OPTIONS.find((o) => o.id === resolved)?.name ?? 'Night Campus';
+}
+
+/** Default background per level. Players may override via settings. */
+export const LEVEL_BACKGROUNDS: Record<number, BackgroundId> = {
+  1: 'nightCampus',
+  2: 'neonCity',
+  3: 'mysticForest',
+  4: 'deepSpace',
+  5: 'fantasyCastle',
+};
+
+export function backgroundForLevel(level: number): BackgroundId {
+  const lvl = Math.max(1, Math.min(5, Math.floor(level) || 1));
+  return LEVEL_BACKGROUNDS[lvl];
+}
 // Layers (all pointer-events:none, never capture gameplay clicks):
 //   sky gradient → stars → clouds → distant scenery (SVG) → midground
 //   → foreground glow/vignette → particles.
@@ -16,32 +93,28 @@ import { useEffect, useMemo, useRef } from 'react';
 // page keeps its content in normal flow ABOVE it by giving the content
 // wrapper position:relative + z-index:1 (one line per page).
 
-export type GameTheme =
-  | 'campus' | 'night' | 'arcade' | 'space'
-  | 'forest' | 'city' | 'underground' | 'castle';
-
 interface ThemeDef {
   sky: [string, string, string];
   starColor: string;
   starCount: number;
   cloudColor: string;
-  scene: 'campus' | 'peaks' | 'grid' | 'stars' | 'hills' | 'skyline' | 'cave' | 'castle';
+  scene: 'campus' | 'peaks' | 'grid' | 'stars' | 'hills' | 'skyline' | 'cave' | 'castle' | 'sunset' | 'dayclouds';
   glow: string;
   particle: string;
 }
 
-const THEMES: Record<GameTheme, ThemeDef> = {
-  campus: {
+const THEMES: Record<BackgroundId, ThemeDef> = {
+  nightCampus: {
     sky: ['#0a0a24', '#141436', '#1e1e4a'],
     starColor: '#ffffff', starCount: 36,
     cloudColor: 'rgba(120,130,220,0.10)',
     scene: 'campus', glow: 'rgba(255,214,10,0.10)', particle: '#ffd60a',
   },
-  night: {
-    sky: ['#060614', '#0d0d28', '#161640'],
+  midnight: {
+    sky: ['#020207', '#060614', '#0b0b22'],
     starColor: '#cfe0ff', starCount: 48,
-    cloudColor: 'rgba(90,100,200,0.08)',
-    scene: 'peaks', glow: 'rgba(72,149,239,0.10)', particle: '#4895ef',
+    cloudColor: 'rgba(90,100,200,0.06)',
+    scene: 'peaks', glow: 'rgba(72,149,239,0.08)', particle: '#4895ef',
   },
   arcade: {
     sky: ['#12041f', '#241040', '#3a1650'],
@@ -49,23 +122,23 @@ const THEMES: Record<GameTheme, ThemeDef> = {
     cloudColor: 'rgba(200,100,255,0.08)',
     scene: 'grid', glow: 'rgba(200,80,255,0.12)', particle: '#ff4dd8',
   },
-  space: {
+  deepSpace: {
     sky: ['#02020c', '#080828', '#101048'],
     starColor: '#ffffff', starCount: 56,
     cloudColor: 'rgba(80,90,220,0.07)',
     scene: 'stars', glow: 'rgba(72,149,239,0.12)', particle: '#7df9ff',
   },
-  forest: {
+  mysticForest: {
     sky: ['#04140e', '#0a2a1c', '#103826'],
     starColor: '#eaffea', starCount: 28,
     cloudColor: 'rgba(120,220,170,0.07)',
     scene: 'hills', glow: 'rgba(6,214,160,0.10)', particle: '#06d6a0',
   },
-  city: {
-    sky: ['#0c0618', '#1c0f30', '#2c1445'],
-    starColor: '#ffe9c4', starCount: 32,
-    cloudColor: 'rgba(255,150,120,0.07)',
-    scene: 'skyline', glow: 'rgba(255,150,80,0.10)', particle: '#fb8500',
+  neonCity: {
+    sky: ['#0d0318', '#200a38', '#3a0f52'],
+    starColor: '#ffe9c4', starCount: 30,
+    cloudColor: 'rgba(255,77,216,0.08)',
+    scene: 'skyline', glow: 'rgba(255,77,216,0.14)', particle: '#00e5ff',
   },
   underground: {
     sky: ['#100a04', '#241408', '#3a220c'],
@@ -73,11 +146,23 @@ const THEMES: Record<GameTheme, ThemeDef> = {
     cloudColor: 'rgba(255,190,100,0.06)',
     scene: 'cave', glow: 'rgba(255,180,60,0.12)', particle: '#ffd60a',
   },
-  castle: {
+  fantasyCastle: {
     sky: ['#0a0618', '#181032', '#282058'],
     starColor: '#e6dcff', starCount: 40,
     cloudColor: 'rgba(150,120,255,0.08)',
     scene: 'castle', glow: 'rgba(150,110,255,0.12)', particle: '#c896ff',
+  },
+  sunsetCity: {
+    sky: ['#1c0b26', '#5a1f3d', '#c65a2e'],
+    starColor: '#ffe9c4', starCount: 18,
+    cloudColor: 'rgba(255,170,110,0.10)',
+    scene: 'sunset', glow: 'rgba(255,150,80,0.16)', particle: '#ffb35c',
+  },
+  sky: {
+    sky: ['#12395e', '#2a6a9e', '#5fa8cf'],
+    starColor: '#ffffff', starCount: 12,
+    cloudColor: 'rgba(255,255,255,0.22)',
+    scene: 'dayclouds', glow: 'rgba(255,255,255,0.12)', particle: '#e8f6ff',
   },
 };
 
@@ -242,21 +327,74 @@ function Scenery({ scene }: { scene: ThemeDef['scene'] }) {
           </g>
         </svg>
       );
+    case 'sunset':
+      return (
+        <svg viewBox="0 0 1200 220" preserveAspectRatio="xMidYMax slice"
+          style={{ width: '100%', height: '100%', display: 'block' }} aria-hidden>
+          {/* low sun + downtown silhouette in amber */}
+          <circle cx="600" cy="168" r="52" fill="#ffcf7d" opacity="0.85" />
+          <circle cx="600" cy="168" r="80" fill="#ff9d5c" opacity="0.25" />
+          <g fill={dark} opacity="0.92">
+            <rect x="0" y="120" width="150" height="100" /><rect x="160" y="90" width="100" height="130" />
+            <rect x="270" y="130" width="80" height="90" /><rect x="850" y="125" width="80" height="95" />
+            <rect x="940" y="85" width="110" height="135" /><rect x="1060" y="120" width="140" height="100" />
+          </g>
+          <g fill="#ffcf7d" opacity="0.7">
+            {Array.from({ length: 18 }).map((_, i) => (
+              <rect key={i} x={[168, 190, 212, 948, 970, 992, 1068, 1090, 1112][i % 9]} y={100 + (i % 5) * 22} width="9" height="11" rx="1" opacity={i % 4 === 0 ? 0.2 : 0.7} />
+            ))}
+          </g>
+        </svg>
+      );
+    case 'dayclouds':
+      return (
+        <svg viewBox="0 0 1200 220" preserveAspectRatio="xMidYMax slice"
+          style={{ width: '100%', height: '100%', display: 'block' }} aria-hidden>
+          {/* bright sun + soft cloud banks, edges weighted to keep gameplay clear */}
+          <circle cx="600" cy="70" r="36" fill="#fff6d8" opacity="0.9" />
+          <circle cx="600" cy="70" r="58" fill="#fff6d8" opacity="0.2" />
+          <g fill="rgba(255,255,255,0.5)">
+            <ellipse cx="170" cy="150" rx="120" ry="26" /><ellipse cx="260" cy="132" rx="80" ry="20" />
+            <ellipse cx="1020" cy="155" rx="130" ry="26" /><ellipse cx="930" cy="136" rx="70" ry="18" />
+            <ellipse cx="600" cy="200" rx="220" ry="26" opacity="0.6" />
+          </g>
+          <g fill="rgba(10,40,70,0.55)">
+            <ellipse cx="120" cy="235" rx="260" ry="60" /><ellipse cx="1080" cy="238" rx="270" ry="60" />
+          </g>
+        </svg>
+      );
   }
 }
 
 export function GameBackground({
-  theme = 'campus',
+  theme = 'nightCampus',
   level = 1,
   parallax = true,
+  particles = true,
+  motion = true,
+  brightness = 1,
+  intensity = 1,
 }: {
   theme?: GameTheme;
   /** Level 1-5: deepens the atmosphere + density as the player progresses. */
   level?: number;
   parallax?: boolean;
+  /** Floating light motes on/off. */
+  particles?: boolean;
+  /** Master motion switch: off disables parallax + all CSS animation. */
+  motion?: boolean;
+  /** 0.4 (dim) – 1.3 (bright). */
+  brightness?: number;
+  /** 0.3 (calm) – 1.5 (dense). Scales stars, motes and glow. */
+  intensity?: number;
 }) {
-  const t = THEMES[theme] ?? THEMES.campus;
+  const id = resolveThemeId(theme);
+  const t = THEMES[id];
   const lvl = Math.max(1, Math.min(5, Math.floor(level) || 1));
+  const bright = Math.max(0.4, Math.min(1.3, Number(brightness) || 1));
+  const dense = Math.max(0.3, Math.min(1.5, Number(intensity) || 1));
+  const animated = motion !== false;
+  const noAnim = animated ? undefined : ('none' as const);
   const skyRef = useRef<HTMLDivElement>(null);
   const starsRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<HTMLDivElement>(null);
@@ -264,7 +402,7 @@ export function GameBackground({
   const stars = useMemo(() => {
     const rand = mulberry32(1234 + lvl * 77);
     // Gameplay readability: keep the middle band sparse, edges dense.
-    return Array.from({ length: t.starCount + lvl * 4 }).map((_, i) => {
+    return Array.from({ length: Math.round((t.starCount + lvl * 4) * dense) }).map((_, i) => {
       const edge = rand();
       const x = edge < 0.32 ? rand() * 30 : edge < 0.64 ? 70 + rand() * 30 : rand() * 100;
       return {
@@ -277,11 +415,12 @@ export function GameBackground({
         delay: rand() * 5,
       };
     });
-  }, [t, lvl]);
+  }, [t, lvl, dense]);
 
   const motes = useMemo(() => {
+    if (!particles) return [];
     const rand = mulberry32(987 + lvl * 31);
-    return Array.from({ length: 10 + lvl }).map((_, i) => ({
+    return Array.from({ length: Math.round((10 + lvl) * dense) }).map((_, i) => ({
       id: i,
       left: `${8 + rand() * 84}%`,
       top: `${30 + rand() * 55}%`,
@@ -289,10 +428,10 @@ export function GameBackground({
       duration: 9 + rand() * 10,
       delay: rand() * 9,
     }));
-  }, [lvl]);
+  }, [lvl, particles, dense]);
 
   useEffect(() => {
-    if (!parallax) return;
+    if (!parallax || !animated) return;
     if (typeof window === 'undefined') return;
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
     let raf = 0;
@@ -316,7 +455,7 @@ export function GameBackground({
       window.removeEventListener('scroll', onScroll);
       cancelAnimationFrame(raf);
     };
-  }, [parallax]);
+  }, [parallax, animated]);
 
   // Higher levels deepen the sky + strengthen the accent glow (progression
   // reads instantly, mechanics untouched).
@@ -330,7 +469,10 @@ export function GameBackground({
         pointerEvents: 'none', background: '#05050f',
       }}>
       {/* 1 — sky */}
-      <div ref={skyRef} style={{ position: 'absolute', inset: '-4% 0', background: sky }} />
+      <div ref={skyRef} style={{
+        position: 'absolute', inset: '-4% 0', background: sky,
+        filter: bright === 1 ? undefined : `brightness(${bright})`,
+      }} />
       {/* 2 — stars */}
       <div ref={starsRef} style={{ position: 'absolute', inset: 0 }}>
         {stars.map((s) => (
@@ -339,6 +481,7 @@ export function GameBackground({
             width: s.size, height: s.size, borderRadius: '50%',
             background: t.starColor, opacity: s.opacity,
             animationDuration: `${s.twinkle}s`, animationDelay: `${s.delay}s`,
+            animation: noAnim,
           }} />
         ))}
       </div>
@@ -352,6 +495,7 @@ export function GameBackground({
             background: `radial-gradient(ellipse, ${t.cloudColor} 0%, transparent 70%)`,
             filter: 'blur(6px)',
             animationDuration: `${[46, 64, 38][i]}s`,
+            animation: noAnim,
           }} />
         ))}
       </div>
@@ -373,10 +517,12 @@ export function GameBackground({
       <div className="gb-orb" style={{
         position: 'absolute', left: '-70px', top: '30%', width: 220, height: 220,
         borderRadius: '50%', background: `radial-gradient(circle, ${t.glow} 0%, transparent 70%)`,
+        opacity: Math.max(0.3, Math.min(1.2, dense)), animation: noAnim,
       }} />
       <div className="gb-orb" style={{
         position: 'absolute', right: '-70px', bottom: '12%', width: 260, height: 260,
         borderRadius: '50%', background: `radial-gradient(circle, ${t.glow} 0%, transparent 70%)`,
+        opacity: Math.max(0.3, Math.min(1.2, dense)), animation: noAnim,
       }} />
       {/* 8 — floating motes */}
       <div style={{ position: 'absolute', inset: 0 }}>
@@ -387,6 +533,7 @@ export function GameBackground({
             background: t.particle, opacity: 0.5,
             boxShadow: `0 0 8px ${t.particle}`,
             animationDuration: `${m.duration}s`, animationDelay: `${m.delay}s`,
+            animation: noAnim,
           }} />
         ))}
       </div>

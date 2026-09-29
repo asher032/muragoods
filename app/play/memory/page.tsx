@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
-import { GameBackground } from '@/app/components/GameBackground';
+import { ThemedGameBackground } from '@/app/components/GameBackgroundSettings';
 import { useGameSession } from '@/app/hooks/useGameSession';
 import { DiscordNudge } from '@/app/components/DiscordNudge';
 import { Brain, Cake, CircleHelp, Coffee, Coins, Cookie, Gift, Heart, Milk, Music, Package, PartyPopper, Pizza, Star, Wheat } from 'lucide-react';
@@ -162,7 +162,7 @@ export default function MemoryGame() {
   return (
     <main style={{ minHeight: '100vh', background: '#0a0a18' }}>
       <NavBar pageLabel="Memory Match" />
-      <GameBackground theme="night" level={1} />
+      <ThemedGameBackground level={1} />
       <div style={{ maxWidth: '600px', margin: '0 auto', padding: '80px 20px 100px' }}>
         <DiscordNudge compact />
         <div style={{ textAlign: 'center', marginBottom: '24px', opacity: loaded ? 1 : 0, transition: 'all 0.6s ease' }}>

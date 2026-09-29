@@ -232,7 +232,7 @@ export default function AchievementsPage() {
 
           {/* Back to Profile */}
           <div className="mt-8 text-center">
-            <Link href="/account/profile" className="deco-btn deco-btn-sm rounded-xl">← Back to Profile</Link>
+            <Link href="/profile" className="deco-btn deco-btn-sm rounded-xl">← Back to Profile</Link>
           </div>
         </div>
       </section>

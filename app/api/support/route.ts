@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import SupportTicket from '@/app/lib/models/SupportTicket';
 import { adminEmails } from '@/app/lib/muragoods-data';
+import { getSessionUser, requireAdmin } from '@/app/lib/session';
 
 // Auto-reply keywords and responses
 const autoReplies: Record<string, string> = {
@@ -28,30 +29,36 @@ export async function GET(req: Request) {
   try {
     await dbConnect();
     const url = new URL(req.url);
-    const userId = url.searchParams.get('userId');
-    const isAdmin = url.searchParams.get('isAdmin') === 'true';
     const ticketId = url.searchParams.get('id');
 
-    // Get specific ticket
+    // Identity comes from the session — the old ?isAdmin=true client flag
+    // (any visitor could list every ticket) and arbitrary ?userId= are gone.
+    const { user: admin } = await requireAdmin(req);
+    const viewer = await getSessionUser(req);
+
+    // Get specific ticket — owner or admin only.
     if (ticketId) {
       const ticket = await SupportTicket.findById(ticketId);
       if (!ticket) return NextResponse.json({ success: false, error: 'Ticket not found' }, { status: 404 });
+      const own = viewer && ticket.userId && String(ticket.userId) === viewer.email;
+      if (!own && !admin) {
+        return NextResponse.json({ success: false, error: 'Sign in required' }, { status: viewer ? 403 : 401 });
+      }
       return NextResponse.json({ success: true, data: ticket });
     }
 
     // Admin sees all tickets
-    if (isAdmin) {
+    if (admin) {
       const tickets = await SupportTicket.find({}).sort({ lastActivity: -1 });
       return NextResponse.json({ success: true, data: tickets });
     }
 
     // User sees their own tickets
-    if (userId) {
-      const tickets = await SupportTicket.find({ userId }).sort({ lastActivity: -1 });
-      return NextResponse.json({ success: true, data: tickets });
+    if (!viewer) {
+      return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });
     }
-
-    return NextResponse.json({ success: false, error: 'userId or isAdmin required' }, { status: 400 });
+    const tickets = await SupportTicket.find({ userId: viewer.email }).sort({ lastActivity: -1 });
+    return NextResponse.json({ success: true, data: tickets });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'An error occurred';
     return NextResponse.json({ success: false, error: message }, { status: 500 });
@@ -63,15 +70,20 @@ export async function POST(req: Request) {
     await dbConnect();
     const body = await req.json();
     const { action, userId, userName, subject, category, text, ticketId, senderName } = body;
+    const viewer = await getSessionUser(req);
+    const { user: admin } = await requireAdmin(req);
 
-    // Create new ticket
+    // Create new ticket — guests may open one, but a signed-in user always
+    // files as themselves (no filing on another account).
     if (action === 'create') {
+      const ownerId = viewer ? viewer.email : userId;
+      const ownerName = viewer ? viewer.name : userName;
       const ticket = await SupportTicket.create({
-        userId,
-        userName,
+        userId: ownerId,
+        userName: ownerName,
         subject: subject || 'Support Request',
         category: category || 'General',
-        messages: [{ sender: 'user', senderName: userName, text }],
+        messages: [{ sender: 'user', senderName: ownerName, text }],
         lastActivity: new Date(),
       });
 
@@ -92,12 +104,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, data: ticket });
     }
 
-    // Send message to existing ticket
+    // Send message to existing ticket — owner or admin only. Admin status
+    // comes from the server-side session/allowlist, never from the client.
     if (action === 'message') {
       const ticket = await SupportTicket.findById(ticketId);
       if (!ticket) return NextResponse.json({ success: false, error: 'Ticket not found' }, { status: 404 });
+      const own = viewer && ticket.userId && String(ticket.userId) === viewer.email;
+      if (!own && !admin) {
+        return NextResponse.json({ success: false, error: 'Sign in required' }, { status: viewer ? 403 : 401 });
+      }
 
-      const isAdminSender = adminEmails.includes(userId || '');
+      const isAdminSender = Boolean(admin) || adminEmails.includes(viewer?.email || '');
       ticket.messages.push({
         sender: isAdminSender ? 'admin' : 'user',
         senderName: senderName || (isAdminSender ? 'Admin' : ticket.userName),
@@ -111,10 +128,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, data: ticket });
     }
 
-    // Close ticket
+    // Close ticket — owner or admin only.
     if (action === 'close') {
       const ticket = await SupportTicket.findById(ticketId);
       if (!ticket) return NextResponse.json({ success: false, error: 'Ticket not found' }, { status: 404 });
+      const own = viewer && ticket.userId && String(ticket.userId) === viewer.email;
+      if (!own && !admin) {
+        return NextResponse.json({ success: false, error: 'Sign in required' }, { status: viewer ? 403 : 401 });
+      }
       ticket.status = 'closed';
       ticket.lastActivity = new Date();
       await ticket.save();

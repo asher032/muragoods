@@ -20,7 +20,7 @@ const BOTTOM_NAV = [
   { href: '/murastream/search', label: 'Search', Icon: Search },
   { href: '/murastream/my-list', label: 'My List', Icon: Bookmark },
   { href: '/murastream/likes', label: 'Likes', Icon: Heart },
-  { href: '/murastream/profile', label: 'Profile', Icon: CircleUserRound },
+  { href: '/profile', label: 'Profile', Icon: CircleUserRound },
 ];
 
 const MORE_LINKS = [
