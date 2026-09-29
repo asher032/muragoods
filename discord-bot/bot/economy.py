@@ -345,10 +345,27 @@ async def sell_item(db, guild_id: int, user_id: int, item_id: str, qty: int = 1)
         return False, "That item can't be sold."
     if qty < 1 or qty > 99:
         return False, "Quantity must be 1–99."
+    # A copy reserved by an open market listing is not sellable, or a player
+    # could take it out of circulation while it is still listed.
+    try:
+        import rewards as rw
+        reserved = await rw.reserved_item_ids(db, guild_id, user_id)
+        if (row["item_id"], qty) in reserved or any(i == row["item_id"] for i, _ in reserved):
+            return False, "That item is reserved on the market — remove the listing first."
+    except Exception:
+        log.warning("sell reservation check failed", exc_info=True)
     # remove_item is a guarded atomic decrement, so two concurrent sells can
     # never both succeed against the same stock.
     if not await remove_item(db, guild_id, user_id, item_id, qty):
         return False, "You don't have that many."
+    # The wallet must exist before the credit: a member whose only holdings are
+    # items (granted by a quest or an admin) has no `economy` document yet, and
+    # apply_delta refuses to upsert one — the item would be consumed for
+    # nothing.
+    try:
+        await get_wallet(db, guild_id, user_id)
+    except Exception:
+        log.warning("sell wallet ensure failed", exc_info=True)
     await apply_delta(db, guild_id, user_id, "balance", row["sell_price"] * qty,
                       "shop_sell", "discord", item_id)
     return True, "ok"
@@ -704,13 +721,26 @@ async def economy_overview(db, guild_id: int) -> dict:
 # ── Quests / collections / achievements progress ──────────────────────
 QUESTS: dict[str, dict] = {
     "earner":   {"name": "Earner", "desc": "Hold 5,000 net worth", "target": 5000,
-                 "check": "net", "reward": 500},
+                 "check": "net", "reward": 500,
+                 "items": [("lecture_notes", 1)]},
     "grinder":  {"name": "Grinder", "desc": "Complete 25 rewarded activities", "target": 25,
-                 "check": "activities", "reward": 750},
+                 "check": "activities", "reward": 750,
+                 "items": [("study_cookie", 2), ("homework_page", 1)]},
     "collector": {"name": "Collector", "desc": "Own 10 distinct items", "target": 10,
-                  "check": "items", "reward": 750},
+                  "check": "items", "reward": 750,
+                  "items": [("campus_keychain", 1), ("mura_sticker", 2)]},
     "loyal":    {"name": "Loyal", "desc": "Reach a 7-day daily streak", "target": 7,
-                 "check": "streak", "reward": 1000},
+                 "check": "streak", "reward": 1000,
+                 "items": [("study_drink", 1), ("campus_id", 1)]},
+    "angler":   {"name": "Angler", "desc": "Catch 10 fish", "target": 10,
+                 "check": "catches", "reward": 900,
+                 "items": [("arcade_token", 1), ("fresh_fish", 2)]},
+    "digger":   {"name": "Digger", "desc": "Complete 5 digs", "target": 5,
+                 "check": "digs", "target_key": "digs", "reward": 850,
+                 "items": [("explorer_backpack", 1)]},
+    "trader":   {"name": "Trader", "desc": "Complete 3 market trades", "target": 3,
+                 "check": "trades", "reward": 1100,
+                 "items": [("open_letter", 1), ("campus_mystery_box", 1)]},
 }
 
 COLLECTIONS: dict[str, dict] = {
@@ -732,16 +762,34 @@ async def quest_progress(db, guild_id: int, user_id: int) -> dict:
     inv = await get_inventory(db, gid, uid)
     acts = await db.economy_tx.count_documents(
         {"guildId": gid, "userId": uid, "type": {"$in": ["daily", "weekly", "work", "beg", "activity"]}})
-    return {
+    out = {
         "net": net_worth(wallet),
         "activities": acts,
-        "items": sum(1 for qty in inv.values() if qty > 0),
+        "items": sum(1 for iid, qty in inv.items() if qty > 0 and items.get_item(iid)),
         "streak": int(wallet.get("streakDaily", 0)),
     }
+    # Per-source counters for the newer quests. Each is a count of an
+    # immutable transaction kind, so a quest can never be inflated.
+    for key, txn_type in (("catches", "fish_catch"), ("digs", "dig"),
+                          ("trades", "market_trade")):
+        try:
+            out[key] = int(await db.economy_tx.count_documents(
+                {"guildId": gid, "userId": uid, "type": txn_type}))
+        except Exception:
+            out[key] = 0
+    return out
 
 
 async def check_quests(db, guild_id: int, user_id: int) -> list[str]:
-    """Award newly-completed quests + linked achievements. Returns quest IDs."""
+    """Award newly-completed quests + linked achievements. Returns quest IDs.
+
+    Quests are the intended main source of items, so each one grants a fixed
+    GUARANTEED bundle through the reward service (not a random roll) plus the
+    random `quest` roll on top. Granting here rather than in the `/quests`
+    command means a completed quest is never lost because the member forgot
+    to open the quest log.
+    """
+    import rewards as rw
     gid, uid = _gid(guild_id), _uid(user_id)
     progress = await quest_progress(db, gid, uid)
     doc = await db.economy_quests.find_one({"guildId": gid, "userId": uid}) or {}
@@ -750,11 +798,20 @@ async def check_quests(db, guild_id: int, user_id: int) -> list[str]:
     for qid, quest in QUESTS.items():
         if qid in done:
             continue
-        if progress.get(quest["check"], 0) >= quest["target"]:
-            done.add(qid)
-            newly.append(qid)
-            await apply_delta(db, gid, uid, "balance", int(quest["reward"]),
-                              "quest_reward", "discord", {"quest": qid})
+        if progress.get(quest["check"], 0) < int(quest["target"]):
+            continue
+        done.add(qid)
+        newly.append(qid)
+        await apply_delta(db, gid, uid, "balance", int(quest["reward"]),
+                          "quest_reward", "discord", {"quest": qid})
+        try:
+            cfg = await get_economy_config(db, gid)
+            await rw.reward_many(db, gid, uid, quest.get("items") or [],
+                                 "quest", idempotency_key=f"quest:{qid}")
+            await rw.roll_item_reward(
+                db, gid, uid, "quest", cfg, idempotency_key=f"questroll:{qid}")
+        except Exception:
+            log.warning("quest item reward failed for %s", qid, exc_info=True)
     if newly:
         await db.economy_quests.update_one(
             {"guildId": gid, "userId": uid}, {"$set": {"done": sorted(done)}}, upsert=True)
@@ -870,14 +927,14 @@ async def farm_harvest(db, guild_id: int, user_id: int) -> tuple[int, int]:
         {"guildId": gid, "userId": uid}, {"$set": {"plots": waiting}})
     if total:
         await apply_delta(db, gid, uid, "balance", total, "farm_harvest", "discord")
-    # Harvests can also yield a sellable/collectible item, from the
-    # centralized catalog's farm pool only.
+    # Harvests can also yield a sellable/collectible item, via the same
+    # centralized reward service every other command uses.
     try:
-        drop = items.roll_drop("farm")
-        if drop:
-            await add_item(db, gid, uid, drop["item_id"], 1)
+        import rewards as rw
+        cfg = await get_economy_config(db, gid)
+        await rw.roll_item_reward(db, gid, uid, "farm", cfg)
     except Exception:
-        log.warning("farm item drop failed", exc_info=True)
+        log.warning("farm item reward failed", exc_info=True)
     return total, len(ripe)
 
 
@@ -907,13 +964,13 @@ async def fish_catch(db, guild_id: int, user_id: int, rng=None) -> tuple[str, st
         {"$inc": {"fishBuckets": 1}}, upsert=True)
     await record_txn(db, gid, uid, "fish_catch", value, "discord", None, {"fish": name})
     # Fishing can also yield a sellable/collectible item. The pool and the
-    # probability both come from the centralized catalog, server-side.
+    # probability both come from the centralized reward service.
     try:
-        drop = items.roll_drop("fish", rng)
-        if drop:
-            await add_item(db, gid, uid, drop["item_id"], 1)
+        import rewards as rw
+        cfg = await get_economy_config(db, gid)
+        await rw.roll_item_reward(db, gid, uid, "fish", cfg, rng=rng)
     except Exception:
-        log.warning("fish item drop failed", exc_info=True)
+        log.warning("fish item reward failed", exc_info=True)
     return name, rarity, value
 
 
@@ -1302,6 +1359,18 @@ ACHIEVEMENTS_FULL: dict[str, dict] = {
     "loyal_7":      {"name": "Loyal", "desc": "Reach a 7-day daily streak", "reward": 1000},
     "prestiged":    {"name": "Reborn", "desc": "Prestige at least once", "reward": 2000},
     "omega_risen":  {"name": "Omega", "desc": "Reach Omega tier", "reward": 5000},
+    # ── Item-system achievements. All conditions are read from the existing
+    # inventory / transaction ledger; none of them introduce a new counter.
+    "shopper_1":     {"name": "First Shop Purchase", "desc": "Complete your first shop purchase",
+                      "reward": 200},
+    "digger_1":      {"name": "Digging Beginner", "desc": "Complete your first dig", "reward": 250},
+    "digger_25":     {"name": "Field Archaeologist", "desc": "Complete 25 digs", "reward": 1200},
+    "market_1":      {"name": "Market Trader", "desc": "Complete your first market trade",
+                      "reward": 400},
+    "rare_finder":   {"name": "Rare Finder", "desc": "Discover a Rare item", "reward": 1500},
+    "epic_discovery": {"name": "Epic Discovery", "desc": "Obtain an Epic item", "reward": 3000},
+    "godly_discovery": {"name": "Godly Discovery", "desc": "Obtain a Godly item", "reward": 10000},
+    "collector_50":  {"name": "Curator", "desc": "Own 50 distinct items", "reward": 2000},
 }
 
 BADGES_CATALOG: dict[str, dict] = {
@@ -1361,7 +1430,14 @@ def play_crime(bet: int, rng=None) -> tuple[int, str]:
 
 # ── Daily streaks (calendar-day aware, exactly-once claim) ────────────
 async def claim_daily(db, guild_id: int, user_id: int, base: int, cooldown_sec: int = 86400) -> tuple[bool, int, int, int]:
-    """Claim daily. Returns (granted, final_coins, streak, remaining_sec)."""
+    """Claim daily. Returns (granted, final_coins, streak, remaining_sec).
+
+    Item drops are rolled by the centralized reward service AFTER the coins
+    are credited, so a reward can never be granted for a claim that did not
+    happen. The streak day doubles as the idempotency key, so a Discord
+    retry on the same day cannot award twice.
+    """
+    import rewards as rw
     gid, uid = _gid(guild_id), _uid(user_id)
     granted, remaining = await claim_cooldown(db, gid, uid, "lastDaily", cooldown_sec)
     if not granted:
@@ -1395,6 +1471,13 @@ async def claim_daily(db, guild_id: int, user_id: int, base: int, cooldown_sec: 
     bonus = min(500, (streak - 1) * 25)  # streak sweetener, capped
     final, _ = await grant_coins(db, gid, uid, base + bonus, "daily", "discord")
     await session_track(db, gid, uid, earned=final, activities=1)
+    try:
+        cfg = await get_economy_config(db, gid)
+        await rw.roll_item_reward(
+            db, gid, uid, "daily", cfg,
+            idempotency_key=f"daily:{_now().date().isoformat()}")
+    except Exception:
+        log.warning("daily item reward failed", exc_info=True)
     await check_quests(db, gid, uid)
     await notify(db, gid, uid, "daily", f"Daily claimed: +{final} (streak {streak})")
     return True, final, streak, 0
@@ -1729,18 +1812,43 @@ async def check_economy_achievements(db, guild_id: int, user_id: int) -> list[st
         friends = len(social.get("friends") or [])
     except Exception:
         friends = 0
+    # Item-system conditions are derived from the real inventory: only ids
+    # that resolve in the catalog count, so a legacy/removed id can never
+    # satisfy "discover a Rare item".
+    owned = [i for i, q in (inv or {}).items() if int(q or 0) > 0]
+    best_rarity = "common"
+    for item_id in owned:
+        row = items.get_item(item_id)
+        if row and items.RANK[row["rarity"]] > items.RANK[best_rarity]:
+            best_rarity = row["rarity"]
+    distinct = len(owned)
+    counts: dict[str, int] = {}
+    for key, txn_type in (("digs", "dig"), ("trades", "market_trade"), ("shops", "shop_buy")):
+        try:
+            counts[key] = int(await db.economy_tx.count_documents(
+                {"guildId": gid, "userId": uid, "type": txn_type}))
+        except Exception:
+            counts[key] = 0
     signals = {
         "first_coin": net_worth(wallet) > 0,
         "earner_5k": net_worth(wallet) >= 5000,
         "tycoon_25k": net_worth(wallet) >= 25000,
         "grinder_25": progress.get("activities", 0) >= 25,
         "gamer_50": games_played >= 50,
-        "collector_10": sum(1 for q in inv.values() if q > 0) >= 10,
+        "collector_10": distinct >= 10,
+        "collector_50": distinct >= 50,
         "angler_10": fish >= 10,
         "friend_5": friends >= 5,
         "loyal_7": int(wallet.get("streakDaily", 0)) >= 7,
         "prestiged": int(wallet.get("prestige", 0)) >= 1,
         "omega_risen": int(wallet.get("omega", 0)) >= 1,
+        "shopper_1": counts.get("shops", 0) >= 1,
+        "digger_1": counts.get("digs", 0) >= 1,
+        "digger_25": counts.get("digs", 0) >= 25,
+        "market_1": counts.get("trades", 0) >= 1,
+        "rare_finder": items.RANK.get(best_rarity, 0) >= items.RANK["rare"],
+        "epic_discovery": items.RANK.get(best_rarity, 0) >= items.RANK["epic"],
+        "godly_discovery": items.RANK.get(best_rarity, 0) >= items.RANK["godly"],
     }
     try:
         doc = await db.economy_achv.find_one({"guildId": gid, "userId": uid}) or {}

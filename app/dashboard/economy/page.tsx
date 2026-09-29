@@ -6,6 +6,7 @@ import { apiFetch } from '../lib/api';
 import { statusMessage } from '../components/selectors';
 import ModuleSettings from '../components/ModuleSettings';
 import ItemsPanel from '../components/ItemsPanel';
+import RewardsPanel from '../components/RewardsPanel';
 
 interface EconomyOverview {
   users: number;
@@ -218,7 +219,7 @@ export default function EconomyPage() {
         </div>
       </div>
 
-      <div className="cc-section-label" style={{ margin: '22px 0 10px' }}>Shop · items · lottery · events</div>
+      <div className="cc-section-label" style={{ margin: '22px 0 10px' }}>Shop · lottery · events</div>
       <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', marginBottom: 22 }}>
         <div className="cc-card" style={{ padding: '14px 18px', fontSize: 13, color: 'var(--cc-text-dim)' }}>
           <strong style={{ color: '#fff' }}>🛒 Shop management</strong>
@@ -256,12 +257,19 @@ export default function EconomyPage() {
       </div>
 
       <div className="cc-section-label" style={{ margin: '22px 0 10px' }}>
+        Rewards · command item drops
+      </div>
+      <RewardsPanel />
+
+      <div className="cc-section-label" style={{ margin: '22px 0 10px' }}>
         Items · categories · loot tables · drop sources
       </div>
       <ItemsPanel />
       <p style={{ margin: '18px 0 0', fontSize: 12, color: 'var(--cc-text-faint)' }}>
-        In Discord: <code>/item &lt;name&gt;</code> · <code>/shop view rarity:… category:…</code> ·{' '}
-        <code>/inventory view rarity:… category:…</code> · <code>/inventory use item:&lt;name&gt;</code>.
+        In Discord: <code>/item &lt;name&gt;</code> · <code>/items</code> · <code>/collection</code> ·{' '}
+        <code>/shop view section:…</code> · <code>/shop buy|sell item:&lt;name&gt;</code> ·{' '}
+        <code>/inventory view rarity:… category:…</code> · <code>/inventory use item:&lt;name&gt;</code> ·{' '}
+        <code>/dig location:…</code> · <code>/market view|post_for_items|accept|remove</code>.
       </p>
 
       <div className="cc-section-label" style={{ margin: '22px 0 10px' }}>Configuration</div>

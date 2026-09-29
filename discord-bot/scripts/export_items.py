@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "discord-bot" / "bot"))
 
 import items as itemdb  # noqa: E402
+import rewards as rw  # noqa: E402
 
 OUT = ROOT / "app" / "lib" / "items-table.json"
 
@@ -53,7 +54,16 @@ def build() -> dict:
         "categoryLabels": itemdb.CATEGORY_LABELS,
         "effectTypes": list(itemdb.EFFECT_TYPES),
         "lootTables": itemdb.LOOT_TABLES,
-        "sourceDropChance": itemdb.SOURCE_DROP_CHANCE,
+        "rewardSources": list(itemdb.REWARD_SOURCES),
+        "dropChances": {
+            src: {r: rw.DEFAULT_DROP_CHANCES[src].get(r, 0.0) for r in itemdb.RARITIES
+                  if rw.DEFAULT_DROP_CHANCES[src].get(r, 0.0)}
+            for src in sorted(rw.DEFAULT_DROP_CHANCES)
+        },
+        "rewardPools": {
+            src: {r: len(rw.pool_for(r, src)) for r in ("common", "uncommon", "rare")}
+            for src in sorted(rw.DEFAULT_DROP_CHANCES)
+        },
         "counts": itemdb.catalog_counts(),
         "items": rows,
     }

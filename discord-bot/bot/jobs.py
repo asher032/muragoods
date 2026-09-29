@@ -829,10 +829,24 @@ async def complete_shift(db, guild_id: int, user_id: int, token: str,
                 {"guildId": gid, "userId": uid}, {"$inc": {"shiftsWorked": 1}})
         except Exception:
             pass
+        # Item bonus on a WON shift only, via the centralized reward service.
+        # The shift token is already atomically consumed above, so it is a
+        # unique idempotency key: a retried completion cannot award twice.
+        item_grant = None
+        if won:
+            try:
+                import rewards as rw
+                from economy import get_economy_config
+                cfg = await get_economy_config(db, gid)
+                item_grant = await rw.roll_item_reward(
+                    db, gid, uid, "work", cfg,
+                    idempotency_key=f"shift:{doc['token']}")
+            except Exception:
+                log.warning("shift item reward failed", exc_info=True)
         fresh = await get_progress(db, gid, uid, job["id"])
         return True, {"won": won, "reason": reason, "payout": payout,
                       "paid": paid, "bonuses": bonuses, "job": job,
-                      "fired": fired,
+                      "fired": fired, "item": item_grant,
                       "promoLevel": promo_level(int(fresh.get("successes", 0) or 0))}
     except Exception:
         log.exception("complete_shift failed")

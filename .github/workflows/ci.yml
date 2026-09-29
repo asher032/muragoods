@@ -154,6 +154,13 @@ jobs:
       - name: Item system (rarity, catalog, effects, loot, security)
         run: python discord-bot/scripts/test_item_system.py
 
+      # Item rewards are rolled by ONE service. Asserts pools derive from the
+      # catalog, that a client cannot choose the item/rarity/quantity/chance,
+      # that rewards are idempotent under retry, and that a market-reserved
+      # item can be neither sold nor used.
+      - name: Item reward service (pools, anti-exploit, reservations)
+        run: python discord-bot/scripts/test_reward_system.py
+
       # Executes the real /level, /rank, /leaderboard, /balance and
       # /leveling handlers against adversarial stored documents. The source
       # scan above cannot catch a ValueError that only fires at runtime, and a

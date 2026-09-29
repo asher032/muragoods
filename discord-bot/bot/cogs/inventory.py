@@ -5,6 +5,7 @@ Same item catalog and guarded stock mutations as every other surface
 """
 
 import logging
+from typing import Any
 
 import discord
 from discord import app_commands
@@ -14,6 +15,7 @@ import database
 import economy as eco
 import embeds
 import items as itemdb
+import rewards as rw
 import utils
 
 log = logging.getLogger("bot.inventory")
@@ -54,6 +56,35 @@ def _item_detail(row: dict) -> str:
             f"{flags}")
 
 
+#: Shop sections. Derived from the catalog, not hand-listed: a section is a
+#: filter, so an item can never be in a section the catalog does not back.
+SHOP_SECTIONS: dict[str, str] = {
+    "essentials": "Main Shop",
+    "fishing": "Fishing",
+    "farming": "Farming",
+    "adventure": "Adventure",
+    "boxes": "Boxes & Packs",
+    "rare": "Rare Items",
+    "limited": "Limited",
+}
+
+_SECTION_RULES: dict[str, Any] = {
+    "essentials": lambda r: r["rarity"] in ("common", "uncommon"),
+    "fishing": lambda r: "fish" in r["drop_sources"] or r["effect_type"] == "fishing_bonus",
+    "farming": lambda r: "farm" in r["drop_sources"] or r["effect_type"] in ("farm_bonus",),
+    "adventure": lambda r: r["category"] in ("equipment", "sellable")
+    and ("work" in r["drop_sources"] or "adventure" in r["drop_sources"]),
+    "boxes": lambda r: r["category"] in ("loot_box", "pack"),
+    "rare": lambda r: r["rarity"] in ("rare", "epic", "godly") and r["buy_price"] > 0,
+    "limited": lambda r: "events" in r["drop_sources"] and r["buy_price"] > 0,
+}
+
+
+def _shop_section(section: str, rows: list[dict]) -> list[dict]:
+    rule = _SECTION_RULES.get((section or "").strip().lower())
+    return [r for r in rows if rule(r)] if rule else rows
+
+
 def _item_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     """Autocomplete by display name or id, so users never type an internal id."""
     q = (current or "").strip().lower()
@@ -73,6 +104,78 @@ class InventoryGroup(commands.Cog):
 
     inv = app_commands.Group(name="inventory", description="Items, crafting and collections")
     shop = app_commands.Group(name="shop", description="Browse, buy and sell items")
+
+    @app_commands.command(name="items", description="Browse the whole Muragoods item catalog.")
+    @app_commands.describe(category="Filter by category", rarity="Filter by rarity",
+                           source="Only items that can come from this source",
+                           tradeable="Only tradeable items", owned="Only items you own",
+                           query="Search item names")
+    @app_commands.choices(category=_CATEGORY_CHOICES, rarity=_RARITY_CHOICES)
+    @app_commands.choices(source=[app_commands.Choice(name=s, value=s)
+                                  for s in itemdb.REWARD_SOURCES])
+    async def items_browse(self, interaction: discord.Interaction, category: str = "",
+                           rarity: str = "", source: str = "", tradeable: bool | None = None,
+                           owned: bool | None = None, query: str = ""):
+        await interaction.response.defer(ephemeral=True)
+        found = itemdb.search_items(query, category, rarity)
+        if source:
+            found = [r for r in found if source in r["drop_sources"]]
+        if tradeable is not None:
+            found = [r for r in found if r["tradeable"] == tradeable]
+        if owned is not None:
+            bag = await eco.get_inventory(database._db, interaction.guild.id, interaction.user.id)
+            held = {k for k, v in (bag or {}).items() if eco.safe_int(v) > 0}
+            found = [r for r in found if (r["item_id"] in held) == owned]
+        if not found:
+            await interaction.followup.send("No items match those filters.", ephemeral=True)
+            return
+        e = embeds.embed("📖 Muragoods Encyclopedia",
+                         f"**{len(found)}** of {len(itemdb.CATALOG)} items · "
+                         "`/item <name>` for a full page", embeds.INFO)
+        for rar in itemdb.RARITIES:
+            rows = [r for r in found if r["rarity"] == rar]
+            if not rows:
+                continue
+            names = ", ".join(r["name"] for r in rows[:20])
+            more = f" … +{len(rows) - 20}" if len(rows) > 20 else ""
+            e.add_field(name=f"{itemdb.rarity_badge(rar)} · {len(rows)}",
+                        value=f"{names}{more}", inline=False)
+        await interaction.followup.send(embed=e, ephemeral=True)
+
+    @app_commands.command(name="collection", description="Your collectible progress by rarity and bundle.")
+    async def collection_progress(self, interaction: discord.Interaction):
+        """One collection view: rarity discovery AND the legacy bundle rewards.
+
+        This replaces `/inventory collection` and `/inventory bundles`, which
+        were near-duplicates of each other and sat against Discord's 100-command
+        cap. Both showed the same `COLLECTIONS` table.
+        """
+        await interaction.response.defer(ephemeral=True)
+        gid, uid = interaction.guild.id, interaction.user.id
+        bag = await eco.get_inventory(database._db, gid, uid)
+        held = {k for k, v in (bag or {}).items()
+                if eco.safe_int(v) > 0 and itemdb.get_item(k) is not None}
+        e = embeds.embed("📚 Muragoods Collection",
+                         f"**{len(held)}** unique items discovered. "
+                         "Duplicate copies do not count twice.", embeds.GOLD)
+        for rar in itemdb.RARITIES:
+            total = len(itemdb.items_by_rarity(rar))
+            have = len([i for i in held if itemdb.get_item(i)["rarity"] == rar])
+            e.add_field(name=itemdb.rarity_badge(rar),
+                        value=f"{have} / {total} discovered", inline=True)
+        if eco.COLLECTIONS:
+            done = await eco.check_collection(database._db, gid, uid)
+            lines = []
+            for _cid, bundle in eco.COLLECTIONS.items():
+                have_txt = ", ".join(
+                    f"{itemdb.get_item(i)['name'] if itemdb.get_item(i) else i} "
+                    f"{min(eco.safe_int(bag.get(i)), eco.safe_int(q))}/{eco.safe_int(q)}"
+                    for i, q in (bundle.get("needs") or {}).items())
+                lines.append(f"**{bundle['name']}** — {have_txt} → **{bundle['reward']}**")
+            e.add_field(name="🎁 Bundles", value="\n".join(lines), inline=False)
+            if done:
+                e.add_field(name="Completed", value=", ".join(done), inline=False)
+        await interaction.followup.send(embed=e, ephemeral=True)
 
     @app_commands.command(name="item", description="Inspect any Muragoods item.")
     @app_commands.describe(item="Item name or id")
@@ -211,6 +314,16 @@ class InventoryGroup(commands.Cog):
                 ephemeral=True)
             return
 
+        # A reserved market listing must not be consumable either — otherwise a
+        # player could burn the very copy they put up for sale. Checked BEFORE
+        # the decrement, so there is no remove-then-restore window.
+        reserved = await rw.reserved_item_ids(
+            database._db, interaction.guild.id, interaction.user.id)
+        if (item_id, qty) in reserved or any(i == item_id for i, _ in reserved):
+            await interaction.followup.send(
+                "📌 That item is reserved on the market — take the listing down first "
+                "with `/market remove`.", ephemeral=True)
+            return
         if not await eco.remove_item(database._db, interaction.guild.id,
                                      interaction.user.id, item_id, qty):
             await interaction.followup.send("You don't have that many.", ephemeral=True)
@@ -274,49 +387,80 @@ class InventoryGroup(commands.Cog):
             return
         await interaction.followup.send(f"🗑 Removed **{item_id}**.", ephemeral=True)
 
-    @shop.command(name="view", description="Browse the shop.")
-    @app_commands.describe(category="Filter by category", rarity="Filter by rarity",
-                           query="Search item names", max_price="Maximum price")
+    @shop.command(name="view", description="Browse the Murashop.")
+    @app_commands.describe(section="Shop section", category="Filter by category",
+                           rarity="Filter by rarity", query="Search item names",
+                           max_price="Maximum price")
     @app_commands.choices(category=_CATEGORY_CHOICES, rarity=_RARITY_CHOICES)
-    async def shop_view(self, interaction: discord.Interaction, category: str = "",
-                        rarity: str = "", query: str = "", max_price: int | None = None):
+    @app_commands.choices(section=[
+        app_commands.Choice(name=s, value=s) for s in SHOP_SECTIONS])
+    async def shop_view(self, interaction: discord.Interaction, section: str = "",
+                        category: str = "", rarity: str = "", query: str = "",
+                        max_price: int | None = None):
         await interaction.response.defer(ephemeral=True)
         found = itemdb.search_items(query, category, rarity, max_price)
         stock = [r for r in found if r["buy_price"] > 0 and r["active"]]
+        if section:
+            stock = _shop_section(section, stock)
         if not stock:
-            await interaction.followup.send("No items match those filters.", ephemeral=True)
+            await interaction.followup.send(
+                "No items match those filters — try `/shop view` with no section.", ephemeral=True)
             return
         stock.sort(key=lambda r: (itemdb.RANK[r["rarity"]], r["buy_price"]))
-        e = embeds.embed("🛒 Murashop", "Buy with `/shop buy item:<name>` · sell with `/shop sell`",
+        label = SHOP_SECTIONS.get(section, "All")
+        e = embeds.embed(f"🛒 Murashop — {label}",
+                         "Buy with `/shop buy item:<name>` · inspect with `/item <name>`",
                          embeds.GOLD)
         shown = stock[:20]
         for row in shown:
             e.add_field(name=f"{itemdb.rarity_badge(row['rarity'])} {row['name']}",
-                        value=f"**{row['buy_price']}** coins · "
+                        value=f"**{row['buy_price']:,}** coins · "
                               f"{itemdb.CATEGORY_LABELS[row['category']]} — {row['description']}",
                         inline=False)
-        e.set_footer(text=f"{len(shown)} of {len(stock)} items · `/item <name>` for details")
+        e.set_footer(text=f"{len(shown)} of {len(stock)} items · sections: "
+                          + ", ".join(SHOP_SECTIONS))
         await interaction.followup.send(embed=e, ephemeral=True)
 
     @shop.command(name="buy", description="Purchase items from the shop.")
-    @app_commands.describe(item="Item ID (see /shop view)", quantity="How many (1-99)")
+    @app_commands.describe(item="Item name or id (see /shop view)", quantity="How many (1-99)")
+    @app_commands.autocomplete(item=_item_autocomplete)
     async def shop_buy(self, interaction: discord.Interaction, item: str, quantity: int = 1):
         await interaction.response.defer(ephemeral=True)
+        # The price, stock and item are all resolved server-side; the client
+        # only ever sends a name and a quantity.
+        row = itemdb.resolve_item(item)
+        if not row:
+            await interaction.followup.send("Unknown item — try `/shop view`.", ephemeral=True)
+            return
         ok, msg = await eco.buy_item(
             database._db, interaction.guild.id, interaction.user.id,
-            (item or "").strip().lower(), max(1, min(int(quantity or 1), 99)))
-        await interaction.followup.send(
-            f"🛒 Purchased **{item}**!" if ok else f"⚠️ {msg}", ephemeral=True)
+            row["item_id"], max(1, min(eco.safe_int(quantity, 1), 99)))
+        if not ok:
+            await interaction.followup.send(f"⚠️ {msg}", ephemeral=True)
+            return
+        await interaction.followup.send(embed=embeds.ok(
+            f"🛒 Bought {row['name']}",
+            f"**×{eco.safe_int(quantity, 1)}** for **{row['buy_price'] * eco.safe_int(quantity, 1):,}** coins.\n"
+            f"Added to `/inventory`."))
 
     @shop.command(name="sell", description="Sell eligible items.")
-    @app_commands.describe(item="Item ID", quantity="How many")
+    @app_commands.describe(item="Item name or id", quantity="How many")
+    @app_commands.autocomplete(item=_item_autocomplete)
     async def shop_sell(self, interaction: discord.Interaction, item: str, quantity: int = 1):
         await interaction.response.defer(ephemeral=True)
+        row = itemdb.resolve_item(item)
+        if not row:
+            await interaction.followup.send("Unknown item — try `/inventory view`.", ephemeral=True)
+            return
+        qty = max(1, min(eco.safe_int(quantity, 1), 99))
         ok, msg = await eco.sell_item(
-            database._db, interaction.guild.id, interaction.user.id,
-            (item or "").strip().lower(), max(1, int(quantity or 1)))
-        await interaction.followup.send(
-            f"💰 Sold for coins!" if ok else f"⚠️ {msg}", ephemeral=True)
+            database._db, interaction.guild.id, interaction.user.id, row["item_id"], qty)
+        if not ok:
+            await interaction.followup.send(f"⚠️ {msg}", ephemeral=True)
+            return
+        await interaction.followup.send(embed=embeds.ok(
+            f"💰 Sold {row['name']}",
+            f"**×{qty}** for **{row['sell_price'] * qty:,}** coins."))
 
     @inv.command(name="craft", description="Craft items from recipes.")
     @app_commands.describe(recipe="Recipe name (gem)")
@@ -357,28 +501,6 @@ class InventoryGroup(commands.Cog):
         else:
             await eco.add_item(database._db, interaction.guild.id, interaction.user.id, result, 1)
             await interaction.followup.send(f"🛠️ Crafted **{result}**!", ephemeral=True)
-
-    @inv.command(name="collection", description="Collection progress and bundle completion.")
-    async def collection(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        done = await eco.check_collection(database._db, interaction.guild.id, interaction.user.id)
-        inv = await eco.get_inventory(database._db, interaction.guild.id, interaction.user.id)
-        lines = []
-        for cid, bundle in eco.COLLECTIONS.items():
-            have = [f"{item} {min(inv.get(item, 0), qty)}/{qty}" for item, qty in bundle["needs"].items()]
-            lines.append(f"**{bundle['name']}** — {', '.join(have)} → **{bundle['reward']}**")
-        extra = f"\n🎉 Completed: {', '.join(done)}" if done else ""
-        await interaction.followup.send(embed=embeds.embed(
-            "📦 Collections", "\n".join(lines) + extra, embeds.INFO), ephemeral=True)
-
-    @inv.command(name="bundles", description="Collectible bundles and requirements.")
-    async def bundles(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        await interaction.followup.send(embed=embeds.embed(
-            "📦 Bundles",
-            "\n".join(f"**{b['name']}**: " + ", ".join(f"{q}x {i}" for i, q in b["needs"].items())
-                      + f" → **{b['reward']}**" for b in eco.COLLECTIONS.values()),
-            embeds.INFO), ephemeral=True)
 
     @inv.command(name="showcase", description="View or add to your cosmetic showcase.")
     @app_commands.describe(item="Item ID to add (empty = view)")

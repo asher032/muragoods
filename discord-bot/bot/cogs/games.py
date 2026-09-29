@@ -7,6 +7,7 @@ client-side amounts — the payout math lives in bot/economy.py.
 
 import logging
 import random
+import time
 
 import discord
 from discord import app_commands
@@ -15,6 +16,7 @@ from discord.ext import commands
 import database
 import economy as eco
 import embeds
+import rewards as rw
 import utils
 
 log = logging.getLogger("bot.games")
@@ -183,7 +185,19 @@ class GamesGroup(commands.Cog):
         if delta > 0:
             await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
                                   "balance", stake + delta, "crime_win", "discord")
-            await interaction.followup.send(f"🥷 {label} (profit **+{delta}**).")
+            # Item drop only on a successful crime, via the shared service.
+            grant = None
+            try:
+                grant = await rw.roll_item_reward(
+                    database._db, interaction.guild.id, interaction.user.id, "crime", cfg,
+                    idempotency_key=f"crime:{int(time.time()) // max(1, eco.safe_int(cfg.get('crimeCooldownSec'), 1800))}")
+            except Exception:
+                log.warning("crime item reward failed", exc_info=True)
+            e = embeds.embed("🥷 Crime Successful", f"{label} (profit **+{delta}**).", embeds.OK)
+            pair = rw.reward_field([grant] if grant else None)
+            if pair:
+                e.add_field(name="You also found", value=pair[1], inline=False)
+            await interaction.followup.send(embed=e)
         else:
             await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
                                   "balance", stake + delta, "crime_push", "discord")
@@ -214,7 +228,20 @@ class GamesGroup(commands.Cog):
             if ok:
                 await eco.apply_delta(database._db, interaction.guild.id, interaction.user.id,
                                       "balance", take, "rob_win", "discord")
-                await interaction.followup.send(f"🥷 You swiped **{take}** coins from {user.mention}!")
+                # A successful rob may leave something behind. Never guaranteed.
+                grant = None
+                try:
+                    grant = await rw.roll_item_reward(
+                        database._db, interaction.guild.id, interaction.user.id, "rob", cfg,
+                        idempotency_key=f"rob:{int(time.time()) // max(1, eco.safe_int(cfg.get('robCooldownSec'), 3600))}")
+                except Exception:
+                    log.warning("rob item reward failed", exc_info=True)
+                e = embeds.embed("🥷 Rob Successful",
+                                 f"You swiped **{take}** coins from {user.mention}!", embeds.OK)
+                pair = rw.reward_field([grant] if grant else None)
+                if pair:
+                    e.add_field(name="They dropped", value=pair[1], inline=False)
+                await interaction.followup.send(embed=e)
             else:
                 await interaction.followup.send("They slipped away.", ephemeral=True)
         else:

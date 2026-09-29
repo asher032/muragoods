@@ -27,6 +27,7 @@ import database
 import economy as eco
 import embeds
 import jobs as jb
+import rewards as rw
 import utils
 
 log = logging.getLogger("bot.jobs")
@@ -120,6 +121,13 @@ class ShiftView(utils.SafeView):
                                   str(res.get("reason") or "the shift failed"),
                                   int(res.get("payout") or 0),
                                   bool(res.get("fired")))
+            # The item bonus rides along in the existing result card rather
+            # than a second message, so a won shift stays a single embed.
+            item = res.get("item")
+            if item:
+                pair = rw.reward_field([item])
+                if pair:
+                    embed.add_field(name="🎁 Bonus Drop", value=pair[1], inline=False)
         try:
             if interaction is not None and not interaction.response.is_done():
                 await interaction.response.edit_message(embed=embed, view=self)
