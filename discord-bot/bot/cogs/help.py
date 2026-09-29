@@ -95,7 +95,7 @@ _NAME_OVERRIDES: tuple[tuple[str, str], ...] = (
     ("/title", "economy"), ("/friends", "economy"), ("/advancements", "economy"),
     ("/leaderboard", "economy"), ("/queue", "music"),
     ("/rank", "leveling"), ("/leaderboard", "leveling"), ("/xp", "leveling"),
-    ("/level", "leveling"),
+    ("/level", "leveling"), ("/leveling", "leveling"),
     ("/watchtogether", "murastream"),
 )
 

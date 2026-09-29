@@ -433,8 +433,12 @@ class LevelingCog(commands.Cog):
         await interaction.followup.send(embed=embeds.ok(
             "💸 Payment sent", f"{interaction.user.mention} → {user.mention}: **{amount}** coins."))
 
-    # ── /level administration + cards ─────────────────────────────────
-    level = app_commands.Group(name="level", description="Leveling administration and cards")
+    # ── /leveling administration + the /level card ────────────────────
+    # The CARD lives at the root as the top-level /level command (below) so
+    # users can run a bare /level with NO member argument. Discord forbids a
+    # command that has both options and subcommands, so the admin subcommands
+    # live in this /leveling group instead of under /level.
+    level = app_commands.Group(name="leveling", description="Leveling administration and cards")
 
     def _deny(self, interaction: discord.Interaction) -> bool:
         return not _is_manager(interaction)
@@ -559,7 +563,7 @@ class LevelingCog(commands.Cog):
         if choice == "server":
             count = await levels.reset_guild(database._db, interaction.guild.id)
             await interaction.response.send_message(
-                f"Server XP reset (**{count}** rows; backup kept, `/level restore` to undo).")
+                f"Server XP reset (**{count}** rows; backup kept, `/leveling restore` to undo).")
             return
         if member is None:
             await interaction.response.send_message("Pick a member to reset.", ephemeral=True)
@@ -748,9 +752,14 @@ class LevelingCog(commands.Cog):
         await interaction.response.send_message(
             f"Level **{level}** → {role.mention}.", ephemeral=True)
 
-    @level.command(name="member", description="Show a member's level card.")
-    @app_commands.describe(member="Whose card (default: you)")
-    async def member(self, interaction: discord.Interaction, member: discord.Member | None = None):
+    # /level — ROOT-level card command: the member option is OPTIONAL, so
+    # /level shows the invoker's card and /level @user shows another member's.
+    # (Previously this was `/level member`, a subcommand of a `level` group —
+    # Discord can't run a bare group, which made a member selection feel
+    # mandatory and left two competing entry points.)
+    @app_commands.command(name="level", description="Show a level card — yours by default, or pick a member.")
+    @app_commands.describe(member="Whose card to show (optional — defaults to you)")
+    async def level_card(self, interaction: discord.Interaction, member: discord.Member | None = None):
         await interaction.response.defer()
         target = member or interaction.user
         doc = await database._db.xp.find_one(
