@@ -9,6 +9,7 @@ import { fmtCoins, fmtDuration, fmtDateTime, type JobDef, type JobGame } from '@
 interface JobState extends JobDef {
   unlocked: boolean;
   disabled?: boolean;
+  difficulty: 'Easy' | 'Medium' | 'Hard';
   unlockProgress: number;
   today: number;
   dailyDone: boolean;

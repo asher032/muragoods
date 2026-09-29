@@ -53,10 +53,16 @@ export const JOBS: JobDef[] = TABLE_JOBS.map((j) => ({
 export const JOB_MAP: Record<string, JobDef> = Object.fromEntries(JOBS.map((j) => [j.id, j]));
 
 // Difficulty tier derived from unlock requirement (higher jobs, tighter).
-function tierOf(job: JobDef): number {
+function tierOf(job: Pick<JobDef, 'unlock'>): number {
   if (job.unlock >= 300) return 2;
   if (job.unlock >= 100) return 1;
   return 0;
+}
+
+/** Display difficulty label, derived from the unlock requirement. */
+export function difficultyFor(job: Pick<JobDef, 'unlock'>): 'Easy' | 'Medium' | 'Hard' {
+  const t = tierOf(job);
+  return t >= 2 ? 'Hard' : t >= 1 ? 'Medium' : 'Easy';
 }
 
 export interface JobParams {

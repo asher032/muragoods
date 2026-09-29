@@ -3,7 +3,7 @@ import dbConnect from '@/app/lib/mongodb';
 import JobShift from '@/app/lib/models/JobShift';
 import JobProgress from '@/app/lib/models/JobProgress';
 import { gameIdentity } from '@/app/lib/gameserver';
-import { JOBS, promoLevelFor, fmtDuration } from '@/app/lib/jobs';
+import { JOBS, promoLevelFor, fmtDuration, difficultyFor } from '@/app/lib/jobs';
 import { jobsTuning } from '@/app/lib/jobs-config';
 
 export const dynamic = 'force-dynamic';
@@ -25,11 +25,11 @@ export async function GET(req: Request) {
 
     const [shifts, progress] = await Promise.all([
       JobShift.find({ userEmail: id.emailLc, consumed: true })
-        .select('jobId consumedAt').lean() as Array<{ jobId: string; consumedAt: Date }>,
-      JobProgress.find({ userEmail: id.emailLc }).lean() as Array<{
+        .select('jobId consumedAt').lean<Array<{ jobId: string; consumedAt: Date }>>(),
+      JobProgress.find({ userEmail: id.emailLc }).lean<Array<{
         jobId: string; successes: number; fails: number; totalShifts: number;
         consecutiveFails: number; firedCount: number;
-      }>,
+      }>>(),
     ]);
     const progByJob: Record<string, { successes: number; fails: number; totalShifts: number; consecutiveFails: number; firedCount: number }> = {};
     for (const p of progress) {
@@ -58,6 +58,7 @@ export async function GET(req: Request) {
         ...j,
         unlocked,
         disabled: tuning.disabledJobs.has(j.id),
+        difficulty: difficultyFor(j),
         unlockProgress: Math.min(totalCompleted, j.unlock),
         today,
         dailyDone,
