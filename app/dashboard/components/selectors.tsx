@@ -174,6 +174,13 @@ export function useGuildResources(guildId: string | null) {
           members: data.members ?? [],
           bot: data.bot ?? null,
         });
+        // Success must clear the loading flag on EVERY attempt, not just the
+        // last one: the finally below only clears it when
+        // attempt === BACKOFFS.length - 1, so a first-attempt success used
+        // to `return` with loading stuck true — leaving every selector on
+        // this and other pages ("Loading…", disabled) forever even though
+        // the data had arrived.
+        if (id === requestId.current) setLoading(false);
         return;
       } catch (err) {
         if (id !== requestId.current) return;

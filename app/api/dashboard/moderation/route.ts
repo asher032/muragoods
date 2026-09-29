@@ -22,9 +22,12 @@ async function guard(token: string, guildId: string) {
 }
 
 async function botUsername(token: string): Promise<string> {
+  // Bounded: an actor label must never hold a moderation action hostage —
+  // a Discord stall here falls back to 'dashboard' instead of hanging.
   try {
     const resp = await fetch('https://discord.com/api/v10/users/@me', {
       headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
     });
     if (resp.ok) {
       const me = await resp.json() as { username?: string };
