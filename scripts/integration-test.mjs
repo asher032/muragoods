@@ -415,6 +415,69 @@ console.log('[3b] leaderboard privacy');
     rows.filter((r) => r.playerKey === you).length <= 1);
 }
 
+// ─── 3c. Jobs + work-shift minigames ─────────────────────────────────
+// Full loop with the owner's session: catalog → start (no payout yet) →
+// play correctly → server-validated win + payout in range → history shows
+// it → immediate re-start hits the cooldown → replays/duplicates refused.
+console.log('[3c] jobs + work shifts');
+{
+  const list = await api('/api/jobs');
+  check('jobs catalog loads', list.status === 200 && Array.isArray(list.body?.jobs) && list.body.jobs.length === 5,
+    `status ${list.status}`);
+  check('cooldown reported', list.status === 200 && typeof list.body?.cooldownRemaining === 'number');
+
+  const badJob = await api('/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'nope' }) });
+  check('unknown job → 404', badJob.status === 404, `status ${badJob.status}`);
+
+  const start = await api('/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'fastfood' }) });
+  check('shift starts (no payout yet)', start.status === 200 && !!start.body?.token, `status ${start.status}`);
+  const token = start.body?.token || '';
+  const seq = start.body?.challenge?.sequence || [];
+  check('order challenge has 4 buttons', start.body?.challenge?.game === 'order' && seq.length === 4);
+
+  const busy = await api('/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'cafe' }) });
+  check('second live shift refused', busy.status === 409, `status ${busy.status}`);
+
+  const wrong = await api('/api/jobs/complete', {
+    method: 'POST', body: JSON.stringify({ token: 'job_doesnotexist', clicks: [1, 2, 3, 4], elapsedMs: 5000 }),
+  });
+  check('forged token refused', wrong.status === 409, `status ${wrong.status}`);
+
+  // Play correctly: ascending order, human-plausible elapsed time.
+  const ordered = [...seq].sort((a, b) => a - b);
+  const done = await api('/api/jobs/complete', {
+    method: 'POST', body: JSON.stringify({ token, clicks: ordered, elapsedMs: 6000 }),
+  });
+  check('correct play wins', done.status === 200 && done.body?.won === true, `status ${done.status}`);
+  const payout = done.body?.payout || 0;
+  check('payout inside fast-food success range', payout >= 150000 && payout <= 220000, `payout ${payout}`);
+  check('balance returned', typeof done.body?.balance === 'number');
+
+  const replay = await api('/api/jobs/complete', {
+    method: 'POST', body: JSON.stringify({ token, clicks: ordered, elapsedMs: 6000 }),
+  });
+  check('shift replay refused (no double pay)', replay.status === 409, `status ${replay.status}`);
+
+  const recool = await api('/api/jobs/start', { method: 'POST', body: JSON.stringify({ jobId: 'cafe' }) });
+  check('cooldown enforced after shift', recool.status === 429, `status ${recool.status}`);
+
+  const hist = await api('/api/jobs/history?limit=5');
+  check('history shows the shift',
+    hist.status === 200 && Array.isArray(hist.body?.history) &&
+    hist.body.history.some((h) => h.jobId === 'fastfood' && h.won === true && h.payout === payout),
+    `status ${hist.status}`);
+
+  // Admin tuning: cooldown readable + writable, then restored.
+  const cfgGet = await api('/api/jobs/config');
+  check('jobs config readable', cfgGet.status === 200 && typeof cfgGet.body?.cooldownSec === 'number');
+  const cfgBad = await api('/api/jobs/config', { method: 'PATCH', body: JSON.stringify({ cooldownSec: 5 }) });
+  check('non-admin config write refused', cfgBad.status === 401 || cfgBad.status === 403, `status ${cfgBad.status}`);
+  const cfgSet = await apiWith(ADMIN_JAR, '/api/jobs/config', { method: 'PATCH', body: JSON.stringify({ cooldownSec: 120 }) });
+  check('admin sets cooldown', cfgSet.status === 200, `status ${cfgSet.status}`);
+  const cfgRestore = await apiWith(ADMIN_JAR, '/api/jobs/config', { method: 'PATCH', body: JSON.stringify({ cooldownSec: 3600 }) });
+  check('admin restores cooldown', cfgRestore.status === 200, `status ${cfgRestore.status}`);
+}
+
 // ─── 4. Cleanup (best effort) ───────────────────────────────────────
 console.log('[4] cleanup');
 {

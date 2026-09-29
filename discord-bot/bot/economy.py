@@ -52,6 +52,7 @@ ECONOMY_DEFAULTS: dict = {
     "begMin": 5,
     "begMax": 100,
     "workCooldownSec": 3600,
+    "jobCooldownSec": 3600,
     "begCooldownSec": 300,
     "crimeCooldownSec": 1800,
     "activityCooldownSec": 600,

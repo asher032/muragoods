@@ -26,6 +26,7 @@ interface EconomyConfig {
   workMax?: number;
   gambleMax?: number;
   workCooldownSec?: number;
+  jobCooldownSec?: number;
   begCooldownSec?: number;
   crimeCooldownSec?: number;
   activityCooldownSec?: number;
@@ -209,7 +210,7 @@ export default function EconomyPage() {
           <strong style={{ color: '#fff' }}>⏳ Cooldowns (seconds)</strong>
           <div style={{ marginTop: 6 }}>
             Work {config?.workCooldownSec ?? 3600} · Beg {config?.begCooldownSec ?? 300} · Crime {config?.crimeCooldownSec ?? 1800}
-            <br />Activity {config?.activityCooldownSec ?? 600} · Rob {config?.robCooldownSec ?? 3600}
+            <br />Activity {config?.activityCooldownSec ?? 600} · Rob {config?.robCooldownSec ?? 3600} · Jobs {config?.jobCooldownSec ?? 3600}
           </div>
         </div>
         <div className="cc-card" style={{ padding: '14px 18px', fontSize: 13, color: 'var(--cc-text-dim)' }}>
@@ -249,7 +250,7 @@ export default function EconomyPage() {
           <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--cc-text-faint)' }}>
             Discord (short commands, no prefix): /balance, /daily, /weekly, /monthly, /deposit, /withdraw,
             /pay, /shop view|buy|sell, /inventory, /profile, /achievements, /quests, /calculate,
-            /leaderboard stats|item, /pets, /farm, /fish, /trade, /lottery, /work shift|stars (+ odd jobs,
+            /leaderboard stats|item, /pets, /farm, /fish, /trade, /lottery, /jobs list|shift|history, /work shift|stars (+ odd jobs,
             session, vacation, events), /badges, /title, /notifications, /friends (+marry), /advancements,
             /minigames (incl. crime, rob, bankrob). Only /economy config is prefixed (admins).
           </p>

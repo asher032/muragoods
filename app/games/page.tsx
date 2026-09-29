@@ -200,6 +200,20 @@ export default function GameCenterPage() {
           <GameBackgroundSettings />
         </div>
 
+        {/* Jobs */}
+        <Link href="/jobs" style={{ textDecoration: 'none' }}>
+          <div style={{ ...card, background: 'linear-gradient(135deg, rgba(6,214,160,0.22), rgba(255,214,10,0.12))', padding: 22, marginBottom: 22, display: 'flex', alignItems: 'center', gap: 16 }}>
+            <span style={{ fontSize: 44 }}>💼</span>
+            <span style={{ flex: 1 }}>
+              <span style={{ display: 'block', color: '#fff', fontSize: 20, fontWeight: 800 }}>Jobs — Work Shifts</span>
+              <span style={{ display: 'block', color: '#ccc', fontSize: 13, marginTop: 4 }}>Clock in, play a shift mini-game, earn ⏣. No mini-game, no payout.</span>
+            </span>
+            <span style={{ background: '#ffd60a', color: '#111', fontWeight: 800, padding: '12px 24px', borderRadius: 12, whiteSpace: 'nowrap' }}>
+              VIEW JOBS
+            </span>
+          </div>
+        </Link>
+
         {/* Favorite games */}
         {favDefs.length > 0 && (
           <>

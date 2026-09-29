@@ -153,6 +153,7 @@ class MuraBot(commands.Bot):
             "cogs.inventory",
             "cogs.profile",
             "cogs.work",
+            "cogs.jobs",
             "cogs.ranch",
             "cogs.help",
             "cogs.debug",
@@ -2236,6 +2237,7 @@ async def _health_server() -> None:
                     "workCooldownSec", "begCooldownSec", "crimeCooldownSec",
                     "activityCooldownSec", "gambleMax", "gambleCooldownSec",
                     "robCooldownSec", "robMinTarget", "lotteryTicketPrice", "lotteryMaxTickets",
+                    "jobCooldownSec",
                 )}})
         except Exception as exc:
             return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)

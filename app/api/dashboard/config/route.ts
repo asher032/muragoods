@@ -395,6 +395,7 @@ export async function PATCH(req: NextRequest) {
       workMax: num(e.workMax, 0, 100000, 300),
       gambleMax: num(e.gambleMax, 10, 1000000, 10000),
       workCooldownSec: num(e.workCooldownSec, 60, 86400, 3600),
+      jobCooldownSec: num(e.jobCooldownSec, 60, 86400, 3600),
       begCooldownSec: num(e.begCooldownSec, 30, 86400, 300),
       lotteryTicketPrice: num(e.lotteryTicketPrice, 1, 100000, 100),
       disabledItems: Array.isArray(e.disabledItems)
