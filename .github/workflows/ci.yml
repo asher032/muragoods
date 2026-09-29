@@ -161,6 +161,19 @@ jobs:
       - name: Item reward service (pools, anti-exploit, reservations)
         run: python discord-bot/scripts/test_reward_system.py
 
+      # Market escrow safety. /market holds a member's coins and items outside
+      # their bag, so two failure modes matter more than a crash: a listing
+      # stranded in `settling` (unclaimable, escrow locked away forever) and a
+      # release that runs twice for one listing (free items/coins). This drives
+      # the real accept/remove/view/sweep coroutines with adversarial stored
+      # documents and concurrent callers. It has already caught three live
+      # bugs: a missing `field` argument in apply_delta that made every payout
+      # and escrow refund raise TypeError, a coin offer that settled the two
+      # sides backwards, and /market remove re-opening the listing it had just
+      # released (a repeatable item-duplication exploit).
+      - name: Market settlement (no stranded listings, no double refunds)
+        run: python discord-bot/scripts/test_market_settlement.py
+
       # Executes the real /level, /rank, /leaderboard, /balance and
       # /leveling handlers against adversarial stored documents. The source
       # scan above cannot catch a ValueError that only fires at runtime, and a
