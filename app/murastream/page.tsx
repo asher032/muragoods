@@ -296,13 +296,8 @@ function MediaRow({ title, items, loading, viewAllHref, ranked, icon: RowIcon }:
         </div>
       </div>
       <div className="ms-row-items" ref={scroller}>
-        {items.map((item, i) => ranked ? (
-          <div key={item.id} className="ms-rank-item">
-            <span className="ms-rank" aria-hidden>{i + 1}</span>
-            <MuraStreamCard item={item} />
-          </div>
-        ) : (
-          <MuraStreamCard key={item.id} item={item} />
+        {items.map((item, i) => (
+          <MuraStreamCard key={item.id} item={item} rank={ranked ? i + 1 : undefined} />
         ))}
       </div>
     </div>

@@ -100,7 +100,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           background-color: transparent;
           border-radius: 14px;
           overflow: visible;
-          transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 0.3s;
+          transition: transform 0.18s ease, box-shadow 0.18s ease;
           cursor: pointer;
           box-sizing: border-box;
           flex-shrink: 0;
@@ -108,7 +108,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           color: inherit;
         }
         .ms-card:hover {
-          transform: translateY(-5px);
+          transform: translateY(-4px);
           box-shadow: 0 14px 30px rgba(0,0,0,0.55);
           z-index: 10;
         }
@@ -326,8 +326,8 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
         .ms-row-items > * { width: clamp(150px, 24vw, 190px); flex-shrink: 0; scroll-snap-align: start; }
         .ms-row-tools { display: flex; align-items: center; gap: 8px; }
         .ms-row-nav {
-          width: 28px;
-          height: 28px;
+          width: 34px;
+          height: 34px;
           border-radius: 50%;
           border: 1px solid var(--ms-border);
           background: rgba(255,255,255,0.06);
@@ -414,43 +414,45 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           to { transform: rotate(360deg); }
         }
         /* ─── Top-10 ranked row (home trending) ────────────
-            Rank numeral sits in normal flow LEFT of the poster (never
-            overlaid on titles/ratings): flex-end aligns its baseline with
-            the poster's bottom edge, and the 44px bottom lift equals the
-            deterministic info-block height below the poster (10px padding
-            + single-line ellipsis title + 3px + 15px min-height meta), so
-            title wrapping can never shift it. The negative right margin
-            tucks it slightly behind the poster edge; the positioned poster
-            paints above it. No pixel coupling to card width anywhere. */
-        .ms-rank-item {
-          display: flex;
-          align-items: flex-end;
-          flex-shrink: 0;
-          scroll-snap-align: start;
+            Rank is a small badge INSIDE the poster (bottom-left) — nothing
+            is positioned outside the card, so overflow/clipping is
+            impossible by construction. Cards are fixed 150px (responsive
+            steps below); the row scrolls the remainder. */
+        .ms-rank-row {
+          padding: 24px clamp(20px, 4vw, 40px) 32px;
+          margin-bottom: 0;
         }
-        .ms-rank-row .ms-row-items {
-          gap: 20px;
-          padding-left: 4px;
-        }
+        .ms-rank-row .ms-row-header { margin-bottom: 24px; }
         .ms-rank-row .ms-card {
-          width: clamp(148px, 24vw, 180px);
-          max-width: 180px;
+          flex: 0 0 150px;
+          width: 150px;
+          max-width: 150px;
         }
-        .ms-rank {
-          flex-shrink: 0;
-          font-family: 'Arial Black', -apple-system, 'Segoe UI', sans-serif;
-          font-weight: 900;
-          font-size: clamp(64px, 7vw, 100px);
-          line-height: 0.8;
-          letter-spacing: -0.04em;
-          color: #0d0d12;
-          -webkit-text-stroke: 2.5px #E50914;
-          paint-order: stroke fill;
-          margin: 0 -0.24em 44px 0;
+        .ms-rank-row .ms-card-image { border-radius: 10px; }
+        .ms-rank-row .ms-card-title { font-size: 14px; line-height: 20px; }
+        .ms-rank-row .ms-card-meta { margin-top: 4px; }
+        .ms-rank-badge {
+          position: absolute;
+          left: 8px;
+          bottom: 8px;
+          background: rgba(0,0,0,0.72);
+          backdrop-filter: blur(8px);
+          border-radius: 8px;
+          padding: 3px 9px;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          color: #fff;
+          z-index: 2;
           pointer-events: none;
-          user-select: none;
         }
-        html.ms-compact .ms-rank-row .ms-card { width: 140px; max-width: 140px; }
+        @media (max-width: 1024px) {
+          .ms-rank-row .ms-card { flex-basis: 140px; width: 140px; max-width: 140px; }
+        }
+        @media (max-width: 640px) {
+          .ms-rank-row .ms-card { flex-basis: 128px; width: 128px; max-width: 128px; }
+        }
       `}</style>
       {/* What's New toast (one-time per changelog entry) */}
       {toast && (

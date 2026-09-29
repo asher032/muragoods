@@ -17,12 +17,15 @@ export default function MuraStreamCard({
   progress,
   season,
   episode,
+  rank,
 }: {
   item: MediaItem;
   showActions?: boolean;
   progress?: number;
   season?: number;
   episode?: number;
+  /** Top-10 rank (1-based): renders a small bottom-left badge inside the poster. */
+  rank?: number;
 }) {
   const { toggleMyList, isInMyList } = useMuraStreamStore();
 
@@ -53,6 +56,11 @@ export default function MuraStreamCard({
           <div className="ms-card-rating">
             <span><Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span> {(item.voteAverage ?? 0).toFixed(1)}
           </div>
+        )}
+
+        {/* Top-10 rank badge (bottom-left, inside the poster) */}
+        {rank != null && (
+          <div className="ms-rank-badge" aria-hidden>{String(rank).padStart(2, '0')}</div>
         )}
 
         {/* Country-of-origin badge */}
