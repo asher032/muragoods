@@ -235,6 +235,166 @@ def fail_payout(salary: int, rate: float) -> int:
     return max(1, int(int(salary) * max(0.05, min(0.9, float(rate)))))
 
 
+def _safe(value, default: int = 0) -> int:
+    """int() that never raises. Job/shift documents are written by the
+    dashboard, by older bot versions and by hand, so a numeric field can be
+    None, "", "undefined", a float or a numeric string. A bare int() on those
+    is what turns a slash command into an unhandled ValueError."""
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        try:
+            return int(value)
+        except (ValueError, OverflowError):
+            return default
+    if isinstance(value, str):
+        text = value.strip()
+        try:
+            return int(text)
+        except ValueError:
+            try:
+                number = float(text)
+            except (ValueError, OverflowError):
+                return default
+            if number != number or number in (float("inf"), float("-inf")):
+                return default
+            return int(number)
+    return default
+
+
+#: The five playable shift minigames. A catalog entry naming anything else
+#: would fall through job_params() to a generic challenge, so it is treated
+#: as a configuration problem rather than silently accepted.
+GAMES: frozenset = frozenset({"order", "memory", "choice", "timing", "reaction"})
+
+
+def job_config_problems(job: dict) -> list[str]:
+    """Validate a catalog entry BEFORE it reaches a payout calculation.
+
+    Returns a list of human-readable problems (empty = valid). A catalog
+    entry with salary <= 0, shiftsPerDay < 1, a negative cooldown or an
+    unknown minigame would otherwise either crash the shift or pay nonsense,
+    so callers surface these as a configuration error instead.
+    """
+    problems: list[str] = []
+    salary = _safe(job.get("salary"), -1)
+    if salary <= 0:
+        problems.append(f"salary must be a positive integer (got {job.get('salary')!r})")
+    unlock = _safe(job.get("unlock"), -1)
+    if unlock < 0:
+        problems.append(f"unlock must be >= 0 (got {job.get('unlock')!r})")
+    per_day = _safe(job.get("shiftsPerDay"), 0)
+    if per_day < 1:
+        problems.append(f"shiftsPerDay must be >= 1 (got {job.get('shiftsPerDay')!r})")
+    cooldown = _safe(job.get("cooldownMin"), -1)
+    if cooldown < 0:
+        problems.append(f"cooldownMin must be >= 0 (got {job.get('cooldownMin')!r})")
+    if job.get("game") not in GAMES:
+        problems.append(f"unknown minigame {job.get('game')!r}")
+    if not job.get("name"):
+        problems.append("job has no display name")
+    return problems
+
+
+def resolve_job(job_id) -> tuple[dict | None, str | None]:
+    """(job, problem). Looks the id up in the ONE catalog and validates it.
+
+    A stored employment whose jobId is not in the catalog (renamed, removed,
+    or from an older format) returns (None, reason) so callers can handle it
+    as stale instead of crashing or inventing a replacement job.
+    """
+    key = str(job_id or "").strip()
+    if not key:
+        return None, "no job recorded"
+    job = JOBS.get(key)
+    if job is None:
+        return None, f"job id {key!r} is not in the current catalog"
+    problems = job_config_problems(job)
+    if problems:
+        return None, f"job {key!r} has invalid configuration: " + "; ".join(problems)
+    return job, None
+
+
+def catalog_entry(job: dict, *, enabled: bool = True) -> dict:
+    """Public, user-facing view of a catalog job.
+
+    Derived from the existing JOBS entries so there is exactly ONE catalog —
+    adding a second source of truth would let the site table, the dashboard
+    and the bot drift apart (the CI parity check exists precisely because
+    that has happened before). Internal DB ids are never shown.
+    """
+    return {
+        "id": job["id"],
+        "name": job["name"],
+        "icon": job.get("icon", "💼"),
+        "description": job.get("description") or _JOB_DESCRIPTIONS.get(job["id"], "Clock in and earn."),
+        "category": job.get("category") or _JOB_CATEGORY(job["id"]),
+        "minimum_level": _safe(job.get("unlock"), 0),
+        "reward_min": _safe(job.get("salary"), 0),
+        "reward_max": _safe(job.get("salary"), 0),
+        "cooldown": _safe(job.get("cooldownMin"), 0) * 60,
+        "enabled": bool(enabled),
+        "requirements": [f"{_safe(job.get('unlock'), 0)} completed shifts"]
+        if _safe(job.get("unlock"), 0) else [],
+    }
+
+
+_JOB_DESCRIPTIONS: dict = {
+    "cashier": "Ring up orders and keep the till honest.",
+    "delivery": "Drop parcels across the city on a tight route.",
+    "janitor": "Clean the building before anyone notices.",
+    "farmer": "Work the fields from sunrise to sunset.",
+    "mechanic": "Diagnose and repair whatever rolls in.",
+    "photographer": "Chase the light and get the shot.",
+    "journalist": "Dig up the story nobody else will print.",
+    "chef": "Run the kitchen and plate it clean.",
+    "construction": "Build it, brace it, do not drop it.",
+    "firefighter": "Answer the call and contain it.",
+    "architect": "Design the building before it exists.",
+    "designer": "Make it look like it was meant to be that way.",
+    "software": "Ship features and fix the ones you broke.",
+    "cybersec": "Hunt the things that got through.",
+    "pilot": "Fly the line, land the plane.",
+    "attendant": "Keep passengers safe and comfortable at 35,000 feet.",
+    "anchor": "Deliver the news and stay calm doing it.",
+    "director": "Call the shots and keep the shoot on time.",
+    "dreamitect": "Build the dream before anyone wakes up.",
+    "ceo": "Run the company and own the outcome.",
+    "astronaut": "Train, launch, and work in orbit.",
+    "agent": "Go undercover and get out quietly.",
+    "gamedesign": "Design the loop players cannot put down.",
+    "airesearch": "Push the frontier of what machines can do.",
+    "meme": "Post it, and pray it lands.",
+    "sleeper": "Look rested for a very large fee.",
+    "fortune": "Read the room and the tea leaves.",
+    "detective": "Follow the evidence to the truth.",
+    "magician": "Make the impossible look routine.",
+    "treasure": "Find what the map only half described.",
+    "streamer": "Go live and keep the chat rolling.",
+    "coach": "Turn a team into a winning team.",
+    "parkop": "Run the park so nobody gets hurt.",
+    "superhero": "Wear the cape, do the job.",
+    "timetravel": "Fix a mistake before it happens.",
+    "pirate": "Take what is unguarded, in space.",
+    "multiverse": "Work across realities, collect across them.",
+    "reality": "Reshape the rules and live in the result.",
+    "dimension": "Rule a dimension and keep it stable.",
+}
+
+
+def _JOB_CATEGORY(job_id: str) -> str:
+    order = JOB_ORDER.index(job_id) if job_id in JOB_ORDER else 0
+    if order < 12:
+        return "Service"
+    if order < 24:
+        return "Skilled"
+    if order < 33:
+        return "Specialist"
+    return "Legendary"
+
+
 def promo_level(successes: int) -> int:
     return max(0, min(PROMO_CAP, int(successes or 0) // PROMO_EVERY))
 
@@ -443,6 +603,48 @@ async def get_employment(db, guild_id: int, user_id: int) -> str | None:
         return None
 
 
+async def employment_state(db, guild_id, user_id) -> dict:
+    """Full employment view, including the STALE case.
+
+    A stored employment can name a job that no longer exists (renamed, removed
+    from the catalog, or written by an older format). Reading it must never
+    crash and must never hand the user an arbitrary replacement job, so the
+    raw id is returned alongside the resolved job and a ``stale`` flag.
+
+    Returns {jobId, job, stale, problem, disabled, enabledJobs}.
+    """
+    gid, uid = _safe(guild_id), _safe(user_id)
+    try:
+        doc = await db.job_employment.find_one({"guildId": gid, "userId": uid})
+    except Exception:
+        doc = None
+    job_id = str((doc or {}).get("jobId") or "").strip()
+    job, problem = resolve_job(job_id) if job_id else (None, None)
+    return {
+        "jobId": job_id or None,
+        "job": job,
+        "stale": bool(job_id) and job is None,
+        "problem": problem,
+    }
+
+
+async def mark_stale_employment(db, guild_id, user_id, reason: str) -> bool:
+    """Flag an employment whose job left the catalog, without deleting it.
+
+    The record is KEPT (requirement: never delete employment history) and
+    annotated so admins can see it in the Error Center and the member gets a
+    clear 'pick a new job' message instead of a crash or a free payout.
+    """
+    gid, uid = _safe(guild_id), _safe(user_id)
+    try:
+        res = await db.job_employment.update_one(
+            {"guildId": gid, "userId": uid},
+            {"$set": {"staleJobId": str(reason)[:200], "staleSince": _now()}})
+        return bool(getattr(res, "modified_count", 0))
+    except Exception:
+        return False
+
+
 async def apply_for_job(db, guild_id: int, user_id: int, job_id: str,
                         disabled: set | None = None) -> tuple[bool, dict]:
     """Apply for (and be accepted into) a job. Unlocks mirror start_shift —
@@ -453,10 +655,13 @@ async def apply_for_job(db, guild_id: int, user_id: int, job_id: str,
         return False, {"error": "Unknown job."}
     if disabled and job["id"] in disabled:
         return False, {"error": "That job is currently closed."}
-    gid, uid = int(guild_id), int(user_id)
+    problems = job_config_problems(job)
+    if problems:
+        return False, {"error": "config", "detail": "; ".join(problems)}
+    gid, uid = _safe(guild_id), _safe(user_id)
     total = await total_completed(db, gid, uid)
-    if total < int(job["unlock"]):
-        return False, {"error": "locked", "required": int(job["unlock"]),
+    if total < _safe(job["unlock"]):
+        return False, {"error": "locked", "required": _safe(job["unlock"]),
                        "progress": total}
     try:
         await db.job_employment.create_index(
@@ -484,10 +689,13 @@ async def start_shift(db, guild_id: int, user_id: int, job_id: str,
         return False, {"error": "Unknown job."}
     if disabled and job["id"] in disabled:
         return False, {"error": "That job is currently closed."}
-    gid, uid = int(guild_id), int(user_id)
+    problems = job_config_problems(job)
+    if problems:
+        return False, {"error": "config", "detail": "; ".join(problems)}
+    gid, uid = _safe(guild_id), _safe(user_id)
     total = await total_completed(db, gid, uid)
-    if total < int(job["unlock"]):
-        return False, {"error": "locked", "required": int(job["unlock"]), "progress": total}
+    if total < _safe(job["unlock"]):
+        return False, {"error": "locked", "required": _safe(job["unlock"]), "progress": total}
     # Employment gate: no mini-game launches without an application on file
     # for THIS job (checked server-side — the UI is not trusted). After the
     # unlock check so a locked job still reports its progress first.

@@ -152,3 +152,9 @@ jobs:
       # advertise a command that no longer exists.
       - name: /work command tree (/jobs removed, /level shift absent)
         run: python discord-bot/scripts/test_work_command_tree.py
+
+      # Executes the real /work list/status/apply/history/stars handlers and
+      # the job library against adversarial stored documents. Found the
+      # remaining MS-B8A02F conversions that a source scan declared clean.
+      - name: /work handlers + job catalog (runtime ValueError guard)
+        run: python discord-bot/scripts/test_work_handlers_live.py

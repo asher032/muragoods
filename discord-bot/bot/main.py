@@ -649,10 +649,58 @@ def describe_error(error: Exception, command_name: str = "") -> tuple[str, str |
     # here means an unhandled code path and is still logged in full — but the
     # user gets a message they can act on rather than a bare exception name.
     if isinstance(original, ValueError):
+        setting = _value_error_setting(original)
+        if setting:
+            return (f"A stored setting is invalid: **{setting}**.",
+                    _value_error_hint(command_name))
         return ("A stored value for this server isn't valid.",
                 _value_error_hint(command_name))
     return (f"An unexpected error occurred ({name}).",
             "The details are in the bot logs and the dashboard Error Center.")
+
+
+#: Substrings that identify WHICH stored setting a conversion failed on,
+#: keyed by the dashboard page an admin should open. The ValueError message
+#: for int()/float() is "invalid literal for int() with base 10: <value>",
+#: so the offending value is recoverable and the admin is told the field and
+#: the page instead of a generic sentence.
+_VALUE_ERROR_FIELDS: tuple[tuple[str, str], ...] = (
+    ("jobFailRate", "Economy → Job Failure Rate"),
+    ("jobCooldownOverrides", "Economy → Job Cooldown Overrides"),
+    ("disabledJobs", "Economy → Disabled Jobs"),
+    ("workCooldownSec", "Economy → Work Cooldown"),
+    ("workMin", "Economy → Work Reward Min"),
+    ("workMax", "Economy → Work Reward Max"),
+    ("begCooldownSec", "Economy → Beg Cooldown"),
+    ("begMin", "Economy → Beg Reward Min"),
+    ("begMax", "Economy → Beg Reward Max"),
+    ("activityCooldownSec", "Economy → Activity Cooldown"),
+    ("dailyAmount", "Economy → Daily Reward"),
+    ("cardOpacity", "Leveling → Card Opacity"),
+    ("cardColor", "Leveling → Card Accent Color"),
+    ("serverBackground", "Leveling → Server Card Background"),
+    ("xpMin", "Leveling → XP Min per Message"),
+    ("xpMax", "Leveling → XP Max per Message"),
+    ("xpCooldownSec", "Leveling → XP Cooldown"),
+    ("announceMod", "Leveling → Announce Every N Levels"),
+    ("announceMinLevel", "Leveling → Announce Above Level"),
+    ("voiceXpAmount", "Leveling → Voice XP per Minute"),
+    ("payout", "Work → Shift payout"),
+    ("jobId", "Work → Employment job id"),
+)
+
+
+def _value_error_setting(exc: BaseException) -> str | None:
+    """Name the stored setting a ValueError came from, when identifiable.
+
+    Returns None for a ValueError with no recognisable field, so the caller
+    falls back to the generic wording rather than guessing wrong at a field.
+    """
+    text = f"{exc}".lower()
+    for needle, label in _VALUE_ERROR_FIELDS:
+        if needle.lower() in text:
+            return label
+    return None
 
 
 # Which dashboard page holds the settings a given command reads. The previous
