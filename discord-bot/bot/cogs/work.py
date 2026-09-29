@@ -1,7 +1,7 @@
 """Work & activities — short commands for earning, social and events.
 
-`/work` hosts shift/stars plus every free-reward activity (beg, search,
-dig, tidy, postmemes, stream, adventure), the earning session tracker,
+`/work` hosts shift/stars plus every free-reward activity (beg, tidy,
+postmemes, stream, adventure), the earning session tracker,
 vacation protection and server events. `/friends` hosts the friendship
 system plus partnerships. All rewards are server-side via bot/economy.py.
 """
@@ -105,31 +105,6 @@ class WorkCog(commands.Cog):
         final, _ = await eco.grant_coins(
             database._db, interaction.guild.id, interaction.user.id, amount, "beg", "discord")
         await interaction.followup.send(f"🪙 A kind soul gave you **{final}** coins.")
-
-    @work.command(name="search", description="Search a location for rewards.")
-    async def work_search(self, interaction: discord.Interaction):
-        await self._activity(interaction, "search", 20, 120,
-                             ["searched", "🔍 You searched the attic:", "🔍 Behind the couch:"])
-
-    @work.command(name="dig", description="Dig for items and collectibles.")
-    async def work_dig(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-        cfg = await _cfg(interaction.guild.id)
-        granted, _ = await eco.claim_cooldown(
-            database._db, interaction.guild.id, interaction.user.id,
-            "last_dig", int(cfg.get("activityCooldownSec", 600)))
-        if not granted:
-            await interaction.followup.send("The ground needs time to restock.", ephemeral=True)
-            return
-        if random.random() < 0.35:
-            item = random.choice(["bread", "gem_shard", "speed_fertilizer"])
-            await eco.add_item(database._db, interaction.guild.id, interaction.user.id, item, 1)
-            await interaction.followup.send(f"⛏️ You dug up **{eco.ITEMS[item]['name']}**!")
-        else:
-            final, _ = await eco.grant_coins(
-                database._db, interaction.guild.id, interaction.user.id,
-                random.randint(15, 90), "activity", "discord")
-            await interaction.followup.send(f"⛏️ You dug up **{final}** coins.")
 
     @work.command(name="tidy", description="Tidy up for a small reward.")
     async def work_tidy(self, interaction: discord.Interaction):
