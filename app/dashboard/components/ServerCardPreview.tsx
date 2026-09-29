@@ -1,20 +1,15 @@
 'use client';
 
-import { useMemo } from 'react';
-import {
-  previewStars,
-  serverCardBackgroundMeta,
-} from '@/app/lib/server-card-backgrounds';
+import { serverCardBackgroundMeta } from '@/app/lib/server-card-backgrounds';
 
 // ── Live server-card preview ─────────────────────────────────────────────
-// Mirrors Murabot's Pillow card (900×260: avatar circle left, name, level +
-// rank, progress bar, XP line) on the selected built-in theme. Bound to the
-// draft value, so changing the dropdown updates it instantly — no refresh.
+// Shows the actual imported asset (object-fit: cover, like the bot's
+// cover-resize) under a readability shade, with the card layout mocked on
+// top. Bound to the draft value, so picking a card updates it instantly.
 // Clearly labeled as a preview; the bot renders the real PNG on Discord.
 
 export default function ServerCardPreview({ themeId, accent }: { themeId: unknown; accent: unknown }) {
   const meta = serverCardBackgroundMeta(themeId);
-  const stars = useMemo(() => previewStars(meta.id), [meta.id]);
   const color = typeof accent === 'string' && /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : '#5865F2';
 
   return (
@@ -29,20 +24,24 @@ export default function ServerCardPreview({ themeId, accent }: { themeId: unknow
           borderRadius: 12,
           overflow: 'hidden',
           border: '1px solid rgba(255,255,255,0.12)',
-          background: `linear-gradient(180deg, ${meta.css[0]} 0%, ${meta.css[1]} 55%, ${meta.css[2]} 100%)`,
+          background: '#14141c',
         }}
       >
-        {stars.map((s, i) => (
-          <span
-            key={i}
-            aria-hidden
-            style={{
-              position: 'absolute', left: s.left, top: s.top,
-              width: s.size, height: s.size, borderRadius: '50%',
-              background: '#fff', opacity: s.opacity,
-            }}
-          />
-        ))}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={meta.file}
+          alt=""
+          aria-hidden
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+        {/* readability shade (mirrors the bot's overlay) */}
+        <span
+          aria-hidden
+          style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(180deg, rgba(8,8,14,0.55) 0%, rgba(8,8,14,0.35) 45%, rgba(8,8,14,0.72) 100%)',
+          }}
+        />
         {/* avatar */}
         <span
           aria-hidden
@@ -101,14 +100,6 @@ export default function ServerCardPreview({ themeId, accent }: { themeId: unknow
         >
           1,240 / 1,500 XP
         </span>
-        {/* bottom shade */}
-        <span
-          aria-hidden
-          style={{
-            position: 'absolute', inset: 0,
-            background: 'linear-gradient(to top, rgba(0,0,0,0.35) 0%, transparent 45%)',
-          }}
-        />
       </div>
       <p style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--cc-text-faint)' }}>
         Preview — {meta.emoji} {meta.name}. The bot renders the real card on Discord when levels change.

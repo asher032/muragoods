@@ -788,9 +788,9 @@ class LevelingCog(commands.Cog):
             personal_bytes = await fetch_bytes(personal, 2_000_000)
         except Exception:
             personal_bytes = None
-        # Member image wins; otherwise the server's built-in theme (an id
-        # like "deep-space" — old URL values resolve to the default and are
-        # never fetched).
+        # Member image wins; otherwise the server's imported picture asset
+        # (an id like "duck-toast" — legacy theme ids and old URL values
+        # resolve to the default asset and are never fetched).
         server_theme = levels.resolve_server_background(cfg.get("serverBackground"))
         kind, payload = levels.render_level_card(
             getattr(target, "display_name", "member"), avatar_bytes, level, into, need, rank,
@@ -823,18 +823,16 @@ class LevelingCog(commands.Cog):
             ephemeral=True)
 
     @level.command(name="serverbackground", description="Set the server card background (Manage Server).")
-    @app_commands.describe(theme="Built-in background theme")
+    @app_commands.describe(theme="Imported picture background")
     @app_commands.choices(theme=[
-        app_commands.Choice(name="🌙 Night Campus", value="night-campus"),
-        app_commands.Choice(name="🌌 Deep Space", value="deep-space"),
-        app_commands.Choice(name="🌲 Mystic Forest", value="mystic-forest"),
-        app_commands.Choice(name="🏙️ Neon City", value="neon-city"),
-        app_commands.Choice(name="🏰 Fantasy Castle", value="fantasy-castle"),
-        app_commands.Choice(name="🎮 Arcade", value="arcade"),
-        app_commands.Choice(name="🌅 Sunset", value="sunset"),
-        app_commands.Choice(name="☁️ Sky", value="sky"),
-        app_commands.Choice(name="🌑 Midnight", value="midnight"),
-        app_commands.Choice(name="✨ Muragoods", value="muragoods"),
+        app_commands.Choice(name="🍞 Duck & Toast", value="duck-toast"),
+        app_commands.Choice(name="🌱 Meadow Friend", value="frog-meadow"),
+        app_commands.Choice(name="🪷 Lily Pond", value="frog-pond"),
+        app_commands.Choice(name="🐠 Goldfish Glow", value="goldfish-glass"),
+        app_commands.Choice(name="🌌 Starry Companion", value="starry-duck"),
+        app_commands.Choice(name="🐤 Lily Rest", value="chick-lily"),
+        app_commands.Choice(name="🐸 Sky Gaze", value="frog-sky"),
+        app_commands.Choice(name="🌅 Pixel Sunset", value="pixel-sunset"),
     ])
     async def serverbackground(self, interaction: discord.Interaction, theme: str):
         if self._deny(interaction):
