@@ -220,7 +220,7 @@ class LevelingCog(commands.Cog):
         target = user or interaction.user
         doc = await database._db.xp.find_one(
             {"guildId": interaction.guild.id, "userId": target.id})
-        xp = int((doc or {}).get("xp", 0))
+        xp = levels.safe_int((doc or {}).get("xp", 0), 0)
         level, into, need = levels.level_from_xp(xp)
         e = embeds.embed(f"📊 {target.display_name}'s Rank",
                          f"**Level {level}** — {into}/{need} XP to Level {level + 1}", color=embeds.INFO)
@@ -245,14 +245,18 @@ class LevelingCog(commands.Cog):
         await interaction.response.defer()
         page = max(1, int(page or 1))
         if board == "xp":
-            docs = await levels.top_xp(interaction.guild.id, 10, (page - 1) * 10)
+            # top_xp(db, guild_id, limit, skip) — the db handle was being
+            # omitted, so `db.xp` was an int and this raised AttributeError
+            # before a single row was read.
+            docs = await levels.top_xp(database._db, interaction.guild.id,
+                                       10, (page - 1) * 10)
             if not docs:
                 await interaction.followup.send("No XP earned yet — start chatting!")
                 return
             medals = ["🥇", "🥈", "🥉"] + ["▫️"] * 7
             lines = []
             for i, d in enumerate(docs):
-                xp = int(d.get("xp", 0))
+                xp = levels.safe_int(d.get("xp", 0), 0)
                 level, into, need = levels.level_from_xp(xp)
                 rank = (page - 1) * 10 + i + 1
                 medal = medals[i] if page == 1 and i < 3 else f"`{rank}.`"
@@ -666,13 +670,15 @@ class LevelingCog(commands.Cog):
     async def level_board(self, interaction: discord.Interaction, page: int = 1):
         await interaction.response.defer()
         page = max(1, int(page or 1))
-        docs = await levels.top_xp(interaction.guild.id, 10, (page - 1) * 10)
+        # top_xp(db, guild_id, limit, skip) — the db handle was being omitted.
+        docs = await levels.top_xp(database._db, interaction.guild.id,
+                                   10, (page - 1) * 10)
         if not docs:
             await interaction.followup.send("No XP earned yet — start chatting!")
             return
         lines = []
         for i, d in enumerate(docs):
-            xp = int(d.get("xp", 0))
+            xp = levels.safe_int(d.get("xp", 0), 0)
             level, into, need = levels.level_from_xp(xp)
             rank = (page - 1) * 10 + i + 1
             medal = ["🥇", "🥈", "🥉"][i] if page == 1 and i < 3 else f"`{rank}.`"
@@ -764,7 +770,7 @@ class LevelingCog(commands.Cog):
         target = member or interaction.user
         doc = await database._db.xp.find_one(
             {"guildId": interaction.guild.id, "userId": target.id}) or {}
-        xp = int(doc.get("xp", 0))
+        xp = levels.safe_int(doc.get("xp", 0), 0)
         level, into, need = levels.level_from_xp(xp)
         try:
             higher = await database._db.xp.count_documents(
@@ -811,7 +817,7 @@ class LevelingCog(commands.Cog):
         kind, payload = levels.render_level_card(
             getattr(target, "display_name", "member"), avatar_bytes, level, into, need, rank,
             accent=str(cfg.get("cardColor") or "#5865F2"),
-            opacity=float(cfg.get("cardOpacity", 1.0) or 1.0),
+            opacity=levels.safe_float(cfg.get("cardOpacity"), 1.0, low=0.0, high=1.0),
             background_bytes=personal_bytes,
             background_id=None if personal_bytes else server_theme)
         if kind == "png":

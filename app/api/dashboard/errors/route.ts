@@ -70,7 +70,18 @@ export async function POST(req: NextRequest) {
     source: String(body.source || 'bot').slice(0, 40),
     message,
     command: String(body.command || '').slice(0, 60),
+    subcommand: String(body.subcommand || '').slice(0, 60),
+    // The MS-XXXXXX the user was shown in Discord. Stored so the Error Center
+    // can be searched by the exact id a user reports.
+    errorId: /^MS-[0-9A-F]{1,12}$/i.test(String(body.errorId || ''))
+      ? String(body.errorId).slice(0, 20).toUpperCase() : '',
     guildId: /^\d{5,25}$/.test(String(body.guildId || '')) ? String(body.guildId) : '',
+    userId: /^\d{5,25}$/.test(String(body.userId || '')) ? String(body.userId) : '',
+    exceptionType: String(body.exceptionType || '').slice(0, 80),
+    exceptionMessage: String(body.exceptionMessage || '').slice(0, 500),
+    file: String(body.file || '').slice(0, 200),
+    line: Number.isInteger(body.line) ? Number(body.line) : null,
+    traceback: String(body.traceback || '').slice(0, 4000),
     severity: ['info', 'warning', 'error', 'critical'].includes(String(body.severity))
       ? String(body.severity) : 'error',
     detail: String(body.detail || '').slice(0, 2000),
@@ -112,7 +123,15 @@ export async function GET(req: NextRequest) {
 
   try {
     const col = await errorsCollection();
-    const query: Record<string, unknown> = guildId ? { guildId } : { guildId: { $in: ['', ...manageable.ids.keys()] } };
+    const base: Record<string, unknown> = guildId ? { guildId } : { guildId: { $in: ['', ...manageable.ids.keys()] } };
+    // `?errorId=MS-A98DE3` looks up the exact record a user reported. It is
+    // still intersected with the manageable-guild scope, so searching by id
+    // cannot read another server's errors.
+    const errorIdParam = (req.nextUrl.searchParams.get('errorId') || '').trim().toUpperCase();
+    if (errorIdParam && !/^MS-[0-9A-F]{1,12}$/.test(errorIdParam)) {
+      return NextResponse.json({ success: false, error: 'Invalid errorId' }, { status: 400 });
+    }
+    const query: Record<string, unknown> = errorIdParam ? { ...base, errorId: errorIdParam } : base;
     const docs = await col.find(query).sort({ createdAt: -1 }).limit(100).toArray();
     return NextResponse.json({
       success: true,
@@ -121,7 +140,15 @@ export async function GET(req: NextRequest) {
         source: d.source,
         message: d.message,
         command: d.command || '',
+        subcommand: d.subcommand || '',
+        errorId: d.errorId || '',
         guildId: d.guildId || '',
+        userId: d.userId || '',
+        exceptionType: d.exceptionType || '',
+        exceptionMessage: d.exceptionMessage || '',
+        file: d.file || '',
+        line: typeof d.line === 'number' ? d.line : null,
+        traceback: d.traceback || '',
         severity: d.severity || 'error',
         detail: d.detail || '',
         resolved: Boolean(d.resolved),

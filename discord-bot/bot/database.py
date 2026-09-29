@@ -1,6 +1,7 @@
 """MongoDB (motor) wrapper — one client for the process, parameterized queries only."""
 
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -176,6 +177,46 @@ def diagnostic() -> dict[str, Any]:
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+# Patterns whose contents must never leave the process in a stored error.
+# A pymongo/dotenv/httpx exception routinely embeds the connection string or
+# the bot token in its message, and these strings end up in a dashboard-
+# readable collection, so they are masked at the point of writing.
+_SECRET_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"(?i)\b(mongodb(?:\+srv)?://)([^:@/\s]+):([^@/\s]+)@"), r"\1\2:***@"),
+    (re.compile(r"(?i)\b(postgres(?:ql)?|mysql|redis)(?:\+srv)?://([^:@/\s]+):([^@/\s]+)@"),
+     r"\1://\2:***@"),
+    (re.compile(r"(?i)([?&](?:password|passwd|pwd|token|api[_-]?key|secret)=)([^&\s]+)"),
+     r"\1***"),
+    # The value must be consumed up to end-of-line: matching only the leading
+    # token would have left "Bearer <token>" sitting in plain text after the
+    # replacement.
+    (re.compile(r"(?im)\b(authorization|auth|x-api-key|cookie|set-cookie)"
+                r"\s*[:=]\s*[^\r\n]+"), r"\1: ***"),
+    (re.compile(r"(?i)\b(discord_token|client_secret|api_key|apikey|secret|"
+                r"bridge_secret|password|passwd|pwd|token)\s*=\s*(\S+)"), r"\1=***"),
+    # Discord bot tokens have a fixed shape, so they can be matched exactly
+    # even when they appear without a nearby key name.
+    (re.compile(r"\b[MNO][A-Za-z0-9_-]{23,}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,}\b"), "***"),
+)
+
+
+def redact_secrets(text: str | None) -> str:
+    """Mask tokens/passwords in text destined for the Error Center.
+
+    Best-effort by design: it must never raise, because it runs inside the
+    error path. Anything it misses is preferable to breaking error reporting.
+    """
+    if not text:
+        return ""
+    out = str(text)
+    for pattern, replacement in _SECRET_PATTERNS:
+        try:
+            out = pattern.sub(replacement, out)
+        except re.error:
+            continue
+    return out
 
 
 def _gid(guild_id: Any) -> str:
@@ -853,15 +894,44 @@ async def get_config_audit(guild_id: int, limit: int = 15) -> list[dict]:
 # ── Error relay (bot → website → dashboard Error Center) ────────────────
 async def record_bot_error(source: str, message: str, *, guild_id: int | None = None,
                            command: str | None = None, severity: str = "error",
-                           detail: str | None = None) -> str | None:
+                           detail: str | None = None,
+                           error_id: str | None = None,
+                           user_id: int | None = None,
+                           subcommand: str | None = None,
+                           exc_type: str | None = None,
+                           exc_message: str | None = None,
+                           file: str | None = None,
+                           line: int | None = None,
+                           traceback_text: str | None = None) -> str | None:
     """Store a bot-side error in the shared cluster for the dashboard.
-    Never raises — telemetry must never take down a command."""
+    Never raises — telemetry must never take down a command.
+
+    `error_id` is the MS-XXXXXX the user is shown in Discord. It is persisted
+    so the Error Center can be searched by that ID — previously the ID existed
+    only in the chat message, so a user reporting "MS-A98DE3" could not be
+    matched to any stored traceback.
+
+    Every free-text field is passed through `redact_secrets` first: a
+    traceback can embed a connection string or token in a pymongo/config
+    exception, and the Error Center is dashboard-readable.
+    """
     try:
         doc = {
-            "source": source[:40], "message": message[:500],
-            "severity": severity, "command": (command or "")[:60],
+            "source": source[:40],
+            "message": redact_secrets(message)[:500],
+            "severity": severity,
+            "command": (command or "")[:60],
+            "subcommand": (subcommand or "")[:60],
+            "errorId": (error_id or "")[:20],
             "guildId": str(guild_id) if guild_id else "",
-            "detail": (detail or "")[:2000], "resolved": False,
+            "userId": str(user_id) if user_id else "",
+            "exceptionType": (exc_type or "")[:80],
+            "exceptionMessage": redact_secrets(exc_message)[:500],
+            "file": (file or "")[:200],
+            "line": line if isinstance(line, int) else None,
+            "traceback": redact_secrets(traceback_text)[:4000],
+            "detail": redact_secrets(detail)[:2000],
+            "resolved": False,
             "createdAt": _now(),
         }
         res = await _db.bot_errors.insert_one(doc)
