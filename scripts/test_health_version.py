@@ -72,6 +72,23 @@ async def get(url: str, timeout: float = 15.0):
         return 0, None, f"{type(exc).__name__}: {exc}"
 
 
+async def post(url: str, payload: dict, timeout: float = 15.0):
+    """POST helper with the same contract as get() — see its docstring for why
+    this must stay async."""
+    import aiohttp
+    try:
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=timeout)) as session:
+            async with session.post(url, json=payload) as resp:
+                body = await resp.text()
+                try:
+                    return resp.status, json.loads(body), body
+                except json.JSONDecodeError:
+                    return resp.status, None, body
+    except Exception as exc:
+        return 0, None, f"{type(exc).__name__}: {exc}"
+
+
 async def main() -> int:
     port = free_port()
     os.environ["PORT"] = str(port)
@@ -172,10 +189,24 @@ async def main() -> int:
         for path, expected in (
             (f"/leveling/background/{guild}", 401),   # exists, needs the secret
             (f"/leveling/config/{guild}", 405),       # exists, POST-only
+            ("/resources/verify", 405),               # exists, POST-only
         ):
             status, _, raw2 = await get(f"{base}{path}")
             check(f"{path} is not a 404 (it answered {status})",
                   status == expected, f"HTTP {status}: {raw2[:120]}")
+
+        print("\n[6b] /resources/verify refuses to guess without a secret")
+        # The dashboard's giveaway save depends on this route existing. A build
+        # that failed to register it would 404 here and silently degrade every
+        # channel/role check into a timeout, so assert the mounted shape.
+        status, _, raw3 = await post(f"{base}/resources/verify", {
+            "guildId": guild, "kind": "channel", "id": "123456789012345678",
+        })
+        check("an unauthenticated POST is rejected, not served",
+              status == 401, f"HTTP {status}: {raw3[:120]}")
+        status, _, raw3 = await post(f"{base}/resources/verify", {})
+        check("a bodyless POST is still rejected the same way",
+              status == 401, f"HTTP {status}: {raw3[:120]}")
         # Unauthenticated 401 (not 404) is the proof the route is mounted.
         status, _, _ = await get(f"{base}/health/version")
         check("the version endpoint stays up alongside them", status == 200)
