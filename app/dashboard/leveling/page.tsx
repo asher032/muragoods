@@ -72,6 +72,15 @@ export default function LevelingPage() {
 
   const mapped = error ? statusMessage(code, error) : null;
 
+  // Read the canonical field first, then the legacy alias. Both are written
+  // with the same value, but preferring the canonical name here keeps the page
+  // showing exactly what the bot's renderer will resolve.
+  const storedBackground = (
+    (config as Record<string, Record<string, unknown>>)?.leveling?.server_card_background
+    ?? (config as Record<string, Record<string, unknown>>)?.leveling?.serverBackground
+  );
+  const selectedTheme = resolveServerCardBackground(storedBackground as string | undefined);
+
   return (
     <div style={{ maxWidth: 960 }}>
       <p style={{ margin: 0, color: 'var(--cc-accent)', fontWeight: 700, letterSpacing: 2, fontSize: 11 }}>MURAGOODS</p>
@@ -127,15 +136,11 @@ export default function LevelingPage() {
           Pick one of the imported pictures — it renders behind every level card on this server.
         </p>
         <LevelBackgroundSelector
-          value={resolveServerCardBackground(
-            (config as Record<string, Record<string, unknown>>)?.leveling?.serverBackground
-          )}
-          onChange={(id) => update('leveling', 'serverBackground', id)}
+          value={selectedTheme}
+          onChange={(id) => update('leveling', 'server_card_background', id)}
         />
         <ServerCardPreview
-          themeId={resolveServerCardBackground(
-            (config as Record<string, Record<string, unknown>>)?.leveling?.serverBackground
-          )}
+          themeId={selectedTheme}
           accent={(config as Record<string, Record<string, unknown>>)?.leveling?.cardColor}
         />
         {/* Which side of the chain is broken — the dashboard's record or
@@ -143,9 +148,7 @@ export default function LevelingPage() {
             way to tell a UI bug from a database mismatch from a renderer bug. */}
         <LevelBackgroundLink
           guildId={selected.id}
-          selectedTheme={resolveServerCardBackground(
-            (config as Record<string, Record<string, unknown>>)?.leveling?.serverBackground
-          )}
+          selectedTheme={selectedTheme}
         />
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
           <button

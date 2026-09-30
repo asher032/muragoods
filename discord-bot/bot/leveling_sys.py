@@ -176,6 +176,12 @@ async def display_name_for(guild, user_id) -> tuple[str, int]:
     return str(name), uid
 
 
+#: The asset used when a guild has never chosen one. Declared BEFORE
+#: LEVEL_DEFAULTS because that dict now derives its two background keys from it
+#: — defining it afterwards would make LEVEL_DEFAULTS a NameError at import,
+#: and a second literal here is how the two defaults drift apart again.
+SERVER_CARD_DEFAULT = "duck-toast"
+
 LEVEL_DEFAULTS: dict = {
     "xpMin": 15,
     "xpMax": 25,
@@ -193,7 +199,18 @@ LEVEL_DEFAULTS: dict = {
     "rewardOnly": False,
     "cardColor": "#5865F2",
     "cardOpacity": 1.0,
-    "serverBackground": "duck-toast",
+    # CANONICAL field. This is the name the dashboard documents, the one
+    # POST /leveling/config writes as the source of truth, the one
+    # GET /leveling/background reports as `field`, and the one the renderer
+    # resolves. It MUST be a key here: `get_level_config` only copies stored
+    # keys that exist in LEVEL_DEFAULTS, so a name missing from this dict is
+    # dropped on every read and the card silently falls back to the default.
+    # That is exactly the bug this entry fixes.
+    "server_card_background": SERVER_CARD_DEFAULT,
+    # Legacy alias, still written so existing readers keep working. It is
+    # normalised to the canonical value on every read, so the two can never
+    # disagree — there is one source of truth, not two competing ones.
+    "serverBackground": SERVER_CARD_DEFAULT,
     "rewards": {},
 }
 
@@ -212,8 +229,6 @@ _LEVEL_BG_DIR = _Path(__file__).resolve().parent / "assets" / "level_backgrounds
 #: card is cheap and is the only way to tell "the selection is being ignored"
 #: apart from "the render failed" in production. Set to 0 to silence.
 _DEBUG_CARD_BACKGROUND = str(_os.environ.get("MURA_LEVEL_CARD_DEBUG", "1")).strip() not in ("", "0", "false", "False")
-
-SERVER_CARD_DEFAULT = "duck-toast"
 
 SERVER_CARD_BACKGROUNDS: dict = {
     "duck-toast": {
@@ -251,6 +266,24 @@ def resolve_server_background(value: object) -> str:
     return SERVER_CARD_DEFAULT
 
 
+def coerce_server_background(canonical: object, legacy: object) -> str:
+    """Reconcile the canonical field and its legacy alias into ONE theme id.
+
+    The canonical `server_card_background` wins whenever it holds a theme we
+    recognise. The alias is consulted only when the canonical field is absent,
+    empty, or a value that no longer exists — which is what keeps a guild saved
+    by an older dashboard build (or by hand) rendering its selection instead of
+    reverting to the default.
+
+    Both fields are then written back with this same value, so the two can never
+    drift apart and no reader can observe a disagreement between them.
+    """
+    for candidate in (canonical, legacy):
+        if isinstance(candidate, str) and candidate in SERVER_CARD_BACKGROUNDS:
+            return candidate
+    return SERVER_CARD_DEFAULT
+
+
 def server_background_meta(theme_id: str) -> dict:
     return SERVER_CARD_BACKGROUNDS.get(theme_id) or SERVER_CARD_BACKGROUNDS[SERVER_CARD_DEFAULT]
 
@@ -272,24 +305,63 @@ def get_level_card_background(cfg: dict, *, guild_id: int | None = None,
     chose one that no longer exists) — a valid selection is never replaced.
 
     Reads BOTH stored spellings. `server_card_background` is the documented
-    name; `serverBackground` is what the dashboard has always written. Accepting
-    either means a guild whose value was saved under the other name renders its
-    selection instead of silently reverting to the default.
+    name and is the source of truth; `serverBackground` is the legacy alias the
+    dashboard has always written. `normalize_level_config` keeps the two in
+    sync, so by the time a config reaches here they agree and the ordering
+    below only matters for a dict assembled by hand.
     """
     stored = cfg or {}
     raw = stored.get("server_card_background")
     if raw is None:
         raw = stored.get("serverBackground")
-    theme = resolve_server_background(raw)
+    theme = coerce_server_background(
+        stored.get("server_card_background"), stored.get("serverBackground"))
     if raw is not None and raw != theme:
         # The stored value is not a theme we know. Fall back rather than crash,
         # and ALWAYS report it: a silent fallback here is indistinguishable
         # from the dashboard setting having no effect.
         print(f"INVALID_LEVEL_BACKGROUND_THEME guild_id={guild_id} "
               f"invalidThemeId={raw!r} defaultTheme={theme}")
+    return theme
+
+
+async def resolve_level_background(db, guild_id: int, *, cfg: dict | None = None,
+                                   source: str = "database") -> str:
+    """THE background resolver. Every level card goes through this.
+
+    1. Reads the guild's live configuration (no cache — a dashboard save is
+       visible on the very next `/level`, with no bot restart and no
+       redeploy; see `get_level_config`, which queries Mongo on every call).
+    2. Reads the canonical `server_card_background` field.
+    3. Resolves the theme id to the real asset, verifying the file is present.
+    4. Returns the theme id the renderer must draw.
+
+    `cfg` may be passed when the caller already read the configuration, to
+    avoid a second query; it is still routed through this function so there is
+    exactly one resolution path.
+
+    Emits the diagnostic block immediately before the background is drawn, so a
+    mismatch between what the dashboard shows and what Discord renders can be
+    traced to a guild id and a theme id. It prints a guild id and a theme id —
+    never a token, URI or other secret.
+    """
+    config = cfg if isinstance(cfg, dict) else await get_level_config(db, guild_id)
+    theme = get_level_card_background(config, guild_id=guild_id, source=source)
+    meta = server_background_meta(theme)
+    asset_name = str(meta.get("file") or "")
+    asset_path = _LEVEL_BG_DIR / asset_name
     if _DEBUG_CARD_BACKGROUND:
-        print(f"LEVEL CARD DEBUG guild_id={guild_id} configuredBackground={raw!r} "
-              f"backgroundTheme={theme} source={source} renderer=render_level_card")
+        print(f"LEVEL CARD RENDER:\n"
+              f"  guildId = {guild_id}\n"
+              f"  configuredBackground = {config.get('server_card_background')!r}\n"
+              f"  resolvedBackground = {theme} (asset={asset_name}, "
+              f"present={asset_path.is_file()})\n"
+              f"  renderer = render_level_card (source={source})")
+    if not asset_path.is_file():
+        # A missing asset produced a flat dark card indistinguishable from
+        # "the setting does nothing". Always report, never silently substitute.
+        print(f"LEVEL_BACKGROUND_ASSET_ERROR theme={theme} "
+              f"asset={_LEVEL_BG_DIR.name}/{asset_name}")
     return theme
 
 
@@ -337,6 +409,17 @@ async def get_level_config(db, guild_id: int) -> dict:
         doc = await db.guild_config.find_one({"guildId": str(guild_id)})
         if doc and isinstance(doc.get("leveling"), dict):
             stored = doc["leveling"]
+            # Promote the legacy alias into the canonical field BEFORE the
+            # whitelist merge below. Order matters: that merge only copies keys
+            # already present in LEVEL_DEFAULTS, and LEVEL_DEFAULTS carries a
+            # DEFAULT for `server_card_background`. Promoting afterwards would
+            # therefore be too late — the stored legacy value would lose to the
+            # default, and a guild saved by an older dashboard build would
+            # render the default background.
+            if (stored.get("server_card_background") is None
+                    and stored.get("serverBackground") is not None):
+                stored = {**stored,
+                          "server_card_background": stored.get("serverBackground")}
             for key, value in stored.items():
                 if key in cfg:
                     cfg[key] = value
@@ -565,9 +648,17 @@ def normalize_level_config(cfg: dict) -> dict:
     out["rewards"] = rewards
 
     # Server card background is an imported asset id — never a number, never a
-    # URL. resolve_server_background maps legacy theme ids and old URL values
-    # to the default, so a pre-migration record cannot reach float()/int().
-    out["serverBackground"] = resolve_server_background(out.get("serverBackground"))
+    # URL. The canonical field and its legacy alias are reconciled into ONE
+    # value and written back to BOTH, so:
+    #   - a record saved under either spelling renders its selection, and
+    #   - a consumer reading either field sees the same theme.
+    # Writing only one of them is what let the two systems compete: a write
+    # that populated the alias left the canonical field stale, and a read that
+    # preferred the canonical field then showed the previous background.
+    theme = coerce_server_background(
+        out.get("server_card_background"), out.get("serverBackground"))
+    out["server_card_background"] = theme
+    out["serverBackground"] = theme
     return out
 
 

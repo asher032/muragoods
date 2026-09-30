@@ -192,7 +192,11 @@ async def main():
 
     section("[5] both card paths resolve through the shared helper")
     cog = (ROOT / "bot" / "cogs" / "leveling.py").read_text(encoding="utf-8")
-    check("the cog calls get_level_card_background", "get_level_card_background(" in cog)
+    # The card builder must go through ONE resolver that takes the guild id,
+    # rather than picking a theme out of a config dict itself. That single
+    # entry point is what guarantees the dashboard's selection reaches the PNG.
+    check("the cog calls the single resolve_level_background resolver",
+          "resolve_level_background(" in cog)
     check("there is exactly ONE card builder", cog.count("def build_level_card(") == 1,
           str(cog.count("def build_level_card(")))
     check("/level uses the shared builder",

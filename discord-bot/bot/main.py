@@ -680,6 +680,7 @@ _VALUE_ERROR_FIELDS: tuple[tuple[str, str], ...] = (
     ("dailyAmount", "Economy → Daily Reward"),
     ("cardOpacity", "Leveling → Card Opacity"),
     ("cardColor", "Leveling → Card Accent Color"),
+    ("server_card_background", "Leveling → Server Card Background"),
     ("serverBackground", "Leveling → Server Card Background"),
     ("xpMin", "Leveling → XP Min per Message"),
     ("xpMax", "Leveling → XP Max per Message"),
@@ -2905,14 +2906,27 @@ async def _health_server() -> None:
         # Only keys the bot already understands, and never a raw theme string:
         # an unknown id would be stored and then silently render the default,
         # which is the exact failure this endpoint exists to make impossible.
+        #
+        # An incoming background key is AUTHORITATIVE. `current` already holds
+        # a previously-stored theme in both spellings, so deriving the result
+        # from `current` alone would let the stale canonical field beat the
+        # selection in this very request and silently drop the save.
+        incoming_background = None
         for key, value in body.items():
             if key not in levels.LEVEL_DEFAULTS:
                 continue
             if key in ("serverBackground", "server_card_background"):
-                current[key] = levels.resolve_server_background(value)
+                incoming_background = levels.resolve_server_background(value)
+                current[key] = incoming_background
             else:
                 current[key] = value
-        current["server_card_background"] = current.get("serverBackground", levels.SERVER_CARD_DEFAULT)
+        # Both spellings are then written with the SAME value, so the record
+        # can never hold two different answers to "what is this guild's
+        # background" and no reader can observe a disagreement between them.
+        theme = incoming_background or levels.coerce_server_background(
+            current.get("server_card_background"), current.get("serverBackground"))
+        current["server_card_background"] = theme
+        current["serverBackground"] = theme
 
         try:
             await database._db.guild_config.update_one(
@@ -2972,14 +2986,16 @@ async def _health_server() -> None:
 
         stored = (doc or {}).get("leveling")
         stored = stored if isinstance(stored, dict) else {}
-        # Read BOTH names so a value saved under the other spelling is still
-        # honoured rather than silently defaulting.
+        # Read the CANONICAL name first, then the legacy alias, so a value
+        # saved under the other spelling is still honoured rather than
+        # silently defaulting.
         raw = stored.get("server_card_background")
         field_used = "server_card_background"
         if raw is None:
             raw = stored.get("serverBackground")
             field_used = "serverBackground"
-        resolved = levels.resolve_server_background(raw)
+        resolved = levels.coerce_server_background(
+            stored.get("server_card_background"), stored.get("serverBackground"))
         meta = levels.server_background_meta(resolved)
         asset = levels._LEVEL_BG_DIR / str(meta.get("file") or "")
         detail = _db_detail()
