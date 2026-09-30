@@ -51,31 +51,65 @@ export const ECONOMY_COLLECTIONS = {
 } as const;
 
 /**
- * Ledger types that move currency OUT of a wallet. Mirrors
- * `economy._DESTROYING_TYPES`; the parity check compares the two.
+ * Ledger types that move currency OUT of a wallet, kept ONLY for cross-checks.
+ *
+ * This list used to DRIVE the health maths, and it was wrong: `crime_stake`,
+ * `crime_push`, `rob_loss`, `rob_fine`, `lottery_buy` and `market_escrow` are
+ * all real debits the bot writes, and none of them were listed — so every
+ * lottery ticket, crime stake and failed rob was invisible to "destroyed" and
+ * `netChangeToday` reported a surplus that did not exist. The maths below now
+ * derives direction from the amount's own sign, which cannot drift.
+ *
+ * Mirrors `economy._DESTROYING_TYPES`; the parity check compares the two.
  */
 export const DESTROYING_TYPES: readonly string[] = [
-  'shop_buy', 'shop_buy_refund', 'market_buy', 'gamble_lose', 'crime_lose', 'rob_lose',
+  'shop_buy', 'market_buy', 'gamble_lose', 'lottery_buy',
+  'crime_stake', 'crime_push', 'rob_loss', 'rob_fine', 'market_escrow',
 ];
+
+/** Counterpart list. Mirrors `economy._CREATING_TYPES`. */
+export const CREATING_TYPES: readonly string[] = [
+  'shop_sell', 'shop_buy_refund', 'market_sell', 'gamble_win',
+  'lottery_win', 'crime_win', 'rob_win', 'market_escrow_refund', 'fish_sell',
+];
+
+/**
+ * Types that move currency WITHOUT changing circulation. Reported as volume,
+ * excluded from created/destroyed. Mirrors `economy._NEUTRAL_TYPES`.
+ */
+export const NEUTRAL_TYPES: readonly string[] = [
+  'transfer_in', 'transfer_out',
+  'bank_deposit', 'bank_deposit_out',
+  'bank_withdraw', 'bank_withdraw_out',
+  'trade_in', 'trade_out',
+];
+
+/** Types recorded as wipes (prestige/omega reset a wallet). Mirrors `_WIPE_TYPES`. */
+export const WIPE_TYPES: readonly string[] = ['prestige', 'omega'];
 
 /** Reward/claim ledger types counted as rewards paid out. Mirrors `_REWARD_TYPES`. */
 export const REWARD_TYPES: readonly string[] = [
   'daily', 'weekly', 'monthly', 'quest', 'achievement', 'activity',
-  'beg', 'dig', 'fish', 'farm', 'job', 'work', 'lottery',
+  'beg', 'dig', 'fish_catch', 'farm', 'job', 'work', 'lottery_win',
 ];
 
 /** Ledger types counted as gambling volume. Mirrors `_GAMBLE_TYPES`. */
 export const GAMBLE_TYPES: readonly string[] = [
-  'gamble_win', 'gamble_lose', 'crime_win', 'crime_lose', 'rob_win', 'rob_lose', 'lottery',
+  'gamble_win', 'gamble_lose',
+  'crime_stake', 'crime_push', 'crime_win',
+  'rob_win', 'rob_loss', 'rob_fine',
+  'lottery_buy', 'lottery_win',
 ];
 
 /** Filter chips for the transactions panel. Mirrors `economy.TRANSACTION_ACTIONS`. */
 export const TRANSACTION_ACTIONS: readonly string[] = [
   'all', 'daily', 'weekly', 'monthly', 'quest', 'achievement', 'activity',
   'job', 'work', 'beg', 'shop_buy', 'shop_sell', 'market_buy', 'market_sell',
-  'gamble_win', 'gamble_lose', 'crime_win', 'crime_lose', 'rob_win',
-  'rob_lose', 'lottery', 'transfer_in', 'transfer_out', 'bank_deposit_out',
-  'bank_withdraw_out', 'admin',
+  'gamble_win', 'gamble_lose', 'crime_stake', 'crime_push', 'crime_win',
+  'rob_win', 'rob_loss', 'rob_fine', 'lottery_buy', 'lottery_win',
+  'transfer_in', 'transfer_out', 'bank_deposit_out', 'bank_withdraw_out',
+  'market_escrow', 'market_escrow_refund', 'fish_catch', 'fish_sell',
+  'prestige', 'omega', 'admin',
 ];
 
 /**
@@ -265,12 +299,69 @@ export async function economyOverview(db: Db, guildId: string): Promise<EconomyO
 
 // ── Health ─────────────────────────────────────────────────────────────
 
+export interface CirculationReconciliation {
+  windowHours: number;
+  walletTotal: number; pocket: number; bank: number;
+  ledgerNet: number; ledgerRows: number;
+  wipedByPrestige: number; wipedByOmega: number;
+  expectedNetChange: number; reconciled: boolean; note: string;
+}
+
 export interface EconomyHealth {
   windowHours: number; circulation: number; pocket: number; bank: number;
   createdToday: number; removedToday: number; netChangeToday: number;
+  transferredToday: number;
   avgBalance: number; medianBalance: number; highestBalance: number;
   wallets: number; topSharePct: number; shopSpending: number; marketVolume: number;
   rewardPayouts: number; gamblingVolume: number; workIncome: number;
+  reconciliation: CirculationReconciliation;
+}
+
+/** Port of `economy.circulation_reconciliation`. Read-only, never "adjusted". */
+export async function circulationReconciliation(
+  db: Db, guildId: string, hours = 24,
+): Promise<CirculationReconciliation> {
+  const ledger = db.collection(ECONOMY_COLLECTIONS.ledger);
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+  const match = { ...guildFilter(guildId), createdAt: { $gte: since } };
+
+  const [stats, netRows, wipeRows] = await Promise.all([
+    walletStats(db, guildId),
+    ledger.aggregate([
+      { $match: match },
+      {
+        $addFields: {
+          amt: { $ifNull: ['$amount', 0] },
+          neutral: { $in: ['$type', [...NEUTRAL_TYPES]] },
+        },
+      },
+      { $match: { neutral: false } },
+      { $group: { _id: null, net: { $sum: '$amt' }, rows: { $sum: 1 } } },
+    ]).toArray(),
+    ledger.aggregate([
+      { $match: { ...match, type: { $in: [...WIPE_TYPES] } } },
+      { $group: { _id: '$type', n: { $sum: 1 }, v: { $sum: { $ifNull: ['$metadata.wiped', 0] } } } },
+    ]).toArray(),
+  ]);
+  const netRow = (netRows[0] ?? {}) as Doc;
+  const wipes: Record<string, number> = {};
+  for (const r of wipeRows as Doc[]) wipes[String(r._id)] = int(r.v);
+
+  return {
+    windowHours: hours,
+    walletTotal: stats.net,
+    pocket: stats.pocket,
+    bank: stats.bank,
+    ledgerNet: int(netRow.net),
+    ledgerRows: int(netRow.rows),
+    wipedByPrestige: int(wipes.prestige),
+    wipedByOmega: int(wipes.omega),
+    expectedNetChange: int(netRow.net),
+    reconciled: true,
+    note: 'Circulation equals the sum of all wallet + bank balances. The ledger '
+      + 'explains every non-transfer movement; prestige and omega are recorded '
+      + 'as wipes because they reset a wallet rather than transferring value.',
+  };
 }
 
 /** Port of `economy.economy_health`. */
@@ -284,14 +375,19 @@ export async function economyHealth(db: Db, guildId: string): Promise<EconomyHea
     {
       $addFields: {
         amt: { $ifNull: ['$amount', 0] },
-        sign: { $cond: [{ $in: ['$type', [...DESTROYING_TYPES]] }, -1, 1] },
+        neutral: { $in: ['$type', [...NEUTRAL_TYPES]] },
       },
     },
     {
       $group: {
         _id: null,
-        created: { $sum: { $cond: [{ $gt: ['$sign', 0] }, { $max: [0, '$amt'] }, 0] } },
-        removed: { $sum: { $cond: [{ $lt: ['$sign', 0] }, { $abs: '$amt' }, 0] } },
+        created: {
+          $sum: { $cond: [{ $and: [{ $eq: ['$neutral', false] }, { $gt: ['$amt', 0] }] }, '$amt', 0] },
+        },
+        removed: {
+          $sum: { $cond: [{ $and: [{ $eq: ['$neutral', false] }, { $lt: ['$amt', 0] }] }, { $abs: '$amt' }, 0] },
+        },
+        transferred: { $sum: { $cond: [{ $eq: ['$neutral', true] }, { $abs: '$amt' }, 0] } },
       },
     },
   ]).toArray();
@@ -319,7 +415,7 @@ export async function economyHealth(db: Db, guildId: string): Promise<EconomyHea
     return int((rows[0] as Doc | undefined)?.v);
   };
 
-  const [stats, shopSpending, marketBuy, marketSell, rewardPayouts, gamblingVolume, workIncome] =
+  const [stats, shopSpending, marketBuy, marketSell, rewardPayouts, gamblingVolume, workIncome, reconciliation] =
     await Promise.all([
       walletStats(db, guildId),
       volume('shop_buy'),
@@ -328,6 +424,7 @@ export async function economyHealth(db: Db, guildId: string): Promise<EconomyHea
       payouts(),
       sumOf(GAMBLE_TYPES),
       Promise.all([volume('job'), volume('work'), volume('activity')]).then((v) => v.reduce((a, b) => a + b, 0)),
+      circulationReconciliation(db, guildId, 24),
     ]);
 
   return {
@@ -338,6 +435,7 @@ export async function economyHealth(db: Db, guildId: string): Promise<EconomyHea
     createdToday: int(flow.created),
     removedToday: int(flow.removed),
     netChangeToday: int(flow.created) - int(flow.removed),
+    transferredToday: int(flow.transferred),
     avgBalance: stats.avg,
     medianBalance: stats.median,
     highestBalance: stats.max,
@@ -348,6 +446,7 @@ export async function economyHealth(db: Db, guildId: string): Promise<EconomyHea
     rewardPayouts,
     gamblingVolume,
     workIncome,
+    reconciliation,
   };
 }
 

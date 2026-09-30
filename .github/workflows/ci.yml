@@ -337,6 +337,16 @@ jobs:
       - name: Economy dashboard (circulation, canonical leaderboard, arbitrage)
         run: python discord-bot/scripts/test_economy_dashboard.py
 
+      # Economic BALANCE, as one connected system rather than per-command.
+      # Drives the real economy code through the shop, market, reward,
+      # gambling, multi-account, flow-ledger and lottery loops and asserts the
+      # invariants that hold the economy together: no buy/sell arbitrage
+      # across every catalogue item, a losing round trip, exactly one reward
+      # per claim, bounded minigame EV, transfers that create nothing, and
+      # created/destroyed that reconcile with real wallet balances.
+      - name: Economy balance (loops, arbitrage, EV, ledger reconciliation)
+        run: python discord-bot/scripts/test_economy_balance.py
+
       # The Murabot owner is one Discord USER ID, and it is neither a name, nor
       # a guild role, nor "an admin". The bot check is answered from the
       # gateway cache and keeps a distinct code per failure. Hermetic: no

@@ -281,6 +281,20 @@ function fakeDb({ wallets = [], ledger = [], stock = [], config = null, fail = f
       const [test, then, other] = expr.$cond;
       return truthy(evalExpr(test, d)) ? evalExpr(then, d) : evalExpr(other, d);
     }
+    if ('$and' in expr) return expr.$and.every((e) => truthy(evalExpr(e, d)));
+    if ('$or' in expr) return expr.$or.some((e) => truthy(evalExpr(e, d)));
+    if ('$eq' in expr) {
+      const [a, b] = expr.$eq;
+      const av = evalExpr(a, d);
+      const bv = evalExpr(b, d);
+      return av === bv || String(av) === String(bv);
+    }
+    if ('$ne' in expr) {
+      const [a, b] = expr.$ne;
+      const av = evalExpr(a, d);
+      const bv = evalExpr(b, d);
+      return !(av === bv || String(av) === String(bv));
+    }
     if ('$gt' in expr) {
       const [a, b] = expr.$gt;
       return Number(evalExpr(a, d) ?? 0) > Number(evalExpr(b, d) ?? 0);

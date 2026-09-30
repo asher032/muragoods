@@ -18,8 +18,15 @@ import { NextRequest, NextResponse } from 'next/server';
 // usable is reported as broken rather than hidden:
 //
 //   BOT_ONLINE · BOT_OFFLINE · BOT_GATEWAY_NOT_READY · BOT_NOT_IN_GUILD
-//   BOT_PERMISSION_MISSING · DISCORD_RATE_LIMITED · AUTHENTICATION_ERROR
+//   BOT_PERMISSION_MISSING · DISCORD_RATE_LIMITED · DISCORD_TIMEOUT
+//   MURABOT_ROUTE_MISSING · MURABOT_UNAVAILABLE · AUTHENTICATION_ERROR
 //   BRIDGE_NOT_CONFIGURED · INTERNAL_ERROR · DISCORD_API_ERROR
+//
+//   `MURABOT_ROUTE_MISSING` exists because a 404 from Murabot is a DEPLOYMENT
+//   mismatch, not a Discord failure. It used to surface as DISCORD_API_ERROR
+//   with "Discord did not return the channel list", which pointed the operator
+//   at their own channel permissions while the real fault was an outdated bot
+//   build.
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -29,8 +36,10 @@ const VALID_REQUIRES = ['view', 'send', 'embed', 'read'] as const;
 /** HTTP status per failure code, so a client can back off correctly. */
 function statusFor(code: BotCheckCode): number {
   if (code === 'BOT_NOT_IN_GUILD') return 404;
+  if (code === 'MURABOT_ROUTE_MISSING') return 501;
   if (code === 'AUTHENTICATION_ERROR') return 502;
   if (code === 'DISCORD_RATE_LIMITED') return 429;
+  if (code === 'DISCORD_TIMEOUT' || code === 'BOT_OFFLINE') return 504;
   if (code === 'BRIDGE_NOT_CONFIGURED' || code === 'INTERNAL_ERROR') return 503;
   return 503;
 }
@@ -68,8 +77,11 @@ export async function GET(req: NextRequest) {
         code: result.error.code,
         error: result.error.message,
         // Retryability is a property of the failure, not a guess: a rate limit
-        // and a missing bridge are both retryable, a missing guild is not.
-        retryable: result.error.code !== 'BOT_NOT_IN_GUILD',
+        // and a missing bridge are both retryable, a missing guild is not. A
+        // missing ROUTE is not retryable either — retrying an outdated build
+        // cannot produce the endpoint.
+        retryable: result.error.code !== 'BOT_NOT_IN_GUILD'
+          && result.error.code !== 'MURABOT_ROUTE_MISSING',
         retryAfterMs: result.retryAfterMs,
         bot: result.presence,
         channels: [],

@@ -34,7 +34,16 @@ export type BotCheckCode =
   | 'BOT_NOT_IN_GUILD'
   | 'BOT_PERMISSION_MISSING'
   | 'DISCORD_RATE_LIMITED'
+  | 'DISCORD_TIMEOUT'
   | 'DISCORD_API_ERROR'
+  | 'DISCORD_PERMISSION_DENIED'
+  // The bridge answered 404: the process serving this request does not have
+  // the route at all. That is a DEPLOYMENT mismatch, not a Discord failure and
+  // not the channel's fault — reporting it as DISCORD_API_ERROR sent operators
+  // looking at their channel permissions when the truth was that Murabot was
+  // running a build from before the endpoint existed.
+  | 'MURABOT_ROUTE_MISSING'
+  | 'MURABOT_UNAVAILABLE'
   | 'AUTHENTICATION_ERROR'
   | 'BRIDGE_NOT_CONFIGURED'
   | 'INTERNAL_ERROR';
@@ -148,14 +157,20 @@ export async function botChannels(
         cache: 'no-store',
         signal: AbortSignal.timeout(8000),
       });
-    } catch {
-      // A timeout or a refused connection. That is a transport fact, and it is
-      // reported as one — never as an invalid channel.
+    } catch (err) {
+      // A transport failure. A deadline is a TIMEOUT and a refused connection
+      // is the process being down; they are different facts and both are
+      // retryable. Neither is ever an invalid channel.
+      const timedOut = err instanceof Error
+        && (err.name === 'TimeoutError' || err.name === 'AbortError');
       return {
         presence: UNKNOWN_PRESENCE, channels: [], requires: [...requires], cached: false,
         error: {
-          code: 'BOT_OFFLINE',
-          message: 'Murabot did not answer. It may be restarting — the channel list is unavailable until it responds.',
+          code: (timedOut ? 'DISCORD_TIMEOUT' : 'BOT_OFFLINE') as BotCheckCode,
+          message: timedOut
+            ? 'Murabot did not respond in time. The channel list is unavailable until it does — '
+              + 'this is not a problem with your channels, and nothing was changed.'
+            : 'Murabot did not answer. It may be restarting — the channel list is unavailable until it responds.',
         },
       };
     }
@@ -198,6 +213,29 @@ export async function botChannels(
       ?? (typeof payload?.code === 'string' ? payload.code : null);
     const failureMessage = (typeof detail === 'object' && detail ? detail.message : null)
       ?? (typeof detail === 'string' ? detail : null);
+
+    // A 404 with NO structured payload means the route itself is missing from
+    // the running build: nothing about Discord, the guild, or the channel was
+    // ever consulted, so it must not be reported as a Discord API error — that
+    // sends the operator to check permissions and rate limits for a problem
+    // only a redeploy fixes. Confirmed against production:
+    // `/economy/channels/<guild>` 404s on the deployed Murabot while the route
+    // exists in `main`.
+    //
+    // A 404 that DOES carry a code is the opposite: Murabot answered and said
+    // "I am not in that server", which is a real, accurate bot-state verdict
+    // and must keep its own code.
+    if (res.status === 404 && !failureCode) {
+      return {
+        presence: UNKNOWN_PRESENCE, channels: [], requires: [...requires], cached: false,
+        error: {
+          code: 'MURABOT_ROUTE_MISSING' as BotCheckCode,
+          message: 'Murabot is running a build that does not include the channel-list '
+            + 'endpoint. This is a deployment problem, not a problem with your server or '
+            + 'your channels — redeploy Murabot and retry. Nothing was changed.',
+        },
+      };
+    }
 
     if (!payload || payload.ok !== true || (!res.ok && failureCode)) {
       const code = (failureCode ?? (res.status >= 500 ? 'INTERNAL_ERROR' : 'DISCORD_API_ERROR')) as BotCheckCode;

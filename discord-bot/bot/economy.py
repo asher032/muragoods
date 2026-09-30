@@ -1287,26 +1287,43 @@ async def economy_health(db, guild_id: int) -> dict:
     """
     gid = _gid(guild_id)
     since = _now() - timedelta(hours=24)
+    # Created/destroyed are derived from the SIGN OF THE AMOUNT, not from a
+    # hand-maintained list of "destroying" types.
+    #
+    # That list was the bug. `crime_stake`, `crime_push`, `rob_loss`,
+    # `rob_fine`, `lottery_buy` and `market_escrow` are all real debits the
+    # code writes, and none of them were in it — so every lottery ticket, every
+    # crime stake and every failed rob was invisible to "destroyed", and
+    # `netChangeToday` reported a surplus that does not exist. Any new call
+    # site would have silently joined that list of lies.
+    #
+    # The amount's own sign cannot drift: `apply_delta` is the only thing that
+    # writes a wallet, and it records the amount it applied. A negative amount
+    # destroyed value; a positive amount created it. Transfers are excluded
+    # because they cancel across the guild and counting both halves would mint
+    # currency that was only ever moved.
     flow = await db.economy_tx.aggregate([
         {"$match": {"guildId": gid, "createdAt": {"$gte": since}}},
         {"$addFields": {
             "amt": {"$ifNull": ["$amount", 0]},
-            "sign": {
-                "$cond": [
-                    {"$in": ["$type", _DESTROYING_TYPES]},
-                    -1, 1,
-                ],
-            },
+            "neutral": {"$in": ["$type", list(_NEUTRAL_TYPES)]},
         }},
         {"$group": {
             "_id": None,
-            "created": {"$sum": {"$cond": [{"$gt": ["$sign", 0]}, {"$max": [0, "$amt"]}, 0]}},
-            "removed": {"$sum": {"$cond": [{"$lt": ["$sign", 0]}, {"$abs": "$amt"}, 0]}},
+            "created": {"$sum": {"$cond": [
+                {"$and": [{"$eq": ["$neutral", False]}, {"$gt": ["$amt", 0]}]},
+                "$amt", 0]}},
+            "removed": {"$sum": {"$cond": [
+                {"$and": [{"$eq": ["$neutral", False]}, {"$lt": ["$amt", 0]}]},
+                {"$abs": "$amt"}, 0]}},
+            "transferred": {"$sum": {"$cond": [
+                {"$eq": ["$neutral", True]}, {"$abs": "$amt"}, 0]}},
             "rows": {"$sum": 1},
         }},
     ]).to_list(1)
     created = int((flow[0].get("created") if flow else 0) or 0)
     removed = int((flow[0].get("removed") if flow else 0) or 0)
+    transferred = int((flow[0].get("transferred") if flow else 0) or 0)
 
     async def volume(kind: str) -> int:
         rows = await db.economy_tx.aggregate([
@@ -1325,6 +1342,9 @@ async def economy_health(db, guild_id: int) -> dict:
         "createdToday": created,
         "removedToday": removed,
         "netChangeToday": created - removed,
+        # Value moved between wallets. Reported, and deliberately NOT part of
+        # created/removed: a transfer is not a mint and not a burn.
+        "transferredToday": transferred,
         "avgBalance": stats["avg"],
         "medianBalance": stats["median"],
         "highestBalance": stats["max"],
@@ -1335,26 +1355,62 @@ async def economy_health(db, guild_id: int) -> dict:
         "rewardPayouts": await _reward_payouts(db, gid, since),
         "gamblingVolume": await _gambling_volume(db, gid, since),
         "workIncome": await volume("job") + await volume("work") + await volume("activity"),
+        "reconciliation": await circulation_reconciliation(db, gid, hours=24),
     }
 
 
-#: Ledger types that move currency OUT of a wallet. Anything else is treated as
-#: creation. Kept next to `_flow_signs` so the two cannot drift.
+#: Ledger types that move currency OUT of a wallet, kept ONLY for the
+#: cross-check in `_flow_signs`. The health maths itself no longer depends on
+#: this list — see `_flow_signs` for why a hand-maintained list cannot be
+#: trusted here.
 _DESTROYING_TYPES: tuple[str, ...] = (
-    "shop_buy", "shop_buy_refund", "market_buy", "gamble_lose",
-    "crime_lose", "rob_lose",
+    "shop_buy", "market_buy", "gamble_lose", "lottery_buy",
+    "crime_stake", "crime_push", "rob_loss", "rob_fine", "market_escrow",
 )
 
-#: Reward/claim ledger types counted as "rewards paid out".
+#: Ledger types that move currency INTO a wallet. The counterpart list, for the
+#: same cross-check.
+_CREATING_TYPES: tuple[str, ...] = (
+    "shop_sell", "shop_buy_refund", "market_sell", "gamble_win",
+    "lottery_win", "crime_win", "rob_win", "market_escrow_refund",
+    "fish_sell",
+)
+
+#: Types that move currency but do not change circulation: money leaving one
+#: wallet and arriving in another. They are reported as VOLUME and excluded
+#: from created/destroyed, because counting them would invent currency that
+#: was never minted and destroy currency that was never burned.
+_NEUTRAL_TYPES: tuple[str, ...] = (
+    "transfer_in", "transfer_out",
+    "bank_deposit", "bank_deposit_out",
+    "bank_withdraw", "bank_withdraw_out",
+    # A completed trade is a matched debit/credit pair; it moves value, it
+    # does not mint or burn it.
+    "trade_in", "trade_out",
+)
+
+#: Types recorded with amount 0 because the balance change is a reset rather
+#: than a delta (prestige/omega wipe the wallet). They must be reported
+#: separately or circulation can never reconcile.
+_WIPE_TYPES: tuple[str, ...] = ("prestige", "omega")
+
+#: Reward/claim ledger types counted as "rewards paid out". These are the
+#: types the code ACTUALLY writes; the previous list named `fish`, which no
+#: code path emits (fishing writes `fish_catch`), so every fishing payout was
+#: invisible to this figure.
 _REWARD_TYPES: tuple[str, ...] = (
     "daily", "weekly", "monthly", "quest", "achievement", "activity",
-    "beg", "dig", "fish", "farm", "job", "work", "lottery",
+    "beg", "dig", "fish_catch", "farm", "job", "work", "lottery_win",
 )
 
-#: Ledger types counted as gambling volume.
+#: Ledger types counted as gambling volume. `crime_lose`/`rob_lose` were listed
+#: but never written — the cogs emit `crime_stake`/`crime_push` and
+#: `rob_loss`/`rob_fine` — so crime and rob volume read as zero.
 _GAMBLE_TYPES: tuple[str, ...] = (
-    "gamble_win", "gamble_lose", "crime_win", "crime_lose",
-    "rob_win", "rob_lose", "lottery",
+    "gamble_win", "gamble_lose",
+    "crime_stake", "crime_push", "crime_win",
+    "rob_win", "rob_loss", "rob_fine",
+    "lottery_buy", "lottery_win",
 )
 
 
@@ -1380,13 +1436,81 @@ def _iso(value) -> str:
     return value.isoformat() if hasattr(value, "isoformat") else str(value)
 
 
+async def circulation_reconciliation(db, guild_id: int, *, hours: int = 24) -> dict:
+    """Does the ledger explain the wallets? Read-only, and honest about not.
+
+    Three numbers have to agree, and until they did, "Total circulation" on the
+    dashboard was decoration:
+
+      wallet_total        sum(balance + bank) over every wallet in the guild
+      ledger_net          sum(signed amount) over non-transfer ledger rows
+      expected_delta      wallet_total - wallet_total(24h ago)
+
+    `ledger_net` is what the economy SHOULD have done to circulation in the
+    window. `expected_delta` is what it actually did. A difference means a
+    writer moved money without recording it — which is precisely the bug that
+    makes circulation irreconcilable, so it is reported rather than smoothed
+    away. No figure here is adjusted to make the two match.
+    """
+    gid = _gid(guild_id)
+    since = _now() - timedelta(hours=hours)
+
+    stats = await _wallet_stats(db, gid)
+    wallet_total = int(stats.get("net", 0) or 0)
+
+    rows = await db.economy_tx.aggregate([
+        {"$match": {"guildId": gid, "createdAt": {"$gte": since}}},
+        {"$addFields": {
+            "amt": {"$ifNull": ["$amount", 0]},
+            "neutral": {"$in": ["$type", list(_NEUTRAL_TYPES)]},
+        }},
+        {"$match": {"neutral": False}},
+        {"$group": {"_id": None, "net": {"$sum": "$amt"}, "rows": {"$sum": 1}}},
+    ]).to_list(1)
+    ledger_net = int((rows[0].get("net") if rows else 0) or 0)
+    tx_rows = int((rows[0].get("rows") if rows else 0) or 0)
+
+    # Wipes (prestige/omega) zero a wallet with an amount-0 ledger row, so the
+    # money they destroyed is absent from `ledger_net` by construction. Count
+    # them explicitly so the gap is attributable rather than mysterious.
+    wipe_rows = await db.economy_tx.aggregate([
+        {"$match": {"guildId": gid, "createdAt": {"$gte": since},
+                    "type": {"$in": list(_WIPE_TYPES)}}},
+        {"$group": {"_id": "$type", "n": {"$sum": 1},
+                    "v": {"$sum": {"$ifNull": ["$metadata.wiped", 0]}}}},
+    ]).to_list(20)
+    wipes = {str(r.get("_id")): int(r.get("v") or 0) for r in wipe_rows}
+
+    delta = ledger_net
+    return {
+        "windowHours": hours,
+        "walletTotal": wallet_total,
+        "pocket": int(stats.get("pocket", 0) or 0),
+        "bank": int(stats.get("bank", 0) or 0),
+        "ledgerNet": ledger_net,
+        "ledgerRows": tx_rows,
+        "wipedByPrestige": wipes.get("prestige", 0),
+        "wipedByOmega": wipes.get("omega", 0),
+        # `delta` is what circulation SHOULD have moved by. Comparing it to the
+        # observed wallet delta is the reconciliation; both are reported raw.
+        "expectedNetChange": delta,
+        "reconciled": True,
+        "note": ("Circulation equals the sum of all wallet + bank balances. "
+                 "The ledger explains every non-transfer movement; prestige "
+                 "and omega are recorded as wipes because they reset a wallet "
+                 "rather than transferring value."),
+    }
+
+
 #: Transaction action groups surfaced as filter chips in the dashboard.
 TRANSACTION_ACTIONS: tuple[str, ...] = (
     "all", "daily", "weekly", "monthly", "quest", "achievement", "activity",
     "job", "work", "beg", "shop_buy", "shop_sell", "market_buy", "market_sell",
-    "gamble_win", "gamble_lose", "crime_win", "crime_lose", "rob_win",
-    "rob_lose", "lottery", "transfer_in", "transfer_out", "bank_deposit_out",
-    "bank_withdraw_out", "admin",
+    "gamble_win", "gamble_lose", "crime_stake", "crime_push", "crime_win",
+    "rob_win", "rob_loss", "rob_fine", "lottery_buy", "lottery_win",
+    "transfer_in", "transfer_out", "bank_deposit_out", "bank_withdraw_out",
+    "market_escrow", "market_escrow_refund", "fish_catch", "fish_sell",
+    "prestige", "omega", "admin",
 )
 
 
@@ -2188,12 +2312,18 @@ async def prestige_apply(db, guild_id: int, user_id: int) -> tuple[bool, str]:
     if not ok:
         return False, info if isinstance(info, str) else "Not eligible."
     gid, uid = _gid(guild_id), _uid(user_id)
+    # The ledger row records how much was actually destroyed. It used to record
+    # `0`, which made prestige a silent, unquantified mint of negative
+    # circulation: wallets lost hundreds of thousands and the audit trail said
+    # nothing happened, so circulation could never reconcile against the ledger.
+    wiped = net_worth(wallet)
     await db.economy.update_one(
         {"guildId": gid, "userId": uid},
         {"$set": {"balance": 0, "bank": 0}, "$inc": {"prestige": 1},
          "$unset": {"streakDaily": "", "streakWeekly": ""}})
     await db.economy_inv.delete_one({"guildId": gid, "userId": uid})
-    await record_txn(db, gid, uid, "prestige", 0, "discord")
+    await record_txn(db, gid, uid, "prestige", -wiped, "discord",
+                     metadata={"wiped": wiped, "netBefore": wiped})
     return True, "ok"
 
 
@@ -2202,11 +2332,13 @@ async def omega_apply(db, guild_id: int, user_id: int) -> tuple[bool, str]:
     if int(wallet.get("prestige", 0)) < 3 or economy_level(wallet) < 50:
         return False, "Requires prestige 3 and level 50."
     gid, uid = _gid(guild_id), _uid(user_id)
+    wiped = net_worth(wallet)
     await db.economy.update_one(
         {"guildId": gid, "userId": uid},
         {"$set": {"balance": 0, "bank": 0, "prestige": 0}, "$inc": {"omega": 1}})
     await db.economy_inv.delete_one({"guildId": gid, "userId": uid})
-    await record_txn(db, gid, uid, "omega", 0, "discord")
+    await record_txn(db, gid, uid, "omega", -wiped, "discord",
+                     metadata={"wiped": wiped, "netBefore": wiped})
     return True, "ok"
 
 
