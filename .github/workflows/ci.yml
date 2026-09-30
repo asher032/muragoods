@@ -204,6 +204,21 @@ jobs:
       - name: Bot HTTP routes are registered after their handlers exist
         run: python scripts/check_route_registration.py
 
+      # Boots the REAL health server and asserts the routes actually answer.
+      #
+      # This is the check that would have caught the production outage. Two
+      # separate startup crashes — `discord.VoiceTextChannel` (removed in
+      # discord.py 2.7) and a handler registered above its own `def` — each
+      # aborted _health_server() before it bound a port. The build SUCCEEDED
+      # and the gateway stayed connected, so every deploy looked green while
+      # the process served nothing, and Render kept the previous instance
+      # alive. A source scan and a route-order scan both passed on that code.
+      # Only actually starting the server and asking it a question finds it.
+      #
+      # Hermetic: no Discord gateway, no database, no network.
+      - name: Bot HTTP server boots and serves the level-card routes
+        run: python scripts/test_health_version.py
+
       - name: YouTube egress fallback (proxy configured)
         run: python discord-bot/scripts/test_youtube_egress_fallback.py
 

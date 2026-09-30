@@ -72,14 +72,29 @@ export async function GET(req: NextRequest) {
   }
 
   // 2-8. Everything that lives on Murabot, answered by Murabot itself.
-  const { bot, error: botError, http } = await askBotLevelBackground(guildId);
+  const { bot, error: botError, http, build } = await askBotLevelBackground(guildId);
   checks.murabotApi = bot ? 'reachable' : (http?.status ? `http_${http.status}` : 'unreachable');
+
+  // Always report which build answered, including when the level-card call
+  // failed. /health/version is on a surface that old builds still have, so a
+  // stale deployment is dated rather than described as "unavailable".
+  details.murabotBuild = build?.version ?? null;
+  details.murabotBuildTime = build?.buildTime ?? null;
+  details.murabotEnvironment = build?.environment ?? null;
+  details.murabotHasLevelingRoutes = build?.levelingBackgroundRegistered ?? null;
+
   if (!bot) {
     problems.push(
       botError
         ? `Murabot could not be asked (${botError.code}). ${botError.message}`
         : 'Murabot could not be asked.',
     );
+    if (build && build.levelingBackgroundRegistered === false) {
+      problems.push(
+        `The running Murabot build (${build.version ?? 'unknown'}) did not register `
+        + '/leveling/background. It predates the code this dashboard calls. Redeploy it.',
+      );
+    }
   }
 
   if (bot) {
@@ -123,14 +138,6 @@ export async function GET(req: NextRequest) {
     if (!bot.assetPresent) {
       problems.push(
         `Murabot is missing its copy of the asset "${bot.asset ?? 'unknown'}". Cards would render a flat background.`,
-      );
-    }
-
-    // 8. Is the running process the same build as the one that saved this?
-    details.murabotBuild = bot.buildFingerprint ?? null;
-    if (!bot.buildFingerprint) {
-      problems.push(
-        'Murabot did not report a build fingerprint, so it is running a build older than this dashboard.',
       );
     }
   } else {

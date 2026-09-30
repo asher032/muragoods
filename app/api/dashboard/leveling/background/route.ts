@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/app/lib/require-session';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 import { clusterDbName, clusterUriSource } from '@/app/lib/db/clusters';
-import { askBotLevelBackground } from '@/app/lib/level-card-probe';
+import { askBotLevelBackground, type BotBuildInfo } from '@/app/lib/level-card-probe';
 import {
   diagnoseBackground,
   type BackgroundDiagnosis,
@@ -57,10 +57,12 @@ export async function GET(req: NextRequest) {
   }
 
   // 2. What the BOT holds — the record it actually renders from.
-  const { bot, error: botError, http: botHttp } = await askBotLevelBackground(guildId);
+  const { bot, error: botError, http: botHttp, build } = await askBotLevelBackground(guildId);
 
   const diagnosis = diagnoseBackground(dashboardValue, bot, botError ?? dashboardError, botHttp);
-  const payload: BackgroundDiagnosis & { success: true; durationMs: number } = {
+  const payload: BackgroundDiagnosis & {
+    success: true; durationMs: number; botBuild: BotBuildInfo | null;
+  } = {
     success: true,
     dashboard: dashboardValue,
     dashboardDatabase: clusterDbName('murabot'),
@@ -68,6 +70,7 @@ export async function GET(req: NextRequest) {
     bot,
     botError: botError ?? dashboardError,
     botHttp: botHttp ?? null,
+    botBuild: build ?? null,
     verdict: diagnosis.verdict,
     explanation: diagnosis.explanation,
     durationMs: Date.now() - started,
@@ -75,7 +78,8 @@ export async function GET(req: NextRequest) {
   console.log(
     `[level-bg] guild=${guildId} dashboard=${dashboardValue ?? '-'} `
     + `bot=${bot?.raw ?? '-'} botDb=${bot?.database ?? '-'} `
-    + `http=${botHttp?.status ?? '-'} verdict=${diagnosis.verdict}`,
+    + `http=${botHttp?.status ?? '-'} build=${build?.version ?? '-'} `
+    + `verdict=${diagnosis.verdict}`,
   );
   return NextResponse.json(payload);
 }

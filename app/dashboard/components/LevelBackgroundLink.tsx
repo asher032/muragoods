@@ -37,6 +37,12 @@ interface Probe {
     bodySnippet: string | null;
     durationMs: number;
   } | null;
+  botBuild?: {
+    version: string | null;
+    environment: string | null;
+    buildTime: string | null;
+    levelingBackgroundRegistered: boolean | null;
+  } | null;
   verdict: Verdict;
   explanation: string;
 }
@@ -151,6 +157,19 @@ export default function LevelBackgroundLink({ guildId, selectedTheme }: {
             : probe.botHttp
               ? `HTTP ${probe.botHttp.status ?? '—'} · ${probe.botHttp.durationMs}ms`
               : 'not attempted')}
+          {/* Which build actually answered. Dated, not guessed: a 404 with a
+              version beside it is actionable, a bare 404 is not. */}
+          {probe.botBuild?.version && row(
+            'Murabot running build',
+            `${probe.botBuild.version}${probe.botBuild.environment
+              ? ` · ${probe.botBuild.environment}` : ''}`,
+          )}
+          {probe.botBuild && probe.botBuild.levelingBackgroundRegistered === false && (
+            <div style={{ color: '#ff8a8a' }}>
+              ✕ This build did not register <code>/leveling/background</code>. It is an older
+              build than this dashboard expects — redeploy Murabot.
+            </div>
+          )}
           {probe.botError && (
             <div style={{ color: probe.botError.code === 'ROUTE_NOT_REGISTERED'
               ? '#ff8a8a' : 'var(--cc-text-dim)' }}>
