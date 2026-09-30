@@ -76,6 +76,13 @@ def _build_fingerprint() -> str:
 
 BUILD_FINGERPRINT = _build_fingerprint()
 
+#: Which level-card endpoints THIS process actually registered, read off the
+#: live router rather than a hardcoded list — so it cannot claim a route exists
+#: when registration failed, which is exactly how a build missing
+#: /leveling/background looked identical to one that had it.
+#: Populated at the end of _health_server(), once every add_* has run.
+LEVELING_ROUTES: dict = {"background": False, "config": False}
+
 # ── Guild registry for event bookkeeping (no config decisions here) ──────
 # Owned by main.py. Cogs consult the DB themselves; this is only the shared
 # thread-safe bitset of guilds the bot is currently in, refreshed by gateway
@@ -2732,9 +2739,24 @@ async def _health_server() -> None:
     # is never dressed up as "this channel is invalid".
 
     #: Channel types that can receive a message with an embed.
-    _TEXT_CAPABLE = (
-        discord.TextChannel, discord.VoiceTextChannel,
-        discord.StageChannel, discord.Thread, discord.DMChannel,
+    #:
+    #: Built by LOOKING THE NAMES UP rather than by referencing the classes
+    #: directly. `discord.VoiceTextChannel` was removed in discord.py 2.7, and a
+    #: direct reference is evaluated the moment this line runs — which is inside
+    #: _health_server(), so the AttributeError aborted the whole function. The
+    #: bot still logged in fine and the gateway was still connected, so nothing
+    #: looked wrong; the process simply never bound a port, and every
+    #: dashboard→bot call failed while /health on the PREVIOUS deployment kept
+    #: answering. Two separate startup crashes hid behind one 404.
+    #:
+    #: Filtering by existence means a discord.py rename can never again take the
+    #: whole HTTP surface down with it.
+    _TEXT_CAPABLE = tuple(
+        cls for cls in (
+            getattr(discord, name, None)
+            for name in ("TextChannel", "VoiceTextChannel", "StageChannel",
+                         "Thread", "DMChannel")
+        ) if isinstance(cls, type)
     )
 
     async def bot_status(request: web.Request) -> web.Response:
@@ -3087,6 +3109,63 @@ async def _health_server() -> None:
             return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
     app.router.add_get("/leveling/overview/{guild_id:\\d+}", leveling_overview)
     app.router.add_post("/self-test/gateway-drop", gateway_drop)
+
+    # Read the route table off the router itself, after every add_* has run.
+    # This is what makes "the deployed build does not have the endpoint" a
+    # measurement rather than an inference from a 404.
+    try:
+        LEVELING_ROUTES["background"] = any(
+            r.resource and r.resource.canonical.endswith("/leveling/background/{guild_id}")
+            for r in app.router.routes())
+        LEVELING_ROUTES["config"] = any(
+            r.resource and r.resource.canonical.endswith("/leveling/config/{guild_id}")
+            for r in app.router.routes())
+    except Exception as exc:
+        log.warning("Could not read the route table: %s", type(exc).__name__)
+    log.info("Registered routes — leveling/background: %s, leveling/config: %s",
+             LEVELING_ROUTES["background"], LEVELING_ROUTES["config"])
+
+    async def health_version(request: web.Request) -> web.Response:
+        """Which build is this, and what can it do? Deliberately UNAUTHENTICATED.
+
+        This exists to answer "am I talking to the build I think I am?" during
+        exactly the failure where the answer matters most: the dashboard calls
+        /leveling/background, gets a 404, and currently has no way to tell a
+        stale process from a misrouted request — both look identical from the
+        outside. This endpoint lives on /health, which is already public, and
+        returns only non-secret facts.
+
+        Never a token, a MongoDB URI, a bridge secret or any other credential:
+        the commit, the build time, the environment name and the route table are
+        the whole point, and none of them are sensitive.
+        """
+        commit = (os.environ.get("RENDER_GIT_COMMIT")
+                  or os.environ.get("COMMIT_SHA")
+                  or os.environ.get("GIT_COMMIT") or "").strip()
+        return web.json_response({
+            "ok": True,
+            "service": "murabot",
+            # Prefer the real commit; fall back to the source mtime, which
+            # changes on every deploy and so still dates the build.
+            "version": commit[:12] or BUILD_FINGERPRINT,
+            "commit": commit or None,
+            "buildFingerprint": BUILD_FINGERPRINT,
+            "buildTime": BUILD_FINGERPRINT,
+            "environment": ("production" if os.environ.get("RENDER")
+                            else os.environ.get("APP_ENV")
+                            or os.environ.get("NODE_ENV") or "development"),
+            "botVersion": getattr(config, "BOT_VERSION", "1.0.0"),
+            # The canonical paths, spelled out so a caller never has to guess
+            # whether a /api prefix is expected. There is exactly one path for
+            # each operation; no aliases are served.
+            "canonicalRoutes": {
+                "readBackground": "GET /leveling/background/{guildId}",
+                "writeConfig": "POST /leveling/config/{guildId}",
+            },
+            "levelingRoutesRegistered": dict(LEVELING_ROUTES),
+        })
+    app.router.add_get("/health/version", health_version)
+
     port = int(os.environ.get("PORT") or 8080) or 8080  # PORT=0 → default
     runner = web.AppRunner(app)
     await runner.setup()

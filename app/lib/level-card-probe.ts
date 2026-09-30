@@ -17,6 +17,58 @@ const BOT_BASE =
 
 export const dynamic = 'force-dynamic';
 
+/** Non-secret facts about the build that answered. */
+export interface BotBuildInfo {
+  service: string | null;
+  version: string | null;
+  commit: string | null;
+  buildFingerprint: string | null;
+  buildTime: string | null;
+  environment: string | null;
+  /** Which level-card endpoints this process actually registered. */
+  levelingBackgroundRegistered: boolean | null;
+  levelingConfigRegistered: boolean | null;
+}
+
+/**
+ * Ask the running process which build it is.
+ *
+ * This exists because a 404 from `/leveling/background` is ambiguous on its
+ * own: the same response means "stale deployment" and "wrong URL", and the
+ * operator has no way to tell them apart — which is why this was reported as
+ * a database problem for so long. `/health/version` is on the same public
+ * `/health` surface that demonstrably works, so it answers even on a build too
+ * old to have the level-card routes at all. That turns "some old build" into
+ * a dated, checkable fact.
+ *
+ * Returns null when even that is unreachable; never throws, and never needs
+ * the bridge secret.
+ */
+export async function askBotBuildInfo(): Promise<BotBuildInfo | null> {
+  try {
+    const res = await fetch(`${BOT_BASE}/health/version`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) return null;
+    const p = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!p || p.ok !== true) return null;
+    const registered = (p.levelingRoutesRegistered ?? {}) as Record<string, unknown>;
+    return {
+      service: typeof p.service === 'string' ? p.service : null,
+      version: typeof p.version === 'string' ? p.version : null,
+      commit: typeof p.commit === 'string' ? p.commit : null,
+      buildFingerprint: typeof p.buildFingerprint === 'string' ? p.buildFingerprint : null,
+      buildTime: typeof p.buildTime === 'string' ? p.buildTime : null,
+      environment: typeof p.environment === 'string' ? p.environment : null,
+      levelingBackgroundRegistered: registered.background === true,
+      levelingConfigRegistered: registered.config === true,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export interface BotProbeResult {
   bot: BotLevelBackground | null;
   error: { code: string; message: string } | null;
@@ -35,6 +87,8 @@ export interface BotProbeResult {
     /** How long the request took, in ms. */
     durationMs: number;
   };
+  /** Present when the call failed, to date the build that answered. */
+  build?: BotBuildInfo | null;
 }
 
 function bridgeSecret(): string | null {
@@ -118,14 +172,26 @@ export async function askBotLevelBackground(guildId: string): Promise<BotProbeRe
     // means the deployed build predates the code that added it. Retrying,
     // re-saving, or changing the theme cannot help; the bot has to be
     // redeployed.
+    //
+    // The build is queried even though this request failed, because
+    // /health/version lives on a surface that old builds DO have. Naming the
+    // running build is the difference between "redeploy Murabot" and "redeploy
+    // Murabot, and here is the build you are currently running".
+    const build = await askBotBuildInfo();
+    const known = build?.version ?? build?.buildFingerprint ?? null;
     return {
       bot: null,
       http,
+      build,
       error: {
         code: 'ROUTE_NOT_REGISTERED',
         message: 'Murabot answered, but it has no /leveling/background endpoint. '
           + 'The running build predates that route, so it is serving an older '
-          + 'version than this repository. Redeploy Murabot; re-saving will not help.',
+          + 'version than this repository. '
+          + (known
+            ? `Running build: ${known}${build?.environment ? ` (${build.environment})` : ''}. `
+            : '')
+          + 'Redeploy Murabot; re-saving will not help.',
       },
     };
   }
