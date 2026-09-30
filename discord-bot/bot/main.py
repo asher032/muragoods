@@ -2385,24 +2385,66 @@ async def _health_server() -> None:
         return guild, None
 
     def _is_bot_owner(guild, actor_id) -> bool:
-        """Is this Discord account the bot owner?
+        """Is this Discord account the Murabot owner?
 
-        The owner is the bot's application owner or the application owner of
-        any guild it is in. `BOT_ADMIN_IDS` is deliberately NOT sufficient on
-        its own — it is a moderator list for operational commands, and the
-        economy is an economic surface, so admin does not imply owner.
+        The authoritative answer is `config.MURABOT_OWNER_DISCORD_ID` — a
+        Discord USER ID, compared numerically. The dashboard resolves the same
+        variable from the same authenticated session, so both sides of the
+        bridge answer identically.
+
+        Deliberately NOT sufficient on their own:
+
+          * `BOT_ADMIN_IDS` — a moderator list for operational commands. Admin
+            is not ownership of economic value.
+          * Manage Server, or Administrator, in this guild.
+          * `guild.owner_id`. Owning the SELECTED SERVER is a different role
+            from owning the BOT. Letting a server owner mint currency in a
+            server they merely happen to own would let anyone who creates a
+            guild set economy values in it, which is precisely what this gate
+            exists to prevent.
+
+        A username, display name, nickname or tag is never consulted. All of
+        those are changeable by the account holder, so authorizing on one would
+        either lock the real owner out after a rename or let whoever takes the
+        name through.
+
+        The bot's own application id is accepted: it is Murabot talking to
+        itself, not a person claiming to be the owner.
         """
         try:
             uid = int(actor_id)
         except (TypeError, ValueError):
             return False
+        if config.MURABOT_OWNER_DISCORD_ID and uid == config.MURABOT_OWNER_DISCORD_ID:
+            return True
         if uid == getattr(bot.user, "id", None):
             return True
-        if guild is not None and getattr(guild, "owner_id", None) == uid:
-            return True
-        if uid in config.BOT_ADMIN_IDS:
-            return True
         return False
+
+    def _owner_diagnostics(actor_id) -> dict:
+        """Credential-free owner resolution, for development diagnostics.
+
+        Reports the two IDs MASKED (last four characters only). The full values
+        are never logged, never returned to a client, and never compared by
+        name — only numerically, in `_is_bot_owner`.
+        """
+        def mask(value) -> str | None:
+            try:
+                text = str(int(value))
+            except (TypeError, ValueError):
+                return None
+            return f"********{text[-4:]}" if len(text) > 4 else "********"
+
+        try:
+            uid = int(actor_id)
+        except (TypeError, ValueError):
+            uid = None
+        return {
+            "authenticatedDiscordUserId": mask(uid),
+            "configuredOwnerId": mask(config.MURABOT_OWNER_DISCORD_ID),
+            "ownerConfigured": config.MURABOT_OWNER_DISCORD_ID is not None,
+            "isOwner": _is_bot_owner(None, uid) if uid is not None else False,
+        }
 
     async def _economy_owner_guard(request: web.Request, guild) -> tuple[int | None, web.Response | None]:
         """Reject non-owner economic writes at the API, not just the UI.
@@ -2410,7 +2452,8 @@ async def _health_server() -> None:
         Returns `(actor_id, None)` when the caller may write economic values,
         or `(None, response)` otherwise. The dashboard hides these controls for
         non-owners, but that is presentation: this is the check that actually
-        holds, so a forged request from a server admin is refused here.
+        holds, so a forged request from a server admin — or from someone who
+        owns the server but is not the bot owner — is refused here.
         """
         body = await request.json() if request.can_read_body else {}
         actor = body.get("actorId") if isinstance(body, dict) else None
@@ -2627,12 +2670,11 @@ async def _health_server() -> None:
     async def economy_owner_check(request: web.Request) -> web.Response:
         """Is this Discord account the Murabot owner?
 
-        The bot is the only authority on who owns it — the site has no trusted
-        copy of that list, and guessing from the caller's guild role would let
-        any server admin claim ownership. The dashboard calls this before
-        applying an economic write; the answer is advisory to the site but the
-        write itself is re-checked in `economy_config_save` below, so neither
-        layer alone is load-bearing.
+        The authoritative comparison is `MURABOT_OWNER_DISCORD_ID` against the
+        numeric Discord user ID. The dashboard resolves the same variable from
+        the authenticated session and compares it itself, so this endpoint is
+        corroboration rather than the only check — the write is enforced in
+        BOTH places, and neither can be satisfied by a client-supplied flag.
         """
         guild, deny = await _economy_guild(request)
         if deny is not None:
@@ -2645,9 +2687,138 @@ async def _health_server() -> None:
         return web.json_response({
             "ok": True, "owner": owner,
             "guildId": str(guild.id),
-            "actorId": str(actor) if actor is not None else None,
+            # Masked ids only: enough to debug a mismatch, useless to harvest.
+            "diagnostics": _owner_diagnostics(actor),
         })
     app.router.add_post("/economy/owner-check/{guild_id:\\d+}", economy_owner_check)
+
+    # ── Bot status + gateway-backed channel selection ───────────────────
+    #
+    # "Is Murabot actually in this server and can it post in these channels?"
+    # is answered here, from the bot's OWN gateway cache, because the bot holds
+    # the connection, the cached guild objects and the resolved permission
+    # overwrites. The dashboard used to answer it with its own Discord REST
+    # calls using a site-side bot token — a second credential that could be
+    # absent, stale or rejected, which surfaced as one useless message about the
+    # bot not answering, shown under a channel field as if the channel were at
+    # fault.
+    #
+    # Every failure mode now has its own code, and "the bot is not connected"
+    # is never dressed up as "this channel is invalid".
+
+    #: Channel types that can receive a message with an embed.
+    _TEXT_CAPABLE = (
+        discord.TextChannel, discord.VoiceTextChannel,
+        discord.StageChannel, discord.Thread, discord.DMChannel,
+    )
+
+    async def bot_status(request: web.Request) -> web.Response:
+        """Live gateway state. Credential-free apart from the bridge check."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "code": "AUTHENTICATION_ERROR",
+                                      "error": "Unauthorized"}, status=401)
+        statuses = http_mod.get_status()
+        latency_ms = gateway_latency_ms(bot, 0)
+        gateway_alive, hb_age, last_hb = gateway_liveness(bot)
+        user = getattr(bot, "user", None)
+        return web.json_response({
+            "ok": True,
+            "state": _gateway_state(gateway_alive, None),
+            "connection_state": _connection_state(gateway_alive, None),
+            "ready": bool(bot.is_ready()) and not bot.is_closed(),
+            "heartbeatAgeSeconds": hb_age,
+            "lastHeartbeat": last_hb,
+            "reconnectCount": _gateway_reconnects + _reconnect_count,
+            "uptimeSeconds": round(time.time() - _start_time),
+            "latencyMs": latency_ms,
+            "botUserId": str(user.id) if user is not None else None,
+            "botUsername": user.name if user is not None else None,
+            "guildIds": [str(g.id) for g in bot.guilds],
+            "ownerConfigured": config.MURABOT_OWNER_DISCORD_ID is not None,
+            "subsystems": statuses,
+        })
+    app.router.add_get("/bot/status", bot_status)
+
+    def _channel_verdict(channel, requires: list[str]) -> dict:
+        """Can the BOT post here? Resolved by discord.py from the cached
+        guild — the same computation the gateway uses when it applies
+        overwrites, so there is no second permission model to drift."""
+        member = getattr(bot, "user", None)
+        perms = channel.permissions_for(member) if member is not None else None
+        names = {"view": ("view_channel", "View Channel"),
+                 "send": ("send_messages", "Send Messages"),
+                 "embed": ("embed_links", "Embed Links"),
+                 "read": ("read_message_history", "Read Message History")}
+        checks, missing = [], None
+        for key in requires:
+            attr, label = names.get(key, (key, key))
+            ok = bool(getattr(perms, attr, False)) if perms is not None else False
+            checks.append({"requirement": key, "label": f"Murabot can: {label}", "ok": ok})
+            if not ok and missing is None:
+                missing = {"requirement": key, "permission": attr, "label": label}
+        return {"id": str(channel.id), "name": channel.name,
+                "type": int(getattr(channel, "type", 0)),
+                "categoryName": (channel.category.name if getattr(channel, "category", None) else None),
+                "usable": missing is None, "missing": missing, "checks": checks}
+
+    async def economy_channels(request: web.Request) -> web.Response:
+        """Selectable channels for a guild, from the bot's gateway cache.
+
+        Zero Discord REST calls: the guild, its channels and their permission
+        overwrites are already in memory, which is also why this cannot be
+        rate-limited the way the dashboard's own reads were.
+        """
+        if not _authorized(request):
+            return web.json_response({"ok": False, "code": "AUTHENTICATION_ERROR",
+                                      "error": "Unauthorized"}, status=401)
+        try:
+            guild_id = int(request.match_info["guild_id"])
+        except (KeyError, TypeError, ValueError):
+            return web.json_response({"ok": False, "code": "INVALID_GUILD_ID",
+                                      "error": "Invalid guild id"}, status=400)
+        requires = [r for r in (request.query.get("requires") or "view,send,embed").split(",")
+                    if r.strip() in ("view", "send", "embed", "read")]
+        if not requires:
+            requires = ["view", "send", "embed"]
+        requires = [r.strip() for r in requires]
+
+        gateway_alive, hb_age, _ = gateway_liveness(bot)
+        state = _gateway_state(gateway_alive, None)
+        user = getattr(bot, "user", None)
+        base = {
+            "ok": True,
+            "state": state,
+            "bot": {
+                "installed": False, "online": bool(bot.is_ready()) and not bot.is_closed(),
+                "guildAccessible": False,
+                "userId": str(user.id) if user is not None else None,
+                "username": user.name if user is not None else None,
+                "heartbeatAgeSeconds": hb_age,
+                "latencyMs": gateway_latency_ms(bot, 0),
+            },
+            "requires": requires,
+        }
+        if not bot.is_ready() or bot.is_closed():
+            # A disconnected bot is not a channel problem. Say exactly that.
+            return web.json_response({**base, "channels": [], **{
+                "error": {"code": "BOT_OFFLINE" if bot.is_closed() else "BOT_GATEWAY_NOT_READY",
+                          "message": "Murabot is not connected to Discord right now. "
+                                     "Channel availability cannot be determined until it reconnects."}}},
+                                    status=503)
+        guild = bot.get_guild(guild_id)
+        if guild is None:
+            return web.json_response({**base, "channels": [], **{
+                "error": {"code": "BOT_NOT_IN_GUILD",
+                          "message": "Murabot is not installed in this server."}}}, status=404)
+        rows = [c for c in guild.channels if isinstance(c, _TEXT_CAPABLE)]
+        rows.sort(key=lambda c: (getattr(getattr(c, "category", None), "position", 0), c.position, c.name))
+        return web.json_response({
+            **base,
+            "bot": {**base["bot"], "installed": True, "guildAccessible": True},
+            "guild": {"id": str(guild.id), "name": guild.name},
+            "channels": [_channel_verdict(c, requires) for c in rows],
+        })
+    app.router.add_get("/economy/channels/{guild_id:\\d+}", economy_channels)
 
     async def economy_config_save(request: web.Request) -> web.Response:
         """Persist economy config. Owner-only for ECONOMIC_KEYS.

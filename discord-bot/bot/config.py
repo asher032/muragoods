@@ -30,6 +30,23 @@ BOT_ADMIN_IDS = {int(u) for u in
                  (part.strip() for part in _get("BOT_ADMIN_IDS").split(","))
                  if u.isdigit()}
 
+# ── Murabot owner ───────────────────────────────────────────────────────
+# The Murabot owner is a GLOBAL role: the person who owns the bot, NOT the
+# owner of any particular Discord server and not "an admin". It is declared
+# once, as a Discord USER ID, and every ownership check on both sides of the
+# bridge compares against this value.
+#
+# A Discord user ID is the only stable identifier. A username, display name or
+# nickname can be changed by the account holder at any time, so authorizing on
+# one would let a rename break the owner OR let someone who takes the name
+# through. Nothing in this codebase may authorize on a name.
+#
+# The website resolves the SAME variable from the same authenticated session
+# (app/lib/murabot-owner.ts), so the dashboard and the bot cannot disagree
+# about who the owner is.
+_owner_raw = _get("MURABOT_OWNER_DISCORD_ID")
+MURABOT_OWNER_DISCORD_ID: int | None = int(_owner_raw) if _owner_raw.isdigit() else None
+
 # ── MuraStream website ───────────────────────────────────────────────────
 MURASTREAM_URL = _get("MURASTREAM_URL", "https://muragoods.vercel.app").rstrip("/")
 BRIDGE_SECRET = _get("DISCORD_BRIDGE_SECRET")
@@ -97,6 +114,10 @@ def validate() -> list[str]:
         problems.append("DISCORD_CLIENT_ID is not set")
     if BRIDGE_SECRET and len(BRIDGE_SECRET) < 16:
         problems.append("DISCORD_BRIDGE_SECRET is too short (use 32+ random chars)")
+    if not MURABOT_OWNER_DISCORD_ID:
+        problems.append(
+            "MURABOT_OWNER_DISCORD_ID is not set to a Discord user ID — "
+            "nobody can change owner-only economy values until it is")
     return problems
 
 

@@ -41,6 +41,62 @@ def _is_manager(member) -> bool:
         return False
 
 
+async def _fetch_image(url: str | None, limit: int) -> bytes | None:
+    """Download an image, or None. Bounded by size and time; never raises."""
+    if not url or not url.startswith("http"):
+        return None
+    try:
+        import aiohttp
+        timeout = aiohttp.ClientTimeout(total=8)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.read()
+                return data if len(data) <= limit else None
+    except Exception:
+        return None
+
+
+async def build_level_card(member: discord.Member, level: int, cfg: dict,
+                            *, guild_id: int, source: str) -> tuple[str, bytes]:
+    """Render one member's level card for this guild.
+
+    THE single card path. `/level` and the automatic level-up card both call
+    this, which is what guarantees the dashboard's chosen background appears on
+    BOTH. They previously resolved the theme independently, and the level-up
+    path did not render a card at all.
+
+    `source` labels the debug line only ('command' vs 'level-up').
+    """
+    doc = await database._db.xp.find_one({"guildId": guild_id, "userId": member.id}) or {}
+    xp = levels.safe_int(doc.get("xp", 0), 0)
+    lvl, into, need = levels.level_from_xp(xp)
+    try:
+        higher = await database._db.xp.count_documents(
+            {"guildId": guild_id, "xp": {"$gt": xp}})
+        rank = higher + 1
+    except Exception:
+        rank = 0
+
+    avatar = await _fetch_image(getattr(getattr(member, "display_avatar", None), "url", None), 500_000)
+    personal_url = str(doc.get("backgroundUrl") or "")
+    personal = await _fetch_image(personal_url, 2_000_000)
+
+    # A member's own picture wins; otherwise the SERVER's selected theme. The
+    # server theme is resolved through the shared resolver so every card in
+    # this guild uses the same background the dashboard shows.
+    server_theme = levels.get_level_card_background(cfg, guild_id=guild_id, source=source)
+    kind, payload = levels.render_level_card(
+        getattr(member, "display_name", "member"), avatar, level or lvl, into, need, rank,
+        accent=str(cfg.get("cardColor") or "#5865F2"),
+        opacity=levels.safe_float(cfg.get("cardOpacity"), 1.0, low=0.0, high=1.0),
+        background_bytes=personal,
+        background_id=None if personal else server_theme,
+    )
+    return kind, payload
+
+
 class LevelingCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -83,8 +139,26 @@ class LevelingCog(commands.Cog):
         if target is None:
             target = channel if isinstance(channel, discord.TextChannel) else None
         if target is not None:
+            # The automatic level-up card. It previously sent a TEXT EMBED
+            # only, so the server's selected background never appeared on it —
+            # the dashboard's setting was working for `/level` and doing nothing
+            # here. It now renders through the same shared card path, so both
+            # surfaces use the guild's configured theme.
+            card: discord.File | None = None
             try:
-                await target.send(embed=embeds.embed("🎉 Level Up!", text, embeds.GOLD))
+                kind, payload = await build_level_card(
+                    member, new_level, cfg, guild_id=guild.id, source="level-up")
+                if kind == "png":
+                    import io as _io
+                    card = discord.File(_io.BytesIO(payload), filename="level.png")
+            except Exception:
+                log.exception("Level-up card render failed; falling back to text")
+            try:
+                await target.send(
+                    content=None if card else text,
+                    embed=None if card else embeds.embed("🎉 Level Up!", text, embeds.GOLD),
+                    file=card,
+                )
             except discord.HTTPException:
                 pass
         if cfg.get("dmNotify"):
@@ -774,65 +848,24 @@ class LevelingCog(commands.Cog):
     async def level_card(self, interaction: discord.Interaction, member: discord.Member | None = None):
         await interaction.response.defer()
         target = member or interaction.user
+        cfg = await levels.get_level_config(database._db, interaction.guild.id)
+        # Same shared card path the level-up announcement uses, so the guild's
+        # selected background is guaranteed to match between the two.
         doc = await database._db.xp.find_one(
             {"guildId": interaction.guild.id, "userId": target.id}) or {}
+        shown_level = levels.safe_int(doc.get("level", 0), 0)
         xp = levels.safe_int(doc.get("xp", 0), 0)
-        level, into, need = levels.level_from_xp(xp)
-        try:
-            higher = await database._db.xp.count_documents(
-                {"guildId": interaction.guild.id, "xp": {"$gt": xp}})
-            rank = higher + 1
-        except Exception:
-            rank = 0
-        cfg = await levels.get_level_config(database._db, interaction.guild.id)
-        avatar_bytes, personal_bytes = None, None
-        try:
-            import aiohttp
-            timeout = aiohttp.ClientTimeout(total=8)
-
-            async def fetch_bytes(url: str | None, limit: int) -> bytes | None:
-                if not url or not url.startswith("http"):
-                    return None
-                try:
-                    async with aiohttp.ClientSession(timeout=timeout) as session:
-                        async with session.get(url) as resp:
-                            if resp.status != 200:
-                                return None
-                            data = await resp.read()
-                            return data if len(data) <= limit else None
-                except Exception:
-                    return None
-
-            try:
-                avatar_bytes = await fetch_bytes(target.display_avatar.url, 500_000)
-            except Exception:
-                avatar_bytes = None
-            personal = ""
-            try:
-                personal = str((await database._db.xp.find_one(
-                    {"guildId": interaction.guild.id, "userId": target.id}) or {}).get("backgroundUrl") or "")
-            except Exception:
-                personal = ""
-            personal_bytes = await fetch_bytes(personal, 2_000_000)
-        except Exception:
-            personal_bytes = None
-        # Member image wins; otherwise the server's imported picture asset
-        # (an id like "duck-toast" — legacy theme ids and old URL values
-        # resolve to the default asset and are never fetched).
-        server_theme = levels.resolve_server_background(cfg.get("serverBackground"))
-        kind, payload = levels.render_level_card(
-            getattr(target, "display_name", "member"), avatar_bytes, level, into, need, rank,
-            accent=str(cfg.get("cardColor") or "#5865F2"),
-            opacity=levels.safe_float(cfg.get("cardOpacity"), 1.0, low=0.0, high=1.0),
-            background_bytes=personal_bytes,
-            background_id=None if personal_bytes else server_theme)
+        level, _into, _need = levels.level_from_xp(xp)
+        kind, payload = await build_level_card(
+            target, shown_level or level, cfg,
+            guild_id=interaction.guild.id, source="command")
         if kind == "png":
             import io as _io
             await interaction.followup.send(
                 file=discord.File(_io.BytesIO(payload), filename="level.png"))
         else:
             await interaction.followup.send(embed=embeds.embed(
-                f"📊 {getattr(target, 'display_name', 'member')} — Level {level} (rank #{rank})",
+                f"📊 {getattr(target, 'display_name', 'member')} — Level {level}",
                 payload.decode("utf-8", "replace"), embeds.INFO))
 
     @level.command(name="background", description="Set your personal card background (URL).")

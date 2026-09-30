@@ -6,14 +6,20 @@ import { ECONOMY_ERROR_CODES, type EconomyFieldError } from '@/app/lib/economy-s
 
 // ── 📜 Economy Log Channel selector ─────────────────────────────────────
 //
-// Populated straight from the Discord API. The operator never types a channel
-// id, and never sees a channel the bot cannot use presented as a normal
-// option — unusable channels are listed, greyed and labelled, because a
-// channel that used to work and no longer does must be visible as broken
-// rather than silently disappearing.
+// Populated from Murabot's own gateway cache. The operator never types a
+// channel id, and never sees a channel Murabot cannot use presented as a
+// normal option.
 //
-// The list is fetched once per server (the endpoint caches and de-duplicates
-// its own Discord reads), and re-fetched only when the operator asks.
+// The bot's state is shown explicitly, because "the list is empty" has two very
+// different causes and the operator has to be able to tell them apart:
+//
+//   Murabot is offline / its gateway is down   → nothing can be verified yet
+//   Murabot is not in THIS server              → invite it
+//   Murabot is here but lacks a permission    → fix the channel overwrites
+//   Murabot is here and the list is empty      → the server has no text channels
+//
+// Each of those is a different message with a different fix. A single
+// "Discord did not answer the bot check" told the operator none of that.
 
 interface ChannelOption {
   id: string;
@@ -21,11 +27,37 @@ interface ChannelOption {
   type: number;
   categoryName: string | null;
   usable: boolean;
-  reason: string | null;
+  missing: { requirement: string; permission: string; label: string } | null;
+  checks: Array<{ requirement: string; label: string; ok: boolean }>;
+}
+
+interface BotPresence {
+  online: boolean;
+  installed: boolean;
+  guildAccessible: boolean;
+  botUserId: string | null;
+  botUsername: string | null;
+  gatewayState: string | null;
+  heartbeatAgeSeconds: number | null;
+  latencyMs: number | null;
 }
 
 const CHANNEL_TYPE_LABEL: Record<number, string> = {
   0: 'Text', 5: 'Announcement', 10: 'Thread', 11: 'Public Thread', 12: 'Private Thread',
+};
+
+/** What each failure means and what the operator should do about it. */
+const FAILURE_HINT: Record<string, string> = {
+  BOT_OFFLINE: 'Murabot is not connected to Discord right now. Nothing about your settings is wrong — this resolves itself when the bot reconnects.',
+  BOT_GATEWAY_NOT_READY: 'Murabot is still connecting to Discord. Wait a moment and retry.',
+  BOT_NOT_IN_GUILD: 'Murabot is not installed in this server. Invite it, then retry — no setting can be verified until it is here.',
+  AUTHENTICATION_ERROR: 'The dashboard and Murabot are not talking to each other correctly. This is a deployment problem, not a settings problem.',
+  BRIDGE_NOT_CONFIGURED: 'The dashboard is not connected to Murabot. This is a deployment problem, not a settings problem.',
+  DISCORD_RATE_LIMITED: 'Discord is temporarily rate limiting requests. Retrying shortly.',
+  DISCORD_API_ERROR: 'Discord did not return the channel list. This is temporary.',
+  INTERNAL_ERROR: 'Murabot reported an error while reading this server. Nothing was changed.',
+  AUTH_REQUIRED: 'Your Discord sign-in expired. Sign in again to continue.',
+  INSUFFICIENT_GUILD_PERMISSION: 'You need Manage Server permission on this server to change its settings.',
 };
 
 export default function EconomyLogChannelSelect({
@@ -41,33 +73,37 @@ export default function EconomyLogChannelSelect({
   onValidity?: (error: EconomyFieldError | null) => void;
 }) {
   const [options, setOptions] = useState<ChannelOption[]>([]);
+  const [bot, setBot] = useState<BotPresence | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<{ code?: string; message: string; retryable?: boolean } | null>(null);
   const [checked, setChecked] = useState<{ id: string; valid: boolean; message?: string; missingPermission?: string } | null>(null);
   const requestId = useRef(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (fresh = false) => {
     const id = ++requestId.current;
     setLoading(true);
     setError(null);
     const resp = await apiFetch<{
-      success: boolean; channels?: ChannelOption[];
+      success: boolean;
+      channels?: ChannelOption[];
+      bot?: BotPresence;
       current?: { id: string; valid: boolean; message?: string; missingPermission?: string } | null;
       error?: string; code?: string; retryable?: boolean;
-    }>(`/api/dashboard/economy/channels?guildId=${guildId}&requires=view,send,embed`);
+    }>(`/api/dashboard/economy/channels?guildId=${guildId}&requires=view,send,embed${fresh ? '&fresh=1' : ''}`);
     if (id !== requestId.current) return;
     const body = resp.ok ? resp.data : null;
     if (body?.success) {
       setOptions(body.channels ?? []);
+      setBot(body.bot ?? null);
       setChecked(body.current ?? null);
       setError(null);
     } else {
-      setOptions([]);
-      const retryable = !resp.ok && resp.status >= 500;
+      // The previous list is KEPT so a temporary outage does not empty a
+      // working dropdown; the banner above it says what is actually wrong.
       setError({
         code: body?.code,
         message: body?.error || (resp.ok ? 'Could not load channels.' : resp.error),
-        retryable,
+        retryable: body?.retryable ?? (!resp.ok && resp.status >= 500),
       });
     }
     setLoading(false);
@@ -90,7 +126,7 @@ export default function EconomyLogChannelSelect({
           : {
               field: 'logChannelId',
               label: 'Economy Log Channel',
-              code: (ECONOMY_ERROR_CODES.MISSING_BOT_PERMISSION),
+              code: ECONOMY_ERROR_CODES.MISSING_BOT_PERMISSION,
               message: checked.message ?? 'Murabot cannot use this channel.',
               current: `"${options.find((o) => o.id === value)?.name ?? value}"`,
               expected: 'A text channel Murabot can read, send and embed in',
@@ -99,9 +135,9 @@ export default function EconomyLogChannelSelect({
       );
       return;
     }
-    // Selection not present in the live list: the channel is gone. That is a
-    // definitive answer from Discord, not an unknown.
-    if (!loading && options.length > 0 && !options.some((o) => o.id === value)) {
+    // A selection the bot no longer offers: the channel was deleted, or the
+    // bot lost View Channel on it. That is a definitive answer, not an unknown.
+    if (!loading && !error && options.length > 0 && !options.some((o) => o.id === value)) {
       onValidity({
         field: 'logChannelId',
         label: 'Economy Log Channel',
@@ -111,10 +147,11 @@ export default function EconomyLogChannelSelect({
         expected: 'A channel from this server’s list',
       });
     }
-  }, [value, checked, options, loading, onValidity]);
+  }, [value, checked, options, loading, error, onValidity]);
 
   const selectedUnusable = checked && !checked.valid && checked.id === value;
-  const selectedMissing = value && !loading && options.length > 0 && !options.some((o) => o.id === value);
+  const selectedMissing = value && !loading && !error && options.length > 0 && !options.some((o) => o.id === value);
+  const selected = options.find((o) => o.id === value) ?? null;
 
   return (
     <div>
@@ -125,7 +162,7 @@ export default function EconomyLogChannelSelect({
         id="eco-logChannelId"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        disabled={loading}
+        disabled={loading || Boolean(error)}
         aria-invalid={selectedUnusable || selectedMissing ? true : undefined}
         style={{
           width: '100%', boxSizing: 'border-box',
@@ -146,24 +183,27 @@ export default function EconomyLogChannelSelect({
           <option key={c.id} value={c.id}>
             {c.usable ? '✓' : '✕'} {c.name}
             {c.categoryName ? ` · ${c.categoryName}` : ''}
-            {c.usable ? '' : ' — Murabot cannot use this'}
+            {c.usable ? '' : ` — missing ${c.missing?.label ?? 'a required permission'}`}
           </option>
         ))}
       </select>
 
       {error && (
         <div style={{ marginTop: 6, fontSize: 11.5 }} role="alert">
-          <div style={{ color: error.retryable ? '#fbbf24' : '#f87171' }}>❌ {error.message}</div>
-          <div style={{ color: 'var(--cc-text-faint)', marginTop: 2 }}>
-            {error.retryable
-              ? 'This is a temporary problem, not a problem with your settings. Nothing was saved — try again in a moment.'
-              : 'Ask a server admin to check your Manage Server permission.'}
+          <div style={{ color: error.retryable ? '#fbbf24' : '#f87171' }}>
+            {error.code === 'BOT_NOT_IN_GUILD' ? '❌' : '⚠️'} {error.message}
           </div>
-          {error.retryable && (
-            <button className="cc-btn" style={{ marginTop: 6, fontSize: 11 }} onClick={() => void load()}>
-              Retry
-            </button>
+          {error.code && (
+            <div style={{ color: 'var(--cc-text-faint)', marginTop: 2 }}>
+              Reason: <code>{error.code}</code>
+            </div>
           )}
+          <div style={{ color: 'var(--cc-text-faint)', marginTop: 2 }}>
+            {FAILURE_HINT[error.code ?? ''] ?? 'This is not a problem with your settings.'}
+          </div>
+          <button className="cc-btn" style={{ marginTop: 6, fontSize: 11 }} onClick={() => void load(true)}>
+            Retry
+          </button>
         </div>
       )}
 
@@ -177,15 +217,27 @@ export default function EconomyLogChannelSelect({
         </div>
       )}
 
-      {!error && !selectedUnusable && !selectedMissing && !loading && options.length > 0 && value && (
+      {!error && !selectedUnusable && !selectedMissing && !loading && value && selected?.usable && (
         <div style={{ marginTop: 4, fontSize: 10.5, color: '#4ade80' }}>
           ✓ Murabot can read, send and embed in this channel.
         </div>
       )}
 
-      {!error && !loading && options.length === 0 && (
+      {!error && !loading && options.length === 0 && bot?.installed && (
         <div style={{ marginTop: 4, fontSize: 11, color: 'var(--cc-text-faint)' }}>
-          No text channels are available. Create one in Discord, then refresh.
+          Murabot is in this server, but no text channels are available. Create one in Discord, then retry.
+        </div>
+      )}
+
+      {/* Presence, stated plainly. The gateway — not a configured token — is
+          what decides whether Murabot is online. */}
+      {!error && bot && (
+        <div style={{ marginTop: 6, fontSize: 10.5, color: 'var(--cc-text-faint)' }}>
+          {bot.online
+            ? `Murabot is online${bot.gatewayState ? ` (gateway ${bot.gatewayState})` : ''}`
+            : 'Murabot is offline'}
+          {bot.installed ? ' and is in this server' : ' and is not in this server'}
+          {typeof bot.latencyMs === 'number' ? ` · ${bot.latencyMs}ms` : ''}
         </div>
       )}
     </div>

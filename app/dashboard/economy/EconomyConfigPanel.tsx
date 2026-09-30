@@ -126,10 +126,9 @@ function remediationFor(error: EconomyFieldError): string {
   }
 }
 
-export function EconomyConfigPanel({ config, guildId, actorId, isOwner, onSaved }: {
+export function EconomyConfigPanel({ config, guildId, isOwner, onSaved }: {
   config: EconomyConfig | null;
   guildId: string;
-  actorId: string | null;
   /** Whether the signed-in account may change economic values. */
   isOwner: boolean;
   onSaved: () => void | Promise<void>;
@@ -253,9 +252,13 @@ export function EconomyConfigPanel({ config, guildId, actorId, isOwner, onSaved 
     const resp = await apiFetch<{
       success?: boolean; error?: string; code?: string;
       errors?: EconomyFieldError[]; warnings?: EconomyFieldError[];
+      ownerConfiguration?: string | null;
     }>('/api/dashboard/config', {
       method: 'PATCH',
-      body: { guildId, actorId, config: { economy: payload } },
+      // The caller is NOT sent. The API resolves the signed-in Discord account
+      // from the session cookie and decides ownership itself — a body field
+      // naming an owner would be a way to claim one.
+      body: { guildId, config: { economy: payload } },
     });
     setSaving(false);
 
@@ -286,11 +289,19 @@ export function EconomyConfigPanel({ config, guildId, actorId, isOwner, onSaved 
         reason: e.message,
         fix: remediationFor(e),
       })));
+      const ownerRefusal = body?.code === ECONOMY_ERROR_CODES.OWNER_ONLY;
       setNotice({
         tone: 'err',
-        text: serverErrors.length === 1
-          ? '✕ Could not save Economy settings — 1 setting needs attention. Nothing was saved.'
-          : `✕ Could not save Economy settings — ${serverErrors.length} settings need attention. Nothing was saved.`,
+        text: [
+          ownerRefusal
+            ? '🔒 Only the Murabot owner can modify economic values. Nothing was saved.'
+            : serverErrors.length === 1
+              ? '✕ Could not save Economy settings — 1 setting needs attention. Nothing was saved.'
+              : `✕ Could not save Economy settings — ${serverErrors.length} settings need attention. Nothing was saved.`,
+          // When NOBODY can be an owner, the reason is a deployment setting,
+          // not a permission the operator can grant themselves.
+          body?.ownerConfiguration ?? '',
+        ].filter(Boolean).join('\n'),
       });
       return;
     }

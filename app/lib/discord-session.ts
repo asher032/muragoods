@@ -217,7 +217,7 @@ export interface IValidatedSession {
 export async function sessionManagesGuild(
   accessToken: string,
   guildId: string,
-): Promise<{ ok: boolean; guild?: { id: string; name: string; icon: string | null; owner: boolean }; error?: string; status?: number }> {
+): Promise<{ ok: boolean; guild?: { id: string; name: string; icon: string | null; owner: boolean }; error?: string; status?: number; retryAfterMs?: number }> {
   const MANAGE_GUILD = BigInt(0x20);
   const ADMINISTRATOR = BigInt(0x8);
   try {
@@ -230,6 +230,15 @@ export async function sessionManagesGuild(
       return { ok: false, error: 'Discord rejected the session token', status: 401 };
     }
     if (!resp.ok) {
+      if (resp.status === 429) {
+        // Rate limited: say so, and tell the caller when to come back instead
+        // of returning a generic 502 that invites an immediate retry.
+        const retryAfter = Number(resp.headers.get('retry-after') ?? '1');
+        return {
+          ok: false, error: 'Discord is rate limiting dashboard requests',
+          status: 429, retryAfterMs: Number.isFinite(retryAfter) ? retryAfter * 1000 : 1000,
+        };
+      }
       return { ok: false, error: `Discord API error ${resp.status}`, status: 502 };
     }
     const guilds = (await resp.json()) as Array<{ id: string; name: string; icon: string | null; owner: boolean; permissions: string | number; approximate_member_count?: number }>;

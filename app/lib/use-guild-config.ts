@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useGuild } from '@/app/lib/guild-context';
+import { normalizeApiError, saveErrorAdvice, saveErrorHeadline } from '@/app/lib/save-errors';
 
 interface GuildConfig {
   modules?: Record<string, boolean>;
@@ -199,25 +200,40 @@ export function useGuildConfig() {
         body: JSON.stringify({ guildId, config: draft }),
         signal: controller.signal,
       });
-      const data = (await resp.json().catch(() => null)) as { success?: boolean; error?: string } | null;
+      const data = (await resp.json().catch(() => null)) as {
+        success?: boolean; error?: string; warnings?: string[]; config?: GuildConfig;
+      } | null;
       if (resp.ok && data && data.success) {
-        // The save is confirmed: this draft IS the server truth now.
-        configCache.set(guildId, { data: draft, at: Date.now() });
+        // The save is confirmed. Prefer the server's echoed document (what is
+        // actually STORED) over the draft we sent, so the form shows the truth.
+        // Any advisory rides along without failing the save.
+        const persisted = (data.config && typeof data.config === 'object' ? data.config : draft) as GuildConfig;
+        configCache.set(guildId, { data: persisted, at: Date.now() });
+        setConfig(persisted);
         setSaveState('saved');
+        if (Array.isArray(data.warnings) && data.warnings.length > 0) {
+          setError(data.warnings.join('\n'));
+        } else {
+          setError('');
+        }
         setTimeout(() => setSaveState('idle'), 2500);
         return true;
       }
-      const serverMessage = typeof data?.error === 'string' && data.error ? ` — ${data.error}` : '';
+      // Classify through the shared taxonomy. A 502 says "Murabot could not be
+      // reached" — it must never be rendered as a validation failure, because
+      // that told the operator to go fix a selection that was already correct.
+      const err = normalizeApiError(resp.status, data);
       setSaveState('error');
-      setError(`Failed to save ${endpoint}: HTTP ${resp.status}${serverMessage}`);
+      setError([saveErrorHeadline(err), err.message, saveErrorAdvice(err)]
+        .filter(Boolean).join('\n'));
       setTimeout(() => setSaveState('idle'), 3000);
       return false;
     } catch (err) {
       setSaveState('error');
       const timedOut = err instanceof DOMException && err.name === 'AbortError';
       setError(timedOut
-        ? `Failed to save ${endpoint}: request timed out after 20s.`
-        : `Failed to save ${endpoint}: network error — ${String(err)}`);
+        ? `${saveErrorHeadline({ kind: 'timeout', code: 'UPSTREAM_TIMEOUT', status: 0, message: 'The request timed out after 20s.', retryable: true })}\nThe save did not reach the server. Your previous settings are unchanged.`
+        : `${saveErrorHeadline({ kind: 'upstream', code: 'BOT_API_UNAVAILABLE', status: 0, message: 'The dashboard could not reach the server.', retryable: true })}\nCheck your connection and retry.`);
       setTimeout(() => setSaveState('idle'), 3000);
       return false;
     } finally {

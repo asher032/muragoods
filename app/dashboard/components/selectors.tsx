@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, Hash, Megaphone, MessagesSquare, Mic, Mic2, FolderInput, RefreshCw, Search, ShieldAlert, X } from 'lucide-react';
+import { normalizeApiError } from '@/app/lib/save-errors';
 
 // ── Reusable Discord selector system ───────────────────────────────────────
 // Every module uses these components — no module implements its own ID logic.
@@ -823,12 +824,33 @@ export interface ValidateCheck {
   ok: boolean;
 }
 
+/**
+ * The outcome of checking one selected resource.
+ *
+ * `verified: false` is the important half. It means the check did not RUN —
+ * the upstream service was down, throttled or unreachable — and therefore
+ * tells us NOTHING about whether the selected id is any good. The old code
+ * returned `valid: false` for this case, which the save path counted as a
+ * failed field and then told the user to go fix their (perfectly correct)
+ * selection. That is the "Validation failed (HTTP 502)" bug.
+ */
+export interface SelectionValidation {
+  valid: boolean;
+  /** False when the check could not be performed at all. */
+  verified: boolean;
+  objectName: string | null;
+  checks: ValidateCheck[];
+  message: string;
+  /** Present when `verified` is false: what stopped us, and whether to retry. */
+  failure?: { kind: string; code: string; retryable: boolean };
+}
+
 export async function validateSelection(
   guildId: string,
   kind: 'channel' | 'category' | 'role' | 'member',
   id: string,
   require: string[] = [],
-): Promise<{ valid: boolean; objectName: string | null; checks: ValidateCheck[]; message: string }> {
+): Promise<SelectionValidation> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 12000);
   try {
@@ -840,13 +862,24 @@ export async function validateSelection(
       signal: controller.signal,
     });
     const data = (await resp.json().catch(() => null)) as {
-      valid?: boolean; objectName?: string | null; checks?: ValidateCheck[]; message?: string; error?: string;
+      valid?: boolean; objectName?: string | null; checks?: ValidateCheck[]; message?: string; error?: string; code?: string;
     } | null;
     if (!resp.ok || !data) {
-      return { valid: false, objectName: null, checks: [], message: data && 'error' in data && typeof data.error === 'string' ? data.error : `Validation failed (HTTP ${resp.status}).` };
+      // The check did not complete. Classify WHY through the shared taxonomy
+      // so a 502 reads as an upstream failure and never as a bad selection.
+      const err = normalizeApiError(resp.status, data);
+      return {
+        valid: false,
+        verified: false,
+        objectName: null,
+        checks: [],
+        message: `${err.message} (This selection was NOT checked.)`,
+        failure: { kind: err.kind, code: err.code, retryable: err.retryable },
+      };
     }
     return {
       valid: Boolean(data.valid),
+      verified: true,
       objectName: data.objectName ?? null,
       checks: data.checks ?? [],
       message: data.message || '',
@@ -854,8 +887,18 @@ export async function validateSelection(
   } catch (err) {
     const timedOut = err instanceof DOMException && err.name === 'AbortError';
     return {
-      valid: false, objectName: null, checks: [],
-      message: timedOut ? 'Validation timed out — the bot service may be slow. Retry.' : 'Validation request failed — check your connection and retry.',
+      valid: false,
+      verified: false,
+      objectName: null,
+      checks: [],
+      message: timedOut
+        ? 'Could not check this selection — the request timed out. (Nothing was checked.)'
+        : 'Could not check this selection — the dashboard could not reach the bot service. (Nothing was checked.)',
+      failure: {
+        kind: timedOut ? 'timeout' : 'upstream',
+        code: timedOut ? 'UPSTREAM_TIMEOUT' : 'BOT_API_UNAVAILABLE',
+        retryable: true,
+      },
     };
   } finally {
     clearTimeout(timer);
@@ -863,15 +906,32 @@ export async function validateSelection(
 }
 
 export function DiscordPermissionStatus({
-  checks, message, valid, checking,
+  checks, message, valid, checking, verified = true,
 }: {
   checks: ValidateCheck[];
   message: string;
   valid: boolean;
   checking: boolean;
+  /**
+   * False when the check never ran. Rendered as a neutral "could not check"
+   * notice, never as a red "this selection is wrong" — we do not know.
+   */
+  verified?: boolean;
 }) {
   if (checking) {
     return <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--cc-text-faint)' }}>Checking bot permissions…</p>;
+  }
+  if (!verified) {
+    if (!message) return null;
+    return (
+      <div
+        className="cc-alert"
+        style={{ marginTop: 8, fontSize: 12, borderLeft: '3px solid #e0a34a' }}
+        role="status"
+      >
+        {message}
+      </div>
+    );
   }
   if (checks.length === 0) return null;
   return (
@@ -954,10 +1014,46 @@ export function statusMessage(code: string, detail: string): { title: string; hi
         title: 'That member is no longer on this server.',
         hint: detail || 'They may have left — pick another member.',
       };
+    case 'DATABASE_UNAVAILABLE':
+      return {
+        title: 'Economy database unavailable',
+        hint: detail || 'The site could not reach the Murabot database. The economy data is intact — this is a connection problem, not an empty economy. Retry in a moment.',
+      };
+    case 'DATABASE_NOT_CONFIGURED':
+      return {
+        title: 'Economy database not configured',
+        hint: detail || 'The site is missing the Murabot database connection string. Add MURABOT_MONGODB_URI where the dashboard runs.',
+      };
+    case 'ECONOMY_LOAD_FAILED':
+    case 'ECONOMY_SNAPSHOT_FAILED':
+      return {
+        title: 'Could not load economy data',
+        hint: detail || 'The request did not complete. Retry — the stored economy is unaffected.',
+      };
+    case 'INVALID_GUILD_ID':
+      return {
+        title: 'No server selected',
+        hint: detail || 'Pick a server in the top bar. Economy data is always scoped to one Discord server.',
+      };
     case 'OWNER_ONLY':
       return {
-        title: '🔒 Owner Only',
-        hint: detail || 'Economic values can only be changed by the Murabot owner. The API enforces this, not just the page.',
+        title: '🔒 Murabot owner only',
+        hint: detail || 'Economic values can only be changed by the Murabot owner — a global role, not a role in this server. The API checks the signed-in Discord account on every save, so this cannot be bypassed from the page.',
+      };
+    case 'BOT_OFFLINE':
+      return {
+        title: 'Murabot is offline',
+        hint: detail || 'Murabot is not connected to Discord, so it cannot verify this server\'s channels. Nothing about your settings is wrong — retry when it reconnects.',
+      };
+    case 'BOT_GATEWAY_NOT_READY':
+      return {
+        title: 'Murabot is still connecting',
+        hint: detail || 'Murabot has not finished connecting to Discord yet. Wait a moment and retry.',
+      };
+    case 'AUTHENTICATION_ERROR':
+      return {
+        title: 'The dashboard cannot talk to Murabot',
+        hint: detail || 'The shared connection secret was refused. This is a deployment problem, not a settings problem.',
       };
     case 'BOT_NOT_CONFIGURED':
     case 'BRIDGE_NOT_CONFIGURED':

@@ -79,12 +79,49 @@ jobs:
       - name: Item catalog parity (five rarities, no Legendary, snapshot fresh)
         run: node scripts/check-items-parity.mjs
 
+      # The dashboard's theme list and Murabot's card renderer each used to
+      # carry their OWN copy, with nothing comparing them. That is how "I
+      # picked a background and the Discord card did not change" stayed true
+      # while both halves looked correct. This fails when the two drift, when a
+      # default is missing, or when a theme's asset is absent on either side.
+      - name: Level card theme parity (dashboard and Murabot render the same themes)
+        run: node scripts/check-level-card-parity.mjs
+
+      # Every dashboard save used to report a 502/503/504 as "1 setting failed
+      # validation … fix the selection above". These pin the status → category
+      # table, the verdict-vs-could-not-check distinction, and the Raid Alerts
+      # matrix (A–J): a toggle must never be blocked by a Discord outage.
+      - name: Dashboard save errors (5xx is never validation, Raid Alerts A–J)
+        run: node scripts/test-save-errors.mjs
+
+      # Proves the saved theme actually reaches Murabot's renderer: the bot
+      # reads what the dashboard wrote, a change applies with no restart, and
+      # two servers stay independent. Pixel-level rendering needs Pillow, which
+      # is the bot's runtime dependency, so that half runs in the bot job
+      # (test_level_card_backgrounds.py); this job asserts the connection.
+      - name: Level card chain (dashboard → database → Murabot renderer)
+        run: node scripts/test-level-card.mjs
+
       # The economy save route used to persist a hand-written whitelist of 12
       # keys while the form showed 21, silently dropping nine of them. These
       # tests pin the schema to the bot's own defaults and exercise the whole
       # validate → verify → all-or-nothing write path (scenarios A–I).
       - name: Economy settings save (schema parity, per-field errors, Discord verdicts)
         run: node scripts/test-economy-config.mjs
+
+      # The dashboard reads the Murabot economy from the same collections the
+      # slash commands read. This pins that implementation to the bot's own and
+      # proves an empty database and a broken database are different answers —
+      # the distinction that made a failure look like "No transactions yet".
+      - name: Economy data source (store/bot parity, error states are never empty data)
+        run: node scripts/test-economy-store.mjs
+
+      # Owner-only economy values are gated on the AUTHENTICATED Discord user
+      # id (MURABOT_OWNER_DISCORD_ID), never on a name, a guild role or a
+      # client-supplied flag; and every bot-check failure keeps its own code
+      # instead of one generic "did not answer".
+      - name: Murabot owner identity + bot-check codes
+        run: node scripts/test-murabot-owner.mjs
 
       - name: Typecheck
         run: npx tsc --noEmit
@@ -130,8 +167,13 @@ jobs:
       # in-process Mongo (Motor-compatible mock), so it needs no database, no
       # network and no Discord connection — but it does need the async driver
       # surface the bot uses.
+      #
+      # Pillow renders the level cards. The renderer degrades to styled text
+      # when it is missing, which is precisely why a missing Pillow once went
+      # unnoticed: the tests could not tell a card apart from a text fallback.
+      # It is a runtime requirement of the bot, so it belongs here.
       - name: Install economy suite dependencies
-        run: pip install pymongo mongomock mongomock-motor typing_extensions
+        run: pip install pymongo mongomock mongomock-motor typing_extensions "Pillow>=10,<12"
 
       # The database architecture is the one thing that cannot be verified by
       # running the app: the site and the bot each resolve their cluster from
@@ -262,3 +304,18 @@ jobs:
       # buy->sell profit.
       - name: Economy dashboard (circulation, canonical leaderboard, arbitrage)
         run: python discord-bot/scripts/test_economy_dashboard.py
+
+      # The Murabot owner is one Discord USER ID, and it is neither a name, nor
+      # a guild role, nor "an admin". The bot check is answered from the
+      # gateway cache and keeps a distinct code per failure. Hermetic: no
+      # network, no database, no gateway.
+      - name: Murabot owner identity + gateway channel checks
+        run: python discord-bot/scripts/test_economy_owner_and_channels.py
+
+      # The pixel-level half of the level-card fix, where Pillow is actually
+      # installed. The Node job asserts the dashboard → database → renderer
+      # chain; this asserts that each theme paints a genuinely DIFFERENT
+      # background, and that a bad theme falls back instead of rendering a
+      # blank card (which is indistinguishable from "the setting does nothing").
+      - name: Level card backgrounds (distinct pixels, safe fallback)
+        run: python discord-bot/scripts/test_level_card_backgrounds.py

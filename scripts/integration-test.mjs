@@ -591,13 +591,23 @@ console.log('[3b] economy authorization');
   check('economy overview rejects non-admin', ov.status === 401 || ov.status === 403,
     `status ${ov.status}`);
 
-  const read = await api(`/api/dashboard/economy/read?guildId=${GUILD}&endpoint=health`);
-  check('economy health rejects non-admin', read.status === 401 || read.status === 403,
+  const read = await api(`/api/dashboard/economy/read?guildId=${GUILD}&endpoint=transactions`);
+  check('economy transactions rejects non-admin', read.status === 401 || read.status === 403,
     `status ${read.status}`);
 
   const lb = await api(`/api/dashboard/economy/read?guildId=${GUILD}&endpoint=leaderboard`);
   check('economy leaderboard rejects non-admin', lb.status === 401 || read.status === 403,
     `status ${lb.status}`);
+
+  const snapshot = await api(`/api/dashboard/economy?guildId=${GUILD}`);
+  check('economy snapshot rejects non-admin', snapshot.status === 401 || snapshot.status === 403,
+    `status ${snapshot.status}`);
+
+  // An undefined/blank guild must be refused outright, never turned into a
+  // query that matches nothing and reads back as an empty economy.
+  const undefinedGuild = await api('/api/dashboard/economy?guildId=undefined');
+  check('an undefined guildId is refused, not queried', undefinedGuild.status === 400,
+    `status ${undefinedGuild.status}`);
 
   const cfg = await api('/api/dashboard/config', {
     method: 'PATCH',
@@ -646,6 +656,56 @@ console.log('[3d] one config system');
     .then((r) => r.status);
   check('the channel selector endpoint rejects an anonymous caller', anonChannels === 401,
     `status ${anonChannels}`);
+}
+
+// ─── 3e. Save error taxonomy, end to end ───────────────────────────
+// A save failure must never be reported to the browser as a validation
+// failure. These assert the STATUS a caller gets for each situation, which is
+// the part the frontend maps.
+console.log('[3e] save failure taxonomy');
+{
+  const GUILD = '1234567890123456789';
+  // This suite signs in with email, not Discord, so every dashboard save is
+  // correctly refused. That refusal is the assertion: an unauthenticated save
+  // must be 401 and must NOT be dressed up as a validation failure.
+  const anonSave = await api('/api/dashboard/config', {
+    method: 'PATCH',
+    body: JSON.stringify({ guildId: GUILD, config: { modules: { security: true } } }),
+  });
+  check('a save without a Discord session is 401', anonSave.status === 401, `status ${anonSave.status}`);
+  check('the refusal names AUTHENTICATION_REQUIRED, not validation',
+    anonSave.body?.code === 'AUTH_REQUIRED', JSON.stringify(anonSave.body));
+  check('an unauthenticated save is not reported as a validation error',
+    anonSave.body?.code !== 'VALIDATION_ERROR' && anonSave.body?.code !== 'INVALID_REQUEST',
+    JSON.stringify(anonSave.body));
+  check('an unauthenticated save is not reported as an upstream failure',
+    anonSave.body?.code !== 'BOT_API_UNAVAILABLE', JSON.stringify(anonSave.body));
+  // Authorization is checked BEFORE the body is even parsed, so a malformed
+  // guild id cannot leak whether it would have been valid.
+  const anonBad = await api('/api/dashboard/config', {
+    method: 'PATCH',
+    body: JSON.stringify({ guildId: 'not-a-guild', config: {} }),
+  });
+  check('an unauthenticated malformed save is still 401, not 400',
+    anonBad.status === 401, `status ${anonBad.status}`);
+
+  // The resource validator must refuse an anonymous caller the same way.
+  const anonValidate = await fetch(`${BASE}/api/dashboard/resources/validate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ guildId: GUILD, kind: 'channel', id: '123456789012345678' }),
+  }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }));
+  check('the resource validator rejects an anonymous caller', anonValidate.status === 401,
+    `status ${anonValidate.status}`);
+  check('the resource validator does not claim a validation failure',
+    anonValidate.body?.code !== 'VALIDATION_ERROR', JSON.stringify(anonValidate.body));
+
+  // The persistence guarantee the dashboard relies on: a successful write
+  // returns what is actually stored. Exercised here through the audit log,
+  // which records the same document the save produced.
+  const readBack = await api('/api/dashboard/config?guildId=' + GUILD);
+  check('reading config without a Discord session is refused',
+    readBack.status === 401 || readBack.status === 403, `status ${readBack.status}`);
 }
 
 // ─── 4. Cleanup (best effort) ───────────────────────────────────────

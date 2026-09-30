@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useGuild } from '@/app/lib/guild-context';
 import { useGuildConfig } from '@/app/lib/use-guild-config';
 import { MODULES } from '@/app/lib/discord-modules';
@@ -25,8 +25,13 @@ export default function ModuleSettings({ moduleId, title, description }: {
   const { config, loading, saveState, error, save, update } = useGuildConfig();
   const { resources, loading: resLoading, error: resError, code: resCode, retryable: resRetryable, refresh: resRefresh } = useGuildResources(selected?.id ?? null);
   // Per-field pre-save validation: { [fieldKey]: { checking, valid, checks, message } }
-  const [validation, setValidation] = useState<Record<string, { checking: boolean; valid: boolean; checks: ValidateCheck[]; message: string }>>({});
+  const [validation, setValidation] = useState<Record<string, { checking: boolean; valid: boolean; verified: boolean; checks: ValidateCheck[]; message: string }>>({});
   const [validateError, setValidateError] = useState('');
+  /**
+   * Resource field keys edited since this page loaded. Pre-save validation
+   * looks at this set and nothing else.
+   */
+  const touched = useRef<Set<string>>(new Set());
 
   const mod = useMemo(() => MODULES.find((m) => m.id === moduleId), [moduleId]);
   const resolvedTitle = title ?? mod?.label ?? 'Module';
@@ -42,7 +47,7 @@ export default function ModuleSettings({ moduleId, title, description }: {
       });
       return;
     }
-    setValidation((v) => ({ ...v, [fieldKey]: { checking: true, valid: false, checks: [], message: '' } }));
+    setValidation((v) => ({ ...v, [fieldKey]: { checking: true, valid: false, verified: false, checks: [], message: '' } }));
     const require = kind === 'channel' ? ['view', 'send'] : [];
     try {
       const result = await validateSelection(selected.id, kind, id, require);
@@ -50,7 +55,10 @@ export default function ModuleSettings({ moduleId, title, description }: {
     } catch {
       // validateSelection is timeout-bounded and should not throw, but a
       // stuck "Checking bot permissions…" is worse than a wrong message.
-      setValidation((v) => ({ ...v, [fieldKey]: { checking: false, valid: false, checks: [], message: 'Validation failed — retry.' } }));
+      setValidation((v) => ({ ...v, [fieldKey]: {
+        checking: false, valid: false, verified: false, checks: [],
+        message: 'Could not check this selection — the bot service did not answer. (Nothing was checked.)',
+      } }));
     }
   };
 
@@ -85,6 +93,10 @@ export default function ModuleSettings({ moduleId, title, description }: {
   const setField = (key: string, value: unknown, kind?: 'channel' | 'category' | 'role' | 'member') => {
     const short = key.startsWith(`${moduleId}.`) ? key.slice(moduleId.length + 1) : key;
     update(moduleId, short, value);
+    // Record WHICH resource fields this save session actually changed. Only
+    // those are pre-checked: a stored, already-verified selection must not be
+    // able to block an unrelated toggle through a transient Discord failure.
+    if (kind) touched.current.add(key);
     setValidateError('');
     if (kind && typeof value === 'string') void runValidation(key, kind, value);
   };
@@ -93,21 +105,35 @@ export default function ModuleSettings({ moduleId, title, description }: {
   const roleNeedsHierarchy = (key: string) =>
     /mod|admin|support|manager|staff|dj|verified|auto|reward/i.test(key);
 
-  // Save only after every selected channel/role/member re-validates live:
-  // existence + bot permissions are checked, never trusted from the UI.
-  // Validation is timeout-bounded (12s/call); a hung validator resolves to
-  // an error row instead of wedging Save forever.
+  // Save after re-checking the RESOURCE fields this session changed:
+  // existence + bot permissions are verified live, never trusted from the UI.
+  //
+  // A check that could not run (upstream down, throttled, timed out) is not a
+  // failed field — it is reported as unverified and does not block the write,
+  // because a toggle like "Raid Alerts: ON" requires no Discord access at all
+  // and must not be refused because Murabot was briefly unreachable.
   const saveWithValidation = async () => {
     setValidateError('');
+    // Only fields the operator ACTUALLY CHANGED are worth pre-checking.
+    // Re-verifying every stored channel/role on every save meant a toggle
+    // could not be saved because some OTHER, unchanged field's Discord
+    // lookup was slow — which is how "enable Raid Alerts" turned into a
+    // validation error about a channel the operator had not touched.
     const checks: Array<{ key: string; kind: 'channel' | 'category' | 'role' | 'member'; id: string }> = [];
     for (const f of mod?.fields ?? []) {
       if (f.type !== 'channel' && f.type !== 'category' && f.type !== 'role' && f.type !== 'member') continue;
       const short = f.key.startsWith(`${moduleId}.`) ? f.key.slice(moduleId.length + 1) : f.key;
       const id = String(section?.[short] ?? '');
-      if (id) checks.push({ key: f.key, kind: f.type, id });
+      if (!id) continue;
+      // `touched` is set by update() below; an untouched value was already
+      // stored and already verified when it was chosen.
+      if (touched.current.has(f.key)) checks.push({ key: f.key, kind: f.type, id });
     }
+
+    // Warnings ride along with a successful save; they never block it.
+    const warnings: string[] = [];
     if (selected && checks.length > 0) {
-      let results: Array<{ key: string; result: Awaited<ReturnType<typeof validateSelection>> }>;
+      let results: Array<{ key: string; result: Awaited<ReturnType<typeof validateSelection>> }> | null = null;
       try {
         results = await Promise.all(
           checks.map(async (c) => ({
@@ -118,37 +144,57 @@ export default function ModuleSettings({ moduleId, title, description }: {
           })),
         );
       } catch {
-        setValidateError('Validation failed to complete — check your connection and try again.');
-        return;
+        // Could not run the pre-checks at all. That is a service problem, not
+        // a reason to refuse a save of a toggle that needs no Discord access.
+        warnings.push('⚠ Could not verify your channel selections before saving (the bot service did not answer). '
+          + 'Your settings were saved; run the check again if something looks wrong.');
       }
-      setValidation((v) => {
-        const next = { ...v };
-        for (const r of results) next[r.key] = { checking: false, ...r.result };
-        return next;
-      });
-      const failed = results.filter((r) => !r.result.valid);
-      if (failed.length > 0) {
-        // Name every failure. "1 setting failed validation" is not actionable:
-        // the operator needs to know WHICH setting, what it is set to, what
-        // was expected, why it failed and what to do about it.
-        const detail = failed.map((r) => {
-          const field = mod?.fields.find((f) => f.key === r.key);
-          const label = field?.label ?? r.key;
-          const failedChecks = r.result.checks.filter((c) => !c.ok);
-          const reason = failedChecks.length
-            ? failedChecks.map((c) => c.label).join('; ')
-            : r.result.message || 'The bot could not confirm this selection.';
-          const objectName = r.result.objectName ? `“${r.result.objectName}”` : 'the current value';
-          return `• ${label} — ${objectName}: ${reason}`;
-        }).join('\n');
-        setValidateError(
-          `Not saved — ${failed.length} setting${failed.length === 1 ? '' : 's'} failed validation.\n${detail}\n\n` +
-          'Fix the selection above (usually bot permissions or a deleted channel/role), then save again.',
-        );
-        return;
+      if (results) {
+        setValidation((v) => {
+          const next = { ...v };
+          for (const r of results) {
+            next[r.key] = {
+            checking: false, valid: r.result.valid, verified: r.result.verified,
+            checks: r.result.checks, message: r.result.message,
+          };
+          }
+          return next;
+        });
+
+        // A field fails ONLY when the check ran and returned a verdict.
+        const failed = results.filter((r) => r.result.verified && !r.result.valid);
+        // A field we could not check is reported as unverified, never failed.
+        const unverified = results.filter((r) => !r.result.verified);
+
+        if (failed.length > 0) {
+          // Name every failure precisely. This IS a validation verdict, so
+          // the advice about channels and permissions is correct here.
+          const detail = failed.map((r) => {
+            const field = mod?.fields.find((f) => f.key === r.key);
+            const label = field?.label ?? r.key;
+            const failedChecks = r.result.checks.filter((c) => !c.ok);
+            const reason = failedChecks.length
+              ? failedChecks.map((c) => c.label).join('; ')
+              : r.result.message || 'The bot could not use this selection.';
+            const objectName = r.result.objectName ? `“${r.result.objectName}”` : 'the current value';
+            return `• ${label} — ${objectName}: ${reason}`;
+          }).join('\n');
+          setValidateError(
+            `✕ Not saved — ${failed.length} setting${failed.length === 1 ? '' : 's'} could not be verified.\n${detail}\n\n`
+            + 'These selections were checked and rejected. Fix the ones listed above, then save again.',
+          );
+          return;
+        }
+        for (const r of unverified) {
+          const label = mod?.fields.find((f) => f.key === r.key)?.label ?? r.key;
+          warnings.push(`⚠ ${label}: could not be checked — ${r.result.message}`);
+        }
       }
     }
-    void save();
+    const saved = await save();
+    if (saved && warnings.length > 0) {
+      setValidateError(warnings.join('\n'));
+    }
   };
 
   const saveLabel = saveState === 'saving' ? 'Saving…'
@@ -227,7 +273,7 @@ export default function ModuleSettings({ moduleId, title, description }: {
                       disabled={resLoading || (!resError && (resources?.channels.length ?? 0) === 0 && !value)}
                     />
                     {val && (
-                      <DiscordPermissionStatus checks={val.checks} message={val.message} valid={val.valid} checking={val.checking} />
+                      <DiscordPermissionStatus checks={val.checks} message={val.message} valid={val.valid} verified={val.verified} checking={val.checking} />
                     )}
                   </>
                 ) : f.type === 'role' ? (
@@ -246,7 +292,7 @@ export default function ModuleSettings({ moduleId, title, description }: {
                       requireManageable={roleNeedsHierarchy(f.key)}
                     />
                     {val && (
-                      <DiscordPermissionStatus checks={val.checks} message={val.message} valid={val.valid} checking={val.checking} />
+                      <DiscordPermissionStatus checks={val.checks} message={val.message} valid={val.valid} verified={val.verified} checking={val.checking} />
                     )}
                   </>
                 ) : f.type === 'member' ? (
@@ -259,7 +305,7 @@ export default function ModuleSettings({ moduleId, title, description }: {
                       disabled={resLoading}
                     />
                     {val && (
-                      <DiscordPermissionStatus checks={val.checks} message={val.message} valid={val.valid} checking={val.checking} />
+                      <DiscordPermissionStatus checks={val.checks} message={val.message} valid={val.valid} verified={val.verified} checking={val.checking} />
                     )}
                   </>
                 ) : f.type === 'select' ? (

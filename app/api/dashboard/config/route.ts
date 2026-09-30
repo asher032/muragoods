@@ -1,4 +1,4 @@
-import { sessionToken } from '@/app/lib/require-session';
+import { sessionToken, requireSession } from '@/app/lib/require-session';
 import { requireGuildManage } from '@/app/lib/discord-guilds';
 import { NextRequest, NextResponse } from 'next/server';
 import { discordConfigCollection } from '@/app/lib/discord-config';
@@ -7,8 +7,8 @@ import { apiFail, logApi } from '@/app/lib/dashboard-response';
 import { SERVER_CARD_BACKGROUNDS, SERVER_CARD_DEFAULT } from '@/app/lib/server-card-backgrounds';
 import { ECONOMY_ERROR_CODES, ECONOMY_FIELDS, type EconomyFieldError } from '@/app/lib/economy-schema';
 import { mergeEconomySection, validateEconomyDraft } from '@/app/lib/economy-validate';
-import { invalidateGuildSnapshot, validateChannelSetting } from '@/app/lib/discord-channels';
-import { isEconomyOwner } from '@/app/lib/economy-owner';
+import { invalidateBotPresence, validateChannelSetting } from '@/app/lib/discord-channels';
+import { isMurabotOwner, logOwnerCheck, ownerConfigurationProblem } from '@/app/lib/murabot-owner';
 
 const SERVER_CARD_IDS = new Set(SERVER_CARD_BACKGROUNDS.map((b) => b.id));
 
@@ -96,10 +96,25 @@ interface BotCheck {
   botTopPosition: number;
 }
 
-async function loadBotCheck(guildId: string, botToken: string): Promise<BotCheck | null> {
+/**
+ * Load the guild's channels, roles and the bot's own member record.
+ *
+ * Returns either the data or a NAMED reason it could not be read. It used to
+ * return `null` for everything, and the caller turned that single `null` into
+ * one sentence — so a throttle, an outage, a rejected credential and a
+ * genuinely absent bot were indistinguishable at the save button.
+ */
+async function loadBotCheck(
+  guildId: string, botToken: string,
+): Promise<{ ok: true; check: BotCheck } | { ok: false; status: number; code: string; error: string; retryAfterMs?: number }> {
   // Bounded: an untimed Discord stall here would hang the SAVE button with
-  // no feedback. 10s is generous; failure resolves to a 502 with retry.
+  // no feedback. 10s is generous; failure resolves to a named 502 with retry.
   const timeout = (ms: number) => AbortSignal.timeout(ms);
+  const label = (res: Response) => {
+    const which = res.url.includes('/channels') ? 'channel list'
+      : res.url.includes('/roles') ? 'role list' : 'bot membership';
+    return `Discord could not return this server's ${which} (HTTP ${res.status})`;
+  };
   try {
     const [channelsRes, rolesRes, memberRes] = await Promise.all([
       fetch(`https://discord.com/api/v10/guilds/${guildId}/channels`, {
@@ -115,7 +130,36 @@ async function loadBotCheck(guildId: string, botToken: string): Promise<BotCheck
         signal: timeout(10000),
       }),
     ]);
-    if (!channelsRes.ok || !rolesRes.ok || !memberRes.ok) return null;
+    for (const res of [channelsRes, rolesRes, memberRes]) {
+      if (res.ok) continue;
+      if (res.status === 429) {
+        const raw = Number(res.headers.get('retry-after') ?? '1');
+        const ms = (Number.isFinite(raw) && raw >= 0 ? Math.min(60, Math.ceil(raw)) : 1) * 1000;
+        return {
+          ok: false, status: 429, code: 'DISCORD_RATE_LIMITED', retryAfterMs: ms,
+          error: `Discord is rate limiting dashboard requests. Retrying in ${Math.round(ms / 1000)}s. `
+            + 'Nothing about your settings is wrong, and nothing was saved.',
+        };
+      }
+      if (res.status === 401 || res.status === 403) {
+        return {
+          ok: false, status: 502, code: 'BOT_CREDENTIAL_REJECTED',
+          error: 'Discord rejected the dashboard\'s bot credentials. This is a dashboard problem, not a problem '
+            + 'with the channel you picked — nothing was checked, and nothing was saved.',
+        };
+      }
+      if (res.status === 404) {
+        return {
+          ok: false, status: 404, code: 'BOT_NOT_IN_GUILD',
+          error: 'Murabot is not installed on this server (BOT_NOT_IN_GUILD). Invite it first — '
+            + 'the channel itself has not been checked.',
+        };
+      }
+      return {
+        ok: false, status: 502, code: 'DISCORD_API_ERROR',
+        error: `${label(res)}. Nothing was saved — try again in a moment.`,
+      };
+    }
     const channels = (await channelsRes.json()) as Array<{ id: string; guild_id?: string; type?: number; name?: string }>;
     const roles = (await rolesRes.json()) as Array<{ id: string; name: string; managed: boolean; position: number; permissions: string }>;
     const member = (await memberRes.json()) as { roles: string[] };
@@ -132,14 +176,20 @@ async function loadBotCheck(guildId: string, botToken: string): Promise<BotCheck
       if (r.position > botTopPosition) botTopPosition = r.position;
     }
     return {
-      channels: new Map(channels.map((c) => [c.id, c])),
-      roles: new Map(roles.map((r) => [r.id, r])),
-      botRoleIds,
-      botIsAdmin,
-      botTopPosition,
+      ok: true,
+      check: {
+        channels: new Map(channels.map((c) => [c.id, c])),
+        roles: new Map(roles.map((r) => [r.id, r])),
+        botRoleIds,
+        botIsAdmin,
+        botTopPosition,
+      },
     };
   } catch {
-    return null;
+    return {
+      ok: false, status: 502, code: 'DISCORD_UNREACHABLE',
+      error: 'Discord did not respond in time. Nothing was saved — try again in a moment.',
+    };
   }
 }
 
@@ -261,15 +311,19 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const token = (await sessionToken());
-  if (!token) return bad('Discord token required', 401, 'AUTH_REQUIRED');
   const body = await req.json().catch(() => null);
   if (!body || typeof body !== 'object') return bad('Invalid JSON body');
   const guildId = String((body as Record<string, unknown>).guildId || '');
-  const auth = await authorize(token, guildId);
-  if (!auth.ok) return bad(auth.error, auth.status, auth.code,
-    auth.retryAfterMs !== undefined ? { retryAfterMs: auth.retryAfterMs, retryable: true } : undefined);
-  const guild = auth.guild;
+  // One call resolves BOTH halves of what this handler needs: proof that the
+  // caller manages this guild, and the Discord identity they are signed in as.
+  // The identity comes from the server-side session document behind the
+  // HttpOnly cookie — never from the body, the query or the client.
+  const auth = await requireSession(guildId);
+  if (!auth.ok) {
+    return bad(auth.error, auth.status, auth.code,
+      auth.retryAfterMs !== undefined ? { retryAfterMs: auth.retryAfterMs, retryable: true } : undefined);
+  }
+  const guild = auth.guild ?? { id: guildId, name: guildId, icon: null, owner: false };
 
   // Storing settings for a server without the bot serves nothing and hides
   // misconfiguration — refuse with the precise state, not a generic 403.
@@ -283,6 +337,19 @@ export async function PATCH(req: NextRequest) {
   if (!patch || typeof patch !== 'object') return bad('config object required');
   const safe = patch as Record<string, Record<string, unknown>>;
   const started = Date.now();
+  // ONE read of the stored document, reused by the economy merge, the
+  // changed-resource sweep below, and the audit diff. Reading it three times
+  // meant three chances to see a different version mid-save.
+  const collection = await discordConfigCollection();
+  const existingDoc = await collection.findOne({ guildId });
+  /**
+   * Non-blocking advisories for a save that DID succeed.
+   *
+   * These exist because "validate everything or refuse everything" is the wrong
+   * trade for an OPTIONAL check. A raid-alerts toggle needs no Discord call; it
+   * used to be refused whenever an unrelated channel lookup was unavailable.
+   */
+  const saveWarnings: string[] = [];
 
   // Whitelist updatable sections with type coercion + bounds.
   const update: Record<string, unknown> = {
@@ -454,33 +521,23 @@ export async function PATCH(req: NextRequest) {
   // Channel), reported success anyway, and produced a single generic
   // "1 setting failed validation" for every other failure.
   if (safe.economy && typeof safe.economy === 'object') {
-    const actorId = String((body as Record<string, unknown>).actorId || '');
-    const owner = await isEconomyOwner(guildId, actorId);
-    if (owner === 'unknown') {
-      // The owner list could not be determined. Refusing is the only safe
-      // answer: guessing would either lock out the owner or let an admin
-      // through. The stored config is untouched.
-      return NextResponse.json({
-        success: false,
-        code: ECONOMY_ERROR_CODES.OWNER_ONLY,
-        errors: [{
-          field: 'config', label: 'Economy settings',
-          code: ECONOMY_ERROR_CODES.OWNER_ONLY,
-          message: 'Could not confirm owner permissions with Murabot, so nothing was saved. Try again in a moment.',
-          retryable: true,
-        }],
-      }, { status: 503 });
-    }
+    // Ownership is decided from the AUTHENTICATED SESSION, never from the
+    // request body. The browser used to send `actorId` and the API used to ask
+    // the bot process about it — which meant the owner check could fail for
+    // reasons that had nothing to do with who was signed in, and any client
+    // could have claimed to be somebody else. The session's Discord id is the
+    // only identity used, and it is compared numerically against
+    // MURABOT_OWNER_DISCORD_ID.
+    const isOwner = isMurabotOwner(auth.discordId);
+    logOwnerCheck(auth.discordId, guildId, 'economy-save');
 
-    const collection0 = await discordConfigCollection();
-    const existingDoc = await collection0.findOne({ guildId });
     const existingEconomy = (existingDoc?.economy && typeof existingDoc.economy === 'object'
       ? existingDoc.economy
       : {}) as Record<string, unknown>;
 
     const { values, errors, warnings } = validateEconomyDraft(safe.economy, {
       existing: existingEconomy,
-      isOwner: owner === true,
+      isOwner,
     });
 
     // Every Discord-dependent setting is verified against LIVE guild state.
@@ -499,44 +556,82 @@ export async function PATCH(req: NextRequest) {
     if (errors.length > 0) {
       // NOTHING is written. The previous configuration stays exactly as it
       // was — a failed save must never blank a working setting.
-      logApi('/api/dashboard/config', 'PATCH', 422, Date.now() - started, 'ECONOMY_VALIDATION');
+      const ownerOnly = errors.every((e) => e.code === ECONOMY_ERROR_CODES.OWNER_ONLY);
+      const status = ownerOnly ? 403 : errors.some((e) => e.retryable) ? 503 : 422;
+      logApi('/api/dashboard/config', 'PATCH', status, Date.now() - started,
+        ownerOnly ? 'OWNER_ONLY' : 'ECONOMY_VALIDATION');
       return NextResponse.json({
         success: false,
-        code: errors[0].code,
+        code: ownerOnly ? ECONOMY_ERROR_CODES.OWNER_ONLY : errors[0].code,
         // The per-field list is the payload. `error` is kept only as a short
         // summary for anything still reading the old shape.
         errors,
-        error: errors.length === 1
-          ? errors[0].message
-          : `${errors.length} settings could not be saved. Nothing was saved.`,
+        error: ownerOnly
+          ? 'Only the Murabot owner can modify economic values.'
+          : errors.length === 1
+            ? errors[0].message
+            : `${errors.length} settings could not be saved. Nothing was saved.`,
+        // Shown when nothing can be an owner at all, so the reason is a
+        // deployment fix rather than a mystery.
+        ownerConfiguration: ownerConfigurationProblem(),
         warnings,
         retryable: errors.every((e) => e.retryable),
-      }, { status: errors.some((e) => e.retryable) ? 503 : 422 });
+      }, { status });
     }
 
     // All-or-nothing: one document, one write, every declared key present.
     update.economy = mergeEconomySection(existingEconomy, values);
-    // The cached snapshot described the guild as it was when the last check
-    // ran; a save must not leave a stale one behind for the next render.
-    invalidateGuildSnapshot(guildId);
+    // The cached presence described Murabot as it was when the last check ran;
+    // a save must not leave a stale answer behind for the next render.
+    invalidateBotPresence(guildId);
     if (warnings.length > 0) economyWarnings = warnings;
   }
 
-  const collection = await discordConfigCollection();
-
-  // Server-side resource verification: every selected channel/category/role
+  // Server-side resource verification: every CHANGED channel/category/role
   // must exist in THIS guild and be usable by the bot — a forged guildId or
   // a foreign ID is rejected here, never stored.
+  //
+  // Only CHANGED ids are checked. An id already stored in this document was
+  // verified when it was chosen and re-verifying it on every unrelated save is
+  // what made "toggle Raid Alerts" fail whenever Discord was briefly slow.
+  // The stored value cannot have become more valid by being left alone.
+  const priorDoc = (existingDoc ?? {}) as Record<string, unknown>;
+  const priorValue = (section: string, field: string): unknown => {
+    const sec = priorDoc[section];
+    return sec && typeof sec === 'object' ? (sec as Record<string, unknown>)[field] : undefined;
+  };
+  const allIdFields = collectIdFields(update as Record<string, unknown>);
+  const idFields = allIdFields.filter(
+    ({ section, field, value }) => String(priorValue(section, field) ?? '') !== value,
+  );
+  const unchangedIds = allIdFields.length - idFields.length;
+
   const bToken = botToken();
-  const idFields = collectIdFields(update as Record<string, unknown>);
-  if (idFields.length > 0) {
-    if (!bToken) {
-      return bad('The bot cannot verify these server settings right now (bot token not configured). Try again later.', 503);
-    }
-    const check = await loadBotCheck(guildId, bToken);
-    if (!check) {
-      return bad('Discord did not answer the verification check — the bot may be unreachable or rate-limited. Wait a moment and try saving again.', 502);
-    }
+  if (idFields.length > 0 && !bToken) {
+    // Discord verification needs a bot token. WITHOUT one we do NOT refuse the
+    // save: these values came from this guild's own resource picker, so they
+    // are structurally sound. Refusing here made every save unsaveable on a
+    // deployment with no site-side bot token. Murabot validates on use.
+    logApi('/api/dashboard/config', 'PATCH', 200, Date.now() - started, 'RESOURCE_CHECK_SKIPPED_NO_BOT_TOKEN');
+    saveWarnings.push(
+      'Changed channel/role selections could not be re-verified against Discord (the dashboard has no bot token configured). '
+      + 'They were saved. Murabot will report a problem only if it cannot actually use them.',
+    );
+  }
+  if (idFields.length > 0 && bToken) {
+    const loaded = await loadBotCheck(guildId, bToken);
+    if (!loaded.ok) {
+      // Discord did not answer. That is a fact about the CONNECTION, not a
+      // verdict about the operator's values, so it is reported as such — and
+      // the save proceeds with a warning rather than being refused and
+      // reported as a validation failure.
+      logApi('/api/dashboard/config', 'PATCH', loaded.status, Date.now() - started, loaded.code);
+      saveWarnings.push(
+        `Could not verify the changed channel/role selections against Discord (${loaded.code}). `
+        + 'Your settings were saved unchanged — re-verify once Murabot responds.',
+      );
+    } else {
+      const check = loaded.check;
     for (const { field, value } of idFields) {
       const label = friendlyField('', field);
       if (/ChannelId$/.test(field)) {
@@ -582,10 +677,11 @@ export async function PATCH(req: NextRequest) {
         }
       }
     }
+    }
   }
 
   // Diff before writing so the audit trail records real before/after values.
-  const existing = await collection.findOne({ guildId });
+  const existing = existingDoc;
   const { diffConfigUpdate, auditConfigChange } = await import('@/app/lib/dashboard-audit');
   const changes = diffConfigUpdate(
     existing as Record<string, unknown> | null,
@@ -640,17 +736,13 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  // Audit trail: who changed what (actor = Discord user from token).
+  // Audit trail: who changed what. The actor is the session's Discord account —
+  // already resolved above — so this costs no extra Discord call and cannot be
+  // spoofed by a request body.
   try {
-    const meResp = await fetch('https://discord.com/api/v10/users/@me', {
-      headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
-      signal: AbortSignal.timeout(8000),
-    });
-    let actor = 'unknown';
-    if (meResp.ok) {
-      const me = (await meResp.json()) as { id?: string; username?: string };
-      actor = me.username ? `${me.username} (${me.id})` : actor;
-    }
+    const actor = auth.username
+      ? `${auth.username} (${auth.discordId})`
+      : `discord:${auth.discordId}`;
     const summary = changes.length
       ? `Updated ${changes.length} setting${changes.length === 1 ? '' : 's'}: ${changes.slice(0, 3).map((c) => `${c.section ? `${c.section}.` : ''}${c.field}`).join(', ')}${changes.length > 3 ? '…' : ''}`
       : 'Saved settings (no changes)';
@@ -658,5 +750,33 @@ export async function PATCH(req: NextRequest) {
   } catch {
     // Audit is best-effort; the config write already succeeded.
   }
-  return NextResponse.json(economyWarnings.length > 0 ? { success: true, warnings: economyWarnings } : { success: true });
+  // Read the document back so the client renders what is actually STORED,
+  // not what it hoped it sent. A success response that disagrees with the
+  // database is worse than a failure, because nobody would go looking.
+  const persisted = (await collection.findOne({ guildId })) as Record<string, unknown> | null;
+  const warnings = [
+    ...economyWarnings.map((w) => w.message),
+    ...saveWarnings,
+  ];
+  return NextResponse.json({
+    success: true,
+    ...(warnings.length > 0 ? { warnings } : {}),
+    config: persisted
+      ? {
+        modules: persisted.modules,
+        securitySettings: persisted.securitySettings,
+        community: persisted.community,
+        music: persisted.music,
+        leveling: persisted.leveling,
+        economy: persisted.economy,
+        tickets: persisted.tickets,
+        giveaways: persisted.giveaways,
+        suggestions: persisted.suggestions,
+        reminders: persisted.reminders,
+        reputation: persisted.reputation,
+        murastream: persisted.murastream,
+      }
+      : null,
+    updatedAt: persisted?.updatedAt ?? null,
+  });
 }
