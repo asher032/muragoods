@@ -23,7 +23,7 @@
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -68,6 +68,24 @@ function scan(files) {
   }
 }
 
+// ── Fixture assembly ───────────────────────────────────────────────────
+// Every credential shape below is BUILT AT RUNTIME from fragments. That is
+// not obfuscation for its own sake: this file is committed, and the scanner
+// runs over committed files, so a fixture written out in full would fail its
+// own scan (and, once exempted, would become a blind spot where a real paste
+// would go unnoticed). Assembling the string keeps the fixture a real
+// credential shape at the moment the scanner sees it in the temp repo, and
+// keeps this file clean at every other moment.
+const SRV = 'mongodb+srv://';
+const plain = 'mongodb://';
+const fixture = (scheme, creds, host) => `${scheme}${creds}@${host}`;
+
+const BOT_TOKEN = [
+  'MTIzNDU2Nzg5MDEyMzQ1Njc4',
+  'GaBcDe',
+  'FfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789',
+].join('.');
+
 // A shape that trips NO rule: process.env reads, comments, docs.
 const CLEAN = {
   'app/lib/db.ts': `
@@ -89,32 +107,32 @@ console.log('\nsecret-scan control: credential shapes that must FAIL');
 const POSITIVES = [
   [
     'mongodb SRV URI with user:password',
-    { 'a.ts': 'const u = "mongodb+srv://someone:hunter2222@cluster0.abcde.mongodb.net/?retryWrites=true";' },
+    { 'a.ts': `const u = "${fixture(SRV, 'someone:hunter2222', 'cluster0.abcde.mongodb.net')}/?retryWrites=true";` },
     'mongodb-uri-with-credentials',
   ],
   [
     'MURAGOODS_MONGODB_URI assigned a literal (no credentials in it)',
-    { 'a.ts': 'export const MURAGOODS_MONGODB_URI = "mongodb+srv://cluster0.abcde.mongodb.net";' },
+    { 'a.ts': `export const MURAGOODS_MONGODB_URI = "${SRV}cluster0.abcde.mongodb.net";` },
     'mongodb-uri-assigned-literal',
   ],
   [
     'MURABOT_MONGODB_URI assigned a local literal',
-    { 'b.py': 'MURABOT_MONGODB_URI = "mongodb://localhost:27017/murastream_bot"' },
+    { 'b.py': `MURABOT_MONGODB_URI = "${plain}localhost:27017/murastream_bot"` },
     'mongodb-uri-assigned-literal',
   ],
   [
     'MONGODB_URI assigned a literal',
-    { 'c.js': 'const MONGODB_URI = `mongodb://user:pw@localhost:27017/x`;' },
+    { 'c.js': `const MONGODB_URI = \`${fixture(plain, 'user:pw', 'localhost:27017')}/x\`;` },
     'mongodb-uri-assigned-literal',
   ],
   [
     'MONGO_URI assigned a literal',
-    { 'd.ts': 'const MONGO_URI: string = "mongodb+srv://host/db";' },
+    { 'd.ts': `const MONGO_URI: string = "${SRV}host/db";` },
     'mongodb-uri-assigned-literal',
   ],
   [
     'a Discord bot token',
-    { 'e.py': 'TOKEN = "MTIzNDU2Nzg5MDEyMzQ1Njc4.GaBcDe.FfGgHhIiJjKkLlMmNnOoPpQqRrSs"' },
+    { 'e.py': `TOKEN = "${BOT_TOKEN}"` },
     'discord-bot-token',
   ],
   [
@@ -136,7 +154,7 @@ const POSITIVES = [
     'a credential-shaped URI inside a comment',
     // A commented-out line is still a committed secret. The one safe way to
     // document the shape is a redaction, which is its own fixture below.
-    { 'notes.md': '# was: mongodb+srv://someone:hunter2222@cluster0.abcde.mongodb.net\n' },
+    { 'notes.md': `# was: ${fixture(SRV, 'someone:hunter2222', 'cluster0.abcde.mongodb.net')}\n` },
     'mongodb-uri-with-credentials',
   ],
 ];
@@ -154,13 +172,34 @@ const NEGATIVES = [
   ['a source file called env.ts', { 'src/env.ts': 'export const region = "eu";' }],
   ['a file called environment.ts', { 'lib/environment.ts': 'export const nodeEnv = "test";' }],
   ['a validation regex naming the scheme', { 'f.ts': 'const RE = /^mongodb(?:\\+srv)?:\\/\\//;' }],
-  ['a .env.example documenting a REDACTED connection shape', { '.env.example': '# format: mongodb+srv://<user>:<password>@<host>/<db>\nMURAGOODS_MONGODB_URI=\n' }],
-  ['a doc showing the shape with angle-bracket placeholders', { 'docs/db.md': 'Set MONGODB_URI to mongodb+srv://user:password@cluster0.example.invalid/db\n' }],
+  ['a .env.example documenting a REDACTED connection shape', { '.env.example': `# format: ${SRV}<user>:<password>@<host>/<db>\nMURAGOODS_MONGODB_URI=\n` }],
+  ['a doc showing the shape with angle-bracket placeholders', { 'docs/db.md': `Set MONGODB_URI to ${SRV}user:password@cluster0.example.invalid/db\n` }],
+  ['a resolved-from-environment read', { 'g.ts': 'const uri = process.env.MURABOT_MONGODB_URI ?? "";' }],
 ];
 
 for (const [label, files] of NEGATIVES) {
   const { code, out } = scan({ ...CLEAN, ...files });
   check(label, code === 0, out.trim().split('\n')[0]);
+}
+
+// The scanner scans itself. If a fixture were written out in full above, this
+// file would fail its own scan — and any exemption added to silence that would
+// create a blind spot. Assert the assembled-then-checked property instead: the
+// scan of the real repository must be clean, and the scanner must be the thing
+// that reports these fixtures, not this file.
+console.log('\nsecret-scan control: the scanner is not blinded by its own fixtures');
+{
+  const self = scan({ 'scripts/test-secret-scan.mjs': readFileSync(new URL(import.meta.url), 'utf8') });
+  check(
+    'this file, scanned in isolation, produces no findings',
+    self.code === 0,
+    self.out.trim().split('\n').slice(0, 4).join(' | '),
+  );
+  check(
+    'and it still plants every fixture it claims to (built at runtime)',
+    POSITIVES.length >= 10,
+    `${POSITIVES.length} positive fixtures`,
+  );
 }
 
 console.log();

@@ -355,21 +355,12 @@ SKIP_DIRS = {"node_modules", ".next", ".git", "dist", "build", "__pycache__"}
 ALLOWED_URI_CONTEXTS = (
     re.compile(r"\.invalid|\.test\b|example\.(com|org|net)|redacted|REDACTED"),
 )
-#: The security control tests PLANT credential-shaped strings on purpose: a
-#: scanner that has no fixture to catch has no way to prove it still catches.
-#: They are the only files exempt, and they are exempt here rather than by
-#: weakening the pattern for everything.
-PLANTED_CREDENTIAL_FIXTURES = {
-    "scripts/test-secret-scan.mjs",
-}
 leaks: list[str] = []
 for path in REPO.rglob("*"):
     if not path.is_file() or any(part in SKIP_DIRS for part in path.parts):
         continue
     if path.suffix.lower() not in {".ts", ".tsx", ".js", ".mjs", ".py", ".md",
                                    ".json", ".yml", ".yaml", ".css", ".html"}:
-        continue
-    if path.relative_to(REPO).as_posix() in PLANTED_CREDENTIAL_FIXTURES:
         continue
     try:
         text = path.read_text(encoding="utf-8")
@@ -386,17 +377,16 @@ check(
     not leaks,
     "; ".join(leaks[:5]),
 )
-# The exemption above is only sound while those files really do plant a
-# credential AND the scanner really does catch it. If someone deleted the
-# fixture the exemption would silently become a hole in the scan, so assert
-# both halves here rather than trusting the filename list.
-for fixture in sorted(PLANTED_CREDENTIAL_FIXTURES):
-    path = REPO / fixture
-    check(
-        f"exempt fixture {fixture} still exists and still plants a credential",
-        path.is_file()
-        and CREDENTIAL_URI.search(path.read_text(encoding="utf-8")) is not None,
-    )
+# No file is exempt from the scan above — not even the scanner's own control
+# test, which therefore has to build its credential fixtures at runtime. If
+# someone later writes one out in full to make the test easier to read, this
+# check is what tells them, instead of the answer being a permanent exemption
+# that quietly becomes a blind spot for real pastes.
+_control_test = (REPO / "scripts" / "test-secret-scan.mjs").read_text(encoding="utf-8")
+check(
+    "the scanner's control test builds fixtures at runtime, so it needs no exemption",
+    CREDENTIAL_URI.search(_control_test) is None and "readFileSync" in _control_test,
+)
 check(
     "the scanner's own control test is registered in CI",
     "test-secret-scan.mjs" in (REPO / ".github" / "workflows" / "ci.yml").read_text(
