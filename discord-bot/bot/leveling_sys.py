@@ -603,6 +603,16 @@ def render_level_card(username: str, avatar_bytes: bytes | None, level: int,
     opacity = safe_float(opacity, 1.0, low=0.0, high=1.0)
     accent = accent if _is_hex_color(accent) else LEVEL_DEFAULTS["cardColor"]
     progress = min(1.0, max(0.0, (xp_into / xp_need) if xp_need else 0.0))
+    # Resolve the theme HERE, not only at the call sites. An unrecognised,
+    # empty or missing id must fall back to the server's default BACKDROP, and
+    # a falsy value used to skip the artwork entirely and render a plain card —
+    # which looks exactly like "the background setting does nothing".
+    #
+    # There is deliberately NO way to ask for a backdropless card: a missing
+    # theme and a request for "no theme" are indistinguishable here, and
+    # guessing wrong renders a blank card. A member's own picture still wins,
+    # because `background_bytes` is applied before this backdrop.
+    background_id = resolve_server_background(background_id)
     try:
         from PIL import Image, ImageDraw, ImageFont  # type: ignore
     except Exception:

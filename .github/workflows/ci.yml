@@ -94,10 +94,12 @@ jobs:
       - name: Dashboard save errors (5xx is never validation, Raid Alerts A–J)
         run: node scripts/test-save-errors.mjs
 
-      # Proves the saved theme actually reaches the rendered PNG: every theme
-      # renders a distinct card, the bot reads what the dashboard wrote, a
-      # change applies with no restart, and two servers stay independent.
-      - name: Level card end-to-end (dashboard → database → Murabot → PNG)
+      # Proves the saved theme actually reaches Murabot's renderer: the bot
+      # reads what the dashboard wrote, a change applies with no restart, and
+      # two servers stay independent. Pixel-level rendering needs Pillow, which
+      # is the bot's runtime dependency, so that half runs in the bot job
+      # (test_level_card_backgrounds.py); this job asserts the connection.
+      - name: Level card chain (dashboard → database → Murabot renderer)
         run: node scripts/test-level-card.mjs
 
       # The economy save route used to persist a hand-written whitelist of 12
@@ -304,3 +306,11 @@ jobs:
       # network, no database, no gateway.
       - name: Murabot owner identity + gateway channel checks
         run: python discord-bot/scripts/test_economy_owner_and_channels.py
+
+      # The pixel-level half of the level-card fix, where Pillow is actually
+      # installed. The Node job asserts the dashboard → database → renderer
+      # chain; this asserts that each theme paints a genuinely DIFFERENT
+      # background, and that a bad theme falls back instead of rendering a
+      # blank card (which is indistinguishable from "the setting does nothing").
+      - name: Level card backgrounds (distinct pixels, safe fallback)
+        run: python discord-bot/scripts/test_level_card_backgrounds.py
