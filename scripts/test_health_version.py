@@ -219,6 +219,28 @@ async def main() -> int:
             check("/health reports the build fingerprint too",
                   "build_fingerprint" in health, json.dumps(list(health))[:160])
 
+        print("\n[8] the dashboard contract is asserted and self-reported")
+        # Every route the dashboard calls. If ANY of these is missing the build
+        # must refuse to start, because a partial contract makes the dashboard
+        # blame the user's Discord server for a Murabot deployment problem.
+        status, ver, raw = await get(f"{base}/health/version")
+        check("/health/version answers 200", status == 200, f"HTTP {status}: {raw[:120]}")
+        contract = (ver or {}).get("dashboardContract") or {}
+        check("the version endpoint reports the dashboard contract",
+              isinstance(contract, dict), json.dumps(list(ver or {}))[:160])
+        check("this build registers every critical route",
+              contract.get("complete") is True and not contract.get("missing"),
+              json.dumps(contract.get("missing")))
+        for r in ("/leveling/background/{guild_id}", "/leveling/config/{guild_id}",
+                  "/economy/channels/{guild_id}", "/resources/verify"):
+            check(f"the contract lists {r}", r in (contract.get("registered") or []),
+                  json.dumps(contract.get("registered"))[:200])
+        canonical = (ver or {}).get("canonicalRoutes") or {}
+        for name, path in (("economyChannels", "/economy/channels/"),
+                           ("verifyResource", "/resources/verify")):
+            check(f"the canonical path for {name} is documented",
+                  path in (canonical.get(name) or ""), json.dumps(canonical)[:200])
+
     finally:
         server.cancel()
         try:
