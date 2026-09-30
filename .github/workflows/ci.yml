@@ -167,8 +167,13 @@ jobs:
       # in-process Mongo (Motor-compatible mock), so it needs no database, no
       # network and no Discord connection — but it does need the async driver
       # surface the bot uses.
+      #
+      # Pillow renders the level cards. The renderer degrades to styled text
+      # when it is missing, which is precisely why a missing Pillow once went
+      # unnoticed: the tests could not tell a card apart from a text fallback.
+      # It is a runtime requirement of the bot, so it belongs here.
       - name: Install economy suite dependencies
-        run: pip install pymongo mongomock mongomock-motor typing_extensions
+        run: pip install pymongo mongomock mongomock-motor typing_extensions "Pillow>=10,<12"
 
       # The database architecture is the one thing that cannot be verified by
       # running the app: the site and the bot each resolve their cluster from
