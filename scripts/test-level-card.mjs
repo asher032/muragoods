@@ -151,11 +151,17 @@ async def main():
     payload = json.loads(sys.argv[1])
     out = {}
     for guild_id, stored in payload.items():
-        doc = {"guildId": guild_id, "leveling": {"serverBackground": stored}}
+        # A bare string means the legacy alias; an object is the exact
+        # "leveling" subdocument to store, so a test can reproduce a record
+        # that holds ONLY the canonical field.
+        doc = {"guildId": guild_id,
+               "leveling": stored if isinstance(stored, dict) else {"serverBackground": stored}}
         cfg = await lv.get_level_config(DB(doc), int(guild_id))
+        theme = await lv.resolve_level_background(DB(doc), int(guild_id), cfg=cfg, source="test")
         out[guild_id] = {
-            "read": cfg.get("serverBackground"),
-            "resolved": lv.get_level_card_background(cfg, guild_id=int(guild_id), source="test"),
+            "read": cfg.get("server_card_background"),
+            "legacy": cfg.get("serverBackground"),
+            "resolved": theme,
         }
     print(json.dumps(out))
 asyncio.run(main())
@@ -181,6 +187,32 @@ const GUILD_B = '123456789012345678';
   const out = botResolves({ [GUILD_A]: theme });
   check('the bot reads the stored theme id', out[GUILD_A]?.read === theme, JSON.stringify(out));
   check('the shared resolver returns that exact theme', out[GUILD_A]?.resolved === theme, JSON.stringify(out));
+
+  // THE REGRESSION THAT CAUSED THE REPORTED BUG: the canonical field name is
+  // the one the dashboard documents, the one POST /leveling/config writes and
+  // GET /leveling/background reports — but it was missing from LEVEL_DEFAULTS,
+  // so `get_level_config`'s whitelist DISCARDED it on every read and the card
+  // fell back to the default. Assert the canonical field on its own.
+  const canonical = botResolves({ [GUILD_A]: { server_card_background: 'goldfish-glass' } });
+  check('the canonical server_card_background field is NOT discarded on read',
+    canonical[GUILD_A]?.read === 'goldfish-glass', JSON.stringify(canonical));
+  check('a record holding ONLY the canonical field renders that theme',
+    canonical[GUILD_A]?.resolved === 'goldfish-glass', JSON.stringify(canonical));
+  const canonicalCard = renderOne(canonical[GUILD_A]?.resolved);
+  if (havePillow) {
+    check('that card is byte-identical to rendering the theme directly',
+      !!canonicalCard && canonicalCard.sha === renderOne('goldfish-glass')?.sha);
+  }
+
+  // Both spellings present and DIFFERENT: the canonical one is the source of
+  // truth, and both must be reconciled to it so no reader disagrees.
+  const both = botResolves({
+    [GUILD_A]: { server_card_background: 'starry-duck', serverBackground: 'duck-toast' },
+  });
+  check('when both spellings exist the canonical field wins',
+    both[GUILD_A]?.resolved === 'starry-duck', JSON.stringify(both));
+  check('and the legacy alias is reconciled to the same value',
+    both[GUILD_A]?.legacy === 'starry-duck', JSON.stringify(both));
   const card = renderOne(out[GUILD_A]?.resolved);
   const direct = renderOne(theme);
   if (havePillow) {
@@ -264,9 +296,20 @@ section('[G] a valid selection is never replaced by the default');
 section('[H] every card path goes through the shared resolver');
 {
   const cogSrc = readFileSync(join(root, 'discord-bot/bot/cogs/leveling.py'), 'utf8');
-  const resolverCalls = (cogSrc.match(/get_level_card_background\(/g) || []).length;
-  check('the cog resolves themes through get_level_card_background', resolverCalls >= 1,
+  // The card builder must go through the ONE guild-id resolver, not pick a
+  // theme out of a config dict itself. That single entry point is what
+  // guarantees the dashboard's saved selection reaches the PNG.
+  const resolverCalls = (cogSrc.match(/resolve_level_background\(/g) || []).length;
+  check('the cog resolves themes through resolve_level_background', resolverCalls >= 1,
     `${resolverCalls} call(s)`);
+  check('the cog does not resolve the theme itself any more',
+    !/get_level_card_background\(/.test(cogSrc), 'a direct resolve bypasses the shared resolver');
+  // The resolver must be one function, and it must take the guild id.
+  const lvSys = readFileSync(join(root, 'discord-bot/bot/leveling_sys.py'), 'utf8');
+  check('there is exactly ONE resolver definition',
+    (lvSys.match(/^async def resolve_level_background\(/gm) || []).length === 1);
+  check('the resolver reads live config from the database',
+    /async def resolve_level_background\(db, guild_id/.test(lvSys));
   // Exactly one place should build a card, so the two surfaces cannot drift.
   const builders = (cogSrc.match(/def build_level_card\(/g) || []).length;
   check('there is exactly ONE card builder', builders === 1, `${builders}`);

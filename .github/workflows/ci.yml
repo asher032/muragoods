@@ -327,3 +327,21 @@ jobs:
       # reports both sides honestly.
       - name: Level card config chain (dashboard write reaches the renderer)
         run: python discord-bot/scripts/test_level_config_chain.py
+
+      # The end-to-end acceptance test for the reported bug: "I pick a
+      # background, I save, and the Discord card does not change."
+      #
+      # The suites above each cover one hop. This one runs the whole chain the
+      # operator actually performs — dashboard selection, save, verify the
+      # stored record, run /level, inspect the rendered PNG — three times with
+      # three different themes, and asserts the PNG is byte-identical to
+      # rendering that theme alone. It also pins the two properties that made
+      # this bug survive earlier fixes: the configuration is re-read from the
+      # database on every card (no cache, so no restart), and /level and the
+      # automatic level-up card share one builder.
+      #
+      # This is the check that fails if the canonical `server_card_background`
+      # field is ever dropped from the config whitelist again, or if a stale
+      # value in one field is allowed to outrank the selection being saved.
+      - name: Level card acceptance (selection → save → rendered PNG)
+        run: python scripts/acceptance_level_background.py

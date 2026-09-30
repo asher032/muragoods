@@ -83,10 +83,22 @@ async def build_level_card(member: discord.Member, level: int, cfg: dict,
     personal_url = str(doc.get("backgroundUrl") or "")
     personal = await _fetch_image(personal_url, 2_000_000)
 
-    # A member's own picture wins; otherwise the SERVER's selected theme. The
-    # server theme is resolved through the shared resolver so every card in
-    # this guild uses the same background the dashboard shows.
-    server_theme = levels.get_level_card_background(cfg, guild_id=guild_id, source=source)
+    # THE resolver. `/level` and the automatic level-up card both come through
+    # `build_level_card`, and both get their theme from here — so the guild's
+    # saved `server_card_background` reaches the PNG on every surface. It reads
+    # live config (no cache), so a dashboard save shows up on the next card
+    # with no bot restart.
+    server_theme = await levels.resolve_level_background(
+        database._db, guild_id, cfg=cfg, source=source)
+
+    if personal:
+        # A member's OWN picture still wins, by design (`/leveling background`).
+        # This used to be invisible, so a member with a personal image read as
+        # "the server background is ignored" while it was working as specified.
+        log.info("LEVEL CARD RENDER: guildId=%s member=%s uses a PERSONAL "
+                 "background (server theme %s is overridden for this member)",
+                 guild_id, member.id, server_theme)
+
     kind, payload = levels.render_level_card(
         getattr(member, "display_name", "member"), avatar, level or lvl, into, need, rank,
         accent=str(cfg.get("cardColor") or "#5865F2"),
@@ -900,7 +912,7 @@ class LevelingCog(commands.Cog):
             await interaction.response.send_message("Manage Server only.", ephemeral=True)
             return
         theme_id = levels.resolve_server_background(theme)
-        await self._save_level_cfg(interaction, {"serverBackground": theme_id})
+        await self._save_level_cfg(interaction, {"server_card_background": theme_id})
         meta = levels.server_background_meta(theme_id)
         await interaction.response.send_message(
             f"{meta.get('emoji', '🎨')} **{meta.get('name', theme_id)}** — "
@@ -911,6 +923,14 @@ class LevelingCog(commands.Cog):
         try:
             cfg = await levels.get_level_config(database._db, interaction.guild.id)
             cfg.update(patch)
+            # Re-normalise before writing. This `$set`s the WHOLE `leveling`
+            # subdocument, so whatever is in `cfg` becomes the guild's entire
+            # stored config. Without this step a patch that set only the legacy
+            # `serverBackground` left the canonical `server_card_background`
+            # holding the PREVIOUS theme — and since the renderer reads the
+            # canonical field, the next `/level` would render the old
+            # background. Normalising keeps both spellings equal.
+            cfg = levels.normalize_level_config(cfg)
             await database.set_guild_config(interaction.guild.id, {"leveling": cfg})
         except Exception:
             log.exception("Level config save failed")

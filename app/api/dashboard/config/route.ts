@@ -490,6 +490,9 @@ export async function PATCH(req: NextRequest) {
       const v = String((l as Record<string, unknown>)[`reward${n}`] || '');
       if (/^\d{5,25}$/.test(v)) rewards[n] = v;
     }
+    const serverBackground = SERVER_CARD_IDS.has(String(l.serverBackground || ''))
+      ? String(l.serverBackground)
+      : SERVER_CARD_DEFAULT;
     update.leveling = {
       xpMin: num(l.xpMin, 1, 100, 15),
       xpMax: num(l.xpMax, 1, 100, 25),
@@ -509,9 +512,14 @@ export async function PATCH(req: NextRequest) {
       rewardOnly: Boolean(l.rewardOnly),
       cardColor: /^#[0-9a-fA-F]{6}$/.test(String(l.cardColor || '')) ? String(l.cardColor) : '#5865F2',
       cardOpacity: Math.max(0, Math.min(1, Number(l.cardOpacity ?? 1) || 0)),
-      serverBackground: SERVER_CARD_IDS.has(String(l.serverBackground || ''))
-        ? String(l.serverBackground)
-        : SERVER_CARD_DEFAULT,
+      // BOTH spellings, always the same value. `server_card_background` is the
+      // canonical field the bot's renderer resolves; `serverBackground` is the
+      // legacy alias older readers still read. Writing only one of them let the
+      // two disagree, and a reader that preferred the other one then showed the
+      // PREVIOUS background — which looked exactly like the setting being
+      // ignored. One value, one source of truth, both keys.
+      server_card_background: serverBackground,
+      serverBackground,
       rewards,
     };
   }
