@@ -1,110 +1,128 @@
-import { sessionToken } from '@/app/lib/require-session';
-import { requireGuildManage } from '@/app/lib/discord-guilds';
-import {
-  guildSnapshot,
-  judgeChannel,
-  listSelectableChannels,
-  type RequiredPermission,
-} from '@/app/lib/discord-channels';
-import { ECONOMY_ERROR_CODES } from '@/app/lib/economy-schema';
+import { requireSession } from '@/app/lib/require-session';
+import { botChannels, invalidateBotPresence, type BotCheckCode } from '@/app/lib/bot-presence';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET ?guildId=…&requires=view,send,embed
 //
-// Backs the channel dropdown. Returns every text channel on the server with
-// whether Murabot can actually use it, plus the verdict for the channel
-// CURRENTLY stored in the config — so a channel that has since been deleted is
-// reported as broken instead of quietly rendering as an empty select.
+// Backs the Economy Log Channel selector.
 //
-// Discord reads are cached and de-duplicated in `guildSnapshot`, so rendering
-// the page and opening this dropdown cost one set of calls, not one per field.
+// The channel list comes from Murabot's own gateway cache, and so does the
+// answer to "can Murabot post here". The dashboard previously made its own
+// Discord REST calls with a site-side bot token; when that token was missing
+// or rejected, Discord's 401 was flattened into "Discord did not answer the
+// bot check" and shown under the channel field as though the channel were at
+// fault.
+//
+// Every outcome is distinct here, and a stored channel that is no longer
+// usable is reported as broken rather than hidden:
+//
+//   BOT_ONLINE · BOT_OFFLINE · BOT_GATEWAY_NOT_READY · BOT_NOT_IN_GUILD
+//   BOT_PERMISSION_MISSING · DISCORD_RATE_LIMITED · AUTHENTICATION_ERROR
+//   BRIDGE_NOT_CONFIGURED · INTERNAL_ERROR · DISCORD_API_ERROR
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const VALID_REQUIRES: RequiredPermission[] = ['view', 'send', 'embed'];
+const VALID_REQUIRES = ['view', 'send', 'embed', 'read'] as const;
+
+/** HTTP status per failure code, so a client can back off correctly. */
+function statusFor(code: BotCheckCode): number {
+  if (code === 'BOT_NOT_IN_GUILD') return 404;
+  if (code === 'AUTHENTICATION_ERROR') return 502;
+  if (code === 'DISCORD_RATE_LIMITED') return 429;
+  if (code === 'BRIDGE_NOT_CONFIGURED' || code === 'INTERNAL_ERROR') return 503;
+  return 503;
+}
 
 export async function GET(req: NextRequest) {
-  const token = await sessionToken();
-  const guildId = req.nextUrl.searchParams.get('guildId') || '';
-  if (!token) {
-    return NextResponse.json(
-      { success: false, code: 'AUTH_REQUIRED', error: 'Sign in with Discord to continue' },
-      { status: 401 },
-    );
-  }
+  const params = req.nextUrl.searchParams;
+  const guildId = (params.get('guildId') || '').trim();
+
   if (!/^\d{5,25}$/.test(guildId)) {
     return NextResponse.json(
       { success: false, code: 'INVALID_GUILD_ID', error: 'Valid guildId required' },
       { status: 400 },
     );
   }
-  const check = await requireGuildManage(token, guildId);
-  if (!check.ok) {
+  const auth = await requireSession(guildId);
+  if (!auth.ok) {
     return NextResponse.json(
-      { success: false, code: check.code, error: check.error, retryable: check.retryable },
-      { status: check.status },
+      { success: false, code: auth.code, error: auth.error },
+      { status: auth.status },
     );
   }
 
-  const requested = (req.nextUrl.searchParams.get('requires') || 'view,send')
-    .split(',')
-    .map((r) => r.trim())
-    .filter((r): r is RequiredPermission => (VALID_REQUIRES as string[]).includes(r));
-  const requires = requested.length > 0 ? requested : (['view', 'send'] as RequiredPermission[]);
+  const requested = (params.get('requires') || 'view,send,embed')
+    .split(',').map((r) => r.trim())
+    .filter((r): r is (typeof VALID_REQUIRES)[number] => (VALID_REQUIRES as readonly string[]).includes(r));
+  const requires = requested.length > 0 ? requested : ['view', 'send', 'embed'];
 
-  let snapshot;
-  try {
-    snapshot = await guildSnapshot(guildId);
-  } catch (err) {
-    const failure = err as { code?: string; message?: string; retryAfterSec?: number };
-    // A rate limit or an outage is a TRANSIENT condition. It must never be
-    // reported as "your channel is invalid" — that would make the operator
-    // change a perfectly good setting because Discord was busy.
-    const retryable = failure.code !== ECONOMY_ERROR_CODES.BOT_NOT_IN_GUILD;
-    const status = failure.code === ECONOMY_ERROR_CODES.BOT_NOT_IN_GUILD ? 404 : 503;
+  if (params.get('fresh') === '1') invalidateBotPresence(guildId);
+  const result = await botChannels(guildId, requires);
+
+  if (result.error) {
     return NextResponse.json(
       {
         success: false,
-        code: failure.code ?? ECONOMY_ERROR_CODES.DISCORD_UNAVAILABLE,
-        error: failure.message ?? 'Could not verify channels with Discord right now.',
-        retryable,
-        retryAfterSec: failure.retryAfterSec,
+        code: result.error.code,
+        error: result.error.message,
+        // Retryability is a property of the failure, not a guess: a rate limit
+        // and a missing bridge are both retryable, a missing guild is not.
+        retryable: result.error.code !== 'BOT_NOT_IN_GUILD',
+        retryAfterMs: result.retryAfterMs,
+        bot: result.presence,
+        channels: [],
+        current: null,
       },
       {
-        status,
-        headers: failure.retryAfterSec ? { 'Retry-After': String(failure.retryAfterSec) } : undefined,
+        status: statusFor(result.error.code),
+        headers: result.retryAfterMs ? { 'Retry-After': String(Math.ceil(result.retryAfterMs / 1000)) } : undefined,
       },
     );
   }
 
-  // Judge the stored channel too, so a previously-valid channel that has since
-  // been deleted or locked out is surfaced as broken.
+  // The verdict for the channel CURRENTLY stored in the config, so a channel
+  // that has since been deleted or locked out is surfaced as broken instead of
+  // rendering as an empty select.
   let current: { id: string; valid: boolean; message?: string; missingPermission?: string } | null = null;
   try {
     const collection = await discordConfigCollection();
     const doc = await collection.findOne({ guildId });
     const stored = (doc?.economy as Record<string, unknown> | undefined)?.logChannelId;
     if (typeof stored === 'string' && /^\d{5,25}$/.test(stored)) {
-      const verdict = judgeChannel(snapshot, guildId, stored, requires);
-      current = {
-        id: stored,
-        valid: verdict.valid,
-        message: verdict.valid ? undefined : verdict.message,
-        missingPermission: verdict.missingPermission,
-      };
+      const found = result.channels.find((c) => c.id === stored);
+      if (found) {
+        current = {
+          id: stored,
+          valid: found.usable,
+          message: found.usable ? undefined : found.missing
+            ? `Murabot is missing the ${found.missing.label} permission in #${found.name}.`
+            : `#${found.name} cannot receive economy logs.`,
+          missingPermission: found.missing?.label,
+        };
+      } else {
+        // Not offered any more: deleted, foreign, or the bot can no longer see
+        // it. Say so rather than pretending the field is simply empty.
+        current = {
+          id: stored,
+          valid: false,
+          message: 'This channel no longer exists on this server, or Murabot can no longer see it. Please select another channel.',
+        };
+      }
     }
   } catch {
-    // A config read failure must not hide the channel list; the verdict for
-    // the stored channel simply comes back unknown (current: null).
+    // A config read failure must not hide the channel list; the verdict for the
+    // stored channel simply comes back unknown.
     current = null;
   }
 
   return NextResponse.json({
     success: true,
-    channels: listSelectableChannels(snapshot, guildId, requires),
+    channels: result.channels,
     current,
-    requires,
+    requires: result.requires,
+    bot: result.presence,
+    cached: result.cached,
   });
 }

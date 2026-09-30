@@ -9,6 +9,7 @@ updates; rewards, announcements and backups are idempotent per level.
 
 import io
 import logging
+import os as _os
 import random
 from datetime import datetime, timedelta, timezone
 from pathlib import Path as _Path
@@ -206,6 +207,9 @@ LEVEL_DEFAULTS: dict = {
 # discord-bot/, so the site copy is unreachable at runtime).
 _LEVEL_BG_DIR = _Path(__file__).resolve().parent / "assets" / "level_backgrounds"
 
+#: Set MURA_LEVEL_CARD_DEBUG=1 to log which theme each rendered card used.
+_DEBUG_CARD_BACKGROUND = str(_os.environ.get("MURA_LEVEL_CARD_DEBUG", "")).strip() not in ("", "0", "false", "False")
+
 SERVER_CARD_DEFAULT = "duck-toast"
 
 SERVER_CARD_BACKGROUNDS: dict = {
@@ -246,6 +250,34 @@ def resolve_server_background(value: object) -> str:
 
 def server_background_meta(theme_id: str) -> dict:
     return SERVER_CARD_BACKGROUNDS.get(theme_id) or SERVER_CARD_BACKGROUNDS[SERVER_CARD_DEFAULT]
+
+
+# ── The one resolver every level card goes through ─────────────────────
+# The dashboard writes `cfg["serverBackground"]`; `/level`, the automatic
+# level-up card, and any future card must all read it through HERE. Each call
+# site resolving its own default is how a selected background ended up applied
+# to `/level` but not to level-ups.
+#
+# `source` is carried only for the debug line, so a mismatch between what the
+# dashboard shows and what a card rendered can be traced to a guild id and a
+# theme id without exposing anything sensitive.
+def get_level_card_background(cfg: dict, *, guild_id: int | None = None,
+                              source: str = "database") -> str:
+    """Resolve the theme id for this guild's level cards.
+
+    Falls back to the default ONLY when the guild has never chosen one (or
+    chose one that no longer exists) — a valid selection is never replaced.
+    """
+    raw = (cfg or {}).get("serverBackground")
+    theme = resolve_server_background(raw)
+    if raw is not None and raw != theme and _DEBUG_CARD_BACKGROUND:
+        # The stored value is not a theme we know. Fall back rather than crash,
+        # and make it visible so the dashboard can be used to repair it.
+        print(f"INVALID_LEVEL_BACKGROUND_THEME guild_id={guild_id} invalidThemeId={raw!r}")
+    if _DEBUG_CARD_BACKGROUND:
+        print(f"LEVEL CARD DEBUG guild_id={guild_id} backgroundTheme={theme} "
+              f"source={source} renderer=render_level_card")
+    return theme
 
 
 def render_card_background(theme_id: str, w: int = 900, h: int = 260):

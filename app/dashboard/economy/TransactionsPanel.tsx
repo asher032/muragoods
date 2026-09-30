@@ -175,7 +175,7 @@ export default function TransactionsPanel({ guildId, symbol }: { guildId: string
                     }}
                   >
                     <td style={{ ...td, fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>
-                      {t.txId.slice(0, 10)}…
+                      {(t.txId ?? 'no-id').slice(0, 10)}…
                     </td>
                     <td style={td}>
                       <code style={{ color: 'var(--cc-accent)' }}>{t.action}</code>
@@ -193,10 +193,10 @@ export default function TransactionsPanel({ guildId, symbol }: { guildId: string
                     <tr>
                       <td colSpan={6} style={{ ...td, background: 'rgba(0,0,0,0.25)' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
-                          <Detail label="Transaction ID" value={t.txId} mono />
+                          <Detail label="Transaction ID" value={t.txId ?? '—'} mono />
                           <Detail label="User" value={t.userId ?? '—'} mono />
                           <Detail label="Guild" value={t.guildId ?? '—'} mono />
-                          <Detail label="Action" value={t.action} />
+                          <Detail label="Action" value={t.action ?? '—'} />
                           <Detail label="Amount" value={`${t.amount > 0 ? '+' : ''}${t.amount.toLocaleString()} ${t.currency ?? symbol}`} />
                           <Detail label="Item" value={t.itemId ?? '—'} />
                           <Detail label="Source" value={t.source} />

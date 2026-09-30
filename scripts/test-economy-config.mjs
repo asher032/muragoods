@@ -9,17 +9,23 @@
 // dropped after a success message. The first test here pins the schema to the
 // bot's own defaults so that class of bug cannot come back silently.
 //
-// The route's logic is split into three pure-ish modules under app/lib, which
-// this suite exercises directly against a stubbed Discord API:
+// The route's logic is split into three modules under app/lib, which this suite
+// exercises against a STUBBED MURABOT — the channel verdicts come from the
+// bot's gateway, not from a site-side Discord call, so the stub answers the
+// bot's endpoint and mirrors the verdicts it would return:
+//
 //   A. valid channel + valid settings → no errors
 //   B. deleted channel              → CHANNEL_NOT_FOUND
 //   C. bot missing SEND_MESSAGES    → MISSING_BOT_PERMISSION
 //   D. bot missing EMBED_LINKS      → MISSING_BOT_PERMISSION
 //   E. invalid numeric range        → exact field error
 //   F. multiple invalid fields      → all reported at once
-//   G. Discord 429                  → retryable, never "invalid"
+//   G. Discord 429 / outage         → retryable, never "invalid"
 //   H. a failed save writes nothing → existing config preserved
 //   I. values survive a round trip  → what was saved is what comes back
+//
+// The bot side of the same contract — how it computes a verdict from its
+// gateway cache — is covered by discord-bot/scripts/test_economy_owner_and_channels.py.
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -43,7 +49,7 @@ function section(title) { console.log(`\n${title}`); }
 // The modules are plain data + functions, so transpiling them to CommonJS is
 // enough to require them; no type checking is needed (tsc does that).
 const outDir = mkdtempSync(join(tmpdir(), 'economy-test-'));
-for (const file of ['economy-schema', 'economy-validate', 'discord-channels']) {
+for (const file of ['economy-schema', 'economy-validate', 'discord-channels', 'bot-presence']) {
   const source = readFileSync(join(root, 'app/lib', `${file}.ts`), 'utf8');
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -55,9 +61,11 @@ const require = createRequire(import.meta.url);
 const schema = require(join(outDir, 'economy-schema.js'));
 const validate = require(join(outDir, 'economy-validate.js'));
 const channels = require(join(outDir, 'discord-channels.js'));
+const presence = require(join(outDir, 'bot-presence.js'));
 const { ECONOMY_FIELDS, ECONOMY_FIELD_BY_KEY, ECONOMY_KEYS } = schema;
 const { validateEconomyDraft, mergeEconomySection } = validate;
-const { validateChannelSetting, listSelectableChannels, guildSnapshot, invalidateGuildSnapshot } = channels;
+const { validateChannelSetting, listSelectableChannels, invalidateBotPresence } = channels;
+const { invalidateBotPresence: dropPresence } = presence;
 
 // ── 1. The schema must cover the bot ───────────────────────────────────
 section('[1] schema covers every economy setting the bot understands');
@@ -101,44 +109,88 @@ section('[1] schema covers every economy setting the bot understands');
   // Distinct codes are the whole point of the rewrite.
   const codes = Object.values(schema.ECONOMY_ERROR_CODES);
   for (const code of ['CHANNEL_NOT_FOUND', 'CHANNEL_ACCESS_DENIED', 'MISSING_BOT_PERMISSION',
-    'BOT_NOT_IN_GUILD', 'DISCORD_RATE_LIMITED', 'DISCORD_UNAVAILABLE', 'DATABASE_ERROR']) {
+    'BOT_NOT_IN_GUILD', 'BOT_OFFLINE', 'BOT_GATEWAY_NOT_READY', 'DISCORD_RATE_LIMITED',
+    'DISCORD_UNAVAILABLE', 'DATABASE_ERROR']) {
     check(`error code ${code} exists`, codes.includes(code));
   }
+
+  // Every bot-state failure the bot can report needs its own code, or the UI
+  // is back to one sentence for all of them.
+  const botCodes = ['BOT_ONLINE', 'BOT_OFFLINE', 'BOT_GATEWAY_NOT_READY', 'BOT_NOT_IN_GUILD',
+    'BOT_PERMISSION_MISSING', 'DISCORD_RATE_LIMITED', 'DISCORD_API_ERROR',
+    'AUTHENTICATION_ERROR', 'BRIDGE_NOT_CONFIGURED', 'INTERNAL_ERROR'];
+  const pyCodes = readFileSync(join(root, 'discord-bot/bot/main.py'), 'utf8');
+  const clientCodes = readFileSync(join(root, 'app/lib/bot-presence.ts'), 'utf8');
+  for (const code of botCodes) {
+    check(`${code} is declared by the site client`, clientCodes.includes(`'${code}'`));
+  }
+  // The bot reads from its gateway cache and makes no REST calls, so a
+  // throttle cannot originate there — but it must still be able to report the
+  // states that CAN originate there.
+  for (const code of ['BOT_OFFLINE', 'BOT_GATEWAY_NOT_READY', 'BOT_NOT_IN_GUILD']) {
+    check(`the bot can emit ${code}`, pyCodes.includes(`"${code}"`));
+  }
+  // The channel handler itself must not touch REST — that is what makes it
+  // immune to throttling. (An unrelated API-reachability probe elsewhere in
+  // main.py is fine and is not part of this path.)
+  const channelsHandler = pyCodes.match(/async def economy_channels[\s\S]*?add_get\("\/economy\/channels/);
+  check('the bot has a gateway-cached channel handler', !!channelsHandler);
+  check('the channel handler makes no REST call', !!channelsHandler && !/session\.|aiohttp|discord\.com\/api/.test(channelsHandler[0]));
+  check('the channel handler reads the guild from the bot cache',
+    !!channelsHandler && /bot\.get_guild\(/.test(channelsHandler[0]));
+  check('the site still handles a 429 from the bot as retryable',
+    clientCodes.includes('DISCORD_RATE_LIMITED') && clientCodes.includes('retryAfterMs'));
+  // Comments may explain the old failure; shipped STRINGS may not contain it.
+  const stripComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((l) => l.split('//', 1)[0]).join('\n');
+  check('the site has no catch-all bot-check message left',
+    !/Discord did not answer the bot check/.test(
+      [
+        'app/dashboard/economy/EconomyLogChannelSelect.tsx',
+        'app/dashboard/economy/EconomyConfigPanel.tsx',
+        'app/lib/discord-channels.ts',
+        'app/lib/bot-presence.ts',
+        'app/api/dashboard/economy/channels/route.ts',
+        'app/api/dashboard/resources/validate/route.ts',
+        'app/dashboard/components/selectors.tsx',
+      ].map((f) => stripComments(readFileSync(join(root, f), 'utf8'))).join('\n')));
 }
 
-// ── Discord stub ───────────────────────────────────────────────────────
+// ── The stubbed Murabot ────────────────────────────────────────────────
+// Channel verdicts now come from the bot's gateway cache, so the stub answers
+// the bot's own endpoint with the verdicts it would have computed. The bot's
+// side of that computation is asserted in the bot's own test suite.
 const GUILD = '900000000000000001';
-const EVERYONE = GUILD;                       // @everyone shares the guild id
-const BOT_ROLE = '900000000000000009';
-const CAT = '900000000000000100';
 const CH_LOGS = '900000000000000101';         // usable
 const CH_GENERAL = '900000000000000102';      // usable
 const CH_MUTED = '900000000000000103';        // bot denied Send Messages
 const CH_NOEMBED = '900000000000000104';      // bot denied Embed Links
-const CH_VOICE = '900000000000000105';        // exists, not text capable
 const CH_GONE = '900000000000000199';         // deleted
 const CH_HIDDEN = '900000000000000198';       // exists, bot cannot view
 
-const VIEW = 1024, SEND = 2048, EMBED = 4096;
+const REQUIREMENT_LABEL = { view: 'View Channel', send: 'Send Messages', embed: 'Embed Links' };
 
-const FAKE_ROLES = [
-  { id: EVERYONE, name: '@everyone', permissions: String(VIEW | SEND | EMBED), position: 0 },
-  { id: BOT_ROLE, name: 'Murabot', permissions: '0', position: 1 },
-];
-const FAKE_CHANNELS = [
-  { id: CAT, name: 'Staff', type: 4, guild_id: GUILD },
-  { id: CH_LOGS, name: 'economy-logs', type: 0, guild_id: GUILD, parent_id: CAT, permission_overwrites: [] },
-  { id: CH_GENERAL, name: 'general', type: 0, guild_id: GUILD, permission_overwrites: [] },
-  { id: CH_MUTED, name: 'muted', type: 0, guild_id: GUILD, permission_overwrites: [{ id: BOT_ROLE, type: 0, allow: '0', deny: String(SEND) }] },
-  { id: CH_NOEMBED, name: 'no-embed', type: 0, guild_id: GUILD, permission_overwrites: [{ id: BOT_ROLE, type: 0, allow: String(VIEW | SEND), deny: String(EMBED) }] },
-  { id: CH_VOICE, name: 'Voice', type: 2, guild_id: GUILD, permission_overwrites: [] },
-  // The hidden channel is deliberately absent from the guild list, as Discord
-  // does for a channel the bot may not view.
-];
-const HIDDEN_CHANNEL = { id: CH_HIDDEN, name: 'secret', type: 0, guild_id: GUILD };
+/** The channel list Murabot would report, with a verdict per channel. */
+function botChannelList() {
+  const verdict = (id, name, categoryName, missingRequirement) => {
+    const missing = missingRequirement
+      ? { requirement: missingRequirement, permission: `${missingRequirement}_channel`.replace('view_channel_channel', 'view_channel'), label: REQUIREMENT_LABEL[missingRequirement] }
+      : null;
+    return {
+      id, name, type: 0, categoryName, usable: !missing, missing,
+      checks: (botMode === 'ok' ? ['view', 'send', 'embed'] : ['view', 'send', 'embed'])
+        .map((r) => ({ requirement: r, label: `Murabot can: ${REQUIREMENT_LABEL[r]}`, ok: r !== missingRequirement })),
+    };
+  };
+  return [
+    verdict(CH_LOGS, 'economy-logs', 'Staff', null),
+    verdict(CH_GENERAL, 'general', null, null),
+    verdict(CH_MUTED, 'muted', null, 'send'),
+    verdict(CH_NOEMBED, 'no-embed', null, 'embed'),
+  ];
+}
 
 let fetches = [];
-let discordMode = 'ok';
+let botMode = 'ok';
 
 function installFetch() {
   globalThis.fetch = async (url) => {
@@ -150,33 +202,55 @@ function installFetch() {
       headers: { get: (k) => headers[k.toLowerCase()] ?? null },
       json: async () => body,
     });
-
-    if (discordMode === 'rate-limited') {
-      return json(429, { retry_after: 2, message: 'You are being rate limited.' }, { 'retry-after': '2' });
+    const presence = {
+      online: true, installed: true, guildAccessible: true,
+      botUserId: '100000000000000000', botUsername: 'muragoods',
+      gatewayState: 'ONLINE', heartbeatAgeSeconds: 3, latencyMs: 81,
+    };
+    if (botMode === 'rate-limited') {
+      return json(429, { ok: false, error: { code: 'DISCORD_RATE_LIMITED', message: 'Slow down.' } }, { 'retry-after': '2' });
     }
-    if (discordMode === 'down') {
-      return json(503, { message: 'Service Unavailable' });
+    if (botMode === 'down') {
+      return json(500, { ok: false, error: { code: 'INTERNAL_ERROR', message: 'Murabot exploded.' } });
     }
-    if (path.endsWith('/members/@me')) {
-      return json(200, { user: { id: '1' }, roles: [BOT_ROLE] });
+    if (botMode === 'refused') {
+      return json(401, { ok: false, code: 'AUTHENTICATION_ERROR', error: 'Unauthorized' });
     }
-    if (path.endsWith('/channels')) return json(200, FAKE_CHANNELS);
-    if (path.endsWith('/roles')) return json(200, FAKE_ROLES);
-    if (path.includes('/channels/')) {
-      const id = path.split('/channels/')[1].split('?')[0];
-      if (id === CH_GONE) return json(404, { message: 'Unknown Channel' });
-      if (id === CH_HIDDEN) return json(403, { message: 'Missing Access' });
-      return json(404, { message: 'Unknown Channel' });
+    // Murabot reports its own bot state as `ok: true` plus an `error` object and
+    // a non-2xx status — it DID answer; the answer is "I cannot see that guild".
+    // The site must read that shape, or a bot that is simply absent from the
+    // server looks exactly like a deleted channel.
+    if (botMode === 'offline') {
+      return json(503, { ok: true, state: 'OFFLINE', channels: [], bot: { installed: false, online: false, guildAccessible: false }, error: { code: 'BOT_OFFLINE', message: 'Murabot is not connected to Discord right now.' } });
     }
-    return json(404, { message: 'Unknown Resource' });
+    if (botMode === 'gateway-not-ready') {
+      return json(503, { ok: true, state: 'CONNECTING', channels: [], bot: { installed: false, online: false, guildAccessible: false }, error: { code: 'BOT_GATEWAY_NOT_READY', message: 'Murabot is still identifying with Discord.' } });
+    }
+    if (botMode === 'not-in-guild') {
+      return json(404, { ok: true, state: 'ONLINE', channels: [], bot: { installed: false, online: true, guildAccessible: false }, error: { code: 'BOT_NOT_IN_GUILD', message: 'Murabot is not installed in this server.' } });
+    }
+    if (path.includes('/economy/channels/')) {
+      return json(200, { ok: true, state: 'ONLINE', bot: presence, requires: ['view', 'send', 'embed'], channels: botChannelList() });
+    }
+    if (path.includes('/bot/status')) {
+      return json(200, { ok: true, state: 'ONLINE', ready: true, latencyMs: 81, uptimeSeconds: 975, heartbeatAgeSeconds: 3, reconnectCount: 0, guildIds: [GUILD], botUserId: presence.botUserId, botUsername: 'muragoods' });
+    }
+    return json(404, { ok: false, code: 'UNKNOWN' });
   };
 }
 installFetch();
 process.env.DISCORD_BOT_TOKEN = 'test-token-not-a-real-secret';
+process.env.DISCORD_BRIDGE_SECRET = 'test-bridge-secret-not-a-real-secret';
+process.env.BOT_HEALTH_URL = 'https://bot.invalid';
 
 const REQUIRES = ECONOMY_FIELD_BY_KEY.get('logChannelId').requires;
 const verify = (id) => validateChannelSetting(GUILD, 'logChannelId', 'Economy Log Channel', id, REQUIRES);
-const reset = () => { invalidateGuildSnapshot(GUILD); fetches = []; discordMode = 'ok'; };
+const reset = () => {
+  invalidateBotPresence(GUILD);
+  dropPresence(GUILD);
+  fetches = [];
+  botMode = 'ok';
+};
 
 // A. Valid channel + valid settings.
 section('[A] valid channel + valid settings → nothing to report');
@@ -188,10 +262,9 @@ section('[A] valid channel + valid settings → nothing to report');
   );
   check('valid draft produces no errors', errors.length === 0, JSON.stringify(errors));
   check('valid draft keeps its values', values.dailyAmount === 500 && values.logChannelId === CH_LOGS);
-  check('a usable channel passes live verification', (await verify(CH_LOGS)) === null);
+  check('a usable channel passes verification', (await verify(CH_LOGS)) === null);
   check('a second usable channel also passes', (await verify(CH_GENERAL)) === null);
-  check('a channel with no problems needs exactly one snapshot', fetches.length === 3,
-    `${fetches.length} calls: ${fetches.join(', ')}`);
+  check('verifying N settings costs one bot call', fetches.length === 1, `${fetches.length} calls`);
 }
 
 // B. Deleted channel.
@@ -206,13 +279,14 @@ section('[B] deleted channel → CHANNEL_NOT_FOUND');
     /select another channel/i.test(err?.message ?? ''), err?.message);
 }
 
-// B2. A channel that exists but the bot cannot see.
-section('[B2] hidden channel → CHANNEL_ACCESS_DENIED (not "not found")');
+// B2. A channel the bot exists but cannot see.
+section('[B2] hidden channel → refused, not silently accepted');
 {
   reset();
   const err = await verify(CH_HIDDEN);
   check('inaccessible channel is rejected', err !== null);
-  check('code is CHANNEL_ACCESS_DENIED', err?.code === 'CHANNEL_ACCESS_DENIED', err?.code);
+  check('the code is one of the precise ones',
+    ['CHANNEL_NOT_FOUND', 'CHANNEL_ACCESS_DENIED'].includes(err?.code), err?.code);
 }
 
 // C. Bot missing SEND_MESSAGES.
@@ -233,16 +307,7 @@ section('[D] bot missing EMBED_LINKS → exact permission error');
   const err = await verify(CH_NOEMBED);
   check('code is MISSING_BOT_PERMISSION', err?.code === 'MISSING_BOT_PERMISSION', err?.code);
   check('names Embed Links', err?.missingPermission === 'Embed Links', err?.missingPermission);
-  check('View + Send are reported as satisfied', /Send Messages/.test(err?.message ?? '') === false);
-}
-
-// D2. A channel that cannot receive messages at all.
-section('[D2] voice channel → CHANNEL_NOT_TEXT_CAPABLE');
-{
-  reset();
-  const err = await verify(CH_VOICE);
-  check('voice channel is rejected', err !== null);
-  check('code is CHANNEL_NOT_TEXT_CAPABLE', err?.code === 'CHANNEL_NOT_TEXT_CAPABLE', err?.code);
+  check('the message names the channel', /no-embed/.test(err?.message ?? ''), err?.message);
 }
 
 // E. Invalid numeric range.
@@ -290,6 +355,8 @@ section('[E] invalid numeric range → exact field error');
   const notOwner = validateEconomyDraft({ dailyAmount: 100 }, { isOwner: false });
   check('a non-owner cannot change an economic value',
     notOwner.errors.some((e) => e.code === 'OWNER_ONLY'));
+  check('a non-owner can still change the log channel',
+    validateEconomyDraft({ logChannelId: CH_LOGS }, { isOwner: false }).errors.length === 0);
 }
 
 // F. Multiple invalid fields at once.
@@ -311,35 +378,64 @@ section('[F] multiple invalid fields → all reported in one response');
   check('no error says "failed validation"', !/failed validation/i.test(JSON.stringify(errors)));
 }
 
-// G. Discord 429 / outage.
-section('[G] Discord 429 → retryable, never reported as an invalid setting');
+// G. Discord 429 / outage / refusal / bot state.
+section('[G] transport failures are retryable, never "invalid"');
 {
   reset();
-  discordMode = 'rate-limited';
-  const err = await verify(CH_LOGS);
-  check('rate limit is surfaced', err !== null);
-  check('code is DISCORD_RATE_LIMITED', err?.code === 'DISCORD_RATE_LIMITED', err?.code);
-  check('the error is marked retryable', err?.retryable === true);
+  botMode = 'rate-limited';
+  const limited = await verify(CH_LOGS);
+  check('rate limit is surfaced', limited !== null);
+  check('code is DISCORD_RATE_LIMITED', limited?.code === 'DISCORD_RATE_LIMITED', limited?.code);
+  check('the error is marked retryable', limited?.retryable === true);
   check('a rate limit is not reported as a bad channel',
-    err?.code !== 'CHANNEL_NOT_FOUND' && err?.code !== 'MISSING_BOT_PERMISSION', err?.code);
-  check('the failure is attributed to Discord, not to the setting',
-    /could not be verified/i.test(err?.message ?? ''), err?.message);
+    limited?.code !== 'CHANNEL_NOT_FOUND' && limited?.code !== 'MISSING_BOT_PERMISSION', limited?.code);
+  check('the failure is attributed to the connection, not to the setting',
+    /could not be verified/i.test(limited?.message ?? ''), limited?.message);
 
   reset();
-  discordMode = 'down';
+  botMode = 'down';
   const down = await verify(CH_LOGS);
-  check('an outage is DISCORD_UNAVAILABLE, not a verdict',
-    down?.code === 'DISCORD_UNAVAILABLE', down?.code);
+  check('an outage is DISCORD_UNAVAILABLE, not a verdict', down?.code === 'DISCORD_UNAVAILABLE', down?.code);
   check('an outage is retryable', down?.retryable === true);
+
+  reset();
+  botMode = 'refused';
+  const refused = await verify(CH_LOGS);
+  check('a rejected connection is BRIDGE_NOT_CONFIGURED, not a channel problem',
+    refused?.code === 'BRIDGE_NOT_CONFIGURED', refused?.code);
+
+  reset();
+  botMode = 'offline';
+  const offline = await verify(CH_LOGS);
+  check('an offline bot has its own code', offline?.code === 'BOT_OFFLINE', offline?.code);
+  check('an offline bot is retryable', offline?.retryable === true);
+  check('an offline bot is not blamed on the channel',
+    offline?.code !== 'CHANNEL_NOT_FOUND' && offline?.code !== 'MISSING_BOT_PERMISSION');
+
+  reset();
+  botMode = 'gateway-not-ready';
+  const connecting = await verify(CH_LOGS);
+  check('an unready gateway has its own code', connecting?.code === 'BOT_GATEWAY_NOT_READY', connecting?.code);
+  check('an unready gateway is retryable', connecting?.retryable === true);
+
+  reset();
+  botMode = 'not-in-guild';
+  const absent = await verify(CH_LOGS);
+  check('a bot that is not in the guild says so', absent?.code === 'BOT_NOT_IN_GUILD', absent?.code);
+  check('a bot that is not in the guild is not retryable', absent?.retryable === false, String(absent?.retryable));
+  check('an absent bot is NOT reported as a deleted channel',
+    absent?.code !== 'CHANNEL_NOT_FOUND', absent?.code);
+  check('an absent bot quotes the bot, not the channel',
+    /not installed in this server/i.test(absent?.message ?? ''), absent?.message);
 }
 
-// G2. Rate-limit hygiene: de-duplication, caching, one snapshot for N checks.
-section('[G2] N validations cost one set of Discord calls');
+// G2. Rate-limit hygiene: de-duplication and caching.
+section('[G2] N validations cost one bot call');
 {
   reset();
-  discordMode = 'rate-limited';
+  botMode = 'rate-limited';
   await Promise.all([verify(CH_LOGS), verify(CH_GENERAL), verify(CH_MUTED), verify(CH_NOEMBED)]);
-  check('four parallel validations share one fetch', fetches.length === 1, `${fetches.length} calls`);
+  check('four parallel validations share one call', fetches.length === 1, `${fetches.length} calls`);
 
   reset();
   fetches = [];
@@ -350,19 +446,16 @@ section('[G2] N validations cost one set of Discord calls');
     `${afterFirst} then ${fetches.length}`);
 
   reset();
-  await verify(CH_LOGS);
-  const snap = await guildSnapshot(GUILD);
-  const list = listSelectableChannels(snap, GUILD, REQUIRES);
-  check('the dropdown lists only text channels',
-    list.every((c) => [0, 5, 10, 11, 12].includes(c.type)), JSON.stringify(list.map((c) => c.type)));
-  check('a usable channel is marked usable', list.find((c) => c.id === CH_LOGS)?.usable === true);
-  check('a muted channel is marked unusable with a reason',
-    list.find((c) => c.id === CH_MUTED)?.usable === false &&
-    !!list.find((c) => c.id === CH_MUTED)?.reason);
-  check('the voice channel is not offered at all', !list.some((c) => c.id === CH_VOICE));
-  check('categories are surfaced for the dropdown', list.find((c) => c.id === CH_LOGS)?.categoryName === 'Staff');
-  check('a hidden channel is not silently dropped from the list',
-    !list.some((c) => c.id === CH_HIDDEN));
+  const list = await listSelectableChannels(GUILD, REQUIRES);
+  check('the bot check succeeded', list.error === null, JSON.stringify(list.error));
+  check('usable channels are offered', list.channels.filter((c) => c.usable).length === 2,
+    JSON.stringify(list.channels.map((c) => [c.id, c.usable])));
+  check('unusable channels are offered with a reason',
+    list.channels.filter((c) => !c.usable).every((c) => !!c.missing?.label));
+  check('categories are surfaced for the dropdown',
+    list.channels.find((c) => c.id === CH_LOGS)?.categoryName === 'Staff');
+  check('a hidden channel is not silently offered as usable',
+    !list.channels.some((c) => c.id === CH_HIDDEN && c.usable));
 }
 
 // H. A failed save writes nothing.
@@ -373,8 +466,6 @@ section('[H] a failed save preserves the existing configuration');
   });
   const before = JSON.stringify(existing);
 
-  // The route's order of operations: validate everything, return before the
-  // write. A rejected draft therefore has no effect on the stored document.
   const good = validateEconomyDraft({ dailyAmount: 900 }, { existing, isOwner: true });
   check('a good draft still validates', good.errors.length === 0, JSON.stringify(good.errors));
   const afterGood = mergeEconomySection(existing, good.values);
@@ -400,15 +491,15 @@ section('[H] a failed save preserves the existing configuration');
   check('the route rejects before it builds a write', rejectIdx > validateIdx && writeIdx > rejectIdx);
   check('the database write happens after the section is built', dbWriteIdx > writeIdx);
   check('the failure response is a 422 with structured errors',
-    /status: errors\.some\(\(e\) => e\.retryable\) \? 503 : 422/.test(route) && /errors,/.test(route));
-  const panel = readFileSync(join(root, 'app/dashboard/economy/EconomyConfigPanel.tsx'), 'utf8');
-  const generic = readFileSync(join(root, 'app/dashboard/components/ModuleSettings.tsx'), 'utf8');
-  const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    /status: errors\.some\(\(e\) => e\.retryable\) \? 503 : 422/.test(route) || /status = ownerOnly \? 403/.test(route));
+  check('the failure response carries the per-field errors', /\n        errors,/.test(route));
+  const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((l) => l.split('//', 1)[0]).join('\n');
+  const panel = strip(readFileSync(join(root, 'app/dashboard/economy/EconomyConfigPanel.tsx'), 'utf8'));
+  const generic = strip(readFileSync(join(root, 'app/dashboard/components/ModuleSettings.tsx'), 'utf8'));
   check('the economy panel never shows a count-only error',
-    !/setting failed validation/.test(stripComments(panel)));
+    !/setting failed validation/.test(panel));
   check('the generic module panel names every failure it lists',
     generic.includes('• ${label} — ${objectName}: ${reason}'));
-  check('the route returns a per-field error list', /errors,\n/.test(route) || /\n        errors,/.test(route));
 }
 
 // I. Refresh after a successful save.

@@ -34,29 +34,136 @@ function botToken(): string | null {
   return process.env.DISCORD_BOT_TOKEN?.trim() || process.env.DISCORD_TOKEN?.trim() || null;
 }
 
-async function botGet(path: string, bToken: string): Promise<{ ok: boolean; status: number; data: unknown }> {
+type BotGet = {
+  ok: boolean;
+  status: number;
+  data: unknown;
+  /** Discord's Retry-After, in ms, when it throttled us. */
+  retryAfterMs?: number;
+  /** True when we never got an answer at all (timeout, DNS, refused). */
+  transport: boolean;
+};
+
+async function botGet(path: string, bToken: string): Promise<BotGet> {
+  let resp: Response;
   try {
-    const resp = await fetch(`${DISCORD_API}${path}`, {
+    resp = await fetch(`${DISCORD_API}${path}`, {
       headers: { Authorization: `Bot ${bToken}` },
       cache: 'no-store',
       signal: AbortSignal.timeout(8000),
     });
-    if (!resp.ok) return { ok: false, status: resp.status, data: null };
-    return { ok: true, status: resp.status, data: await resp.json().catch(() => null) };
   } catch {
-    return { ok: false, status: 0, data: null };
+    return { ok: false, status: 0, data: null, transport: true };
   }
+  if (!resp.ok) {
+    if (resp.status === 429) {
+      const raw = Number(resp.headers.get('retry-after') ?? '1');
+      const secs = Number.isFinite(raw) && raw >= 0 ? Math.min(60, Math.ceil(raw)) : 1;
+      return { ok: false, status: 429, data: null, transport: false, retryAfterMs: secs * 1000 };
+    }
+    return { ok: false, status: resp.status, data: null, transport: false };
+  }
+  return { ok: true, status: resp.status, data: await resp.json().catch(() => null), transport: false };
+}
+
+/**
+ * Name a Discord read failure precisely.
+ *
+ * This used to answer every transport problem with one sentence, shown under a
+ * channel field as if the channel were broken. A throttle, an outage and a
+ * dropped connection are three different facts with three different remedies,
+ * and none of them is a statement about the selected channel.
+ */
+function discordFailure(res: BotGet): {
+  status: number; code: string; message: string; retryable: true; retryAfterMs?: number;
+} {
+  if (res.status === 429) {
+    return {
+      status: 429, code: 'DISCORD_RATE_LIMITED', retryable: true, retryAfterMs: res.retryAfterMs ?? 1000,
+      message: `Discord is rate limiting dashboard requests. Retrying in ${Math.round((res.retryAfterMs ?? 1000) / 1000)}s — nothing about ${'the selected object'} is wrong.`,
+    };
+  }
+  if (res.status === 401 || res.status === 403) {
+    return {
+      status: 502, code: 'DISCORD_AUTH_ERROR', retryable: true,
+      message: 'Discord rejected the dashboard\'s bot credentials (HTTP '
+        + `${res.status}). The object has NOT been checked — this is a dashboard credential problem, not a channel problem.`,
+    };
+  }
+  if (res.status >= 500) {
+    return {
+      status: 502, code: 'DISCORD_API_ERROR', retryable: true,
+      message: `Discord answered with HTTP ${res.status}. The object has NOT been checked — try again in a moment.`,
+    };
+  }
+  return {
+    status: 502, code: 'DISCORD_UNREACHABLE', retryable: true,
+    message: 'Discord did not respond in time. The object has NOT been checked — try again in a moment.',
+  };
 }
 
 function bad(message: string, status = 400, code?: string) {
   return NextResponse.json({ success: false, valid: false, message, checks: [], ...(code ? { code } : {}) }, { status });
 }
 
+/**
+ * One credential-free line per check.
+ *
+ * Records what a failed save needs to be diagnosable: which request, which
+ * guild, which resource kind, which outcome, which status, how long. The
+ * selected OBJECT id is deliberately omitted — it is not needed to classify
+ * the failure and is not something to copy into a log.
+ */
+function logValidate(requestId: string, guildId: string, kind: string, outcome: string, status = 0, ms?: number) {
+  console.log(
+    `[validate] ${requestId} guild=${guildId} kind=${kind} outcome=${outcome}`
+    + ` status=${status}${ms === undefined ? '' : ` duration=${ms}ms`}`,
+  );
+}
+
+/**
+ * A failure that means "the check did not run", as opposed to "your value is
+ * wrong".
+ *
+ * The distinction is the whole point of this endpoint. `valid: false` on its
+ * own reads as a verdict, and a verdict about a channel that was never
+ * examined is a lie — it is what produced "Raid Alerts — Validation failed
+ * (HTTP 502) … Fix the selection above". Every such response now says
+ * `verified: false` and carries a code the UI can classify.
+ */
+function unverifiable(message: string, status: number, code: string, retryable = true, retryAfterMs?: number, requestId = '') {
+  return NextResponse.json(
+    {
+      success: false, valid: false, verified: false, objectName: null, checks: [],
+      code, message, retryable, requestId,
+      ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+    },
+    {
+      status,
+      headers: retryAfterMs !== undefined
+        ? { 'Retry-After': String(Math.max(1, Math.ceil(retryAfterMs / 1000))) }
+        : undefined,
+    },
+  );
+}
+
 export async function POST(req: NextRequest) {
+  // Correlation id for the log line and the client, so a report of "it failed"
+  // can be traced to one request without exposing anything sensitive.
+  const requestId = `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const started = Date.now();
   const userToken = await sessionToken();
   const bToken = botToken();
   if (!userToken) return bad('Sign in with Discord to continue', 401, 'AUTH_REQUIRED');
-  if (!bToken) return bad('Dashboard resource access is not configured (DISCORD_BOT_TOKEN).', 503, 'BOT_NOT_CONFIGURED');
+  if (!bToken) {
+    // No site-side bot token: we cannot verify. That is a DEPLOYMENT state,
+    // not a problem with the operator's selection.
+    return unverifiable(
+      'The dashboard cannot verify server resources right now (no bot token configured). '
+      + 'This selection was NOT checked.',
+      503, 'BOT_CREDENTIAL_MISSING', true, undefined, requestId,
+    );
+  }
 
   const body = (await req.json().catch(() => null)) as {
     guildId?: string; kind?: string; id?: string; require?: string[];
@@ -68,6 +175,7 @@ export async function POST(req: NextRequest) {
   if (!/^\d{5,25}$/.test(guildId) || !/^\d{5,25}$/.test(objectId)) {
     return bad('Valid guildId and object id are required', 400, 'INVALID_GUILD_ID');
   }
+  logValidate(requestId, guildId, kind, 'START');
   if (!['channel', 'category', 'role', 'member'].includes(kind)) {
     return bad('kind must be channel, category, role or member', 400, 'INVALID_OP');
   }
@@ -93,16 +201,24 @@ export async function POST(req: NextRequest) {
         message: 'The bot is not a member of this server (BOT_NOT_IN_GUILD). Invite it first — the channel itself has not been checked yet.',
       });
     }
-    return NextResponse.json({
-      success: false, valid: false, objectName: null,
-      code: 'DISCORD_API_ERROR', retryable: true,
-      checks: [{ key: 'installed', label: 'Bot installation verifiable right now', ok: false }],
-      message: 'Discord did not answer the bot check — retry in a moment.',
-    }, { status: 502 });
+    const failure = discordFailure(botMemberRes);
+    logValidate(requestId, guildId, kind, failure.code, failure.status);
+    return unverifiable(
+      failure.message,
+      failure.status, failure.code, failure.retryable, failure.retryAfterMs, requestId,
+    );
   }
   const botMember = botMemberRes.data as { user: { id: string }; roles: string[] };
   const rolesRes = await botGet(`/guilds/${guildId}/roles`, bToken);
-  const roles = (rolesRes.ok && Array.isArray(rolesRes.data) ? rolesRes.data : []) as Role[];
+  if (!rolesRes.ok || !Array.isArray(rolesRes.data)) {
+    // Without the role table the permission maths below silently degrades to
+    // "the bot has no permissions", which is a false accusation. Refuse to
+    // answer instead of answering wrongly.
+    const failure = discordFailure(rolesRes);
+    logValidate(requestId, guildId, kind, failure.code, failure.status);
+    return unverifiable(failure.message, failure.status, failure.code, failure.retryable, failure.retryAfterMs, requestId);
+  }
+  const roles = rolesRes.data as Role[];
   const roleById = new Map(roles.map((r) => [r.id, r]));
 
   // Base permissions = OR of the bot's role grants; Administrator wins all.
@@ -133,6 +249,15 @@ export async function POST(req: NextRequest) {
           checks: [{ key: 'access', label: 'Murabot can access this channel', ok: false }],
           message: 'Murabot cannot access that channel (CHANNEL_ACCESS_DENIED). Check the channel\'s permission overwrites, then select it again.',
         });
+      }
+      // Only a real 404 means absence. A throttle, a 5xx or a dropped
+      // connection means we never learned whether the channel exists, and
+      // reporting that as CHANNEL_NOT_FOUND would tell the operator their
+      // channel was deleted when it was not.
+      if (chRes.status !== 404) {
+        const failure = discordFailure(chRes);
+        logValidate(requestId, guildId, kind, failure.code, failure.status);
+        return unverifiable(failure.message, failure.status, failure.code, failure.retryable, failure.retryAfterMs, requestId);
       }
       return NextResponse.json({
         success: true, valid: false, objectName: null,
@@ -213,12 +338,16 @@ export async function POST(req: NextRequest) {
     // kind === 'member'
     const mRes = await botGet(`/guilds/${guildId}/members/${objectId}`, bToken);
     if (!mRes.ok) {
+      if (mRes.status !== 404) {
+        const failure = discordFailure(mRes);
+        logValidate(requestId, guildId, kind, failure.code, failure.status);
+        return unverifiable(failure.message, failure.status, failure.code, failure.retryable, failure.retryAfterMs, requestId);
+      }
       return NextResponse.json({
         success: true, valid: false, objectName,
+        code: 'MEMBER_NOT_IN_GUILD',
         checks: [{ key: 'exists', label: 'Member is still on this server', ok: false }],
-        message: mRes.status === 404
-          ? 'That member is no longer on this server.'
-          : 'The bot cannot see that member. Check its permissions.',
+        message: 'That member is no longer on this server.',
       });
     }
     const m = mRes.data as { user?: { username?: string; global_name?: string | null }; nick?: string | null };
@@ -227,6 +356,7 @@ export async function POST(req: NextRequest) {
   }
 
   const valid = checks.every((c) => c.ok);
+  logValidate(requestId, guildId, kind, valid ? 'VERIFIED_OK' : 'VERIFIED_REJECTED', 200, Date.now() - started);
   // Permission failures are ACCESS, not absence. The code lets the UI say so
   // instead of implying the channel was deleted.
   const code = valid
@@ -237,6 +367,9 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     success: true,
     valid,
+    // The check RAN. Clients may treat `valid: false` here as a verdict.
+    verified: true,
+    requestId,
     objectName,
     ...(code ? { code } : {}),
     checks,

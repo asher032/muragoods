@@ -80,6 +80,8 @@ export interface SessionGuardOk {
   accessToken: string;
   discordId: string;
   username: string;
+  /** The guild that was checked, straight from the live Discord check. */
+  guild?: { id: string; name: string; icon: string | null; owner: boolean };
   session: IValidatedSession['session'];
 }
 
@@ -87,6 +89,10 @@ export interface SessionGuardFail {
   ok: false;
   status: number;
   error: string;
+  /** Machine-readable refusal, so routes can stop inventing their own codes. */
+  code?: string;
+  /** Discord's Retry-After, forwarded so a client can back off instead of hammering. */
+  retryAfterMs?: number;
 }
 
 export async function requireSession(
@@ -94,17 +100,37 @@ export async function requireSession(
 ): Promise<SessionGuardOk | SessionGuardFail> {
   const auth = await getSession();
   if (!auth) {
-    return { ok: false, status: 401, error: 'Sign in with Discord to continue' };
+    return { ok: false, status: 401, error: 'Sign in with Discord to continue', code: 'AUTH_REQUIRED' };
   }
   if (guildId) {
     const manages = await sessionManagesGuild(auth.accessToken, guildId);
     if (!manages.ok) {
-      return { ok: false, status: manages.status || 403, error: manages.error || 'Not allowed to manage that server' };
+      return {
+        ok: false,
+        status: manages.status || 403,
+        error: manages.error || 'Not allowed to manage that server',
+        code: manages.status === 401 ? 'AUTH_REQUIRED'
+          : manages.status === 403 ? 'INSUFFICIENT_GUILD_PERMISSION'
+          : 'DISCORD_API_UNAVAILABLE',
+        retryAfterMs: manages.retryAfterMs,
+      };
     }
+    return {
+      ok: true,
+      accessToken: auth.accessToken,
+      discordId: auth.discordId,
+      username: auth.session.username,
+      guild: manages.guild,
+      session: auth.session,
+    };
   }
   return {
     ok: true,
     accessToken: auth.accessToken,
+    // The Discord user id of the SIGNED-IN account, taken from the server-side
+    // session document. This is the only identity any authorization decision
+    // on this site may use: it is derived from the HttpOnly session, so a
+    // client cannot assert a different one.
     discordId: auth.discordId,
     username: auth.session.username,
     session: auth.session,

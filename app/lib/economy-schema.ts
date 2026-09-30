@@ -163,6 +163,10 @@ export const ECONOMY_ERROR_CODES = {
   MISSING_BOT_PERMISSION: 'MISSING_BOT_PERMISSION',
   /** Bot is not a member of this guild. */
   BOT_NOT_IN_GUILD: 'BOT_NOT_IN_GUILD',
+  /** Murabot is not connected to Discord at all. Retryable. */
+  BOT_OFFLINE: 'BOT_OFFLINE',
+  /** Murabot's gateway session has not finished identifying. Retryable. */
+  BOT_GATEWAY_NOT_READY: 'BOT_GATEWAY_NOT_READY',
   /** Channel cannot receive messages at all (voice channel, category...). */
   CHANNEL_NOT_TEXT_CAPABLE: 'CHANNEL_NOT_TEXT_CAPABLE',
   /** Value is not a number, or is not an integer where one is required. */
@@ -179,6 +183,8 @@ export const ECONOMY_ERROR_CODES = {
   DISCORD_RATE_LIMITED: 'DISCORD_RATE_LIMITED',
   /** Discord could not be reached / answered 5xx. Retryable. */
   DISCORD_UNAVAILABLE: 'DISCORD_UNAVAILABLE',
+  /** The dashboard cannot talk to Murabot (missing or rejected bridge secret). */
+  BRIDGE_NOT_CONFIGURED: 'BRIDGE_NOT_CONFIGURED',
   /** The database write failed. The previous config is untouched. */
   DATABASE_ERROR: 'DATABASE_ERROR',
   /** Not a guild admin. */

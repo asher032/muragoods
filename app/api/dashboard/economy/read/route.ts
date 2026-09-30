@@ -1,106 +1,89 @@
-import { sessionToken } from '@/app/lib/require-session';
-import { requireGuildManage } from '@/app/lib/discord-guilds';
-import { botEconomyGet } from '@/app/lib/economy-backend';
-import { isEconomyOwner } from '@/app/lib/economy-owner';
+import { requireSession } from '@/app/lib/require-session';
+import { withDisplayNames } from '@/app/lib/discord-names';
+import { isMurabotOwner } from '@/app/lib/murabot-owner';
+import { economyTransactions, topWallets, withEconomyDb } from '@/app/lib/economy-store';
 import { NextRequest, NextResponse } from 'next/server';
 
-// GET ?guildId=…&endpoint=leaderboard|health|transactions|audit|shop
+// GET ?guildId=…&endpoint=leaderboard|transactions
 //
-// ONE route for all economy READS. Previously the page needed a separate
-// endpoint per panel, which meant several independent upstream calls on a
-// single page view. Centralizing them here means every read passes through the
-// same cache + single-flight layer, so a full page load costs at most one
-// upstream request per distinct (endpoint, guild, filter) key.
+// The FILTERED reads, kept separate from the page snapshot because a filter
+// change is a new question, not a new page. It reads the same canonical
+// Murabot collections as everything else, through the same store.
+//
+// A failure here is reported as a failure. It is never coerced into an empty
+// result set: "no transactions match" and "the database did not answer" are
+// different facts and the panel must be able to tell them apart.
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const ENDPOINTS = new Set(['leaderboard', 'health', 'transactions', 'audit', 'shop', 'config']);
+const ENDPOINTS = new Set(['leaderboard', 'transactions']);
 
 export async function GET(req: NextRequest) {
   const params = req.nextUrl.searchParams;
-  const token = await sessionToken();
-  const guildId = params.get('guildId') || '';
+  const guildId = (params.get('guildId') || '').trim();
   const endpoint = params.get('endpoint') || '';
 
-  if (!token) {
-    return NextResponse.json(
-      { success: false, code: 'AUTH_REQUIRED', error: 'Sign in with Discord to continue' },
-      { status: 401 },
-    );
-  }
+  // Shape check first: a malformed scope is a caller bug and must never reach a
+  // query. It discloses nothing, and every data access below still requires a
+  // session and Manage Server on this guild.
   if (!/^\d{5,25}$/.test(guildId)) {
     return NextResponse.json(
-      { success: false, code: 'INVALID_GUILD_ID', error: 'Valid guildId required' },
+      { success: false, code: 'INVALID_GUILD_ID', error: 'A valid Discord server ID is required.' },
       { status: 400 },
     );
   }
   if (!ENDPOINTS.has(endpoint)) {
     return NextResponse.json(
-      {
-        success: false, code: 'UNKNOWN_ENDPOINT',
-        error: `Unknown endpoint "${endpoint}". Expected one of: ${[...ENDPOINTS].join(', ')}.`,
-      },
+      { success: false, code: 'UNKNOWN_ENDPOINT', error: `Unknown endpoint "${endpoint}".` },
       { status: 400 },
     );
   }
-  const check = await requireGuildManage(token, guildId);
-  if (!check.ok) {
+  // One call: proof the caller manages this guild, plus WHO they are.
+  const auth = await requireSession(guildId);
+  if (!auth.ok) {
     return NextResponse.json(
-      { success: false, code: check.code, error: check.error, retryable: check.retryable },
-      { status: check.status },
+      { success: false, code: auth.code, error: auth.error },
+      { status: auth.status },
     );
   }
 
-  // Pass through only the filters this route understands, so an arbitrary
-  // query string can never reach the backend unvalidated.
-  const forwarded: Record<string, string | number | undefined> = {};
-  if (endpoint === 'leaderboard') {
-    forwarded.limit = params.get('limit') || 10;
-    forwarded.skip = params.get('skip') || 0;
-    forwarded.by = params.get('by') || 'net';
-  } else if (endpoint === 'transactions') {
-    for (const key of ['userId', 'action', 'hours', 'direction', 'itemId', 'txId', 'limit', 'skip']) {
-      const value = params.get(key);
-      if (value) forwarded[key] = value;
-    }
-  } else if (endpoint === 'shop') {
-    const section = params.get('section');
-    if (section) forwarded.section = section;
-  }
+  const filter = {
+    userId: params.get('userId') || undefined,
+    action: params.get('action') || 'all',
+    hours: Number(params.get('hours') ?? 168),
+    direction: params.get('direction') || 'all',
+    itemId: params.get('itemId') || undefined,
+    txId: params.get('txId') || undefined,
+    limit: Number(params.get('limit') ?? 50),
+    skip: Number(params.get('skip') ?? 0),
+  };
 
-  const res = await botEconomyGet(endpoint, guildId, forwarded);
-  if (!res.ok || !res.data) {
-    const headers = res.retryAfterSec ? { 'Retry-After': String(res.retryAfterSec) } : undefined;
+  const read = await withEconomyDb('read', guildId, async (db) => {
+    if (endpoint === 'transactions') return { page: await economyTransactions(db, guildId, filter) };
+    const by = (params.get('by') || 'net') as 'net' | 'balance' | 'gems';
+    const rows = await topWallets(db, guildId, by, Number(params.get('limit') ?? 10), Number(params.get('skip') ?? 0));
+    return { rows: await withDisplayNames(guildId, rows) };
+  });
+
+  if (!read.ok) {
     return NextResponse.json(
-      {
-        success: false,
-        code: res.code || 'ECONOMY_DATA_FAILED',
-        error: res.error || 'Economy data could not be loaded.',
-        retryable: res.status === 429 || res.status >= 500,
-        retryAfterSec: res.retryAfterSec,
-      },
-      { status: res.status === 429 ? 429 : res.status >= 500 ? 503 : res.status, headers },
+      { success: false, code: read.error.code, error: read.error.message, retryable: read.error.retryable },
+      { status: 503 },
     );
   }
-  const { ok, ...payload } = res.data;
-  void ok;
 
-  // Ownership is per-caller, so it is resolved on the way out and never
-  // cached. The UI uses it to disable economic controls; the API refuses the
-  // write regardless, so a wrong answer here cannot grant access.
-  if (endpoint === 'config') {
-    const actorId = params.get('actorId') || '';
-    const owner = await isEconomyOwner(guildId, actorId);
+  if (endpoint === 'transactions') {
+    return NextResponse.json({ success: true, ...read.data.page });
+  }
+
+  // Ownership is per-caller, derived from the session — never from a parameter.
+  if (params.get('withOwner') === '1') {
     return NextResponse.json({
       success: true,
-      cached: Boolean(res.cached),
-      // `unknown` is reported verbatim so the UI can say "could not confirm"
-      // rather than guessing either way.
-      isOwner: owner === true ? true : owner === false ? false : null,
-      ...payload,
+      rows: read.data.rows,
+      isOwner: isMurabotOwner(auth.discordId),
     });
   }
-
-  return NextResponse.json({ success: true, cached: Boolean(res.cached), ...payload });
+  return NextResponse.json({ success: true, rows: read.data.rows });
 }
