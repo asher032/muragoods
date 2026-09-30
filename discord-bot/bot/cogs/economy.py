@@ -78,24 +78,48 @@ class EconomyCore(commands.Cog):
 
     # ── Wallet ──
     @app_commands.command(name="deposit", description="Move coins from pocket to bank.")
-    @app_commands.describe(amount="How many coins")
-    async def deposit(self, interaction: discord.Interaction, amount: int):
+    @app_commands.describe(amount="How many coins: `500`, `2k`, `4.5k`, `1m`, `30%` or `max`")
+    async def deposit(self, interaction: discord.Interaction, amount: str):
         await interaction.response.defer(ephemeral=True)
-        ok, msg = await eco.bank_move(
-            database._db, interaction.guild.id, interaction.user.id, int(amount or 0), "deposit")
+        # The string is only ever a REQUEST. The balance, the bank balance,
+        # the capacity, the percentage and the final transfer amount are all
+        # resolved server-side inside eco.deposit.
+        ok, msg, detail = await eco.deposit(
+            database._db, interaction.guild.id, interaction.user.id, amount)
+        if not ok:
+            await interaction.followup.send(
+                embed=embeds.embed("⚠️ Deposit failed", msg, embeds.WARN), ephemeral=True)
+            return
+        put = detail["deposited"]
+        left = detail["walletAfter"]
+        lines = [f"Deposited **{put:,} coins** into your bank.\n"
+                 f"Wallet: **{left:,}**\n"
+                 f"Bank: **{detail['bankAfter']:,} / {detail['capacity']:,}**"]
+        if detail["capped"]:
+            lines.append(f"\n⚠️ Your bank reached its capacity, so "
+                         f"**{detail['requested'] - put:,} coins** remained in your wallet.")
         await interaction.followup.send(
-            embed=embeds.ok("🏦 Deposited", f"**{amount:,}** coins secured.")
-            if ok else embeds.embed("⚠️ Deposit failed", msg, embeds.WARN), ephemeral=True)
+            embed=embeds.ok("🏦 Deposit Complete", "\n".join(lines)), ephemeral=True)
 
     @app_commands.command(name="withdraw", description="Move coins from bank to pocket.")
-    @app_commands.describe(amount="How many coins")
-    async def withdraw(self, interaction: discord.Interaction, amount: int):
+    @app_commands.describe(amount="How many coins: `500`, `2k`, `4.5k`, `1m`, `30%` or `max`")
+    async def withdraw(self, interaction: discord.Interaction, amount: str):
         await interaction.response.defer(ephemeral=True)
-        ok, msg = await eco.bank_move(
-            database._db, interaction.guild.id, interaction.user.id, int(amount or 0), "withdraw")
+        # Shares eco.deposit's parser and capacity rules so the two commands
+        # cannot drift apart, but moves coins the other way: the bank is the
+        # source, so a withdrawal is only ever limited by what is banked.
+        ok, msg, detail = await eco.withdraw(
+            database._db, interaction.guild.id, interaction.user.id, amount)
+        if not ok:
+            await interaction.followup.send(
+                embed=embeds.embed("⚠️ Withdraw failed", msg, embeds.WARN), ephemeral=True)
+            return
+        took = detail["withdrawn"]
+        lines = [f"Withdrew **{took:,} coins** into your pocket.\n"
+                 f"Wallet: **{detail['walletAfter']:,}**\n"
+                 f"Bank: **{detail['bankAfter']:,} / {detail['capacity']:,}**"]
         await interaction.followup.send(
-            embed=embeds.ok("🏦 Withdrawn", f"**{amount:,}** coins in pocket.")
-            if ok else embeds.embed("⚠️ Withdraw failed", msg, embeds.WARN), ephemeral=True)
+            embed=embeds.ok("🏦 Withdraw Complete", "\n".join(lines)), ephemeral=True)
 
     # ── Timed rewards ──
     async def _timed(self, interaction: discord.Interaction, field: str,

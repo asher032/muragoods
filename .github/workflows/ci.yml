@@ -161,6 +161,23 @@ jobs:
       - name: Item reward service (pools, anti-exploit, reservations)
         run: python discord-bot/scripts/test_reward_system.py
 
+      # Murashop access and pricing. Epic and Godly items were unbuyable
+      # because shop availability was inferred from `buy_price > 0` and those
+      # rarities shipped with no price — a hidden per-rarity rule. This buys
+      # one item of EVERY rarity, checks every epic and godly item in the
+      # catalog, asserts the bands, and covers funds, limited stock, a race for
+      # the last copy, and rotation restock.
+      - name: Murashop (all rarities purchasable, bands, stock, rotation)
+        run: python discord-bot/scripts/test_shop_pricing.py
+
+      # /deposit and /withdraw move coins between two accounts, one of which
+      # has a ceiling, so both must be ONE guarded atomic update. Covers free
+      # text amounts (2k / 4.5k / 30% / max), separator validation, capacity
+      # clamping that never destroys the excess, the capacity-item bonus, a
+      # same-member deposit race, and the full transaction record.
+      - name: /deposit (parsing, bank capacity, atomicity, audit)
+        run: python discord-bot/scripts/test_deposit_command.py
+
       # Market escrow safety. /market holds a member's coins and items outside
       # their bag, so two failure modes matter more than a crash: a listing
       # stranded in `settling` (unclaimable, escrow locked away forever) and a

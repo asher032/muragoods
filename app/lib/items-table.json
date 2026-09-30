@@ -33,10 +33,10 @@
     "trinket": "Trinket"
   },
   "counts": {
-    "common": 47,
+    "common": 48,
     "epic": 18,
     "godly": 7,
-    "rare": 24,
+    "rare": 25,
     "uncommon": 42
   },
   "dropChances": {
@@ -104,12 +104,13 @@
     "loot_bonus",
     "coin_multiplier",
     "coin_reward",
-    "rob_shield"
+    "rob_shield",
+    "bank_capacity"
   ],
   "items": [
     {
       "active": true,
-      "buyPrice": 300,
+      "buyPrice": 500,
       "category": "equipment",
       "description": "One entry to a special Muragoods activity.",
       "dropSources": [
@@ -126,13 +127,15 @@
       "rarity": "rare",
       "sellPrice": 0,
       "sellable": false,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 260,
+      "buyPrice": 300,
       "category": "collectible",
       "description": "One of the last eight on the campus arcade board.",
       "dropSources": [
@@ -148,6 +151,8 @@
       "rarity": "uncommon",
       "sellPrice": 340,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -170,13 +175,39 @@
       "rarity": "rare",
       "sellPrice": 120,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 1200,
+      "buyPrice": 250,
+      "category": "equipment",
+      "description": "Lifts the cap on your bank by 5,000 while you keep it. No paperwork.",
+      "dropSources": [
+        "shop",
+        "achievements"
+      ],
+      "effectDuration": 0,
+      "effectType": "bank_capacity",
+      "effectValue": 5000.0,
+      "equipable": true,
+      "id": "bank_permit",
+      "name": "Bank Expansion Permit",
+      "rarity": "common",
+      "sellPrice": 100,
+      "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
+      "stackable": true,
+      "tradeable": true,
+      "usable": true
+    },
+    {
+      "active": true,
+      "buyPrice": 450,
       "category": "equipment",
       "description": "One extra roll on a machine that is mostly luck anyway.",
       "dropSources": [
@@ -193,6 +224,8 @@
       "rarity": "uncommon",
       "sellPrice": 0,
       "sellable": false,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -215,13 +248,15 @@
       "rarity": "common",
       "sellPrice": 78,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 25,
+      "buyPrice": 50,
       "category": "consumable",
       "description": "Cafeteria toast. Reliable, filling, eaten over a keyboard.",
       "dropSources": [
@@ -237,6 +272,8 @@
       "rarity": "common",
       "sellPrice": 10,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -259,6 +296,8 @@
       "rarity": "common",
       "sellPrice": 26,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -281,13 +320,15 @@
       "rarity": "common",
       "sellPrice": 20,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 1050,
+      "buyPrice": 650,
       "category": "equipment",
       "description": "Furniture and, briefly, a weapon.",
       "dropSources": [
@@ -303,13 +344,15 @@
       "rarity": "uncommon",
       "sellPrice": 470,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 320,
+      "buyPrice": 200,
       "category": "equipment",
       "description": "Shades the eyes, hides a bad morning, survives a mosh pit.",
       "dropSources": [
@@ -325,13 +368,15 @@
       "rarity": "common",
       "sellPrice": 130,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 20,
+      "buyPrice": 50,
       "category": "trinket",
       "description": "Worn to a shape. Fades a little more with every exam.",
       "dropSources": [
@@ -347,6 +392,8 @@
       "rarity": "common",
       "sellPrice": 14,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -369,13 +416,15 @@
       "rarity": "common",
       "sellPrice": 22,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 90,
+      "buyPrice": 200,
       "category": "trinket",
       "description": "Highlights everything, so nothing stands out.",
       "dropSources": [
@@ -391,13 +440,15 @@
       "rarity": "uncommon",
       "sellPrice": 45,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 900,
+      "buyPrice": 600,
       "category": "equipment",
       "description": "Warm, enormous, and a reliable way to lose a lecture hall on purpose.",
       "dropSources": [
@@ -413,13 +464,15 @@
       "rarity": "uncommon",
       "sellPrice": 420,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 260,
+      "buyPrice": 250,
       "category": "equipment",
       "description": "Grants access to a building, and gives it a name at the desk.",
       "dropSources": [
@@ -435,13 +488,15 @@
       "rarity": "common",
       "sellPrice": 105,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 420,
+      "buyPrice": 350,
       "category": "collectible",
       "description": "Four keys, one of which opens something, probably not on campus.",
       "dropSources": [
@@ -457,6 +512,8 @@
       "rarity": "uncommon",
       "sellPrice": 230,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -480,13 +537,15 @@
       "rarity": "common",
       "sellPrice": 34,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 45,
+      "buyPrice": 50,
       "category": "collectible",
       "description": "Fridge-side proof of enrolment, or just a nice picture.",
       "dropSources": [
@@ -503,13 +562,15 @@
       "rarity": "common",
       "sellPrice": 24,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 340,
+      "buyPrice": 300,
       "category": "collectible",
       "description": "Free with the first coffee, which is the best coffee.",
       "dropSources": [
@@ -525,13 +586,15 @@
       "rarity": "uncommon",
       "sellPrice": 360,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 1100,
+      "buyPrice": 750,
       "category": "loot_box",
       "description": "Bigger than the Mura Box. Worse odds, better flavour text.",
       "dropSources": [
@@ -548,13 +611,15 @@
       "rarity": "uncommon",
       "sellPrice": 400,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 8500,
       "category": "collectible",
       "description": "A single frame of the quad at 3am, printed once.",
       "dropSources": [
@@ -569,13 +634,15 @@
       "rarity": "godly",
       "sellPrice": 0,
       "sellable": false,
+      "shopEnabled": true,
+      "shopStock": 1,
       "stackable": true,
       "tradeable": false,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 80,
+      "buyPrice": 200,
       "category": "collectible",
       "description": "Everyone looks terrible. That is exactly why it is worth keeping.",
       "dropSources": [
@@ -591,13 +658,15 @@
       "rarity": "uncommon",
       "sellPrice": 190,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 35,
+      "buyPrice": 50,
       "category": "consumable",
       "description": "The one everyone shares during a 9am lecture. It is gone by 9:04.",
       "dropSources": [
@@ -613,13 +682,15 @@
       "rarity": "common",
       "sellPrice": 14,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 1800,
       "category": "collectible",
       "description": "For the team that turned a group project into a personality.",
       "dropSources": [
@@ -635,13 +706,15 @@
       "rarity": "rare",
       "sellPrice": 2600,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 2600,
+      "buyPrice": 750,
       "category": "pack",
       "description": "Gloves, a visor and the specific exhaustion of a shift.",
       "dropSources": [
@@ -658,13 +731,15 @@
       "rarity": "uncommon",
       "sellPrice": 0,
       "sellable": false,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 20,
+      "buyPrice": 50,
       "category": "collectible",
       "description": "A wall planner from the start of term, in March.",
       "dropSources": [
@@ -681,6 +756,8 @@
       "rarity": "common",
       "sellPrice": 45,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -703,13 +780,15 @@
       "rarity": "uncommon",
       "sellPrice": 260,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 110,
+      "buyPrice": 200,
       "category": "trinket",
       "description": "Reads VISITOR in bold. Freedom.",
       "dropSources": [
@@ -725,6 +804,8 @@
       "rarity": "uncommon",
       "sellPrice": 55,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -747,6 +828,8 @@
       "rarity": "common",
       "sellPrice": 18,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -769,6 +852,8 @@
       "rarity": "common",
       "sellPrice": 25,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -791,13 +876,15 @@
       "rarity": "uncommon",
       "sellPrice": 40,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 1450,
+      "buyPrice": 700,
       "category": "equipment",
       "description": "Turns a 9pm problem into a 10pm problem, but a lit one.",
       "dropSources": [
@@ -813,13 +900,15 @@
       "rarity": "uncommon",
       "sellPrice": 660,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 900,
       "category": "collectible",
       "description": "For the early days when the whole campus fit in one voice channel.",
       "dropSources": [
@@ -835,13 +924,15 @@
       "rarity": "rare",
       "sellPrice": 1400,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 40,
+      "buyPrice": 55,
       "category": "consumable",
       "description": "Brewed twice. Bought once. Effective once.",
       "dropSources": [
@@ -857,13 +948,15 @@
       "rarity": "common",
       "sellPrice": 16,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 1600,
+      "buyPrice": 1500,
       "category": "buff",
       "description": "Two shifts' worth of energy in a can you will regret at 2am.",
       "dropSources": [
@@ -879,6 +972,8 @@
       "rarity": "rare",
       "sellPrice": 700,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -901,6 +996,8 @@
       "rarity": "epic",
       "sellPrice": 1700,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 3,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -923,13 +1020,15 @@
       "rarity": "common",
       "sellPrice": 35,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 95,
+      "buyPrice": 100,
       "category": "consumable",
       "description": "Three sips and you remember every formula. Mostly.",
       "dropSources": [
@@ -945,13 +1044,15 @@
       "rarity": "common",
       "sellPrice": 40,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 300,
+      "buyPrice": 350,
       "category": "equipment",
       "description": "Still says MURAGOODS on it. Still works at the door.",
       "dropSources": [
@@ -967,13 +1068,15 @@
       "rarity": "uncommon",
       "sellPrice": 140,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 1600,
+      "buyPrice": 1500,
       "category": "equipment",
       "description": "A window seat, near the door, in writing nobody can prove.",
       "dropSources": [
@@ -989,13 +1092,15 @@
       "rarity": "rare",
       "sellPrice": 760,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 2100,
+      "buyPrice": 750,
       "category": "equipment",
       "description": "Built for the campus and the field trip that went badly.",
       "dropSources": [
@@ -1011,6 +1116,8 @@
       "rarity": "uncommon",
       "sellPrice": 950,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -1033,13 +1140,15 @@
       "rarity": "epic",
       "sellPrice": 0,
       "sellable": false,
+      "shopEnabled": true,
+      "shopStock": 3,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 400,
+      "buyPrice": 250,
       "category": "equipment",
       "description": "Permanent legal claim to one more patch of campus soil.",
       "dropSources": [
@@ -1056,13 +1165,15 @@
       "rarity": "common",
       "sellPrice": 0,
       "sellable": false,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 6500,
       "category": "collectible",
       "description": "The very first thing ever bought in the Murashop, kept unspent since.",
       "dropSources": [
@@ -1078,6 +1189,8 @@
       "rarity": "godly",
       "sellPrice": 0,
       "sellable": false,
+      "shopEnabled": true,
+      "shopStock": 1,
       "stackable": true,
       "tradeable": false,
       "usable": false
@@ -1100,13 +1213,15 @@
       "rarity": "common",
       "sellPrice": 80,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 1400,
+      "buyPrice": 1300,
       "category": "buff",
       "description": "The cup says 'you will have a good day'. The coffee is doing the real work.",
       "dropSources": [
@@ -1122,13 +1237,15 @@
       "rarity": "rare",
       "sellPrice": 620,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 4500,
       "category": "collectible",
       "description": "Worn by the people who showed up before there was anything to show up to.",
       "dropSources": [
@@ -1143,13 +1260,15 @@
       "rarity": "epic",
       "sellPrice": 5200,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 3,
       "stackable": true,
       "tradeable": false,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 1500,
       "category": "collectible",
       "description": "The original letter that started the shop. Framed, then unframed, then framed.",
       "dropSources": [
@@ -1165,13 +1284,15 @@
       "rarity": "rare",
       "sellPrice": 2400,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 6500,
       "category": "pack",
       "description": "Everything from the launch, boxed, for people who were there.",
       "dropSources": [
@@ -1187,13 +1308,15 @@
       "rarity": "epic",
       "sellPrice": 0,
       "sellable": false,
+      "shopEnabled": true,
+      "shopStock": 3,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 9000,
       "category": "collectible",
       "description": "The stamp that opened the first account. One exists.",
       "dropSources": [
@@ -1208,6 +1331,8 @@
       "rarity": "godly",
       "sellPrice": 0,
       "sellable": false,
+      "shopEnabled": true,
+      "shopStock": 1,
       "stackable": true,
       "tradeable": false,
       "usable": false
@@ -1230,13 +1355,15 @@
       "rarity": "common",
       "sellPrice": 55,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 2800,
+      "buyPrice": 1800,
       "category": "equipment",
       "description": "Turns a Murastream night into a very late Murastream night.",
       "dropSources": [
@@ -1252,13 +1379,15 @@
       "rarity": "rare",
       "sellPrice": 1250,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 1500,
       "category": "sellable",
       "description": "Three of these and a little coin becomes a gem.",
       "dropSources": [
@@ -1274,13 +1403,15 @@
       "rarity": "epic",
       "sellPrice": 150,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 3,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 1300,
       "category": "sellable",
       "description": "A bit of real gold in a display case. Zero utility, excellent shelf presence.",
       "dropSources": [
@@ -1296,6 +1427,8 @@
       "rarity": "rare",
       "sellPrice": 1700,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -1319,13 +1452,15 @@
       "rarity": "epic",
       "sellPrice": 1200,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 3,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 4800,
       "category": "equipment",
       "description": "Waves at everything. Including, once, a locked door that stayed shut.",
       "dropSources": [
@@ -1341,6 +1476,8 @@
       "rarity": "epic",
       "sellPrice": 6800,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 3,
       "stackable": true,
       "tradeable": false,
       "usable": false
@@ -1363,13 +1500,15 @@
       "rarity": "epic",
       "sellPrice": 1000,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 3,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 1200,
       "category": "collectible",
       "description": "Struck for the campus shop launch. Heavy in a pocket for a reason.",
       "dropSources": [
@@ -1386,13 +1525,15 @@
       "rarity": "rare",
       "sellPrice": 1800,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 2000,
       "category": "collectible",
       "description": "A second coin, struck for the campus shop relaunch.",
       "dropSources": [
@@ -1408,13 +1549,15 @@
       "rarity": "rare",
       "sellPrice": 3200,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 2400,
+      "buyPrice": 1700,
       "category": "equipment",
       "description": "For the /build that has to be done before the deadline.",
       "dropSources": [
@@ -1430,13 +1573,15 @@
       "rarity": "rare",
       "sellPrice": 1100,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 28,
+      "buyPrice": 50,
       "category": "consumable",
       "description": "Stuck to a textbook. Now it is a free snack and a stain.",
       "dropSources": [
@@ -1453,13 +1598,15 @@
       "rarity": "common",
       "sellPrice": 11,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 320,
+      "buyPrice": 300,
       "category": "collectible",
       "description": "You did the work. Everyone knows you did the work.",
       "dropSources": [
@@ -1475,6 +1622,8 @@
       "rarity": "uncommon",
       "sellPrice": 400,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -1497,6 +1646,8 @@
       "rarity": "uncommon",
       "sellPrice": 55,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -1519,13 +1670,15 @@
       "rarity": "common",
       "sellPrice": 40,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 30,
+      "buyPrice": 50,
       "category": "consumable",
       "description": "Dorm-room survival. Tastes like victory.",
       "dropSources": [
@@ -1541,13 +1694,15 @@
       "rarity": "common",
       "sellPrice": 12,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 2300,
+      "buyPrice": 750,
       "category": "equipment",
       "description": "Worn by everyone in the group photo. Fits about two of you.",
       "dropSources": [
@@ -1563,6 +1718,8 @@
       "rarity": "uncommon",
       "sellPrice": 1000,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -1585,13 +1742,15 @@
       "rarity": "uncommon",
       "sellPrice": 140,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 3200,
       "category": "collectible",
       "description": "Named for the myth, not the rarity. It is an Epic fish, and it knows it.",
       "dropSources": [
@@ -1606,13 +1765,15 @@
       "rarity": "epic",
       "sellPrice": 4200,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 3,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 640,
+      "buyPrice": 500,
       "category": "equipment",
       "description": "Your fines record is a work of art.",
       "dropSources": [
@@ -1628,6 +1789,8 @@
       "rarity": "uncommon",
       "sellPrice": 300,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -1650,13 +1813,15 @@
       "rarity": "uncommon",
       "sellPrice": 95,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 1000,
       "category": "collectible",
       "description": "Only given out at the launch event. 300 made, and that is the joke.",
       "dropSources": [
@@ -1671,13 +1836,15 @@
       "rarity": "rare",
       "sellPrice": 2100,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 30,
+      "buyPrice": 50,
       "category": "collectible",
       "description": "Number 214. Nobody has ever claimed 214.",
       "dropSources": [
@@ -1693,13 +1860,15 @@
       "rarity": "common",
       "sellPrice": 18,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 1900,
+      "buyPrice": 750,
       "category": "equipment",
       "description": "A bent paperclip in a card sleeve. It works more than it should.",
       "dropSources": [
@@ -1715,6 +1884,8 @@
       "rarity": "uncommon",
       "sellPrice": 880,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -1738,6 +1909,8 @@
       "rarity": "epic",
       "sellPrice": 1900,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 3,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -1760,13 +1933,15 @@
       "rarity": "rare",
       "sellPrice": 200,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 620,
+      "buyPrice": 650,
       "category": "buff",
       "description": "Bright, fizzing, and statistically irrelevant until it is not.",
       "dropSources": [
@@ -1782,13 +1957,15 @@
       "rarity": "uncommon",
       "sellPrice": 270,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 380,
+      "buyPrice": 400,
       "category": "trinket",
       "description": "A small Mura mascot on a swivel. Statistically meaningless, emotionally not.",
       "dropSources": [
@@ -1804,13 +1981,15 @@
       "rarity": "uncommon",
       "sellPrice": 260,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 1200,
+      "buyPrice": 700,
       "category": "equipment",
       "description": "Never breaks mid-exam. Improves quest rewards for a while.",
       "dropSources": [
@@ -1826,6 +2005,8 @@
       "rarity": "uncommon",
       "sellPrice": 560,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -1848,13 +2029,15 @@
       "rarity": "epic",
       "sellPrice": 0,
       "sellable": false,
+      "shopEnabled": true,
+      "shopStock": 3,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 5000,
       "category": "equipment",
       "description": "Grants access to a door that is technically always unlocked.",
       "dropSources": [
@@ -1870,13 +2053,15 @@
       "rarity": "epic",
       "sellPrice": 7400,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 3,
       "stackable": true,
       "tradeable": false,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 4500,
       "category": "collectible",
       "description": "Awarded for staying up past the point of sense.",
       "dropSources": [
@@ -1892,13 +2077,15 @@
       "rarity": "epic",
       "sellPrice": 5200,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 3,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 100,
+      "buyPrice": 200,
       "category": "trinket",
       "description": "A highlighter that fits in a pen case. The good idea of the year.",
       "dropSources": [
@@ -1914,6 +2101,8 @@
       "rarity": "uncommon",
       "sellPrice": 130,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -1937,13 +2126,15 @@
       "rarity": "uncommon",
       "sellPrice": 45,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 180,
+      "buyPrice": 200,
       "category": "collectible",
       "description": "Proof you were somewhere else instead of revising.",
       "dropSources": [
@@ -1959,13 +2150,15 @@
       "rarity": "uncommon",
       "sellPrice": 210,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 1300,
+      "buyPrice": 700,
       "category": "equipment",
       "description": "From a band that played the student bar exactly once.",
       "dropSources": [
@@ -1981,13 +2174,15 @@
       "rarity": "uncommon",
       "sellPrice": 600,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 400,
+      "buyPrice": 250,
       "category": "loot_box",
       "description": "The standard campus mystery box. Usually a snack.",
       "dropSources": [
@@ -2004,13 +2199,15 @@
       "rarity": "common",
       "sellPrice": 150,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 7000,
       "category": "collectible",
       "description": "Pins are pressed at the campus shop. This one was pressed by hand, once.",
       "dropSources": [
@@ -2026,13 +2223,15 @@
       "rarity": "godly",
       "sellPrice": 0,
       "sellable": false,
+      "shopEnabled": true,
+      "shopStock": 1,
       "stackable": true,
       "tradeable": false,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 5500,
       "category": "collectible",
       "description": "A black-enamel founder pin. The pin the other pins are modelled on.",
       "dropSources": [
@@ -2048,13 +2247,15 @@
       "rarity": "epic",
       "sellPrice": 8600,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 3,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 3000,
+      "buyPrice": 1900,
       "category": "equipment",
       "description": "The uniform of people who answer Discord notifications at midnight.",
       "dropSources": [
@@ -2071,6 +2272,8 @@
       "rarity": "rare",
       "sellPrice": 1350,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -2094,6 +2297,8 @@
       "rarity": "epic",
       "sellPrice": 1800,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 3,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -2117,13 +2322,15 @@
       "rarity": "common",
       "sellPrice": 55,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 4000,
       "category": "pack",
       "description": "Display case for the pieces that do not fit in a pocket.",
       "dropSources": [
@@ -2138,6 +2345,8 @@
       "rarity": "epic",
       "sellPrice": 0,
       "sellable": false,
+      "shopEnabled": true,
+      "shopStock": 3,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -2161,13 +2370,15 @@
       "rarity": "common",
       "sellPrice": 22,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 11000,
       "category": "equipment",
       "description": "The original optic, ground once, never replaced. It shows you nothing extra. It is simply right.",
       "dropSources": [
@@ -2183,6 +2394,8 @@
       "rarity": "godly",
       "sellPrice": 0,
       "sellable": false,
+      "shopEnabled": true,
+      "shopStock": 1,
       "stackable": true,
       "tradeable": false,
       "usable": false
@@ -2205,13 +2418,15 @@
       "rarity": "common",
       "sellPrice": 70,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 5000,
       "category": "collectible",
       "description": "For the first year of streams nobody but a few dozen watched.",
       "dropSources": [
@@ -2227,6 +2442,8 @@
       "rarity": "epic",
       "sellPrice": 6400,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 3,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -2249,6 +2466,8 @@
       "rarity": "rare",
       "sellPrice": 0,
       "sellable": false,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -2272,6 +2491,8 @@
       "rarity": "uncommon",
       "sellPrice": 320,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -2294,6 +2515,8 @@
       "rarity": "common",
       "sellPrice": 65,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -2315,6 +2538,8 @@
       "rarity": "common",
       "sellPrice": 60,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -2337,13 +2562,15 @@
       "rarity": "common",
       "sellPrice": 30,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 7500,
       "category": "equipment",
       "description": "Proof of the endgame trials. Opens nothing you can name.",
       "dropSources": [
@@ -2359,13 +2586,15 @@
       "rarity": "godly",
       "sellPrice": 0,
       "sellable": false,
+      "shopEnabled": true,
+      "shopStock": 1,
       "stackable": true,
       "tradeable": false,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 500,
+      "buyPrice": 400,
       "category": "collectible",
       "description": "From the founder, sent to everyone, read by almost no one.",
       "dropSources": [
@@ -2381,13 +2610,15 @@
       "rarity": "uncommon",
       "sellPrice": 520,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 1500,
+      "buyPrice": 700,
       "category": "equipment",
       "description": "Left open on purpose so the chapter was ready before class.",
       "dropSources": [
@@ -2403,6 +2634,8 @@
       "rarity": "uncommon",
       "sellPrice": 700,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -2425,13 +2658,15 @@
       "rarity": "common",
       "sellPrice": 16,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 2000,
+      "buyPrice": 1600,
       "category": "equipment",
       "description": "A pot that got left on. It is still technically soup.",
       "dropSources": [
@@ -2447,13 +2682,15 @@
       "rarity": "rare",
       "sellPrice": 900,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 25,
+      "buyPrice": 50,
       "category": "trinket",
       "description": "Three paperclips linked by hope and poor time management.",
       "dropSources": [
@@ -2469,13 +2706,15 @@
       "rarity": "common",
       "sellPrice": 19,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 3400,
+      "buyPrice": 1900,
       "category": "equipment",
       "description": "Solar powered, exam-room legal, faintly intimidating.",
       "dropSources": [
@@ -2491,6 +2730,8 @@
       "rarity": "rare",
       "sellPrice": 1500,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -2512,6 +2753,8 @@
       "rarity": "rare",
       "sellPrice": 1100,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -2534,6 +2777,8 @@
       "rarity": "uncommon",
       "sellPrice": 210,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -2557,6 +2802,8 @@
       "rarity": "common",
       "sellPrice": 8,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -2579,6 +2826,8 @@
       "rarity": "rare",
       "sellPrice": 900,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -2602,6 +2851,8 @@
       "rarity": "epic",
       "sellPrice": 1400,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 3,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -2625,6 +2876,8 @@
       "rarity": "common",
       "sellPrice": 12,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -2647,6 +2900,8 @@
       "rarity": "common",
       "sellPrice": 20,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -2669,6 +2924,8 @@
       "rarity": "uncommon",
       "sellPrice": 380,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -2691,6 +2948,8 @@
       "rarity": "common",
       "sellPrice": 50,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -2713,13 +2972,15 @@
       "rarity": "common",
       "sellPrice": 15,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 1200,
+      "buyPrice": 250,
       "category": "pack",
       "description": "Everything a first-year actually needs, which is mostly pens.",
       "dropSources": [
@@ -2735,13 +2996,15 @@
       "rarity": "common",
       "sellPrice": 0,
       "sellable": false,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 35,
+      "buyPrice": 50,
       "category": "trinket",
       "description": "Emergency reminders, in quantity. Never the right one.",
       "dropSources": [
@@ -2757,13 +3020,15 @@
       "rarity": "common",
       "sellPrice": 28,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 3100,
+      "buyPrice": 1900,
       "category": "equipment",
       "description": "Broadcast quality, dorm acoustics.",
       "dropSources": [
@@ -2780,13 +3045,15 @@
       "rarity": "rare",
       "sellPrice": 1400,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 500,
+      "buyPrice": 250,
       "category": "equipment",
       "description": "Carries more than it should, and always one thing too many.",
       "dropSources": [
@@ -2801,13 +3068,15 @@
       "rarity": "common",
       "sellPrice": 210,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 700,
+      "buyPrice": 750,
       "category": "buff",
       "description": "An hour of pretending the reading list is short.",
       "dropSources": [
@@ -2823,13 +3092,15 @@
       "rarity": "uncommon",
       "sellPrice": 300,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 850,
+      "buyPrice": 750,
       "category": "loot_box",
       "description": "Stationery restock with a suspicious rattle inside.",
       "dropSources": [
@@ -2845,6 +3116,8 @@
       "rarity": "uncommon",
       "sellPrice": 300,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -2867,13 +3140,15 @@
       "rarity": "common",
       "sellPrice": 25,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 380,
+      "buyPrice": 300,
       "category": "consumable",
       "description": "Modest, reliable, and not available in a coffin size.",
       "dropSources": [
@@ -2889,13 +3164,15 @@
       "rarity": "uncommon",
       "sellPrice": 165,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 2400,
+      "buyPrice": 750,
       "category": "pack",
       "description": "Snacks, a notebook and one honest revision plan.",
       "dropSources": [
@@ -2911,13 +3188,15 @@
       "rarity": "uncommon",
       "sellPrice": 0,
       "sellable": false,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 0,
+      "buyPrice": 12000,
       "category": "collectible",
       "description": "A quest log from the first year, every entry still open.",
       "dropSources": [
@@ -2933,6 +3212,8 @@
       "rarity": "godly",
       "sellPrice": 0,
       "sellable": false,
+      "shopEnabled": true,
+      "shopStock": 1,
       "stackable": true,
       "tradeable": false,
       "usable": false
@@ -2955,6 +3236,8 @@
       "rarity": "common",
       "sellPrice": 30,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -2977,6 +3260,8 @@
       "rarity": "common",
       "sellPrice": 40,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -2999,13 +3284,15 @@
       "rarity": "common",
       "sellPrice": 24,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 45,
+      "buyPrice": 50,
       "category": "consumable",
       "description": "Somewhere between a snack and a roofing material.",
       "dropSources": [
@@ -3021,13 +3308,15 @@
       "rarity": "common",
       "sellPrice": 18,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 1800,
+      "buyPrice": 1500,
       "category": "equipment",
       "description": "X marks a spot behind the engineering block. Probably.",
       "dropSources": [
@@ -3044,13 +3333,40 @@
       "rarity": "rare",
       "sellPrice": 850,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": true
     },
     {
       "active": true,
-      "buyPrice": 25,
+      "buyPrice": 1800,
+      "category": "equipment",
+      "description": "A legal claim to a further 50,000 of banked coins. Hold on to it.",
+      "dropSources": [
+        "shop",
+        "achievements",
+        "events"
+      ],
+      "effectDuration": 0,
+      "effectType": "bank_capacity",
+      "effectValue": 50000.0,
+      "equipable": true,
+      "id": "vault_deed",
+      "name": "Vault Deed",
+      "rarity": "rare",
+      "sellPrice": 700,
+      "sellable": true,
+      "shopEnabled": true,
+      "shopStock": 5,
+      "stackable": true,
+      "tradeable": true,
+      "usable": true
+    },
+    {
+      "active": true,
+      "buyPrice": 50,
       "category": "consumable",
       "description": "Dropped a coin at 2am and got tangerine. Regretted it by 2:04.",
       "dropSources": [
@@ -3066,13 +3382,15 @@
       "rarity": "common",
       "sellPrice": 10,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 100,
+      "buyPrice": 200,
       "category": "trinket",
       "description": "Item 7. Nobody knows what item 7 is.",
       "dropSources": [
@@ -3088,6 +3406,8 @@
       "rarity": "uncommon",
       "sellPrice": 60,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": false
@@ -3111,13 +3431,15 @@
       "rarity": "rare",
       "sellPrice": 760,
       "sellable": true,
+      "shopEnabled": false,
+      "shopStock": 5,
       "stackable": true,
       "tradeable": true,
       "usable": false
     },
     {
       "active": true,
-      "buyPrice": 900,
+      "buyPrice": 600,
       "category": "loot_box",
       "description": "Dropped on a Friday. Opened on a Sunday.",
       "dropSources": [
@@ -3133,6 +3455,8 @@
       "rarity": "uncommon",
       "sellPrice": 350,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -3155,6 +3479,8 @@
       "rarity": "uncommon",
       "sellPrice": 220,
       "sellable": true,
+      "shopEnabled": true,
+      "shopStock": null,
       "stackable": true,
       "tradeable": true,
       "usable": true
@@ -3370,5 +3696,27 @@
     "monthly",
     "market"
   ],
+  "shopBands": {
+    "common": [
+      50,
+      250
+    ],
+    "epic": [
+      1500,
+      7500
+    ],
+    "godly": [
+      5000,
+      null
+    ],
+    "rare": [
+      500,
+      2000
+    ],
+    "uncommon": [
+      200,
+      750
+    ]
+  },
   "version": 1
 }
