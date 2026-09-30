@@ -85,6 +85,111 @@ def _shop_line(row: dict, remaining: int | None) -> str:
             f"{_stock_text(remaining)}")
 
 
+async def _shop_landing(interaction: discord.Interaction) -> None:
+    """Shown when someone types `/shop` with no subcommand.
+
+    Members previously had to know `/shop view` existed and then guess a
+    section name. `/shop` is now the front door: this embed plus one dropdown
+    reaches every section. Subcommands (`/shop view|buy|sell`) are unchanged,
+    so nothing that worked before is removed.
+    """
+    e = embeds.embed(
+        "🛒 Murashop",
+        "Pick a section below — stock and prices rotate on their own schedule.\n"
+        "`/shop view section:…` for rarity/category filters · "
+        "`/shop buy|sell item:<name>` to trade.",
+        embeds.GOLD,
+    )
+    await interaction.response.send_message(
+        embed=e, view=ShopSectionMenu(), ephemeral=True)
+
+
+class ShopGroup(app_commands.Group):
+    """`/shop` — a group that also answers when invoked on its own.
+
+    discord.py normally rejects a bare `/shop` with "missing subcommand". This
+    subclass routes the bare invocation to a landing menu instead, so the shop
+    has one obvious entry point while `/shop view|buy|sell` keep working.
+    """
+
+    def __init__(self, *args, fallback=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._fallback = fallback
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if not interaction.guild:
+            await interaction.response.send_message(
+                "The shop only exists inside a server.", ephemeral=True)
+            return False
+        return True
+
+    async def invoke(self, interaction: discord.Interaction):
+        # A group is only invoked bare when no subcommand matched.
+        if self._fallback is not None:
+            try:
+                await self._fallback(interaction)
+                return
+            except discord.HTTPException:
+                pass
+        await super().invoke(interaction)
+
+
+class ShopSectionSelect(discord.ui.Select):
+    """One dropdown, four sections, rendered from `shopmod.SECTIONS`."""
+
+    def __init__(self):
+        options = []
+        for key, meta in shopmod.SECTIONS.items():
+            options.append(discord.SelectOption(
+                label=meta["label"],
+                description=meta["blurb"][:100],
+                emoji=_SECTION_EMOJI.get(key, "🛍️"),
+                value=key,
+            ))
+        super().__init__(placeholder="🛍️ Choose a shop section…", options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        section = self.values[0]
+        meta = shopmod.SECTIONS.get(section)
+        if meta is None:
+            await interaction.response.send_message("Unknown shop section.", ephemeral=True)
+            return
+        rows = shopmod.shop_items(section)
+        if not rows:
+            await interaction.response.send_message(
+                f"**{meta['label']}** is empty this rotation — try again shortly.",
+                ephemeral=True)
+            return
+        gid = interaction.guild.id
+        stock = await shopmod.stock_map(db=database._db, guild_id=gid, rows=rows[:20])
+        e = embeds.embed(
+            f"🛒 Murashop — {meta['label']}",
+            f"{meta['blurb']}\n🔄 Rotates in {shopmod.time_left(section)}",
+            embeds.GOLD,
+        )
+        for row in rows[:20]:
+            e.add_field(
+                name=f"{itemdb.rarity_badge(row['rarity'])} {row['name']}",
+                value=_shop_line(row, stock.get(row["item_id"])),
+                inline=False,
+            )
+        e.set_footer(text=f"{min(len(rows), 20)} of {len(rows)} items · "
+                          f"buy with `/shop buy item:<name>`")
+        await interaction.response.edit_message(embed=e, view=ShopSectionMenu())
+
+
+#: Menu emoji per section, kept beside the menu that renders them.
+_SECTION_EMOJI = {"coin": "🪙", "fishing": "🎣", "special": "✨", "skin": "🎨"}
+
+
+class ShopSectionMenu(utils.SafeView):
+    """Persistent `/shop` landing menu; re-renders the section on selection."""
+
+    def __init__(self, timeout: float = 180.0):
+        super().__init__(timeout=timeout)
+        self.add_item(ShopSectionSelect())
+
+
 def _item_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     """Autocomplete by display name or id, so users never type an internal id."""
     q = (current or "").strip().lower()
@@ -103,7 +208,9 @@ class InventoryGroup(commands.Cog):
         self.bot = bot
 
     inv = app_commands.Group(name="inventory", description="Items, crafting and collections")
-    shop = app_commands.Group(name="shop", description="Browse, buy and sell items")
+    shop = ShopGroup(
+        name="shop", description="Browse, buy and sell items",
+        guild_only=True, fallback=_shop_landing)
 
     @app_commands.command(name="items", description="Browse the whole Muragoods item catalog.")
     @app_commands.describe(category="Filter by category", rarity="Filter by rarity",

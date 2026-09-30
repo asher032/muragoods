@@ -10,11 +10,17 @@ Design rules enforced by this module:
     There is deliberately no "legendary"; legacy callers that ask for one are
     mapped to Godly rather than silently keeping a sixth tier.
   * Item ids are stable machine-readable slugs. Display names are free text
-    and are never used as identifiers.
+    and are never used as identifiers, and never used as a lookup key.
+  * `sell_price` is always strictly below `buy_price`; the catalog raises
+    rather than accepting a profitable round trip.
   * All effect values are server-side and validated. A client may only ever
     send an item id + quantity; the effect, price and duration always come
     from here.
   * Rarity is *not* a price. `buy_price` / `sell_price` are set per item.
+  * Rarity is *not* a behaviour either. Whether an item has an effect, can be
+    sold, is sold in the shop or can be traded is an explicit per-item
+    property. `DEFAULT_STOCK` is the ONLY place rarity is consulted, and it
+    governs restock quantity alone.
 """
 
 from __future__ import annotations
@@ -323,6 +329,15 @@ def _i(
         stock = int(stock)
         if stock < 0:
             raise ItemError(f"bad shop stock for {item_id}: {stock}")
+    # Arbitrage invariant, checked once here so an unprofitable round trip can
+    # never enter the catalog in the first place. A sell at or above the buy
+    # price is a free-money loop, and it must be impossible to express — not
+    # merely absent today. The seller is always strictly worse off.
+    if shop_enabled and buy_price > 0 and sell_price > 0 and sell_price >= buy_price:
+        raise ItemError(
+            f"{item_id} sell_price {sell_price} must be below buy_price {buy_price} "
+            "(buy -> sell would print currency)"
+        )
     return {
         "item_id": item_id,
         "name": name,
@@ -451,23 +466,23 @@ _CATALOG += [
        120, 55, sources=("shop", "events", "achievements")),
     _i("golden_mura_coin", "Golden Mura Coin", "collectible", "rare",
        "Struck for the campus shop launch. Heavy in a pocket for a reason.",
-       1200, 1800, sources=("achievements", "events", "loot_box")),
+       1200, 600, sources=("achievements", "events", "loot_box")),
     _i("campus_trophy", "Campus Trophy", "collectible", "rare",
-       "For the team that turned a group project into a personality.", 1800, 2600,
+       "For the team that turned a group project into a personality.", 1800, 900,
        sources=("achievements", "events")),
     _i("tiny_mascot", "Tiny Mascot", "collectible", "common",
        "A beanbag Mura. Wins every office football match by being thrown at it.", 90, 40,
        sources=("shop", "events")),
     _i("founder_badge", "Founder Badge", "collectible", "epic",
        "Worn by the people who showed up before there was anything to show up to.",
-       4500, 5200, tradeable=False, sources=("events",)),
+       4500, 1800, tradeable=False, sources=("events",)),
     _i("campus_photo", "Campus Photo", "collectible", "uncommon",
        "Everyone looks terrible. That is exactly why it is worth keeping.", 200, 190,
        sources=("quests", "events")),
     _i("class_schedule", "Class Schedule", "collectible", "common",
        "A wall planner from the start of term, in March.", 50, 45, sources=("quests", "work", "daily")),
     _i("mural_sketch", "Mural Sketch", "collectible", "common",
-       "Rubbing of the quad mural. Slightly smudged, entirely sentimental.", 55, 70,
+       "Rubbing of the quad mural. Slightly smudged, entirely sentimental.", 55, 22,
        sources=("quests", "events")),
     _i("campus_magnet", "Campus Magnet", "collectible", "common",
        "Fridge-side proof of enrolment, or just a nice picture.", 50, 24,
@@ -608,13 +623,13 @@ _CATALOG += [
        "The cup says 'you will have a good day'. The coffee is doing the real work.",
        1300, 620, effect_type="luck_bonus", effect_value=0.15, effect_duration=2400, sources=("shop", "loot_box")),
     _i("explorer_backpack", "Explorer Backpack", "equipment", "uncommon",
-       "Built for the campus and the field trip that went badly.", 750, 950,
+       "Built for the campus and the field trip that went badly.", 750, 300,
        effect_type="loot_bonus", effect_value=0.10, effect_duration=0, sources=("shop", "achievements")),
     _i("pro_calculator", "Pro Calculator", "equipment", "rare",
        "Solar powered, exam-room legal, faintly intimidating.",       1900, 1500,
        effect_type="quest_bonus", effect_value=0.15, effect_duration=0, sources=("shop", "achievements")),
     _i("open_textbook", "Open Textbook", "equipment", "uncommon",
-       "Left open on purpose so the chapter was ready before class.",       700, 700,
+       "Left open on purpose so the chapter was ready before class.",       700, 280,
        effect_type="xp_multiplier", effect_value=0.08, effect_duration=0, sources=("quests", "achievements")),
     _i("mystery_package", "Mystery Package", "sellable", "uncommon",
        "Nobody has ever agreed on what is inside.", 0, 320, sources=("crime", "rob", "events")),
@@ -632,9 +647,9 @@ _CATALOG += [
        "From a band that played the student bar exactly once.",       700, 600,
        effect_type="xp_multiplier", effect_value=0.06, effect_duration=0, sources=("shop", "murastream")),
     _i("movie_ticket_stub", "Movie Ticket Stub", "collectible", "uncommon",
-       "Proof you were somewhere else instead of revising.", 200, 210, sources=("murastream", "events")),
+       "Proof you were somewhere else instead of revising.", 200, 85, sources=("murastream", "events")),
     _i("arcade_token", "Arcade Token", "collectible", "uncommon",
-       "One of the last eight on the campus arcade board.", 300, 340, sources=("games", "events")),
+       "One of the last eight on the campus arcade board.", 300, 130, sources=("games", "events")),
     _i("campus_beanbag", "Campus Beanbag", "equipment", "uncommon",
        "Furniture and, briefly, a weapon.", 650, 470,
        effect_type="temporary_protection", effect_value=0.12, effect_duration=1800, sources=("shop", "events")),
@@ -650,41 +665,41 @@ _CATALOG += [
        sources=("work", "achievements", "shop")),
     _i("luck_break_charm", "Luck Break Charm", "equipment", "uncommon",
        "A bent paperclip in a card sleeve. It works more than it should.",
-       750, 880, effect_type="luck_bonus", effect_value=0.12, effect_duration=0, sources=("shop", "loot_box")),
+       750, 300, effect_type="luck_bonus", effect_value=0.12, effect_duration=0, sources=("shop", "loot_box")),
     _i("bonus_roll_ticket", "Bonus Roll Ticket", "equipment", "uncommon",
        "One extra roll on a machine that is mostly luck anyway.", 450, 0, sellable=False,
        sources=("lottery", "shop", "events")),
     _i("group_project_credit", "Group Project Credit", "collectible", "uncommon",
-       "You did the work. Everyone knows you did the work.",       300, 400,
+       "You did the work. Everyone knows you did the work.",       300, 130,
        sources=("quests", "achievements")),
     _i("desk_lamp", "Desk Lamp", "equipment", "uncommon",
        "Turns a 9pm problem into a 10pm problem, but a lit one.", 700, 660,
        effect_type="xp_multiplier", effect_value=0.09, effect_duration=0, sources=("shop", "work")),
     _i("campus_mug", "Campus Mug", "collectible", "uncommon",
-       "Free with the first coffee, which is the best coffee.", 300, 360, sources=("shop", "work")),
+       "Free with the first coffee, which is the best coffee.", 300, 130, sources=("shop", "work")),
     _i("lab_coat", "Lab Coat", "equipment", "uncommon",
-       "Worn by everyone in the group photo. Fits about two of you.",       750, 1000,
+       "Worn by everyone in the group photo. Fits about two of you.",       750, 300,
        effect_type="quest_bonus", effect_value=0.12, effect_duration=0, sources=("shop", "achievements")),
     _i("open_letter", "Open Letter", "collectible", "uncommon",
-       "From the founder, sent to everyone, read by almost no one.", 400, 520,
+       "From the founder, sent to everyone, read by almost no one.", 400, 170,
        sources=("events", "achievements")),
 
     # ── Rare (22) ──────────────────────────────────────────────────────
     _i("golden_mura_coin_p2", "Golden Campus Token", "collectible", "rare",
-       "A second coin, struck for the campus shop relaunch.", 2000, 3200, sources=("events", "achievements")),
+       "A second coin, struck for the campus shop relaunch.", 2000, 900, sources=("events", "achievements")),
     _i("master_student_card", "Master Student Card", "equipment", "epic",
-       "Grants access to a door that is technically always unlocked.", 5000, 7400,
+       "Grants access to a door that is technically always unlocked.", 5000, 2000,
        tradeable=False, effect_type="xp_multiplier", effect_value=0.20, effect_duration=3600,
        sources=("achievements", "events")),
     _i("golden_campus_pass", "Golden Campus Pass", "equipment", "epic",
        "Waves at everything. Including, once, a locked door that stayed shut.",
-       4800, 6800, tradeable=False, sources=("events", "achievements")),
+       4800, 1900, tradeable=False, sources=("events", "achievements")),
     _i("mura_mystery_chest", "Mura Mystery Chest", "loot_box", "epic",
        "The high-tier campus box. Loud, heavy, and rarely worth the key.",
        5200, 1800, sources=("achievements", "events", "loot_box")),
     _i("legendary_koi", "Legendary Koi", "collectible", "epic",
        "Named for the myth, not the rarity. It is an Epic fish, and it knows it.",
-       3200, 4200, sources=("fish",)),
+       3200, 1300, sources=("fish",)),
     _i("roasted_coffee_bean", "Roasted Coffee Bean", "sellable", "rare",
        "Single origin, high altitude, mildly unreasonable about it.", 0, 900, sources=("work", "farm")),
     _i("exam_seat_token", "Exam Seat Token", "equipment", "rare",
@@ -713,7 +728,7 @@ _CATALOG += [
        sources=("quests", "loot_box", "events")),
     _i("discord_badge", "Discord Badge", "collectible", "rare",
        "For the early days when the whole campus fit in one voice channel.",
-       900, 1400, sources=("events", "achievements")),
+       900, 400, sources=("events", "achievements")),
     _i("vending_treasure", "Vending Treasure", "sellable", "rare",
        "Item 7, resolved. It was a good one.", 0, 760, sources=("work", "quests", "events")),
     _i("rare_fish_catch", "Abyssal Eel", "sellable", "rare",
@@ -721,21 +736,21 @@ _CATALOG += [
        0, 1100, sources=("fish",)),
     _i("founder_letter", "Founder Letter", "collectible", "rare",
        "The original letter that started the shop. Framed, then unframed, then framed.",
-       1500, 2400, sources=("events", "achievements")),
+       1500, 650, sources=("events", "achievements")),
     _i("overnight_boiler", "Overnight Boiler", "equipment", "rare",
        "A pot that got left on. It is still technically soup.",       1600, 900,
        effect_type="xp_multiplier", effect_value=0.12, effect_duration=0, sources=("shop", "work")),
     _i("gold_bar_souvenir", "Gold Bar Souvenir", "sellable", "rare",
        "A bit of real gold in a display case. Zero utility, excellent shelf presence.",
-       1300, 1700, sources=("events", "achievements")),
+       1300, 520, sources=("events", "achievements")),
     _i("limited_mura_pin", "Limited Muragoods Pin", "collectible", "rare",
        "Only given out at the launch event. 300 made, and that is the joke.",
-       1000, 2100, sources=("events",)),
+       1000, 420, sources=("events",)),
 
     # ── Epic (16) ──────────────────────────────────────────────────────
     _i("mura_founder_pin", "Mura Founder Pin", "collectible", "epic",
        "A black-enamel founder pin. The pin the other pins are modelled on.",
-       5500, 8600, sources=("events", "achievements")),
+       5500, 2200, sources=("events", "achievements")),
     _i("mura_relic_bundle", "Mura Relic Case", "pack", "epic",
        "Display case for the pieces that do not fit in a pocket.", 4000, 0, sellable=False,
        sources=("events",)),
@@ -765,9 +780,9 @@ _CATALOG += [
        sources=("shop", "achievements", "crime")),
     _i("murastream_trophy", "Murastream Trophy", "collectible", "epic",
        "For the first year of streams nobody but a few dozen watched.",
-       5000, 6400, sources=("murastream", "events")),
+       5000, 2000, sources=("murastream", "events")),
     _i("midnight_keepsake", "Midnight Keepsake", "collectible", "epic",
-       "Awarded for staying up past the point of sense.", 4500, 5200, sources=("murastream", "achievements")),
+       "Awarded for staying up past the point of sense.", 4500, 1800, sources=("murastream", "achievements")),
 
     # ── Godly (6) ──────────────────────────────────────────────────────
 ]

@@ -916,20 +916,54 @@ export function statusMessage(code: string, detail: string): { title: string; hi
         hint: detail || 'Ask a server admin for Manage Server permission.',
       };
     case 'BOT_NOT_INSTALLED':
+    case 'BOT_NOT_IN_GUILD':
       return {
         title: 'MuraBot is not installed on this server.',
-        hint: detail || 'Invite the bot first — pick the server in the top bar.',
+        hint: detail || 'Invite the bot first — pick the server in the top bar. Nothing about your channel selection is wrong yet.',
+      };
+    // The three channel outcomes are deliberately distinct. Reporting them as
+    // one generic "invalid channel" is what made a deleted channel
+    // indistinguishable from a permissions problem.
+    case 'CHANNEL_NOT_FOUND':
+      return {
+        title: 'That channel no longer exists.',
+        hint: detail || 'It was deleted, or it belongs to another server — pick another channel.',
+      };
+    case 'CHANNEL_ACCESS_DENIED':
+      return {
+        title: 'MuraBot cannot access that channel.',
+        hint: detail || "The channel exists, but Murabot's permissions exclude it. Fix the channel's permission overwrites in Discord, then save again.",
+      };
+    case 'ROLE_NOT_FOUND':
+      return {
+        title: 'That role no longer exists.',
+        hint: detail || 'It was deleted — pick another role.',
+      };
+    case 'ROLE_ACCESS_DENIED':
+      return {
+        title: "MuraBot's role is too low to manage that role.",
+        hint: detail || "Move the bot's role above the target in Server Settings → Roles, then save again.",
+      };
+    case 'ROLE_MANAGED':
+      return {
+        title: 'That role is managed by an integration.',
+        hint: detail || 'Integration-managed roles cannot be assigned by the bot — pick another role.',
+      };
+    case 'MEMBER_NOT_FOUND':
+      return {
+        title: 'That member is no longer on this server.',
+        hint: detail || 'They may have left — pick another member.',
+      };
+    case 'OWNER_ONLY':
+      return {
+        title: '🔒 Owner Only',
+        hint: detail || 'Economic values can only be changed by the Murabot owner. The API enforces this, not just the page.',
       };
     case 'BOT_NOT_CONFIGURED':
     case 'BRIDGE_NOT_CONFIGURED':
       return {
         title: 'The bot bridge is not configured.',
         hint: detail || 'The server operator needs to configure the bot connection first.',
-      };
-    case 'BOT_TOKEN_REJECTED':
-      return {
-        title: 'The dashboard bot credential was rejected by Discord.',
-        hint: detail || 'The bot token on the site host is outdated — update DISCORD_BOT_TOKEN. Do not re-invite the bot.',
       };
     case 'BOT_TOKEN_REJECTED':
       return {

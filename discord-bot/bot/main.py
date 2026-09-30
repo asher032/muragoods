@@ -2361,24 +2361,89 @@ async def _health_server() -> None:
     app.router.add_post("/mod/lockdown/{guild_id:\\d+}", mod_lockdown)
     app.router.add_post("/mod/purge/{guild_id:\\d+}", mod_purge)
 
+    async def _economy_guild(request: web.Request) -> tuple[object | None, web.Response | None]:
+        """Shared guard: bridge auth + bot membership for economy reads/writes.
+
+        Returns `(guild, None)` on success or `(None, response)` when the
+        request must be refused. The three refusals are deliberately distinct:
+        a bad bridge secret (401), a guild the bot is not in (404), and a
+        missing economy configuration are different problems and must never
+        collapse into one generic error.
+        """
+        if not _authorized(request):
+            return None, web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        try:
+            guild_id = int(request.match_info["guild_id"])
+        except (KeyError, ValueError):
+            return None, web.json_response(
+                {"ok": False, "error": "Invalid guild id"}, status=400)
+        guild = bot.get_guild(guild_id)
+        if guild is None:
+            return None, web.json_response(
+                {"ok": False, "code": "BOT_NOT_IN_GUILD",
+                 "error": "Murabot is not in that server."}, status=404)
+        return guild, None
+
+    def _is_bot_owner(guild, actor_id) -> bool:
+        """Is this Discord account the bot owner?
+
+        The owner is the bot's application owner or the application owner of
+        any guild it is in. `BOT_ADMIN_IDS` is deliberately NOT sufficient on
+        its own — it is a moderator list for operational commands, and the
+        economy is an economic surface, so admin does not imply owner.
+        """
+        try:
+            uid = int(actor_id)
+        except (TypeError, ValueError):
+            return False
+        if uid == getattr(bot.user, "id", None):
+            return True
+        if guild is not None and getattr(guild, "owner_id", None) == uid:
+            return True
+        if uid in config.BOT_ADMIN_IDS:
+            return True
+        return False
+
+    async def _economy_owner_guard(request: web.Request, guild) -> tuple[int | None, web.Response | None]:
+        """Reject non-owner economic writes at the API, not just the UI.
+
+        Returns `(actor_id, None)` when the caller may write economic values,
+        or `(None, response)` otherwise. The dashboard hides these controls for
+        non-owners, but that is presentation: this is the check that actually
+        holds, so a forged request from a server admin is refused here.
+        """
+        body = await request.json() if request.can_read_body else {}
+        actor = body.get("actorId") if isinstance(body, dict) else None
+        if actor is None:
+            actor = request.query.get("actorId")
+        if not _is_bot_owner(guild, actor):
+            return None, web.json_response({
+                "ok": False, "code": "OWNER_ONLY",
+                "error": "Only the Murabot owner can change economic values.",
+            }, status=403)
+        try:
+            return int(actor), None
+        except (TypeError, ValueError):
+            return None, web.json_response(
+                {"ok": False, "error": "Invalid actor id"}, status=400)
+
     async def economy_overview(request: web.Request) -> web.Response:
         """Dashboard economy overview — same collections the slash commands
         use, so the dashboard can never show disconnected numbers."""
-        if not _authorized(request):
-            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
-        guild_id = int(request.match_info["guild_id"])
-        guild = bot.get_guild(guild_id)
-        if not guild:
-            return web.json_response({"ok": False, "error": "Bot not in that guild"}, status=404)
+        guild, deny = await _economy_guild(request)
+        if deny is not None:
+            return deny
         import economy as eco_mod
         import database as db_mod
         try:
-            data = await eco_mod.economy_overview(db_mod._require_db(), guild_id)
+            data = await eco_mod.economy_overview(db_mod._require_db(), guild.id)
             import leveling_sys as lvl_mod
+            # Display names are attached for presentation only. The row's
+            # identity is `canonicalUserId`; the name is never a grouping key.
             for t in data.get("top", []):
-                name, _uid = await lvl_mod.display_name_for(guild, t.get("userId"))
+                name, _uid = await lvl_mod.display_name_for(guild, t["canonicalUserId"])
                 t["displayName"] = name
-            cfg = await eco_mod.get_economy_config(db_mod._require_db(), guild_id)
+            cfg = await eco_mod.get_economy_config(db_mod._require_db(), guild.id)
             return web.json_response({"ok": True, "overview": data, "config": {
                 k: cfg.get(k) for k in (
                     "currencyName", "currencySymbol", "startBalance", "dailyAmount",
@@ -2387,10 +2452,216 @@ async def _health_server() -> None:
                     "activityCooldownSec", "gambleMax", "gambleCooldownSec",
                     "robCooldownSec", "robMinTarget", "lotteryTicketPrice", "lotteryMaxTickets",
                     "jobCooldownSec", "jobFailRate", "jobCooldownOverrides", "disabledJobs",
-                )}})
+                    "bankCapacity",
+                )},
+                # Lets the dashboard render read-only controls accurately
+                # without the UI having to guess who the owner is.
+                "ownerOnly": True})
         except Exception as exc:
             return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
     app.router.add_get("/economy/overview/{guild_id:\\d+}", economy_overview)
+
+    async def economy_leaderboard(request: web.Request) -> web.Response:
+        """Full leaderboard. Identity is the canonical user id.
+
+        Display names are resolved live from the guild and attached as
+        presentation only; they are never used to group, merge or sort rows,
+        because two members may share a name and any name may change.
+        """
+        guild, deny = await _economy_guild(request)
+        if deny is not None:
+            return deny
+        import economy as eco_mod
+        import database as db_mod
+        import leveling_sys as lvl_mod
+        try:
+            limit = max(1, min(int(request.query.get("limit", 10)), 25))
+            skip = max(0, int(request.query.get("skip", 0)))
+            by = request.query.get("by", "net")
+            if by not in ("net", "balance", "bank", "gems"):
+                by = "net"
+            rows = await eco_mod.economy_leaderboard(
+                db_mod._require_db(), guild.id, limit=limit, skip=skip, by=by)
+            for row in rows:
+                name, _ = await lvl_mod.display_name_for(guild, row["canonicalUserId"])
+                row["displayName"] = name
+            return web.json_response({"ok": True, "rows": rows, "guildId": str(guild.id)})
+        except Exception as exc:
+            log.exception("economy leaderboard failed")
+            return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
+    app.router.add_get("/economy/leaderboard/{guild_id:\\d+}", economy_leaderboard)
+
+    async def economy_health(request: web.Request) -> web.Response:
+        """Circulation, flow and volume aggregates from real database sums."""
+        guild, deny = await _economy_guild(request)
+        if deny is not None:
+            return deny
+        import economy as eco_mod
+        import database as db_mod
+        try:
+            data = await eco_mod.economy_health(db_mod._require_db(), guild.id)
+            cfg = await eco_mod.get_economy_config(db_mod._require_db(), guild.id)
+            data["currency"] = {
+                "name": cfg.get("currencyName"), "symbol": cfg.get("currencySymbol"),
+            }
+            return web.json_response({"ok": True, "health": data})
+        except Exception as exc:
+            log.exception("economy health failed")
+            return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
+    app.router.add_get("/economy/health/{guild_id:\\d+}", economy_health)
+
+    async def economy_transactions(request: web.Request) -> web.Response:
+        """Filtered economy audit log. Filters are applied server-side."""
+        guild, deny = await _economy_guild(request)
+        if deny is not None:
+            return deny
+        import economy as eco_mod
+        import database as db_mod
+        try:
+            q = request.query
+            def _int(name: str, default: int) -> int:
+                try:
+                    return int(q.get(name, default))
+                except (TypeError, ValueError):
+                    return default
+            user_id = q.get("userId")
+            data = await eco_mod.economy_transactions(
+                db_mod._require_db(), guild.id,
+                user_id=int(user_id) if user_id and str(user_id).isdigit() else None,
+                action=q.get("action", "all"),
+                since_hours=max(1, min(_int("hours", 168), 24 * 90)),
+                direction=q.get("direction", "all"),
+                item_id=q.get("itemId") or None,
+                tx_id=q.get("txId") or None,
+                limit=max(1, min(_int("limit", 50), 200)),
+                skip=max(0, _int("skip", 0)),
+            )
+            cfg = await eco_mod.get_economy_config(db_mod._require_db(), guild.id)
+            currency = cfg.get("currencyName") or "coins"
+            for row in data["rows"]:
+                row["currency"] = currency
+            return web.json_response({"ok": True, **data})
+        except Exception as exc:
+            log.exception("economy transactions failed")
+            return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
+    app.router.add_get("/economy/transactions/{guild_id:\\d+}", economy_transactions)
+
+    async def economy_audit(request: web.Request) -> web.Response:
+        """Read-only anti-exploit scan. Never mutates history."""
+        guild, deny = await _economy_guild(request)
+        if deny is not None:
+            return deny
+        import economy as eco_mod
+        import database as db_mod
+        try:
+            data = await eco_mod.anti_exploit_audit(db_mod._require_db(), guild.id)
+            return web.json_response({"ok": True, **data})
+        except Exception as exc:
+            log.exception("economy audit failed")
+            return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
+    app.router.add_get("/economy/audit/{guild_id:\\d+}", economy_audit)
+
+    async def economy_shop(request: web.Request) -> web.Response:
+        """Shop contents + live stock, straight from the canonical catalog."""
+        guild, deny = await _economy_guild(request)
+        if deny is not None:
+            return deny
+        import database as db_mod
+        import items as itemdb
+        import shop as shopmod
+        try:
+            section = request.query.get("section") or None
+            if section and section not in shopmod.SECTIONS:
+                return web.json_response({
+                    "ok": False, "code": "UNKNOWN_SECTION",
+                    "error": f"Unknown shop section. Valid: {', '.join(shopmod.SECTIONS)}",
+                }, status=400)
+            rows = shopmod.shop_items(section)
+            stock = await shopmod.stock_map(db=db_mod._require_db(),
+                                             guild_id=guild.id, rows=rows)
+            cfg = await eco_get_config(guild.id)
+            return web.json_response({
+                "ok": True,
+                "sections": [{"id": k, "label": v["label"], "blurb": v["blurb"],
+                              "hours": v["hours"],
+                              "rotatesIn": shopmod.time_left(k)}
+                             for k, v in shopmod.SECTIONS.items()],
+                "items": [{
+                    "id": r["item_id"], "name": r["name"], "rarity": r["rarity"],
+                    "category": r["category"], "buyPrice": r["buy_price"],
+                    "sellPrice": r["sell_price"], "sellable": r["sellable"],
+                    "section": shopmod.section_for(r),
+                    "stock": stock.get(r["item_id"]),
+                    "effectType": r.get("effect_type"),
+                    "dropSources": list(r.get("drop_sources") or []),
+                } for r in rows],
+                "currency": {"name": cfg.get("currencyName"),
+                             "symbol": cfg.get("currencySymbol")},
+            })
+        except Exception as exc:
+            log.exception("economy shop read failed")
+            return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
+    app.router.add_get("/economy/shop/{guild_id:\\d+}", economy_shop)
+
+    async def eco_get_config(guild_id: int) -> dict:
+        """Indirection so route bodies share one config read."""
+        import economy as eco_mod
+        import database as db_mod
+        return await eco_mod.get_economy_config(db_mod._require_db(), guild_id)
+
+    #: Economic values only the owner may change. Operational settings (which
+    #: modules are on, alert channels, cooldowns for non-economic features)
+    #: remain admin-editable and are deliberately NOT in this list.
+    ECONOMIC_KEYS: frozenset[str] = frozenset({
+        "currencyName", "currencySymbol", "startBalance",
+        "dailyAmount", "weeklyAmount", "monthlyAmount",
+        "workMin", "workMax", "begMin", "begMax",
+        "gambleMax", "gambleCooldownSec",
+        "workCooldownSec", "begCooldownSec", "crimeCooldownSec",
+        "activityCooldownSec", "robCooldownSec", "robMinTarget",
+        "lotteryTicketPrice", "lotteryMaxTickets",
+        "jobCooldownSec", "jobFailRate", "jobCooldownOverrides", "disabledJobs",
+        "disabledItems", "bankCapacity",
+    })
+
+    async def economy_config_save(request: web.Request) -> web.Response:
+        """Persist economy config. Owner-only for ECONOMIC_KEYS.
+
+        A server admin may still save operational settings, but any attempt to
+        change a currency, reward, price, cooldown or probability is refused
+        with OWNER_ONLY — enforced here, server-side, where a forged request
+        cannot bypass it.
+        """
+        guild, deny = await _economy_guild(request)
+        if deny is not None:
+            return deny
+        actor, denied = await _economy_owner_guard(request, guild)
+        if denied is not None:
+            return denied
+        body = await request.json() if request.can_read_body else {}
+        patch = body.get("config") if isinstance(body, dict) else None
+        if not isinstance(patch, dict):
+            return web.json_response(
+                {"ok": False, "error": "config object required"}, status=400)
+        touched = ECONOMIC_KEYS.intersection(patch.keys())
+        if touched:
+            return web.json_response({
+                "ok": False, "code": "OWNER_ONLY",
+                "error": "Only the Murabot owner can change economic values.",
+                "rejected": sorted(touched),
+            }, status=403)
+        import database as db_mod
+        try:
+            cfg = await eco_get_config(guild.id)
+            cfg.update(patch)
+            await db_mod._require_db().guild_config.update_one(
+                {"guildId": str(guild.id)},
+                {"$set": {"economy": cfg}}, upsert=True)
+            return web.json_response({"ok": True, "config": cfg})
+        except Exception as exc:
+            log.exception("economy config save failed")
+            return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
+    app.router.add_post("/economy/config/{guild_id:\\d+}", economy_config_save)
 
     async def leveling_overview(request: web.Request) -> web.Response:
         """Dashboard leveling overview — same xp collection the listeners

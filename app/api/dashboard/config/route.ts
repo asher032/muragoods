@@ -267,8 +267,8 @@ export async function PATCH(req: NextRequest) {
   // misconfiguration — refuse with the precise state, not a generic 403.
   const installed = await botInstalled(guildId);
   if (installed === false) {
-    return bad('The bot is not installed on this server. Invite it first — settings apply once it joins.',
-      404, 'BOT_NOT_INSTALLED');
+    return bad('The bot is not installed on this server (BOT_NOT_IN_GUILD). Invite it first — settings apply once it joins.',
+      404, 'BOT_NOT_IN_GUILD');
   }
 
   const patch = (body as Record<string, unknown>).config;
@@ -498,31 +498,43 @@ export async function PATCH(req: NextRequest) {
       if (/ChannelId$/.test(field)) {
         const ch = check.channels.get(value);
         if (!ch || ch.guild_id !== guildId) {
-          return bad(`${label} is no longer available on this server. Pick another channel.`);
+          // CHANNEL_NOT_FOUND is distinct from CHANNEL_ACCESS_DENIED: the
+          // channel is gone (or foreign), which is a different problem from
+          // the bot being unable to use a channel that still exists. The
+          // operator is told which one they have.
+          return bad(
+            `${label} is no longer available on this server (CHANNEL_NOT_FOUND). ` +
+            'It was deleted, or it belongs to another server — pick another channel.',
+            400, 'CHANNEL_NOT_FOUND',
+          );
         }
       } else if (/CategoryId$/.test(field)) {
         const ch = check.channels.get(value);
         if (!ch || ch.guild_id !== guildId || ch.type !== 4) {
-          return bad(`${label} is no longer a category on this server. Pick another category.`);
+          return bad(
+            `${label} is no longer a category on this server (CHANNEL_NOT_FOUND). ` +
+            'Pick another category.',
+            400, 'CHANNEL_NOT_FOUND',
+          );
         }
       } else if (/RoleId$/.test(field)) {
         const role = check.roles.get(value);
         if (!role || value === guildId) {
-          return bad(`${label} is no longer available on this server. Pick another role.`);
+          return bad(`${label} is no longer available on this server (ROLE_NOT_FOUND). Pick another role.`, 400, 'ROLE_NOT_FOUND');
         }
         if (role.managed) {
-          return bad(`${role.name} is managed by an integration and cannot be used here.`);
+          return bad(`${role.name} is managed by an integration and cannot be used here.`, 400, 'ROLE_MANAGED');
         }
         if (!check.botIsAdmin && check.botTopPosition <= role.position) {
           return bad(
-            `This role can't be managed by the bot — move the bot's role above ${role.name} in Discord's Server Settings → Roles, then save again.`,
-            403,
+            `This role can't be managed by the bot (ROLE_ACCESS_DENIED) — move the bot's role above ${role.name} in Discord's Server Settings → Roles, then save again.`,
+            403, 'ROLE_ACCESS_DENIED',
           );
         }
       } else {
         // MemberId / UserId
         if (!(await memberInGuild(guildId, value, bToken))) {
-          return bad(`${label} is no longer on this server. Pick another member.`);
+          return bad(`${label} is no longer on this server (MEMBER_NOT_FOUND). Pick another member.`, 400, 'MEMBER_NOT_FOUND');
         }
       }
     }

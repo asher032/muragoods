@@ -9,7 +9,7 @@
 //   2. a rarity outside the five-tier system appears (esp. "legendary"),
 //   3. the catalog falls below the required per-rarity minimums,
 //   4. an item id is not a stable machine-readable slug,
-//   5. a Godly item is anything other than a collectible (no effect, no sell),
+//   5. a buy/sell arbitrage or a sellable/sell-price contradiction,
 //   6. an item carries another bot's identity.
 //
 // Run: node scripts/check-items-parity.mjs
@@ -86,11 +86,32 @@ for (const item of table.items) {
   }
 }
 
-// ── 5. Godly is prestigious and collectible, not powerful ──────────────
-for (const item of table.items.filter((i) => i.rarity === 'godly')) {
-  if (item.effectType) failures.push(`godly item ${item.id} must not grant an effect`);
-  if (item.sellPrice > 0) failures.push(`godly item ${item.id} must not be sellable`);
-  if (item.tradeable) failures.push(`godly item ${item.id} must not be tradeable`);
+// ── 5. Item behaviour comes from the item, never from its rarity ───────
+// An earlier version of this check asserted that every Godly item has no
+// effect, cannot be sold and cannot be traded. That encoded a DESCRIPTION of
+// the catalog as a RULE, which made the next legitimately-effectful or
+// legitimately-resellable Godly item impossible to add without editing CI.
+//
+// What is actually enforced here is the invariant that matters for economy
+// safety, and it applies to EVERY rarity equally:
+//   sell_price must be strictly below buy_price (no buy->sell profit loop),
+//   a sellable item must actually be sellable, and a sell price must never
+//   be set on an item flagged unsellable.
+// Rarity is explicitly NOT consulted for effects, sellability or tradeability.
+for (const item of table.items) {
+  const buy = Number(item.buyPrice) || 0;
+  const sell = Number(item.sellPrice) || 0;
+  if (buy > 0 && sell >= buy) {
+    failures.push(
+      `item ${item.id} sells for ${sell} at or above its buy price ${buy} — buy->sell arbitrage`,
+    );
+  }
+  if (sell > 0 && item.sellable === false) {
+    failures.push(`item ${item.id} has sellPrice ${sell} but is marked unsellable`);
+  }
+  if (sell === 0 && item.sellable === true) {
+    failures.push(`item ${item.id} is marked sellable but has no sell price`);
+  }
 }
 
 // ── 6. original identity ───────────────────────────────────────────────
