@@ -175,6 +175,11 @@ jobs:
       - name: Install economy suite dependencies
         run: pip install pymongo mongomock mongomock-motor typing_extensions "Pillow>=10,<12"
 
+      # The scene backgrounds are drawn with numpy; without it the generator
+      # cannot reproduce the committed assets.
+      - name: Install background generator dependency
+        run: pip install "numpy>=1.24"
+
       # The database architecture is the one thing that cannot be verified by
       # running the app: the site and the bot each resolve their cluster from
       # the environment, and when they disagree nothing crashes — the dashboard
@@ -345,3 +350,14 @@ jobs:
       # value in one field is allowed to outrank the selection being saved.
       - name: Level card acceptance (selection → save → rendered PNG)
         run: python scripts/acceptance_level_background.py
+
+      # The scene themes are generated artwork, and the renderer lays a dark
+      # gradient plus a luminance-scaled shade over every backdrop. An asset
+      # that is attractive on its own can still come out of that pipeline as a
+      # near-black panel — indistinguishable from "the background setting does
+      # nothing", which is the failure this area keeps producing. So this
+      # renders each theme through the REAL card path and asserts it kept real
+      # tonal range, that its luminance stayed legible, and that it is distinct
+      # from every other theme including the hand-drawn ones.
+      - name: Level card backgrounds survive the card renderer
+        run: python scripts/check_level_background_quality.py

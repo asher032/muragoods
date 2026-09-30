@@ -906,6 +906,17 @@ class LevelingCog(commands.Cog):
         app_commands.Choice(name="🐤 Lily Rest", value="chick-lily"),
         app_commands.Choice(name="🐸 Sky Gaze", value="frog-sky"),
         app_commands.Choice(name="🌅 Pixel Sunset", value="pixel-sunset"),
+        # Scene themes (procedural artwork; see scripts/generate_level_backgrounds.py).
+        app_commands.Choice(name="🌙 Night Campus", value="night-campus"),
+        app_commands.Choice(name="🛰️ Deep Space", value="deep-space"),
+        app_commands.Choice(name="🌲 Mystic Forest", value="mystic-forest"),
+        app_commands.Choice(name="🌃 Neon City", value="neon-city"),
+        app_commands.Choice(name="🏰 Fantasy Castle", value="fantasy-castle"),
+        app_commands.Choice(name="🕹️ Arcade", value="arcade"),
+        app_commands.Choice(name="🌇 Sunset", value="sunset"),
+        app_commands.Choice(name="☁️ Open Sky", value="sky"),
+        app_commands.Choice(name="🌑 Midnight", value="midnight"),
+        app_commands.Choice(name="🍞 Muragoods", value="muragoods"),
     ])
     async def serverbackground(self, interaction: discord.Interaction, theme: str):
         if self._deny(interaction):

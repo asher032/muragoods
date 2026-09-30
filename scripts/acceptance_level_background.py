@@ -28,11 +28,11 @@ from PIL import Image, ImageStat  # noqa: E402
 
 GUILD = "997389969448517632"
 
-# The user's requested sequence, mapped onto this project's real themes.
+# The EXACT sequence from the acceptance criteria, using the real theme ids.
 SEQUENCE = [
-    ("neon-city  -> starry-duck", "starry-duck"),
-    ("sunset     -> pixel-sunset", "pixel-sunset"),
-    ("deep-space -> frog-pond", "frog-pond"),
+    ("neon-city", "neon-city"),
+    ("sunset", "sunset"),
+    ("deep-space", "deep-space"),
 ]
 
 
@@ -92,7 +92,7 @@ async def main():
 
     for label, theme in SEQUENCE:
         print("=" * 72)
-        print(f"STEP  —  dashboard selects {label}")
+        print(f"STEP  —  dashboard selects {label} and saves")
         print("=" * 72)
 
         # 1. DASHBOARD SELECTION + SAVE (no restart, no redeploy anywhere below).

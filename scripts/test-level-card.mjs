@@ -270,7 +270,10 @@ section('[E] two servers keep independent backgrounds');
 
 section('[F] an invalid theme falls back safely');
 {
-  for (const bad of ['not-a-theme', 'neon-city', '', 'https://example.com/bg.png', '../../etc/passwd']) {
+  // "neon-city" used to be in this list as an invented id, back when no such
+  // theme existed. It is a real shipped theme now, so it is gone; this list is
+  // for genuinely-unknown values.
+  for (const bad of ['not-a-theme', 'not-a-real-theme', '', 'https://example.com/bg.png', '../../etc/passwd']) {
     const out = botResolves({ [GUILD_A]: bad });
     check(`"${bad}" resolves to the default instead of crashing`,
       out[GUILD_A]?.resolved === LEVEL_CARD_DEFAULT_THEME, JSON.stringify(out));

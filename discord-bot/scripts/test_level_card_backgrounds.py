@@ -120,7 +120,10 @@ else:
 section("[2] an invalid theme falls back to the default")
 if HAVE_PILLOW:
     default_sha = render(lv.SERVER_CARD_DEFAULT)[1]
-    for bad in ["not-a-theme", "neon-city", "", "https://example.com/bg.png",
+    # NB: "neon-city" used to sit in this list as a made-up id, back when no
+    # such theme existed. It IS a real shipped theme now, so it is gone from
+    # here; the point of the list is genuinely-unknown values.
+    for bad in ["not-a-theme", "not-a-real-theme", "", "https://example.com/bg.png",
                 "../../etc/passwd", None]:
         resolved = lv.resolve_server_background(bad)
         check(f"{bad!r} resolves to the default theme",

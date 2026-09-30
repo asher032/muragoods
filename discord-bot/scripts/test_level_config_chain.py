@@ -141,7 +141,7 @@ async def main():
 
     section("[4] the push cannot store a value that would silently default")
     cfg5 = await lv.get_level_config(bot_db, int(GUILD))
-    merged5 = apply_dashboard_push(cfg5, {"serverBackground": "neon-city"})
+    merged5 = apply_dashboard_push(cfg5, {"serverBackground": "not-a-real-theme"})
     check("an unknown theme is normalised to the default at WRITE time",
           merged5.get("serverBackground") == lv.SERVER_CARD_DEFAULT,
           merged5.get("serverBackground"))
