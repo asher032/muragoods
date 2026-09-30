@@ -84,10 +84,13 @@ export async function POST(req: NextRequest) {
   // retry), never as a false "not a member" verdict that sticks.
   if (!botMemberRes.ok) {
     if (botMemberRes.status === 404) {
+      // BOT_NOT_IN_GUILD: the bot itself is not on this server. Nothing about
+      // the selected channel is wrong yet — the bot must be invited first.
       return NextResponse.json({
         success: true, valid: false, objectName: null,
+        code: 'BOT_NOT_IN_GUILD',
         checks: [{ key: 'installed', label: 'Bot installed on this server', ok: false }],
-        message: 'The bot is not a member of this server. Invite it first.',
+        message: 'The bot is not a member of this server (BOT_NOT_IN_GUILD). Invite it first — the channel itself has not been checked yet.',
       });
     }
     return NextResponse.json({
@@ -120,18 +123,31 @@ export async function POST(req: NextRequest) {
   if (kind === 'channel' || kind === 'category') {
     const chRes = await botGet(`/channels/${objectId}`, bToken);
     if (!chRes.ok || !chRes.data || typeof chRes.data !== 'object') {
+      // CHANNEL_NOT_FOUND: Discord does not know this id at all. It was
+      // deleted, or it belongs to a server the bot cannot see. A 403 here is
+      // ACCESS rather than absence and is reported separately below.
+      if (chRes.status === 403) {
+        return NextResponse.json({
+          success: true, valid: false, objectName: null,
+          code: 'CHANNEL_ACCESS_DENIED',
+          checks: [{ key: 'access', label: 'Murabot can access this channel', ok: false }],
+          message: 'Murabot cannot access that channel (CHANNEL_ACCESS_DENIED). Check the channel\'s permission overwrites, then select it again.',
+        });
+      }
       return NextResponse.json({
-        success: true, valid: false, objectName,
+        success: true, valid: false, objectName: null,
+        code: 'CHANNEL_NOT_FOUND',
         checks: [{ key: 'exists', label: 'Channel still exists', ok: false }],
-        message: 'That channel no longer exists. Choose another one.',
+        message: 'That channel no longer exists (CHANNEL_NOT_FOUND). It was probably deleted — select another channel.',
       });
     }
     const ch = chRes.data as Channel;
     if (ch.guild_id && ch.guild_id !== guildId) {
       return NextResponse.json({
         success: true, valid: false, objectName,
+        code: 'CHANNEL_NOT_FOUND',
         checks: [{ key: 'exists', label: 'Channel belongs to this server', ok: false }],
-        message: 'That channel belongs to a different server.',
+        message: 'That channel belongs to a different server (CHANNEL_NOT_FOUND).',
       });
     }
     if (kind === 'category' && ch.type !== 4) {
@@ -211,13 +227,23 @@ export async function POST(req: NextRequest) {
   }
 
   const valid = checks.every((c) => c.ok);
+  // Permission failures are ACCESS, not absence. The code lets the UI say so
+  // instead of implying the channel was deleted.
+  const code = valid
+    ? undefined
+    : kind === 'channel' || kind === 'category'
+      ? 'CHANNEL_ACCESS_DENIED'
+      : kind === 'role' ? 'ROLE_ACCESS_DENIED' : undefined;
   return NextResponse.json({
     success: true,
     valid,
     objectName,
+    ...(code ? { code } : {}),
     checks,
     message: valid
       ? 'Ready to use.'
-      : 'Fix the failed checks in Discord, then save again.',
+      : (kind === 'channel' || kind === 'category'
+        ? 'Murabot lacks a required permission in that channel (CHANNEL_ACCESS_DENIED). Fix the channel permissions in Discord, then save again.'
+        : 'Fix the failed checks in Discord, then save again.'),
   });
 }

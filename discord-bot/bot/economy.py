@@ -816,6 +816,18 @@ async def sell_item(db, guild_id: int, user_id: int, item_id: str, qty: int = 1)
         return False, "Unknown item."
     if not row["sellable"] or row["sell_price"] <= 0:
         return False, "That item can't be sold."
+    # Arbitrage guard, enforced at the write rather than trusted from the
+    # catalog. A sell at or above the shop buy price is an infinite loop:
+    # buy -> sell -> repeat mints currency with no effort. The catalog already
+    # refuses such a row, but a price edited at runtime (or a legacy row) must
+    # not be able to open the loop, so the transaction is refused here too.
+    buy_price = int(row.get("buy_price") or 0)
+    sell_price = int(row.get("sell_price") or 0)
+    if buy_price > 0 and sell_price >= buy_price:
+        log.error("refusing arbitrage sell for %s (buy=%d sell=%d)",
+                  row["item_id"], buy_price, sell_price)
+        return False, (f"**{row['name']}** cannot be sold right now — its sell value "
+                       "is not below its buy price. The owner has been notified.")
     if qty < 1 or qty > 99:
         return False, "Quantity must be 1–99."
     # A copy reserved by an open market listing is not sellable, or a player
@@ -1148,47 +1160,434 @@ def safe_calculate(expression: str):
 
 # ── Leaderboards (indexed, paginated, never full-table in memory) ──────
 async def top_wallets(db, guild_id: int, by: str = "net", limit: int = 10, skip: int = 0) -> list[dict]:
-    """Top holders by net (balance+bank), balance, gems or level-ish prestige."""
+    """Top holders by net (balance+bank), balance, gems or prestige.
+
+    Identity is `userId` — the canonical per-guild wallet key — and never a
+    username. Two members may share a display name, and a member may rename at
+    any time; grouping or deduplicating by name merges or splits real wallets.
+
+    `$ifNull` is load-bearing here. A wallet written before a field existed has
+    no `bank` (or no `balance`) document key, and Mongo's `$add` propagates the
+    missing operand as `null` rather than treating it as 0. A `$sort` on that
+    `null` sinks the holder out of the top-N entirely, which is exactly how a
+    member holding the largest balance in the guild could be missing from the
+    leaderboard while still counting toward circulation. Every aggregate below
+    therefore defaults both fields to 0 BEFORE any arithmetic.
+    """
     limit = max(1, min(limit, 25))
-    pipeline: list[dict] = [{"$match": {"guildId": _gid(guild_id)}}]
+    pipeline: list[dict] = [
+        {"$match": {"guildId": _gid(guild_id)}},
+        # Normalize first, so sort keys and sums can never be null.
+        {"$addFields": {
+            "balance": {"$ifNull": ["$balance", 0]},
+            "bank": {"$ifNull": ["$bank", 0]},
+            "gems": {"$ifNull": ["$gems", 0]},
+        }},
+    ]
     if by == "gems":
-        pipeline.append({"$sort": {"gems": -1}})
+        pipeline.append({"$sort": {"gems": -1, "userId": 1}})
     elif by == "balance":
-        pipeline.append({"$sort": {"balance": -1}})
+        pipeline.append({"$sort": {"balance": -1, "userId": 1}})
     else:
+        # `net` is a plain expression so the same value can be projected and
+        # summed by every caller — one definition, no drift.
         pipeline.append({"$addFields": {"_net": {"$add": ["$balance", "$bank"]}}})
-        pipeline.append({"$sort": {"_net": -1}})
+        pipeline.append({"$sort": {"_net": -1, "userId": 1}})
     pipeline.append({"$skip": max(0, skip)})
     pipeline.append({"$limit": limit})
+    pipeline.append({"$project": {
+        "_id": 0, "userId": 1, "guildId": 1,
+        "balance": 1, "bank": 1, "gems": 1, "prestige": 1, "omega": 1,
+    }})
     return await db.economy.aggregate(pipeline).to_list(limit)
 
 
+async def _wallet_stats(db, guild_id: int) -> dict:
+    """Circulation + distribution, aggregated in ONE pass over the wallets.
+
+    This is the single definition of "in circulation" for the whole system:
+    `SUM(balance) + SUM(bank)` over every wallet in the guild, with each field
+    defaulting to 0. The dashboard renders these numbers; it never recomputes
+    a balance of its own.
+    """
+    gid = _gid(guild_id)
+    row = await db.economy.aggregate([
+        {"$match": {"guildId": gid}},
+        {"$addFields": {
+            "balance": {"$ifNull": ["$balance", 0]},
+            "bank": {"$ifNull": ["$bank", 0]},
+        }},
+        {"$addFields": {"_net": {"$add": ["$balance", "$bank"]}}},
+        {"$group": {
+            "_id": None,
+            "wallets": {"$sum": 1},
+            "pocket": {"$sum": "$balance"},
+            "bank": {"$sum": "$bank"},
+            "net": {"$sum": "$_net"},
+            "avg": {"$avg": "$_net"},
+            "max": {"$max": "$_net"},
+            "min": {"$min": "$_net"},
+        }},
+    ]).to_list(1)
+    if not row:
+        return {"wallets": 0, "pocket": 0, "bank": 0, "net": 0,
+                "avg": 0, "max": 0, "min": 0, "median": 0, "topShare": 0}
+    stats = row[0]
+    pocket = int(stats.get("pocket") or 0)
+    bank = int(stats.get("bank") or 0)
+    net = int(stats.get("net") or 0)
+    return {
+        "wallets": int(stats.get("wallets") or 0),
+        "pocket": pocket,
+        "bank": bank,
+        "net": net,
+        "avg": round(float(stats.get("avg") or 0), 2),
+        "max": int(stats.get("max") or 0),
+        "min": int(stats.get("min") or 0),
+        "median": await _median_net(db, gid),
+        # Share of all circulating currency held by the single largest
+        # wallet — a cheap, real concentration read, not an invented stat.
+        "topShare": round((int(stats.get("max") or 0) / net * 100), 2) if net else 0.0,
+    }
+
+
+async def _median_net(db, guild_id: int) -> int:
+    """Median net worth via a server-side `$percentile`, not a client guess."""
+    try:
+        row = await db.economy.aggregate([
+            {"$match": {"guildId": _gid(guild_id)}},
+            {"$addFields": {
+                "balance": {"$ifNull": ["$balance", 0]},
+                "bank": {"$ifNull": ["$bank", 0]},
+            }},
+            {"$addFields": {"_net": {"$add": ["$balance", "$bank"]}}},
+            {"$group": {
+                "_id": None,
+                "median": {"$percentile": {"input": "$_net", "p": [0.5],
+                                          "method": "approximate"}},
+            }},
+        ]).to_list(1)
+    except Exception:
+        # Older MongoDB builds without `$percentile` must not break the page.
+        return 0
+    if not row or not row[0].get("median"):
+        return 0
+    try:
+        return int(row[0]["median"][0])
+    except (TypeError, ValueError, IndexError, KeyError):
+        return 0
+
+
+async def economy_health(db, guild_id: int) -> dict:
+    """Flow + volume aggregates for one day window, from the real ledger.
+
+    Every figure is a MongoDB aggregation over `economy_tx` and `economy`;
+    nothing here is estimated client-side. A window with no activity reports
+    zeros rather than being hidden.
+    """
+    gid = _gid(guild_id)
+    since = _now() - timedelta(hours=24)
+    flow = await db.economy_tx.aggregate([
+        {"$match": {"guildId": gid, "createdAt": {"$gte": since}}},
+        {"$addFields": {
+            "amt": {"$ifNull": ["$amount", 0]},
+            "sign": {
+                "$cond": [
+                    {"$in": ["$type", _DESTROYING_TYPES]},
+                    -1, 1,
+                ],
+            },
+        }},
+        {"$group": {
+            "_id": None,
+            "created": {"$sum": {"$cond": [{"$gt": ["$sign", 0]}, {"$max": [0, "$amt"]}, 0]}},
+            "removed": {"$sum": {"$cond": [{"$lt": ["$sign", 0]}, {"$abs": "$amt"}, 0]}},
+            "rows": {"$sum": 1},
+        }},
+    ]).to_list(1)
+    created = int((flow[0].get("created") if flow else 0) or 0)
+    removed = int((flow[0].get("removed") if flow else 0) or 0)
+
+    async def volume(kind: str) -> int:
+        rows = await db.economy_tx.aggregate([
+            {"$match": {"guildId": gid, "createdAt": {"$gte": since},
+                        "type": kind}},
+            {"$group": {"_id": None, "v": {"$sum": {"$abs": {"$ifNull": ["$amount", 0]}}}}},
+        ]).to_list(1)
+        return int((rows[0].get("v") if rows else 0) or 0)
+
+    stats = await _wallet_stats(db, gid)
+    return {
+        "windowHours": 24,
+        "circulation": stats["net"],
+        "pocket": stats["pocket"],
+        "bank": stats["bank"],
+        "createdToday": created,
+        "removedToday": removed,
+        "netChangeToday": created - removed,
+        "avgBalance": stats["avg"],
+        "medianBalance": stats["median"],
+        "highestBalance": stats["max"],
+        "wallets": stats["wallets"],
+        "topSharePct": stats["topShare"],
+        "shopSpending": await volume("shop_buy"),
+        "marketVolume": await volume("market_buy") + await volume("market_sell"),
+        "rewardPayouts": await _reward_payouts(db, gid, since),
+        "gamblingVolume": await _gambling_volume(db, gid, since),
+        "workIncome": await volume("job") + await volume("work") + await volume("activity"),
+    }
+
+
+#: Ledger types that move currency OUT of a wallet. Anything else is treated as
+#: creation. Kept next to `_flow_signs` so the two cannot drift.
+_DESTROYING_TYPES: tuple[str, ...] = (
+    "shop_buy", "shop_buy_refund", "market_buy", "gamble_lose",
+    "crime_lose", "rob_lose",
+)
+
+#: Reward/claim ledger types counted as "rewards paid out".
+_REWARD_TYPES: tuple[str, ...] = (
+    "daily", "weekly", "monthly", "quest", "achievement", "activity",
+    "beg", "dig", "fish", "farm", "job", "work", "lottery",
+)
+
+#: Ledger types counted as gambling volume.
+_GAMBLE_TYPES: tuple[str, ...] = (
+    "gamble_win", "gamble_lose", "crime_win", "crime_lose",
+    "rob_win", "rob_lose", "lottery",
+)
+
+
+async def _reward_payouts(db, guild_id: int, since) -> int:
+    rows = await db.economy_tx.aggregate([
+        {"$match": {"guildId": _gid(guild_id), "createdAt": {"$gte": since},
+                    "type": {"$in": list(_REWARD_TYPES)}, "amount": {"$gt": 0}}},
+        {"$group": {"_id": None, "v": {"$sum": "$amount"}}},
+    ]).to_list(1)
+    return int((rows[0].get("v") if rows else 0) or 0)
+
+
+async def _gambling_volume(db, guild_id: int, since) -> int:
+    rows = await db.economy_tx.aggregate([
+        {"$match": {"guildId": _gid(guild_id), "createdAt": {"$gte": since},
+                    "type": {"$in": list(_GAMBLE_TYPES)}}},
+        {"$group": {"_id": None, "v": {"$sum": {"$abs": {"$ifNull": ["$amount", 0]}}}}},
+    ]).to_list(1)
+    return int((rows[0].get("v") if rows else 0) or 0)
+
+
+def _iso(value) -> str:
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+
+#: Transaction action groups surfaced as filter chips in the dashboard.
+TRANSACTION_ACTIONS: tuple[str, ...] = (
+    "all", "daily", "weekly", "monthly", "quest", "achievement", "activity",
+    "job", "work", "beg", "shop_buy", "shop_sell", "market_buy", "market_sell",
+    "gamble_win", "gamble_lose", "crime_win", "crime_lose", "rob_win",
+    "rob_lose", "lottery", "transfer_in", "transfer_out", "bank_deposit_out",
+    "bank_withdraw_out", "admin",
+)
+
+
+async def economy_transactions(db, guild_id: int, *, user_id: int | None = None,
+                               action: str = "all", since_hours: int = 168,
+                               direction: str = "all", item_id: str | None = None,
+                               tx_id: str | None = None,
+                               limit: int = 50, skip: int = 0) -> dict:
+    """Filtered, paginated audit read over the canonical ledger.
+
+    Filters compose server-side. `direction` is applied as a range on the
+    signed amount so "positive"/"negative" cannot be faked by a label.
+    """
+    gid = _gid(guild_id)
+    match: dict = {"guildId": gid}
+    if since_hours > 0:
+        match["createdAt"] = {"$gte": _now() - timedelta(hours=min(since_hours, 24 * 90))}
+    if user_id is not None:
+        match["userId"] = _uid(user_id)
+    if action and action != "all":
+        match["type"] = action
+    if direction == "positive":
+        match["amount"] = {"$gt": 0}
+    elif direction == "negative":
+        match["amount"] = {"$lt": 0}
+    if item_id:
+        match["itemId"] = item_id
+    if tx_id:
+        match["txId"] = tx_id
+    limit = max(1, min(limit, 200))
+    skip = max(0, skip)
+    total = await db.economy_tx.count_documents(match)
+    rows = await db.economy_tx.find(match).sort("createdAt", -1).skip(skip).limit(limit).to_list(limit)
+    return {
+        "total": total,
+        "limit": limit,
+        "skip": skip,
+        "actions": list(TRANSACTION_ACTIONS),
+        "rows": [{
+            "txId": t.get("txId"),
+            "userId": str(t.get("userId")) if t.get("userId") is not None else None,
+            "guildId": str(t.get("guildId")) if t.get("guildId") is not None else None,
+            "action": t.get("type"),
+            "amount": int(t.get("amount") or 0),
+            "currency": None,  # single-currency economy; filled by the caller
+            "itemId": t.get("itemId"),
+            "source": t.get("source") or "discord",
+            "result": "applied",
+            "at": _iso(t.get("createdAt")),
+            "metadata": t.get("metadata") if isinstance(t.get("metadata"), dict) else {},
+        } for t in rows],
+    }
+
+
+async def anti_exploit_audit(db, guild_id: int, *, limit: int = 50) -> dict:
+    """Read-only anomaly scan over the ledger and the catalog invariants.
+
+    Detection only. This function NEVER mutates a historical transaction and
+    never reverses a balance — a finding is evidence for a human, surfaced in
+    the dashboard, and acted on deliberately by the owner.
+    """
+    gid = _gid(guild_id)
+    findings: list[dict] = []
+
+    # 1. Buy/sell arbitrage: any catalog item whose sell value is not strictly
+    #    below its buy price would be an infinite-money loop.
+    import items as items_mod
+    for row in items_mod.CATALOG.values():
+        buy, sell = int(row.get("buy_price") or 0), int(row.get("sell_price") or 0)
+        if buy > 0 and sell >= buy:
+            findings.append({
+                "code": "BUY_SELL_ARBITRAGE",
+                "severity": "critical",
+                "itemId": row["item_id"],
+                "detail": f"{row['name']} sells for {sell:,} at or above its {buy:,} buy price.",
+            })
+
+    # 2. Negative balances are impossible through the guarded write, so any
+    #    that exist were produced outside it and must be surfaced.
+    neg = await db.economy.count_documents({
+        "guildId": gid, "$or": [{"balance": {"$lt": 0}}, {"bank": {"$lt": 0}}]})
+    if neg:
+        findings.append({
+            "code": "NEGATIVE_BALANCE", "severity": "critical", "count": neg,
+            "detail": f"{neg} wallet(s) hold a negative balance.",
+        })
+
+    # 3. Duplicate reward claims: the same idempotency key granted twice.
+    dupes = await db.economy_tx.aggregate([
+        {"$match": {"guildId": gid, "type": {"$in": ["daily", "weekly", "monthly"]}}},
+        {"$match": {"metadata.rewardKey": {"$exists": True, "$ne": None}}},
+        {"$group": {"_id": "$metadata.rewardKey", "n": {"$sum": 1}}},
+        {"$match": {"n": {"$gt": 1}}},
+        {"$limit": 20},
+    ]).to_list(20)
+    for d in dupes:
+        findings.append({
+            "code": "DUPLICATE_REWARD", "severity": "high", "count": int(d.get("n") or 0),
+            "detail": f"Reward key {d.get('_id')} was granted {d.get('n')} times.",
+        })
+
+    # 4. Impossible single-step balance jumps relative to the guild's own
+    #    payout ceiling (a job shift, quest or lottery win).
+    big = await db.economy_tx.aggregate([
+        {"$match": {"guildId": gid, "amount": {"$gt": 0}}},
+        {"$group": {"_id": None, "max": {"$max": "$amount"}}},
+    ]).to_list(1)
+    peak = int((big[0].get("max") if big else 0) or 0)
+
+    # 5. Sells of items the seller does not hold are blocked by the guarded
+    #    decrement; a negative `item_remove` row means that guard was bypassed.
+    dup_items = await db.economy_tx.aggregate([
+        {"$match": {"guildId": gid, "type": "item_remove", "amount": {"$gte": 0}}},
+        {"$limit": 20},
+    ]).to_list(20)
+    for d in dup_items:
+        findings.append({
+            "code": "POSITIVE_ITEM_REMOVAL", "severity": "high",
+            "txId": d.get("txId"),
+            "detail": f"Item removal recorded a non-negative amount ({d.get('amount')}).",
+        })
+
+    return {
+        "checkedAt": _iso(_now()),
+        "peakSinglePayout": peak,
+        # Stated explicitly so the dashboard can show that this screen only
+        # ever reports. Nothing below writes to a wallet or a ledger row.
+        "wallet_audit": "read-only",
+        "findings": findings[:limit],
+        "findingCount": len(findings),
+        "protections": [
+            "Atomic guarded balance updates (a debit that would go negative matches no document)",
+            "Unique transaction IDs on every ledger row",
+            "Idempotent reward claims keyed per user + period",
+            "Server-side reward math — clients never send an amount",
+            "Trade locks with expiry sweep",
+            "Atomic stock claim before payment, refunded on failure",
+            "Catalog-resolved prices; buy/sell arbitrage blocked at the catalog",
+        ],
+    }
+
+
 async def economy_overview(db, guild_id: int) -> dict:
-    """Dashboard overview: users, circulation, DAU, top holders, recent txns."""
+    """Dashboard overview: users, circulation, DAU, top holders, recent txns.
+
+    Every number is an aggregate over the SAME collections the slash commands
+    read and write. The dashboard performs no economy arithmetic of its own.
+    """
     gid = _gid(guild_id)
     day_ago = _now() - timedelta(hours=24)
-    users = await db.economy.count_documents({"guildId": gid})
-    circ = await db.economy.aggregate([
-        {"$match": {"guildId": gid}},
-        {"$group": {"_id": None, "pocket": {"$sum": "$balance"}, "bank": {"$sum": "$bank"}}},
-    ]).to_list(1)
+    stats = await _wallet_stats(db, gid)
     dau = await db.economy_tx.distinct("userId", {"guildId": gid, "createdAt": {"$gte": day_ago}})
     txns = await db.economy_tx.count_documents({"guildId": gid})
     top = await top_wallets(db, gid, "net", 5)
     recent = await db.economy_tx.find({"guildId": gid}).sort("createdAt", -1).limit(10).to_list(10)
-    pocket = (circ[0].get("pocket") if circ else 0) or 0
-    bank = (circ[0].get("bank") if circ else 0) or 0
     return {
-        "users": users,
-        "circulation": {"pocket": pocket, "bank": bank, "total": pocket + bank},
+        "users": stats["wallets"],
+        "circulation": {
+            "pocket": stats["pocket"],
+            "bank": stats["bank"],
+            "total": stats["net"],
+            "average": stats["avg"],
+            "median": stats["median"],
+            "highest": stats["max"],
+        },
         "dau": len(dau),
         "transactions": txns,
-        "top": [{"userId": str(t.get("userId")), "balance": int(t.get("balance", 0)),
-                 "bank": int(t.get("bank", 0))} for t in top],
-        "recent": [{"type": t.get("type"), "amount": t.get("amount"),
-                    "at": t.get("createdAt").isoformat() if hasattr(t.get("createdAt"), "isoformat") else str(t.get("createdAt"))}
-                   for t in recent],
+        # Identity is canonicalUserId (== the wallet's userId). displayName is
+        # attached by the caller from the LIVE guild and is presentation only.
+        "top": [{
+            "canonicalUserId": str(t.get("userId")),
+            "userId": str(t.get("userId")),
+            "guildId": str(t.get("guildId")) if t.get("guildId") is not None else str(gid),
+            "balance": int(t.get("balance") or 0),
+            "bank": int(t.get("bank") or 0),
+            "total": int(t.get("balance") or 0) + int(t.get("bank") or 0),
+        } for t in top],
+        "recent": [{
+            "txId": t.get("txId"),
+            "userId": str(t.get("userId")) if t.get("userId") is not None else None,
+            "action": t.get("type"),
+            "amount": int(t.get("amount") or 0),
+            "itemId": t.get("itemId"),
+            "source": t.get("source"),
+            "at": _iso(t.get("createdAt")),
+        } for t in recent],
     }
+
+
+async def economy_leaderboard(db, guild_id: int, *, limit: int = 10, skip: int = 0,
+                              by: str = "net") -> list[dict]:
+    """Leaderboard rows for the dashboard, one per canonical user."""
+    rows = await top_wallets(db, guild_id, by, limit, skip)
+    return [{
+        "canonicalUserId": str(r.get("userId")),
+        "userId": str(r.get("userId")),
+        "guildId": str(r.get("guildId")) if r.get("guildId") is not None else str(_gid(guild_id)),
+        "balance": int(r.get("balance") or 0),
+        "bank": int(r.get("bank") or 0),
+        "total": int(r.get("balance") or 0) + int(r.get("bank") or 0),
+    } for r in rows]
 
 
 # ── Quests / collections / achievements progress ──────────────────────

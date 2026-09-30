@@ -119,6 +119,13 @@ jobs:
       - name: Install bot dependencies
         run: pip install "discord.py>=2.4,<3.0" davey "yt-dlp[default]" python-dotenv
 
+      # The economy suite drives the REAL economy/item service against an
+      # in-process Mongo (Motor-compatible mock), so it needs no database, no
+      # network and no Discord connection — but it does need the async driver
+      # surface the bot uses.
+      - name: Install economy suite dependencies
+        run: pip install pymongo mongomock mongomock-motor typing_extensions
+
       # The database architecture is the one thing that cannot be verified by
       # running the app: the site and the bot each resolve their cluster from
       # the environment, and when they disagree nothing crashes — the dashboard
@@ -236,3 +243,15 @@ jobs:
       # through every branch and asserts every browser page lays out.
       - name: /work shift branches + job browser layout
         run: python discord-bot/scripts/test_work_shift_live.py
+
+      # The dashboard reported a leaderboard whose top holders did not
+      # reconcile with circulation. Root cause: the net sort was
+      # `{$add: ["$balance", "$bank"]}`, and Mongo propagates a MISSING
+      # operand as null rather than 0 — so any wallet without a `bank` key
+      # sorted as null and fell out of the top-N while still counting toward
+      # circulation. This pins that regression, asserts circulation equals
+      # SUM(balance)+SUM(bank), that leaderboard identity is the canonical
+      # user id rather than a display name, and that no catalog row allows a
+      # buy->sell profit.
+      - name: Economy dashboard (circulation, canonical leaderboard, arbitrage)
+        run: python discord-bot/scripts/test_economy_dashboard.py

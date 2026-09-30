@@ -128,9 +128,22 @@ export default function ModuleSettings({ moduleId, title, description }: {
       });
       const failed = results.filter((r) => !r.result.valid);
       if (failed.length > 0) {
+        // Name every failure. "1 setting failed validation" is not actionable:
+        // the operator needs to know WHICH setting, what it is set to, what
+        // was expected, why it failed and what to do about it.
+        const detail = failed.map((r) => {
+          const field = mod?.fields.find((f) => f.key === r.key);
+          const label = field?.label ?? r.key;
+          const failedChecks = r.result.checks.filter((c) => !c.ok);
+          const reason = failedChecks.length
+            ? failedChecks.map((c) => c.label).join('; ')
+            : r.result.message || 'The bot could not confirm this selection.';
+          const objectName = r.result.objectName ? `“${r.result.objectName}”` : 'the current value';
+          return `• ${label} — ${objectName}: ${reason}`;
+        }).join('\n');
         setValidateError(
-          `Not saved — ${failed.length} setting${failed.length === 1 ? '' : 's'} failed validation. ` +
-          'Fix the failed checks above (usually bot permissions or a deleted channel/role), then save again.',
+          `Not saved — ${failed.length} setting${failed.length === 1 ? '' : 's'} failed validation.\n${detail}\n\n` +
+          'Fix the selection above (usually bot permissions or a deleted channel/role), then save again.',
         );
         return;
       }
@@ -154,6 +167,11 @@ export default function ModuleSettings({ moduleId, title, description }: {
         <div className="cc-alert cc-alert-error" role="alert" style={{ fontSize: 13, marginBottom: 12 }}>
           <strong>⚠️ Could not load configuration.</strong>
           <div style={{ marginTop: 4 }}>{error}</div>
+          <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--cc-text-faint)' }}>
+            Configuration is read from Murabot&rsquo;s own store and cached per server, so this panel
+            issues one request per server rather than one per component. A rate-limit notice here means
+            Discord itself is throttling this account, not that the page is looping.
+          </p>
         </div>
       )}
 

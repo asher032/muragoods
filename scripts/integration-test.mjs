@@ -578,6 +578,49 @@ console.log('[3c] jobs + work shifts');
   check('admin restores fail rate', cfgRestore.status === 200, `status ${cfgRestore.status}`);
 }
 
+// ─── 3b. Economy API — authorization and validation ───────────────────
+// These routes are the dashboard's only path to the economy. The critical
+// property is that they REFUSE an unauthorized caller and that a read never
+// fabricates a number. A logged-in storefront user is not a Discord guild
+// admin, so every economy route must reject them.
+console.log('[3b] economy authorization');
+{
+  const GUILD = '1234567890123456789';
+
+  const ov = await api(`/api/dashboard/economy/overview?guildId=${GUILD}`);
+  check('economy overview rejects non-admin', ov.status === 401 || ov.status === 403,
+    `status ${ov.status}`);
+
+  const read = await api(`/api/dashboard/economy/read?guildId=${GUILD}&endpoint=health`);
+  check('economy health rejects non-admin', read.status === 401 || read.status === 403,
+    `status ${read.status}`);
+
+  const lb = await api(`/api/dashboard/economy/read?guildId=${GUILD}&endpoint=leaderboard`);
+  check('economy leaderboard rejects non-admin', lb.status === 401 || read.status === 403,
+    `status ${lb.status}`);
+
+  const cfg = await api('/api/dashboard/economy/config', {
+    method: 'PATCH',
+    body: JSON.stringify({
+      guildId: GUILD,
+      actorId: '123',
+      config: { dailyAmount: 999999 },
+    }),
+  });
+  check('owner-only economic write rejected', cfg.status === 401 || cfg.status === 403,
+    `status ${cfg.status}`);
+
+  // Malformed guild ids are rejected before any upstream call is attempted.
+  const bad = await api('/api/dashboard/economy/overview?guildId=not-a-snowflake');
+  check('malformed guildId rejected', bad.status === 400 || bad.status === 401,
+    `status ${bad.status}`);
+
+  const badEndpoint = await api(
+    `/api/dashboard/economy/read?guildId=${GUILD}&endpoint=../../etc/passwd`);
+  check('unknown read endpoint rejected', badEndpoint.status === 400 || badEndpoint.status === 401,
+    `status ${badEndpoint.status}`);
+}
+
 // ─── 4. Cleanup (best effort) ───────────────────────────────────────
 console.log('[4] cleanup');
 {
