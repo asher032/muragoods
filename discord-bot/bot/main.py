@@ -83,6 +83,28 @@ BUILD_FINGERPRINT = _build_fingerprint()
 #: Populated at the end of _health_server(), once every add_* has run.
 LEVELING_ROUTES: dict = {"background": False, "config": False}
 
+#: The routes the DASHBOARD calls. Each one is a contract: if the dashboard
+#: calls it and this build does not serve it, the dashboard degrades into
+#: blaming the user's server for a Murabot deployment fault — a channel
+#: selector says the channel is gone, a leveling save says the endpoint does
+#: not exist. Both are false, and both cost real time to diagnose.
+#:
+#: Asserted at the end of `_health_server()`. A build that cannot serve these
+#: refuses to start rather than serving a partial contract.
+CRITICAL_ROUTES: tuple[str, ...] = (
+    "/health/version",
+    "/leveling/background/{guild_id}",
+    "/leveling/config/{guild_id}",
+    "/economy/channels/{guild_id}",
+    "/economy/overview/{guild_id}",
+    "/economy/health/{guild_id}",
+    "/economy/shop/{guild_id}",
+    "/economy/transactions/{guild_id}",
+    "/economy/leaderboard/{guild_id}",
+    "/economy/audit/{guild_id}",
+    "/resources/verify",
+)
+
 # ── Guild registry for event bookkeeping (no config decisions here) ──────
 # Owned by main.py. Cogs consult the DB themselves; this is only the shared
 # thread-safe bitset of guilds the bot is currently in, refreshed by gateway
@@ -3353,10 +3375,45 @@ async def _health_server() -> None:
             "canonicalRoutes": {
                 "readBackground": "GET /leveling/background/{guildId}",
                 "writeConfig": "POST /leveling/config/{guildId}",
+                "economyChannels": "GET /economy/channels/{guildId}",
+                "verifyResource": "POST /resources/verify",
             },
             "levelingRoutesRegistered": dict(LEVELING_ROUTES),
+            # The exact routes this process serves. A build that registers all of
+            # them cannot be the build the dashboard is 404ing on.
+            "dashboardContract": {
+                "registered": sorted(_registered),
+                "missing": [r for r in CRITICAL_ROUTES if r not in _registered],
+                "complete": not _missing,
+            },
         })
     app.router.add_get("/health/version", health_version)
+
+    # ── The dashboard contract ─────────────────────────────────────────────
+    # Checked here, after EVERY add_* has run — including /health/version
+    # itself, which is registered just above.
+    #
+    # Every handler is nested inside this function, so a NameError or an
+    # AttributeError in ANY of them aborts the whole thing before
+    # `site.start()` — the bot keeps its Discord gateway connected, keeps
+    # looking perfectly healthy, and serves no HTTP at all. That happened twice
+    # in production (#121, #122) and was invisible from outside: the deploy
+    # platform saw the still-running PREVIOUS instance answer its health check,
+    # reported the rollout as successful, and left the stale process serving.
+    #
+    # So the routes the dashboard depends on are asserted here. A build that
+    # cannot serve them fails loudly and immediately instead of starting up
+    # healthy while quietly serving a stale contract.
+    _registered = {r.resource.canonical for r in app.router.routes() if r.resource}
+    _missing = [r for r in CRITICAL_ROUTES if r not in _registered]
+    if _missing:
+        log.error("FATAL: the dashboard contract is incomplete — these routes "
+                  "did not register: %s", ", ".join(_missing))
+        log.error("FATAL: refusing to start. Serving a partial contract makes the "
+                  "dashboard blame Discord for a Murabot deployment problem.")
+        raise RuntimeError(f"missing dashboard routes: {', '.join(_missing)}")
+    log.info("Dashboard contract OK — all %d critical routes registered",
+             len(CRITICAL_ROUTES))
 
     port = int(os.environ.get("PORT") or 8080) or 8080  # PORT=0 → default
     runner = web.AppRunner(app)
@@ -3427,7 +3484,33 @@ async def main() -> None:
         for p in problems:
             log.error("CONFIG: %s", p)
         sys.exit(1)
-    asyncio.create_task(_health_server())
+    _health_task = asyncio.create_task(_health_server())
+
+    def _health_server_watchdog(task: "asyncio.Task") -> None:
+        """Turn a dead HTTP server into a FAILED process.
+
+        `create_task` swallows whatever the coroutine raised: the task simply
+        dies, `bot.start()` keeps running, the gateway stays connected, and the
+        process looks alive while serving nothing. That is how two separate
+        startup crashes reached production as "successful" deploys.
+
+        Exiting non-zero makes the rollout fail visibly instead of leaving the
+        previous instance quietly serving a stale contract.
+        """
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is None:
+            return
+        log.error("FATAL: the HTTP server failed to start: %s: %s",
+                  type(exc).__name__, exc)
+        log.error("FATAL: exiting non-zero so the deployment is marked FAILED. "
+                  "Serving an incomplete API is worse than not starting.")
+        import traceback
+        log.error("Startup traceback:\n%s", traceback.format_exc())
+        sys.exit(1)
+
+    _health_task.add_done_callback(_health_server_watchdog)
     # Exponential backoff reconnect loop — survives network drops and the
     # privileged-intent fallback rebuild.
     delay = 5

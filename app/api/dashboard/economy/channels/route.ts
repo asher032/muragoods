@@ -1,5 +1,6 @@
 import { requireSession } from '@/app/lib/require-session';
-import { botChannels, invalidateBotPresence, type BotCheckCode } from '@/app/lib/bot-presence';
+import { botChannels, invalidateBotPresence } from '@/app/lib/bot-presence';
+import { murabotStatusFor, murabotRetryable, normalizeMurabotCode } from '@/app/lib/murabot-contract';
 import { discordConfigCollection } from '@/app/lib/discord-config';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -33,16 +34,11 @@ export const runtime = 'nodejs';
 
 const VALID_REQUIRES = ['view', 'send', 'embed', 'read'] as const;
 
-/** HTTP status per failure code, so a client can back off correctly. */
-function statusFor(code: BotCheckCode): number {
-  if (code === 'BOT_NOT_IN_GUILD') return 404;
-  if (code === 'MURABOT_ROUTE_MISSING') return 501;
-  if (code === 'AUTHENTICATION_ERROR') return 502;
-  if (code === 'DISCORD_RATE_LIMITED') return 429;
-  if (code === 'DISCORD_TIMEOUT' || code === 'BOT_OFFLINE') return 504;
-  if (code === 'BRIDGE_NOT_CONFIGURED' || code === 'INTERNAL_ERROR') return 503;
-  return 503;
-}
+/**
+ * HTTP status and retryability come from the shared Murabot contract, so this
+ * route and the leveling probe cannot drift into describing the same fault
+ * two different ways.
+ */
 
 export async function GET(req: NextRequest) {
   const params = req.nextUrl.searchParams;
@@ -71,24 +67,23 @@ export async function GET(req: NextRequest) {
   const result = await botChannels(guildId, requires);
 
   if (result.error) {
+    const code = normalizeMurabotCode(result.error.code);
     return NextResponse.json(
       {
         success: false,
-        code: result.error.code,
+        code,
         error: result.error.message,
-        // Retryability is a property of the failure, not a guess: a rate limit
-        // and a missing bridge are both retryable, a missing guild is not. A
-        // missing ROUTE is not retryable either — retrying an outdated build
-        // cannot produce the endpoint.
-        retryable: result.error.code !== 'BOT_NOT_IN_GUILD'
-          && result.error.code !== 'MURABOT_ROUTE_MISSING',
+        // Retryability is a property of the failure, not a guess. A missing
+        // ROUTE is not retryable: no amount of retrying an outdated build
+        // makes the endpoint appear.
+        retryable: murabotRetryable(code),
         retryAfterMs: result.retryAfterMs,
         bot: result.presence,
         channels: [],
         current: null,
       },
       {
-        status: statusFor(result.error.code),
+        status: murabotStatusFor(code),
         headers: result.retryAfterMs ? { 'Retry-After': String(Math.ceil(result.retryAfterMs / 1000)) } : undefined,
       },
     );
