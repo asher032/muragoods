@@ -50,3 +50,21 @@ next-env.d.ts
 
 # Local service credentials - never commit
 service.json
+
+# Python bytecode. These are build artefacts, they are not reviewable, and a
+# compiled .pyc can contain a connection string that the .py it came from no
+# longer has (for example a URI that was removed from source but not
+# regenerated locally). Never commit them.
+__pycache__/
+*.py[cod]
+*$py.class
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Any local env file, in any directory (not just the repo root).
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.sample

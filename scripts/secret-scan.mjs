@@ -30,6 +30,23 @@ const MODE = args.has('--staged') ? 'staged' : args.has('--all') ? 'all' : 'trac
 const RULES = [
   { id: 'discord-bot-token', re: /\b[MNO][A-Za-z\d_-]{23,}\.[A-Za-z\d_-]{6}\.[A-Za-z\d_-]{27,}\b/ },
   { id: 'mongodb-uri-with-credentials', re: /mongodb(?:\+srv)?:\/\/[^\s:@/]+:[^\s:@/]{6,}@/ },
+  {
+    id: 'mongodb-uri-assigned-literal',
+    // A connection string bound to a variable, with or without credentials.
+    // The rule above only fires on user:password@, so a local/dev URI, an
+    // Atlas SRV string with no auth, or a half-redacted paste would slip past
+    // it. The ecosystem's contract is that these come from the deployment
+    // environment, never from a file, so ANY assigned literal is a finding.
+    // `\b` cannot be used before MONGO: an underscore is a word character, so
+    // `MURAGOODS_MONGODB_URI` has no boundary ahead of `MONGO`. The leading
+    // class therefore requires a non-identifier character instead. The
+    // optional type annotation covers a TypeScript declaration that carries
+    // one (a name, a `: string` type, then the value), which is how this is
+    // written in practice and how it slipped past the first version. The
+    // wording of this comment deliberately avoids writing such a declaration
+    // out in full, because the scanner scans itself.
+    re: /(?:^|[^A-Za-z0-9])(?:MURAGOODS_|MURABOT_)?MONGO(?:DB)?_?(?:URI|URL)\s*(?::\s*[\w<>[\]|"'. ]+\s*)?=\s*["'`]mongodb/im,
+  },
   { id: 'google-api-key', re: /\bAIza[0-9A-Za-z_-]{30,}\b/ },
   { id: 'openai-style-key', re: /\bsk-[A-Za-z0-9]{20,}\b/ },
   { id: 'github-token', re: /\bgh[pousr]_[A-Za-z0-9]{30,}\b/ },
@@ -83,6 +100,37 @@ const SKIP_PATH = [
   /(^|\/)yarn\.lock$/,
   /\.(png|jpe?g|gif|webp|ico|svg|woff2?|ttf|eot|mp[34]|webm|zip|pdf)$/i,
   /(^|\/)(node_modules|\.next|dist|build|\.git)\//,
+  // Python bytecode caches a copy of every source literal — including any
+  // credential a developer once pasted — and is untracked, so scanning it
+  // produces noise rather than signal.
+  /(^|\/)__pycache__\//,
+  /\.py[cod]$/i,
+  /\.(mypy_cache|pytest_cache|ruff_cache)\//,
+];
+
+/**
+ * Files that must never be TRACKED at all.
+ *
+ * .gitignore already excludes them, but an ignore rule only binds files that
+ * were ignored when it was added: `git add -f`, a `!` negation, or a pattern
+ * that stopped matching after a rename all put a live .env into history,
+ * where removing the file does not remove the secret. A tracked env file is
+ * therefore reported as a finding in its own right, independent of its
+ * contents — which also means a harmless `.env.example` naming a variable
+ * still passes, because it is a different filename.
+ */
+const FORBIDDEN_TRACKED = [
+  {
+    re: /(^|\/)\.env($|\.)/,
+    // `.env.example` / `.env.sample` are documentation and are committed on
+    // purpose in most repos; everything else is a live secret file.
+    allow: /(^|\/)\.env\.(example|sample|template)$/,
+    label: 'environment file is tracked in Git',
+  },
+  {
+    re: /(^|\/)(\.?id_(rsa|dsa|ecdsa|ed25519)|\.?(npmrc|pypirc|netrc)|credentials)$/,
+    label: 'credential file is tracked in Git',
+  },
 ];
 
 function mask(value) {
@@ -108,6 +156,15 @@ function isAllowed(match, line) {
 const findings = [];
 const files = listFiles();
 
+const trackedIssues = [];
+for (const file of files) {
+  for (const rule of FORBIDDEN_TRACKED) {
+    if (!rule.re.test(file)) continue;
+    if (rule.allow?.test(file)) continue;
+    trackedIssues.push({ file, label: rule.label });
+  }
+}
+
 for (const file of files) {
   if (SKIP_PATH.some((pattern) => pattern.test(file))) continue;
   let text;
@@ -130,17 +187,32 @@ for (const file of files) {
   });
 }
 
-if (findings.length === 0) {
+if (findings.length === 0 && trackedIssues.length === 0) {
   console.log(`secret scan: clean (${files.length} ${MODE} file(s) checked)`);
   process.exit(0);
 }
 
-console.error(`secret scan: ${findings.length} potential credential(s) found\n`);
-for (const finding of findings) {
-  console.error(`  ${finding.file}:${finding.line}  ${finding.rule}  ${finding.preview}`);
+if (trackedIssues.length) {
+  console.error(`secret scan: ${trackedIssues.length} file(s) that must not be tracked\n`);
+  for (const issue of trackedIssues) {
+    console.error(`  ${issue.file}  ${issue.label}`);
+  }
+  console.error(
+    '\nUntrack it, add it to .gitignore, and rotate every secret it ever held —\n' +
+    'untracking does not remove it from history.\n',
+  );
 }
-console.error(
-  '\nRemove the value from the file, keep it in the provider/host environment,\n' +
-  'and rotate it if it was ever committed or pasted anywhere.',
-);
+
+if (findings.length) {
+  console.error(`secret scan: ${findings.length} potential credential(s) found\n`);
+  for (const finding of findings) {
+    console.error(`  ${finding.file}:${finding.line}  ${finding.rule}  ${finding.preview}`);
+  }
+}
+if (findings.length) {
+  console.error(
+    '\nRemove the value from the file, keep it in the provider/host environment,\n' +
+    'and rotate it if it was ever committed or pasted anywhere.\n',
+  );
+}
 process.exit(1);
