@@ -406,6 +406,7 @@ def test_command_surface() -> None:
     inv = (ROOT / "bot" / "cogs" / "inventory.py").read_text(encoding="utf-8")
     dig = (ROOT / "bot" / "cogs" / "digging.py").read_text(encoding="utf-8")
     mkt = (ROOT / "bot" / "cogs" / "marketplace.py").read_text(encoding="utf-8")
+    shop_src = (ROOT / "bot" / "shop.py").read_text(encoding="utf-8")
 
     check("registers /dig", 'app_commands.command(name="dig"' in dig)
     check("/dig has location autocomplete", "@dig.autocomplete" in dig)
@@ -424,7 +425,10 @@ def test_command_surface() -> None:
 
     check("registers /items encyclopedia", 'app_commands.command(name="items"' in inv)
     check("registers /collection", 'app_commands.command(name="collection"' in inv)
-    check("shop has section filters", "section" in inv and "_shop_section" in inv)
+    # Section filtering moved to bot/shop.py so rotation and stock have one
+    # owner; /shop view delegates to it rather than re-deriving sections.
+    check("shop has section filters", "section" in inv and "shopmod.shop_items(section)" in inv)
+    check("shop sections are defined in bot/shop.py", '"coin"' in shop_src)
     check("shop buy resolves a display name to a real id",
           "itemdb.resolve_item" in inv)
     check("inventory use refuses reserved items", "reserved_item_ids" in inv)

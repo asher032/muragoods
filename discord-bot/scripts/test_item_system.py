@@ -126,18 +126,35 @@ def test_model_typing() -> None:
 
 
 # ── 4. migration safety ────────────────────────────────────────────────
+# The ten ids below predate the item system and are referenced by live data
+# and live code, so the ID, the RARITY and the SELL price are load-bearing and
+# are asserted exactly.
+#
+# The BUY price is different. It was originally pinned to the pre-migration
+# value purely so the migration itself could not silently re-price anyone's
+# wealth. A later, deliberate shop rebalance moved those buy prices into their
+# rarity bands (and gave epic/godly items a price at all, which is what makes
+# them purchasable). The guard below now pins the REVIEWED values instead, so
+# it still catches accidental drift — which is what it is for — without
+# blocking an intentional rebalance.
 MIGRATED = {
-    # id: (buy_price, sell_price, rarity) — the exact pre-migration values.
-    "bread": (25, 10, "common"),
+    # id: (buy_price, sell_price, rarity)
+    "bread": (50, 10, "common"),
     "fishing_rod": (200, 80, "common"),
     "lucky_charm": (500, 200, "rare"),
     "mystery_box": (500, 0, "rare"),
-    "gem_shard": (0, 150, "epic"),
+    "gem_shard": (1500, 150, "epic"),
     "golden_hook": (2500, 1000, "epic"),
-    "adventure_ticket": (300, 0, "rare"),
-    "farm_plot_deed": (400, 0, "common"),
+    "adventure_ticket": (500, 0, "rare"),
+    "farm_plot_deed": (250, 0, "common"),
     "speed_fertilizer": (150, 50, "common"),
-    "omega_key": (0, 0, "godly"),
+    "omega_key": (7500, 0, "godly"),
+}
+
+#: The exact pre-migration buy prices, kept only to document what changed.
+PRE_REBALANCE_BUY = {
+    "bread": 25, "gem_shard": 0, "adventure_ticket": 300,
+    "farm_plot_deed": 400, "omega_key": 0,
 }
 
 
@@ -146,12 +163,20 @@ def test_migration() -> None:
         row = itemdb.get_item(item_id)
         if not check(f"migrated item {item_id} still exists", row is not None):
             continue
-        check(f"{item_id} buy price unchanged", row["buy_price"] == buy,
+        check(f"{item_id} buy price matches the reviewed value", row["buy_price"] == buy,
               f"{row['buy_price']} != {buy}")
         check(f"{item_id} sell price unchanged", row["sell_price"] == sell,
               f"{row['sell_price']} != {sell}")
         check(f"{item_id} rarity mapped into the five tiers", row["rarity"] == rarity,
               row["rarity"])
+        # The rebalance gave formerly-unbuyable items a price, and must never
+        # have quietly un-bought one that used to be purchasable.
+        if item_id in PRE_REBALANCE_BUY and PRE_REBALANCE_BUY[item_id] == 0:
+            check(f"{item_id} is now actually purchasable", row["shop_enabled"],
+                  "shop_enabled is false")
+        else:
+            check(f"{item_id} is still purchasable", row["shop_enabled"],
+                  "shop_enabled is false")
 
     # Items live systems depend on by id.
     for item_id in ("fishing_rod", "golden_hook", "gem_shard", "bread", "adventure_ticket",
@@ -190,8 +215,11 @@ def test_effects() -> None:
     for row in itemdb.CATALOG.values():
         if not row["effect_type"]:
             continue
-        cap = (itemdb.MAX_COIN_REWARD if itemdb.is_instant(row["effect_type"])
-               else itemdb.MAX_EFFECT_VALUE)
+        # Read the ceiling from the catalog rather than re-deriving it: effect
+        # values come in three categories (percentage, instant coin, absolute
+        # bank capacity) and a hardcoded two-way choice here would reject every
+        # capacity item the moment one is added.
+        cap = itemdb.effect_ceiling(row["effect_type"])
         check(f"{row['item_id']} effect value within bounds",
               0 <= row["effect_value"] <= cap, row["effect_value"])
 

@@ -43,10 +43,13 @@ def build() -> dict:
             "effectDuration": row["effect_duration"],
             "dropSources": list(row["drop_sources"]),
             "active": row["active"],
+            "shopEnabled": row["shop_enabled"],
+            "shopStock": row["shop_stock"],
         })
     return {
         "version": 1,
         "rarities": list(itemdb.RARITIES),
+        "shopBands": {k: [lo, hi] for k, (lo, hi) in itemdb.SHOP_BANDS.items()},
         "categories": list(itemdb.CATEGORIES),
         "rarityColors": itemdb.RARITY_COLORS,
         "rarityEmoji": itemdb.RARITY_EMOJI,

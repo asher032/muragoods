@@ -23,6 +23,7 @@ import operator
 import random
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import items
 
@@ -95,6 +96,7 @@ ECONOMY_DEFAULTS: dict = {
     "disabledItems": [],
     "lotteryTicketPrice": 100,
     "lotteryMaxTickets": 10,
+    "bankCapacity": 10000,
 }
 
 
@@ -172,12 +174,18 @@ async def record_txn(db, guild_id: int, user_id: int, kind: str, amount: int,
 
 async def apply_delta(db, guild_id: int, user_id: int, field: str, amount: int,
                       kind: str, source: str = "discord",
-                      metadata: dict | None = None) -> tuple[bool, dict]:
+                      metadata: dict | None = None,
+                      item_id: str | None = None) -> tuple[bool, dict]:
     """Atomically add `amount` (may be negative) to a wallet field.
 
     Negative results are refused by the guarded update itself — the write
     matches zero documents instead of creating a negative balance. Returns
     (applied, wallet-after-or-before).
+
+    `item_id` is forwarded to the ledger so a coin movement that was really an
+    item purchase (the Murashop) or an item sale (the market) records WHICH
+    item. Without it every such transaction reads as an anonymous coin delta,
+    which makes the economy unreviewable after the fact.
     """
     gid, uid = _gid(guild_id), _uid(user_id)
     filt: dict = {"guildId": gid, "userId": uid}
@@ -190,7 +198,8 @@ async def apply_delta(db, guild_id: int, user_id: int, field: str, amount: int,
         if doc is None:
             before = await db.economy.find_one({"guildId": gid, "userId": uid}) or {}
             return False, before
-        await record_txn(db, gid, uid, kind, amount, source, metadata=metadata)
+        await record_txn(db, gid, uid, kind, amount, source, item_id,
+                         metadata=metadata)
         return True, doc
     except Exception as exc:
         log.warning("apply_delta failed: %s", type(exc).__name__)
@@ -225,6 +234,413 @@ async def bank_move(db, guild_id: int, user_id: int, amount: int, direction: str
         return False, "Insufficient funds."
     await apply_delta(db, guild_id, user_id, in_field, amount, f"bank_{direction}_in")
     return True, "ok"
+
+
+# ── /deposit ───────────────────────────────────────────────────────────
+#: Suffix multipliers accepted in `/deposit 2k`. Case-insensitive.
+AMOUNT_SUFFIXES: dict[str, int] = {"k": 1_000, "m": 1_000_000, "b": 1_000_000_000}
+
+#: Words that mean "as much as the wallet and the bank will allow".
+MAX_WORDS: frozenset[str] = frozenset({"max", "all", "everything"})
+
+#: Hard ceiling on a single deposit, so a corrupt config or a `999999999b`
+#: request can never drive a wallet field into a value the rest of the economy
+#: cannot reason about.
+MAX_DEPOSIT = 1_000_000_000_000
+
+#: Default bank capacity for a guild that has not configured one. Generous
+#: enough that early players never feel walled in, tight enough that banking
+#: is a real decision rather than an infinite-money sink.
+DEFAULT_BANK_CAPACITY = 10_000
+
+#: Absolute ceiling on a configured base capacity, so a mistyped dashboard
+#: value cannot hand every member an unbounded bank.
+MAX_BASE_CAPACITY = 100_000_000
+
+
+def parse_amount(value: Any) -> tuple[int, str]:
+    """Parse a `/deposit` amount. Returns `(amount, mode)`.
+
+    `mode` is one of:
+      `"exact"`  — a literal coin amount
+      `"pct"`    — a percentage of the wallet (returned as 0–100, applied by
+                   the caller against the CURRENT balance, never by the client)
+      `"max"`    — as much as the wallet and bank capacity allow
+
+    Anything unparseable returns `(0, "invalid")` rather than raising, so a
+    member typing `/deposit banana` gets a message instead of a stack trace.
+    The caller re-validates the resolved amount, so a parser that returned a
+    bogus number still cannot move coins.
+    """
+    if isinstance(value, bool):
+        return 0, "invalid"
+    if isinstance(value, (int, float)):
+        amount = safe_int(value, 0)
+        return (amount, "exact") if amount > 0 else (0, "invalid")
+    if not isinstance(value, str):
+        return 0, "invalid"
+
+    text = value.strip()
+    if not text:
+        return 0, "invalid"
+    # Validate the digit-grouping separators BEFORE stripping them, so a
+    # malformed number like `1,00,0` is rejected rather than silently
+    # reinterpreted as 1000.
+    if not _separators_ok(text):
+        return 0, "invalid"
+    text = text.replace(",", "").replace("_", "").replace(" ", "")
+    if not text:
+        return 0, "invalid"
+
+    if text.lower() in MAX_WORDS:
+        return 0, "max"
+
+    # Percentage: a positive number strictly between 0 and 100. `0%` and
+    # `100%` are both rejected here — 0% is a no-op and 100% is what "max"
+    # is for, so accepting them would give two spellings for one meaning.
+    if text.endswith("%"):
+        body = text[:-1].strip()
+        pct = _decimal(body)
+        if pct is None or pct <= 0 or pct >= 100:
+            return 0, "invalid"
+        return int(pct), "pct"
+
+    # Suffix shorthand: 2k, 4.5K, 1m, 1b.
+    suffix = text[-1].lower()
+    if suffix in AMOUNT_SUFFIXES and len(text) > 1:
+        number = _decimal(text[:-1])
+        if number is None:
+            return 0, "invalid"
+        amount = int(number * AMOUNT_SUFFIXES[suffix])
+        if amount <= 0 or amount > MAX_DEPOSIT:
+            return 0, "invalid"
+        return amount, "exact"
+
+    number = _decimal(text)
+    if number is None:
+        return 0, "invalid"
+    amount = int(number)
+    if amount <= 0 or amount > MAX_DEPOSIT:
+        return 0, "invalid"
+    return amount, "exact"
+
+
+def _separators_ok(text: str) -> bool:
+    """True if `,`/`_`/space appear only as well-formed digit group separators.
+
+    `1,000` and `1 000` and `1_000` are fine. `1,00,0`, `,100`, `100,` and
+    `1,,000` are not — and must not be, because stripping them would turn
+    them into a different, valid-looking number.
+    """
+    body = text
+    for i, ch in enumerate(text):
+        if ch not in ",_ ":
+            continue
+        head = text[:i]
+        if not head or not head[-1].isdigit():
+            return False
+        rest = text[i + 1:]
+        if not rest:
+            return False
+        # Everything from this separator to the next must be a full group of
+        # three digits (or a single group to the end).
+        nxt = min((rest.find(c) for c in ",_ " if rest.find(c) != -1), default=len(rest))
+        group = rest[:nxt]
+        # Every group after the first must be exactly three digits, including
+        # the last one: `1,000` is a number, `1,00,0` and `1,000,00` are not.
+        if not group.isdigit() or len(group) != 3:
+            return False
+    return True
+
+
+def _decimal(text: str) -> float | None:
+    """Parse a plain decimal string. Returns None for anything else.
+
+    Deliberately strict: no signs, no exponents, no leading `.` junk, no
+    `inf`/`nan` — `_i`-style coercion elsewhere in the bot would accept those
+    and a `1e400` deposit must not become an error page.
+    """
+    if not text or len(text) > 24:
+        return None
+    body = text[1:] if text[0] in "+-" else text
+    if not body or not body.replace(".", "", 1).isdigit():
+        return None
+    if body.count(".") > 1:
+        return None
+    try:
+        value = float(text)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if value != value or value in (float("inf"), float("-inf")):
+        return None
+    return value
+
+
+def _bounded(value: Any, default: int, low: int, high: int) -> int:
+    """`safe_int` clamped into a range, so a bad stored config cannot produce a
+    negative or absurd capacity."""
+    return max(low, min(high, safe_int(value, default)))
+
+
+async def bank_capacity(db, guild_id: int, user_id: int) -> tuple[int, int, int]:
+    """`(effective, base, bonus)` bank capacity for a member.
+
+        effective = base + best active capacity bonus
+        base      = the guild's configured `bankCapacity`
+        bonus     = the best `bank_capacity` effect currently held or live
+
+    The bonus is only ever ADDED for the duration of the calculation. Nothing
+    here writes capacity to the wallet, so holding a capacity item raises the
+    ceiling and putting it down lowers the ceiling again without destroying
+    the coins already banked: callers floor the effective capacity at the
+    current bank balance, so a member can never hold more than they are
+    allowed, and can always get their own coins back out.
+    """
+    base = DEFAULT_BANK_CAPACITY
+    bonus = 0.0
+    try:
+        cfg = await get_economy_config(db, guild_id)
+        base = _bounded(cfg.get("bankCapacity"), DEFAULT_BANK_CAPACITY,
+                        1, MAX_BASE_CAPACITY)
+    except Exception:
+        pass
+    try:
+        effects = await active_item_effects(db, guild_id, user_id)
+        bonus = float(effects.get("bank_capacity", 0.0) or 0.0)
+    except Exception:
+        bonus = 0.0
+    if bonus < 0 or bonus != bonus or bonus in (float("inf"), float("-inf")):
+        bonus = 0.0
+    bonus = int(min(bonus, items.MAX_BANK_CAPACITY_BONUS))
+    return base + bonus, base, bonus
+
+
+def base_capacity_for(cfg: dict) -> int:
+    """The guild's configured base capacity, clamped to a sane range.
+
+    Deliberately NOT a function of net worth: an owner who sets 10,000 must
+    get 10,000 for every member, and capacity the owner cannot see or change
+    from the dashboard is not a setting.
+    """
+    return _bounded((cfg or {}).get("bankCapacity"), DEFAULT_BANK_CAPACITY,
+                    1, MAX_BASE_CAPACITY)
+
+
+async def deposit(db, guild_id: int, user_id: int, value: Any) -> tuple[bool, str, dict]:
+    """Move coins from a member's pocket into their bank.
+
+    Returns `(ok, message, detail)`. `detail` carries the numbers the command
+    needs for its response and the transaction record:
+
+        requested, deposited, walletBefore, walletAfter, bankBefore, bankAfter,
+        capacity, base, bonus, capped
+
+    The whole transfer is ONE guarded atomic update. The filter requires both
+    `balance >= amount` and `bank <= capacity - amount`, so two simultaneous
+    deposits can never jointly exceed capacity, and a member is never charged
+    for coins that did not move.
+    """
+    amount, mode = parse_amount(value)
+    if mode == "invalid":
+        return False, ("That isn't an amount I understand. Try `500`, `2k`, "
+                       "`50%` or `max`."), {}
+
+    wallet = await get_wallet(db, guild_id, user_id)
+    pocket = safe_int(wallet.get("balance"), 0)
+    banked = safe_int(wallet.get("bank"), 0)
+    if pocket < 0:
+        pocket = 0
+    if banked < 0:
+        banked = 0
+
+    # Capacity is computed from a net-worth tier plus live bonuses, so a
+    # member can always still access coins they banked before the ceiling
+    # dropped. That keeps `bank <= capacity` true even if a bonus expires.
+    try:
+        cfg = await get_economy_config(db, guild_id)
+    except Exception:
+        cfg = dict(ECONOMY_DEFAULTS)
+    _, bonus_base, bonus_amount = await bank_capacity(db, guild_id, user_id)
+    effective = max(base_capacity_for(cfg) + bonus_amount, banked, 1)
+    room = max(0, effective - banked)
+
+    if mode == "pct":
+        want = pocket * amount // 100
+    elif mode == "max":
+        want = min(pocket, room)
+    else:
+        want = amount
+
+    if want < 1:
+        if room <= 0 and pocket > 0:
+            return False, "🏦 Your bank is already at its capacity.", {
+                "requested": amount, "deposited": 0,
+                "walletBefore": pocket, "walletAfter": pocket,
+                "bankBefore": banked, "bankAfter": banked,
+                "capacity": effective, "base": bonus_base, "bonus": bonus_amount,
+                "capped": False,
+            }
+        return False, "You don't have enough coins to deposit that.", {
+            "requested": amount, "deposited": 0,
+            "walletBefore": pocket, "walletAfter": pocket,
+            "bankBefore": banked, "bankAfter": banked,
+            "capacity": effective, "base": bonus_base, "bonus": bonus_amount,
+            "capped": False,
+        }
+
+    if want > pocket:
+        return False, (f"You only have **{pocket:,}** coins in your pocket."), {
+            "requested": amount, "deposited": 0,
+            "walletBefore": pocket, "walletAfter": pocket,
+            "bankBefore": banked, "bankAfter": banked,
+            "capacity": effective, "base": bonus_base, "bonus": bonus_amount,
+            "capped": False,
+        }
+
+    # Deposit as much as actually fits. The excess is left in the pocket,
+    # never destroyed.
+    deposited = min(want, room)
+    if deposited < 1:
+        return False, "🏦 Your bank is already at its capacity.", {
+            "requested": amount, "deposited": 0,
+            "walletBefore": pocket, "walletAfter": pocket,
+            "bankBefore": banked, "bankAfter": banked,
+            "capacity": effective, "base": bonus_base, "bonus": bonus_amount,
+            "capped": False,
+        }
+
+    try:
+        from pymongo import ReturnDocument
+        after = await db.economy.find_one_and_update(
+            {"guildId": _gid(guild_id), "userId": _uid(user_id),
+             "balance": {"$gte": deposited},
+             "bank": {"$lte": effective - deposited}},
+            {"$inc": {"balance": -deposited, "bank": deposited}},
+            return_document=ReturnDocument.AFTER)
+    except Exception:
+        log.warning("deposit failed: %s", type(Exception).__name__)
+        after = None
+
+    if after is None:
+        # The guard rejected the write: either the balance moved under us or
+        # the bank filled up first. Re-read so the message is truthful.
+        fresh = await get_wallet(db, guild_id, user_id)
+        return False, "The deposit didn't go through — your balance or bank changed.", {
+            "requested": amount, "deposited": 0,
+            "walletBefore": pocket, "walletAfter": safe_int(fresh.get("balance"), 0),
+            "bankBefore": banked, "bankAfter": safe_int(fresh.get("bank"), 0),
+            "capacity": effective, "base": bonus_base, "bonus": bonus_amount,
+            "capped": False,
+        }
+
+    wallet_after = safe_int(after.get("balance"), 0)
+    bank_after = safe_int(after.get("bank"), 0)
+
+    # One ledger row for the whole transfer, in the existing economy_tx system,
+    # carrying the full before/after picture the command needs to be auditable.
+    await record_txn(
+        db, _gid(guild_id), _uid(user_id), "bank_deposit", -deposited, "/deposit",
+        None,
+        metadata={
+            "command": "/deposit",
+            "input": value if isinstance(value, str) else str(value),
+            "mode": mode,
+            "requested": amount,
+            "deposited": deposited,
+            "walletBefore": pocket, "walletAfter": wallet_after,
+            "bankBefore": banked, "bankAfter": bank_after,
+            "capacity": effective, "capacityBase": bonus_base,
+            "capacityBonus": bonus_amount,
+            "capped": deposited < want,
+        })
+
+    return True, "ok", {
+        "requested": amount, "deposited": deposited,
+        "walletBefore": pocket, "walletAfter": wallet_after,
+        "bankBefore": banked, "bankAfter": bank_after,
+        "capacity": effective, "base": bonus_base, "bonus": bonus_amount,
+        "capped": deposited < want,
+    }
+
+
+async def withdraw(db, guild_id: int, user_id: int, value: Any) -> tuple[bool, str, dict]:
+    """Move coins from a member's bank back into their pocket.
+
+    Mirrors `deposit`: same parser, same capacity model, same single guarded
+    atomic update. The bank is the source here, so the only limit is what is
+    actually banked — a withdrawal can never fail for capacity reasons, and a
+    deposit can never fail for the same reason twice.
+    """
+    amount, mode = parse_amount(value)
+    if mode == "invalid":
+        return False, ("That isn't an amount I understand. Try `500`, `2k`, "
+                       "`50%` or `max`."), {}
+
+    wallet = await get_wallet(db, guild_id, user_id)
+    pocket = max(0, safe_int(wallet.get("balance"), 0))
+    banked = max(0, safe_int(wallet.get("bank"), 0))
+    effective, base, bonus = await bank_capacity(db, guild_id, user_id)
+
+    if mode == "pct":
+        want = banked * amount // 100
+    elif mode == "max":
+        want = banked
+    else:
+        want = amount
+
+    if want < 1:
+        return False, "You don't have that many coins banked.", {
+            "requested": amount, "withdrawn": 0,
+            "walletBefore": pocket, "walletAfter": pocket,
+            "bankBefore": banked, "bankAfter": banked,
+            "capacity": effective, "base": base, "bonus": bonus,
+        }
+    if want > banked:
+        return False, f"You only have **{banked:,}** coins banked.", {
+            "requested": amount, "withdrawn": 0,
+            "walletBefore": pocket, "walletAfter": pocket,
+            "bankBefore": banked, "bankAfter": banked,
+            "capacity": effective, "base": base, "bonus": bonus,
+        }
+
+    took = min(want, banked)
+    try:
+        from pymongo import ReturnDocument
+        after = await db.economy.find_one_and_update(
+            {"guildId": _gid(guild_id), "userId": _uid(user_id),
+             "bank": {"$gte": took}},
+            {"$inc": {"bank": -took, "balance": took}},
+            return_document=ReturnDocument.AFTER)
+    except Exception:
+        log.warning("withdraw failed: %s", type(Exception).__name__)
+        after = None
+
+    if after is None:
+        fresh = await get_wallet(db, guild_id, user_id)
+        return False, "The withdrawal didn't go through — your bank changed.", {
+            "requested": amount, "withdrawn": 0,
+            "walletBefore": pocket, "walletAfter": max(0, safe_int(fresh.get("balance"), 0)),
+            "bankBefore": banked, "bankAfter": max(0, safe_int(fresh.get("bank"), 0)),
+            "capacity": effective, "base": base, "bonus": bonus,
+        }
+
+    await record_txn(
+        db, _gid(guild_id), _uid(user_id), "bank_withdraw", took, "/withdraw", None,
+        metadata={
+            "command": "/withdraw",
+            "input": value if isinstance(value, str) else str(value),
+            "mode": mode, "requested": amount, "withdrawn": took,
+            "walletBefore": pocket, "walletAfter": max(0, safe_int(after.get("balance"), 0)),
+            "bankBefore": banked, "bankAfter": max(0, safe_int(after.get("bank"), 0)),
+            "capacity": effective, "capacityBase": base, "capacityBonus": bonus,
+        })
+
+    return True, "ok", {
+        "requested": amount, "withdrawn": took,
+        "walletBefore": pocket, "walletAfter": max(0, safe_int(after.get("balance"), 0)),
+        "bankBefore": banked, "bankAfter": max(0, safe_int(after.get("bank"), 0)),
+        "capacity": effective, "base": base, "bonus": bonus,
+    }
 
 
 async def claim_cooldown(db, guild_id: int, user_id: int, field: str,
@@ -316,11 +732,36 @@ async def remove_item(db, guild_id: int, user_id: int, item_id: str, qty: int = 
 
 
 async def buy_item(db, guild_id: int, user_id: int, item_id: str, qty: int = 1) -> tuple[bool, str]:
+    """Purchase an item from the Murashop.
+
+    Validation runs in a fixed order — exists, enabled, available, priced,
+    funds, stock, ownable, then the atomic write — and NONE of those steps
+    consults the item's rarity. Whether the shop sells something is the
+    per-item `shop_enabled` flag; a shop-disabled item says so plainly rather
+    than being rejected as "too rare".
+    """
+    import shop as shopmod
+
+    # 1. the item exists
     row = items.get_item(item_id)
     if not row:
         return False, "Unknown item."
-    if not row["active"] or row["buy_price"] <= 0:
-        return False, "That item can't be bought."
+    item_id = row["item_id"]
+
+    # 2. it is enabled for the shop (explicit, per item — never per rarity)
+    if not row.get("shop_enabled"):
+        return False, f"**{row['name']}** isn't sold in the Murashop."
+
+    # 3. it is currently available
+    if not row["active"]:
+        return False, f"**{row['name']}** is not available right now."
+
+    # 4. it has valid pricing
+    price = safe_int(row.get("buy_price"), 0)
+    if price < 1:
+        return False, f"**{row['name']}** has no shop price."
+
+    # quantity, and a per-guild override of the shop decision
     if qty < 1 or qty > 99:
         return False, "Quantity must be 1–99."
     try:
@@ -329,11 +770,43 @@ async def buy_item(db, guild_id: int, user_id: int, item_id: str, qty: int = 1) 
             return False, "That item is disabled on this server."
     except Exception:
         pass
-    total = row["buy_price"] * qty
-    ok, _ = await apply_delta(db, guild_id, user_id, "balance", -total, "shop_buy", "discord", item_id)
-    if not ok:
+
+    # 7. the member can own it — a non-stackable item they already hold is a
+    # duplicate, and there is no reason to sell them a second copy.
+    if not row.get("stackable", True):
+        try:
+            inv = await db.economy_inv.find_one(
+                {"guildId": _gid(guild_id), "userId": _uid(user_id),
+                 f"items.{item_id}": {"$gt": 0}})
+            if inv:
+                return False, "You already own that."
+        except Exception:
+            pass
+
+    # 6. stock, claimed atomically BEFORE payment. Claiming first means the
+    # only way to lose a copy is to also lose the payment attempt, which we
+    # then undo; the reverse order could take a member's coins for a purchase
+    # that never delivered.
+    if not await shopmod.claim_stock(db, guild_id, item_id, qty):
+        return False, f"**{row['name']}** is out of stock this rotation."
+
+    # 5. the member can pay
+    total = price * qty
+    paid, _ = await apply_delta(db, guild_id, user_id, "balance", -total,
+                                "shop_buy", "discord", item_id=item_id)
+    if not paid:
+        await shopmod.restore_stock(db, guild_id, item_id, qty)
         return False, "Insufficient funds."
-    await add_item(db, guild_id, user_id, item_id, qty)
+
+    granted = await add_item(db, guild_id, user_id, item_id, qty)
+    if not granted:
+        # Refund rather than take coins for nothing. add_item only refuses an
+        # unknown id or a non-positive quantity, both already ruled out, so
+        # this is a belt-and-braces path rather than an expected outcome.
+        apply_delta(db, guild_id, user_id, "balance", total, "shop_buy_refund",
+                    "discord", item_id)
+        await shopmod.restore_stock(db, guild_id, item_id, qty)
+        return False, "That purchase could not be completed — you were not charged."
     return True, "ok"
 
 

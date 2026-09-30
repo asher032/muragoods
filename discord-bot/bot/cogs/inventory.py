@@ -15,6 +15,7 @@ import database
 import economy as eco
 import embeds
 import items as itemdb
+import shop as shopmod
 import rewards as rw
 import utils
 
@@ -33,9 +34,15 @@ def _rarity_line(row: dict) -> str:
 
 def _item_detail(row: dict) -> str:
     """Full item page. Every number here comes from the server-side catalog."""
-    buy = f"**{row['buy_price']:,}** coins" if row["buy_price"] else "Not for sale"
+    if row["shop_enabled"] and row["buy_price"]:
+        buy = f"**{row['buy_price']:,}** coins"
+    else:
+        buy = "Not sold in the Murashop"
     sell = f"**{row['sell_price']:,}** coins" if row["sellable"] else "Not sellable"
+    stock = row.get("shop_stock")
     flags = " · ".join(filter(None, [
+        (f"📦 {stock} per rotation" if stock is not None else "📦 Unlimited stock")
+        if row["shop_enabled"] else "",
         "🔄 Stackable" if row["stackable"] else "",
         "🤝 Tradeable" if row["tradeable"] else "🔒 Untradeable",
         "🛒 Sellable" if row["sellable"] else "",
@@ -56,33 +63,26 @@ def _item_detail(row: dict) -> str:
             f"{flags}")
 
 
-#: Shop sections. Derived from the catalog, not hand-listed: a section is a
-#: filter, so an item can never be in a section the catalog does not back.
-SHOP_SECTIONS: dict[str, str] = {
-    "essentials": "Main Shop",
-    "fishing": "Fishing",
-    "farming": "Farming",
-    "adventure": "Adventure",
-    "boxes": "Boxes & Packs",
-    "rare": "Rare Items",
-    "limited": "Limited",
-}
-
-_SECTION_RULES: dict[str, Any] = {
-    "essentials": lambda r: r["rarity"] in ("common", "uncommon"),
-    "fishing": lambda r: "fish" in r["drop_sources"] or r["effect_type"] == "fishing_bonus",
-    "farming": lambda r: "farm" in r["drop_sources"] or r["effect_type"] in ("farm_bonus",),
-    "adventure": lambda r: r["category"] in ("equipment", "sellable")
-    and ("work" in r["drop_sources"] or "adventure" in r["drop_sources"]),
-    "boxes": lambda r: r["category"] in ("loot_box", "pack"),
-    "rare": lambda r: r["rarity"] in ("rare", "epic", "godly") and r["buy_price"] > 0,
-    "limited": lambda r: "events" in r["drop_sources"] and r["buy_price"] > 0,
-}
+#: The Murashop sections live in `bot/shop.py` so the rotation and stock rules
+#: have one owner. They are re-exported here because the command's choice list
+#: and the help text are the shop's public surface.
+SHOP_SECTIONS: dict[str, str] = {k: v["label"] for k, v in shopmod.SECTIONS.items()}
 
 
-def _shop_section(section: str, rows: list[dict]) -> list[dict]:
-    rule = _SECTION_RULES.get((section or "").strip().lower())
-    return [r for r in rows if rule(r)] if rule else rows
+def _stock_text(remaining: int | None) -> str:
+    """Stock line for a shop row. `None` means unlimited."""
+    if remaining is None:
+        return "♾️ Unlimited"
+    if remaining <= 0:
+        return "❌ Out of stock"
+    return f"📦 Stock: {remaining}"
+
+
+def _shop_line(row: dict, remaining: int | None) -> str:
+    """One shop row: name, icon, rarity, description, price, stock."""
+    return (f"**{row['buy_price']:,}** coins · "
+            f"{itemdb.CATEGORY_LABELS[row['category']]} — {row['description']}\n"
+            f"{_stock_text(remaining)}")
 
 
 def _item_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
@@ -398,27 +398,34 @@ class InventoryGroup(commands.Cog):
                         category: str = "", rarity: str = "", query: str = "",
                         max_price: int | None = None):
         await interaction.response.defer(ephemeral=True)
-        found = itemdb.search_items(query, category, rarity, max_price)
-        stock = [r for r in found if r["buy_price"] > 0 and r["active"]]
-        if section:
-            stock = _shop_section(section, stock)
-        if not stock:
+        gid = interaction.guild.id
+        # `shop_enabled` is the only gate. Rarity is never one — epic and
+        # godly items are listed and sold exactly like everything else.
+        rows = [r for r in shopmod.shop_items(section)
+                if (not category or r["category"] == category)
+                and (not rarity or r["rarity"] == itemdb.normalize_rarity(rarity, ""))
+                and (not query or query.lower() in r["name"].lower())
+                and (max_price is None or r["buy_price"] <= max_price)]
+        if not rows:
             await interaction.followup.send(
-                "No items match those filters — try `/shop view` with no section.", ephemeral=True)
+                "No items match those filters — try `/shop view` with no filters.",
+                ephemeral=True)
             return
-        stock.sort(key=lambda r: (itemdb.RANK[r["rarity"]], r["buy_price"]))
-        label = SHOP_SECTIONS.get(section, "All")
+        stock = await shopmod.stock_map(db=database._db, guild_id=gid, rows=rows[:20])
+        label = SHOP_SECTIONS.get(section, "All Sections")
+        blurb = shopmod.SECTIONS.get(section, {}).get("blurb", "")
+        resets = ""
+        if section:
+            resets = f"\n🔄 Rotates in {shopmod.time_left(section)}"
         e = embeds.embed(f"🛒 Murashop — {label}",
-                         "Buy with `/shop buy item:<name>` · inspect with `/item <name>`",
+                         f"{blurb}{resets}".strip(),
                          embeds.GOLD)
-        shown = stock[:20]
-        for row in shown:
+        for row in rows[:20]:
             e.add_field(name=f"{itemdb.rarity_badge(row['rarity'])} {row['name']}",
-                        value=f"**{row['buy_price']:,}** coins · "
-                              f"{itemdb.CATEGORY_LABELS[row['category']]} — {row['description']}",
+                        value=_shop_line(row, stock.get(row["item_id"])),
                         inline=False)
-        e.set_footer(text=f"{len(shown)} of {len(stock)} items · sections: "
-                          + ", ".join(SHOP_SECTIONS))
+        e.set_footer(text=f"{min(len(rows), 20)} of {len(rows)} items · "
+                          f"buy with `/shop buy item:<name>`")
         await interaction.followup.send(embed=e, ephemeral=True)
 
     @shop.command(name="buy", description="Purchase items from the shop.")
@@ -432,15 +439,17 @@ class InventoryGroup(commands.Cog):
         if not row:
             await interaction.followup.send("Unknown item — try `/shop view`.", ephemeral=True)
             return
+        qty = max(1, min(eco.safe_int(quantity, 1), 99))
         ok, msg = await eco.buy_item(
-            database._db, interaction.guild.id, interaction.user.id,
-            row["item_id"], max(1, min(eco.safe_int(quantity, 1), 99)))
+            database._db, interaction.guild.id, interaction.user.id, row["item_id"], qty)
         if not ok:
             await interaction.followup.send(f"⚠️ {msg}", ephemeral=True)
             return
+        left = await shopmod.stock_left(database._db, interaction.guild.id, row["item_id"])
+        stock_note = "" if left is None else f"\n{_stock_text(left)} for this rotation."
         await interaction.followup.send(embed=embeds.ok(
             f"🛒 Bought {row['name']}",
-            f"**×{eco.safe_int(quantity, 1)}** for **{row['buy_price'] * eco.safe_int(quantity, 1):,}** coins.\n"
+            f"**×{qty}** for **{row['buy_price'] * qty:,}** coins.{stock_note}\n"
             f"Added to `/inventory`."))
 
     @shop.command(name="sell", description="Sell eligible items.")
