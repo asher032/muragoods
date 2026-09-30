@@ -208,7 +208,10 @@ LEVEL_DEFAULTS: dict = {
 _LEVEL_BG_DIR = _Path(__file__).resolve().parent / "assets" / "level_backgrounds"
 
 #: Set MURA_LEVEL_CARD_DEBUG=1 to log which theme each rendered card used.
-_DEBUG_CARD_BACKGROUND = str(_os.environ.get("MURA_LEVEL_CARD_DEBUG", "")).strip() not in ("", "0", "false", "False")
+#: Level cards are rendered on demand and are rare, so one diagnostic line per
+#: card is cheap and is the only way to tell "the selection is being ignored"
+#: apart from "the render failed" in production. Set to 0 to silence.
+_DEBUG_CARD_BACKGROUND = str(_os.environ.get("MURA_LEVEL_CARD_DEBUG", "1")).strip() not in ("", "0", "false", "False")
 
 SERVER_CARD_DEFAULT = "duck-toast"
 
@@ -267,16 +270,26 @@ def get_level_card_background(cfg: dict, *, guild_id: int | None = None,
 
     Falls back to the default ONLY when the guild has never chosen one (or
     chose one that no longer exists) — a valid selection is never replaced.
+
+    Reads BOTH stored spellings. `server_card_background` is the documented
+    name; `serverBackground` is what the dashboard has always written. Accepting
+    either means a guild whose value was saved under the other name renders its
+    selection instead of silently reverting to the default.
     """
-    raw = (cfg or {}).get("serverBackground")
+    stored = cfg or {}
+    raw = stored.get("server_card_background")
+    if raw is None:
+        raw = stored.get("serverBackground")
     theme = resolve_server_background(raw)
-    if raw is not None and raw != theme and _DEBUG_CARD_BACKGROUND:
+    if raw is not None and raw != theme:
         # The stored value is not a theme we know. Fall back rather than crash,
-        # and make it visible so the dashboard can be used to repair it.
-        print(f"INVALID_LEVEL_BACKGROUND_THEME guild_id={guild_id} invalidThemeId={raw!r}")
+        # and ALWAYS report it: a silent fallback here is indistinguishable
+        # from the dashboard setting having no effect.
+        print(f"INVALID_LEVEL_BACKGROUND_THEME guild_id={guild_id} "
+              f"invalidThemeId={raw!r} defaultTheme={theme}")
     if _DEBUG_CARD_BACKGROUND:
-        print(f"LEVEL CARD DEBUG guild_id={guild_id} backgroundTheme={theme} "
-              f"source={source} renderer=render_level_card")
+        print(f"LEVEL CARD DEBUG guild_id={guild_id} configuredBackground={raw!r} "
+              f"backgroundTheme={theme} source={source} renderer=render_level_card")
     return theme
 
 
@@ -287,17 +300,27 @@ def render_card_background(theme_id: str, w: int = 900, h: int = 260):
     legible on any artwork. Missing/unreadable file → dark solid fallback."""
     from PIL import Image, ImageDraw  # type: ignore
     base = Image.new("RGBA", (w, h), (20, 20, 28, 255))
-    meta = server_background_meta(resolve_server_background(theme_id))
+    resolved = resolve_server_background(theme_id)
+    meta = server_background_meta(resolved)
+    asset_name = str(meta.get("file") or "")
+    asset_path = _LEVEL_BG_DIR / asset_name
+    if _DEBUG_CARD_BACKGROUND:
+        print(f"LEVEL CARD RENDER: theme={resolved} asset={asset_name} "
+              f"assetPresent={asset_path.is_file()}")
     try:
-        art = Image.open(_LEVEL_BG_DIR / str(meta.get("file") or "")).convert("RGBA")
+        art = Image.open(asset_path).convert("RGBA")
         scale = max(w / max(1, art.width), h / max(1, art.height))
         art = art.resize((max(1, int(art.width * scale)), max(1, int(art.height * scale))))
         left = max(0, (art.width - w) // 2)
         top = max(0, (art.height - h) // 2)
         art = art.crop((left, top, left + w, top + h))
         base = Image.alpha_composite(base, art)
-    except Exception:
-        pass
+    except Exception as exc:
+        # NEVER swallow this. A missing or unreadable asset produced a flat dark
+        # card that is indistinguishable from "the background setting does
+        # nothing" — which is exactly the bug this diagnostic exists to expose.
+        print(f"LEVEL_BACKGROUND_ASSET_ERROR theme={resolved} "
+              f"asset={_LEVEL_BG_DIR.name}/{asset_name} detail={type(exc).__name__}")
     shade = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(shade)
     for y in range(h):

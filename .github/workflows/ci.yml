@@ -319,3 +319,11 @@ jobs:
       # blank card (which is indistinguishable from "the setting does nothing").
       - name: Level card backgrounds (distinct pixels, safe fallback)
         run: python discord-bot/scripts/test_level_card_backgrounds.py
+
+      # Reproduces the actual reported failure: the dashboard writes a
+      # guild_config the bot never reads, so /level keeps rendering the default
+      # while the save reports success. Proves the bot-owned write path closes
+      # it, that a second change needs no restart, and that the diagnostic
+      # reports both sides honestly.
+      - name: Level card config chain (dashboard write reaches the renderer)
+        run: python discord-bot/scripts/test_level_config_chain.py

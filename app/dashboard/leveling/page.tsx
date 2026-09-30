@@ -8,6 +8,7 @@ import { statusMessage } from '../components/selectors';
 import ModuleSettings from '../components/ModuleSettings';
 import LevelBackgroundSelector from '../components/LevelBackgroundSelector';
 import ServerCardPreview from '../components/ServerCardPreview';
+import LevelBackgroundLink from '../components/LevelBackgroundLink';
 import { resolveServerCardBackground } from '@/app/lib/server-card-backgrounds';
 
 interface LevelingOverview {
@@ -136,6 +137,15 @@ export default function LevelingPage() {
             (config as Record<string, Record<string, unknown>>)?.leveling?.serverBackground
           )}
           accent={(config as Record<string, Record<string, unknown>>)?.leveling?.cardColor}
+        />
+        {/* Which side of the chain is broken — the dashboard's record or
+            Murabot's. Without this, "saved but the card did not change" has no
+            way to tell a UI bug from a database mismatch from a renderer bug. */}
+        <LevelBackgroundLink
+          guildId={selected.id}
+          selectedTheme={resolveServerCardBackground(
+            (config as Record<string, Record<string, unknown>>)?.leveling?.serverBackground
+          )}
         />
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
           <button
