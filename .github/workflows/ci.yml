@@ -192,6 +192,18 @@ jobs:
       - name: Database architecture (two clusters, one identity, no credentials)
         run: python discord-bot/scripts/test_db_architecture.py
 
+      # `app.router.add_get("/x", handler)` takes the NAME `handler`. If the
+      # `def` has not run yet it raises NameError — and because every handler is
+      # nested inside `_health_server()`, the FIRST such failure aborts the
+      # whole function, so the TCPSite is never created and the bot serves no
+      # HTTP at all while still appearing online on Discord. That is exactly
+      # what happened: /leveling/background was registered ~90 lines above its
+      # own `def`, so the live bot answered 404 and the dashboard reported
+      # "Murabot could not be asked". This fails the build on any handler
+      # registered before it is defined.
+      - name: Bot HTTP routes are registered after their handlers exist
+        run: python scripts/check_route_registration.py
+
       - name: YouTube egress fallback (proxy configured)
         run: python discord-bot/scripts/test_youtube_egress_fallback.py
 

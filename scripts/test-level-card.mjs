@@ -372,6 +372,31 @@ section('[I] the diagnostic names the broken link');
   check('an unreachable bot does not accuse the database',
     !/BROKEN LINK/.test(offline.explanation), offline.explanation);
 
+  // A 404 from the running bot means the deployed build predates the route.
+  // This is the failure that was reported as "Murabot database: —" with
+  // BOT_API_UNAVAILABLE, and it has nothing to do with the database or the
+  // selected theme — the report must say so, and must carry the status code,
+  // or the operator goes looking in the wrong place forever.
+  const stale = diag.diagnoseBackground('frog-sky', null,
+    { code: 'ROUTE_NOT_REGISTERED', message: 'no endpoint' }, { status: 404 });
+  check('a missing route is diagnosed as a DEPLOYMENT problem',
+    /BROKEN LINK: DEPLOYMENT/.test(stale.explanation), stale.explanation);
+  check('the deployment verdict names the HTTP status',
+    /HTTP 404/.test(stale.explanation), stale.explanation);
+  check('the deployment verdict does not blame the database',
+    !/MURABOT_MONGODB_URI|different databases/.test(stale.explanation), stale.explanation);
+  check('the deployment verdict does not blame the selection',
+    /older version than this repository/.test(stale.explanation), stale.explanation);
+
+  // Any other transport failure still names its own status, so a 500 is never
+  // reported the same way as a 404.
+  const serverError = diag.diagnoseBackground('frog-sky', null,
+    { code: 'HTTP_500', message: 'boom' }, { status: 500 });
+  check('a 5xx reports its own status',
+    /HTTP 500/.test(serverError.explanation), serverError.explanation);
+  check('a 5xx is not called a deployment mismatch',
+    !/BROKEN LINK: DEPLOYMENT/.test(serverError.explanation), serverError.explanation);
+
   // The dangerous regression: reporting a verdict we cannot support.
   for (const [label, dash, b] of [
     ['bot unreachable', 'frog-sky', null],
