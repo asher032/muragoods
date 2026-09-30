@@ -10,6 +10,7 @@ import { mergeEconomySection, validateEconomyDraft } from '@/app/lib/economy-val
 import { invalidateBotPresence, validateChannelSetting } from '@/app/lib/discord-channels';
 import { isMurabotOwner, logOwnerCheck, ownerConfigurationProblem } from '@/app/lib/murabot-owner';
 import { pushLevelConfigToBot } from '@/app/lib/level-card-probe';
+import { verifyResource, invalidateGuild } from '@/app/lib/resource-verifier';
 
 const SERVER_CARD_IDS = new Set(SERVER_CARD_BACKGROUNDS.map((b) => b.id));
 
@@ -365,6 +366,34 @@ export async function PATCH(req: NextRequest) {
       Object.entries(safe.modules).slice(0, 16).map(([k, v]) => [k.slice(0, 30), Boolean(v)]),
     );
   }
+  if (safe.giveaways && typeof safe.giveaways === 'object') {
+    // This section used to have NO sanitiser at all. The revalidation block
+    // below read `update.giveaways`, the read-back echoed `persisted.giveaways`,
+    // and the dashboard rendered a full Giveaways form — but nothing in the
+    // PATCH ever built `update.giveaways`, so the write silently dropped the
+    // whole section. The dashboard reported success and the bot read the
+    // default config forever. Every field here is one the /giveaway command
+    // actually consumes (see bot/cogs/community.py), so they are written
+    // verbatim rather than inventing a second shape.
+    const g = safe.giveaways as Record<string, unknown>;
+    const num = (v: unknown, lo: number, hi: number, fb: number) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? Math.max(lo, Math.min(hi, Math.floor(n))) : fb;
+    };
+    update.giveaways = {
+      channelId: String(g.channelId || '').slice(0, 25),
+      logsChannelId: String(g.logsChannelId || '').slice(0, 25),
+      managerRoleId: String(g.managerRoleId || '').slice(0, 25),
+      requiredRoleId: String(g.requiredRoleId || '').slice(0, 25),
+      // Hours in the dashboard, minutes at the command boundary — converted on
+      // read in the cog so one stored unit serves both surfaces.
+      defaultDuration: num(g.defaultDuration, 1, 24 * 14, 24),
+      defaultWinners: num(g.defaultWinners, 1, 20, 1),
+      minAccountAge: num(g.minAccountAge, 0, 3650, 0),
+      requiredLevel: num(g.requiredLevel, 0, 100, 0),
+      requiredActivity: num(g.requiredActivity, 0, 3650, 0),
+    };
+  }
   if (safe.securitySettings && typeof safe.securitySettings === 'object') {
     const s = safe.securitySettings;
     update.securitySettings = {
@@ -381,6 +410,98 @@ export async function PATCH(req: NextRequest) {
       suggestionChannelId: String(c.suggestionChannelId || '').slice(0, 25),
       reportChannelId: String(c.reportChannelId || '').slice(0, 25),
     };
+  }
+
+  // ── Server-side revalidation of every channel/role in this write ───────
+  //
+  // The browser already checked these, and that check is a convenience, not a
+  // guarantee: the page is the untrusted party, `verified: true` arrives in the
+  // body, and the operator may have left the tab open while a channel was
+  // deleted. So the same objects are re-checked here, through Murabot, before
+  // anything is written.
+  //
+  // This is the step that makes the save transactional. A resource that cannot
+  // be verified is NOT a reason to clear it, to write an empty string over a
+  // working id, or to save the rest of the form and leave a half-applied state:
+  // if any named resource is rejected OR unknown, NOTHING in this section is
+  // written and the operator is told which field and why. Verified resources
+  // are never dropped because a different one failed.
+  if (update.community || update.giveaways) {
+    const RESOURCE_FIELDS: Array<{
+      section: 'community' | 'giveaways';
+      key: string;
+      kind: 'channel' | 'role' | 'category';
+      require: string[];
+    }> = [
+      { section: 'community', key: 'giveawayChannelId', kind: 'channel', require: ['view', 'send', 'embed'] },
+      { section: 'community', key: 'suggestionChannelId', kind: 'channel', require: ['view', 'send', 'embed'] },
+      { section: 'community', key: 'reportChannelId', kind: 'channel', require: ['view', 'send', 'embed'] },
+      { section: 'giveaways', key: 'channelId', kind: 'channel', require: ['view', 'send', 'embed', 'react'] },
+      { section: 'giveaways', key: 'logsChannelId', kind: 'channel', require: ['view', 'send', 'embed'] },
+      { section: 'giveaways', key: 'managerRoleId', kind: 'role', require: [] },
+      { section: 'giveaways', key: 'requiredRoleId', kind: 'role', require: [] },
+    ];
+
+    const resourceErrors: Array<{
+      field: string; label: string; code: string; message: string;
+      retryable: boolean;
+      missingPermissions?: Array<{ key: string; label: string }>;
+    }> = [];
+    for (const spec of RESOURCE_FIELDS) {
+      const sectionValue = spec.section === 'community' ? update.community : update.giveaways;
+      if (!sectionValue) continue;
+      const raw = (sectionValue as Record<string, unknown>)[spec.key];
+      const id = String(raw ?? '');
+      // An empty selection is a deliberate "unset", not a failed check, and is
+      // allowed through untouched.
+      if (!id) continue;
+      if (!/^\d{5,25}$/.test(id)) {
+        resourceErrors.push({
+          field: `${spec.section}.${spec.key}`, label: spec.key, code: 'INVALID_SELECTION',
+          message: `"${id}" is not a Discord id.`,
+          // Not retryable: retrying will not make a malformed id well-formed.
+          retryable: false,
+        });
+        continue;
+      }
+      const v = await verifyResource(guildId, spec.kind, id, spec.require,
+        { bypassCache: true });
+      if (v.code === 'VERIFIED') continue;        resourceErrors.push({
+          field: `${spec.section}.${spec.key}`,
+          label: spec.key,
+          code: v.code,
+          // A code that means "we could not find out" is reported as such, and is
+          // never presented as a broken selection.
+          message: v.message,
+          retryable: v.retryable,
+          ...(v.missingPermissions.length > 0
+            ? { missingPermissions: v.missingPermissions }
+            : {}),
+        });
+    }
+
+    if (resourceErrors.length > 0) {
+      // NOTHING is written. Not this section, not the rest of the form.
+      delete update.community;
+      delete update.giveaways;
+      logApi('/api/dashboard/config', 'config-save', 422, Date.now() - started,
+        `RESOURCE_REVALIDATION_FAILED:${resourceErrors.map((e) => e.code).join(',')}`);
+      return NextResponse.json({
+        success: false,
+        saved: false,
+        code: resourceErrors.every((e) => e.code === 'INVALID_SELECTION'
+          || e.code === 'PERMISSION_DENIED')
+          ? 'INVALID_SELECTION'
+          : 'DISCORD_UNVERIFIED',
+        retryable: resourceErrors.some((e) => e.retryable
+          && e.code !== 'INVALID_SELECTION' && e.code !== 'PERMISSION_DENIED'),
+        errors: resourceErrors,
+        message: 'Nothing was saved. '
+          + resourceErrors.map((e) => `${e.label}: ${e.message}`).join(' '),
+      }, { status: 422 });
+    }
+    // Everything checked out; the cached verdicts for this guild are now stale.
+    invalidateGuild(guildId);
   }
   if (safe.music && typeof safe.music === 'object') {
     const m = safe.music;

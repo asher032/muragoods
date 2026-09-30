@@ -177,12 +177,20 @@ section('[5] Raid Alerts A–C: a module toggle saves');
     /results\.filter\(\(r\) => r\.result\.verified && !r\.result\.valid\)/.test(modSrc));
   check('an unverifiable field is tracked separately',
     /const unverified = results\.filter\(\(r\) => !r\.result\.verified\)/.test(modSrc));
-  check('an unverifiable field is a WARNING, not a blocker',
-    /warnings\.push\(`⚠/.test(modSrc));
+  // An unverifiable field BLOCKS. A timeout must never be written over a
+  // working config, and must never be laundered into "invalid".
+  check('an unverifiable field BLOCKS the save, it is not a warning',
+    !/warnings\.push\(`⚠/.test(modSrc));
+  check('the block happens before save() is ever called',
+    /if \(unverified\.length > 0\)/.test(modSrc)
+    && modSrc.indexOf('if (unverified.length > 0)')
+      < modSrc.indexOf('const saved = await save()'));
+  check('a blocked save offers "Retry verification" without a reload',
+    /Retry verification/.test(modSrc));
+  check('a blocked save tells the operator nothing was changed',
+    /NOT been changed|was not changed|Nothing was saved/i.test(modSrc));
   check('only fields touched this session are pre-checked',
     /touched\.current\.has\(f\.key\)/.test(modSrc));
-  check('the save proceeds after an unverified warning',
-    /const saved = await save\(\);/.test(modSrc));
   check('the generic "Fix the selection above" advice is gone',
     !/Fix the selection above/.test(modSrc));
   check('no code path can blame a channel for an upstream failure',
@@ -204,42 +212,123 @@ section('[5] Raid Alerts A–C: a module toggle saves');
     /priorValue\(section, field\)[\s\S]{0,80}!== value/.test(routeSrc));
   check('the save route does not refuse when it has no bot token',
     /if \(idFields\.length > 0 && !bToken\)/.test(routeSrc));
-  check('an unverifiable Discord read no longer fails the save',
-    /saveWarnings\.push\([\s\S]{0,200}Murabot responds/.test(routeSrc));
+  // The giveaways section had NO sanitiser at all, so PATCH silently dropped
+  // it: the dashboard said "saved" and the bot read defaults forever.
+  check('the giveaways section has a sanitiser and is actually written',
+    /if \(safe\.giveaways && typeof safe\.giveaways === 'object'\)/.test(routeSrc)
+    && /update\.giveaways = \{/.test(routeSrc));
+  for (const field of ['channelId', 'logsChannelId', 'managerRoleId', 'requiredRoleId',
+    'defaultDuration', 'defaultWinners', 'minAccountAge', 'requiredLevel', 'requiredActivity']) {
+    check(`the sanitiser writes giveaways.${field}`, new RegExp(`\\b${field}:`).test(routeSrc));
+  }
+  // Save-time revalidation: the browser's `verified: true` is never trusted.
+  check('the save re-verifies resources server-side',
+    /await verifyResource\(/.test(routeSrc));
+  check('save-time revalidation bypasses the cache',
+    /bypassCache: true/.test(routeSrc));
+  check('a rejected resource is all-or-nothing',
+    /delete update\.community;[\s\S]{0,40}delete update\.giveaways;/.test(routeSrc));
+  check('a rejected resource answers 422 and saved: false',
+    /saved: false[\s\S]{0,900}status: 422/.test(routeSrc));
+  check('a rejected resource names the exact field',
+    /field: `\$\{spec\.section\}\.\$\{spec\.key\}`/.test(routeSrc));
+  check('a successful save invalidates the guild cache',
+    /invalidateGuild\(guildId\)/.test(routeSrc));
   check('the success response reports warnings separately',
     /warnings,/.test(routeSrc) && /\.\.\.\(warnings\.length > 0 \? \{ warnings \}/.test(routeSrc));
   check('the success response echoes the PERSISTED document',
     /const persisted = \(await collection\.findOne/.test(routeSrc));
+  check('the read-back includes the giveaways section',
+    /giveaways: persisted\.giveaways/.test(routeSrc));
 }
 
 // ── 6. Raid Alerts D–E: real verdicts still block, per field ─────────────
 section('[6] Raid Alerts D–E: real verdicts are specific and block');
 {
   const routeSrc = readFileSync(join(root, 'app/api/dashboard/resources/validate/route.ts'), 'utf8');
-  check('a deleted channel is CHANNEL_NOT_FOUND',
-    /CHANNEL_NOT_FOUND/.test(routeSrc));
-  check('only a real 404 is treated as absence',
-    /if \(chRes\.status !== 404\)/.test(routeSrc));
-  check('a channel the bot cannot read is CHANNEL_ACCESS_DENIED',
-    /CHANNEL_ACCESS_DENIED/.test(routeSrc));
+  const verSrc = readFileSync(join(root, 'app/lib/resource-verifier.ts'), 'utf8');
+  const botSrc = readFileSync(join(root, 'discord-bot/bot/main.py'), 'utf8');
+
+  // The dashboard must not open its OWN Discord client — that second client
+  // is what timed out and told the operator their channel was broken.
+  check('the dashboard no longer builds a Discord REST client',
+    !/chRes|d\.channels\.get|fetch\(.?https:\/\/discord\.com\/api/.test(routeSrc));
+  check('the dashboard asks Murabot, which already holds the guild state',
+    /from '@\/app\/lib\/resource-verifier'/.test(routeSrc)
+    && /verifyResource\(/.test(routeSrc));
+  check('Murabot exposes the gateway-cache verifier',
+    /add_post\("\/resources\/verify"/.test(botSrc));
+  check('the verifier authenticates with the existing bridge secret',
+    /DISCORD_BRIDGE_SECRET/.test(verSrc));
+  check('no second Discord token is introduced in the dashboard',
+    !/DISCORD_TOKEN|discord\.com\/api\/v\d/.test(verSrc));
+
+  // The closed set of states. A timeout is its own state.
+  for (const code of ['VERIFIED', 'INVALID_SELECTION', 'PERMISSION_DENIED',
+    'DISCORD_RATE_LIMITED', 'DISCORD_TIMEOUT', 'DISCORD_SERVICE_UNAVAILABLE',
+    'DISCORD_API_ERROR']) {
+    check(`the state set includes ${code}`, verSrc.includes(`'${code}'`));
+  }
+  check('a timeout is retryable', /DISCORD_TIMEOUT[\s\S]{0,120}retryable: true/.test(verSrc));
+  check('a timeout is never reported as an invalid selection',
+    !/DISCORD_TIMEOUT[\s\S]{0,160}outcome: 'invalid'/.test(verSrc));
+  check('INVALID_SELECTION is NOT retryable',
+    /INVALID_SELECTION[\s\S]{0,160}retryable: false/.test(verSrc));
+
   check('an unavailable check says verified: false',
-    /unverifiable\(/.test(routeSrc) && /verified:\s*false/.test(routeSrc));
+    /verified:\s*false/.test(routeSrc));
   check('a check that ran says verified: true',
-    /verified:\s*true/.test(routeSrc));
+    /verified: r\.outcome === 'verified'/.test(routeSrc)
+    || /verified:\s*true/.test(routeSrc));
   check('every failure carries a request id', /requestId/.test(routeSrc));
   check('a 429 carries Retry-After', /'Retry-After'/.test(routeSrc));
+  check('a rate limit is surfaced as its own state',
+    /DISCORD_RATE_LIMITED/.test(routeSrc));
   check('failures are logged with guild, kind and outcome',
-    /\[validate\]/.test(routeSrc) && /outcome=/.test(routeSrc));
+    /\[verify\]/.test(verSrc) && /outcome=/.test(verSrc));
   // The selected object's id is deliberately absent from the log line.
-  const logLine = (routeSrc.match(/`\[validate\][^`]*`/) ?? [''])[0];
-  check('the selected object id is never logged', !logLine.includes('objectId'), logLine);
+  // The line is built from concatenated template literals, so match across them.
+  const logStart = verSrc.indexOf('`[verify]');
+  const logLine = logStart === -1 ? '' : verSrc.slice(logStart, logStart + 320);
+  check('the selected object id is never logged', !/objectId=/.test(logLine), logLine);
   check('the log line names the request, guild, kind and outcome',
-    /requestId/.test(logLine) && /guild=/.test(logLine) && /kind=/.test(logLine));
+    /requestId/.test(logLine) && /guild=/.test(logLine) && /kind=/.test(logLine)
+    && /outcome=/.test(logLine) && /status=/.test(logLine) && /duration=/.test(logLine));
   check('the log carries no credentials',
-    !/console\.log\([^)]*(token|secret|password)/i.test(routeSrc));
+    !/console\.log\([^)]*(token|secret|password)/i.test(verSrc));
 
-  const botCheck = routeSrc.split('async function loadBotCheck')[0];
-  void botCheck;
+  // Deduplication and caching.
+  check('concurrent identical checks collapse into one call',
+    /inflight/.test(verSrc));
+  check('only VERIFIED verdicts are cached',
+    /outcome === 'verified'/.test(verSrc));
+  check('the cache can be bypassed by the save path',
+    /bypassCache/.test(verSrc));
+}
+
+// ── 6c. The giveaway runtime reads the config the dashboard saves ────────
+section('[6c] the giveaway runtime reads the saved config');
+{
+  const cogSrc = readFileSync(join(root, 'discord-bot/bot/cogs/community.py'), 'utf8');
+  check('the giveaway cog reads the guild config section',
+    /def giveaway_config/.test(cogSrc)
+    && /cfg\.get\("giveaways"\)/.test(cogSrc));
+  check('it reads the same guild document the dashboard writes',
+    /database\.get_guild_config/.test(cogSrc));
+  for (const field of ['channelId', 'logsChannelId', 'managerRoleId', 'requiredRoleId',
+    'defaultDuration', 'defaultWinners', 'minAccountAge', 'requiredLevel', 'requiredActivity']) {
+    check(`the runtime honours giveaways.${field}`, new RegExp(`"${field}"`).test(cogSrc));
+  }
+  check('a giveaway posts to the configured channel',
+    /configured_channel/.test(cogSrc));
+  check('a deleted configured channel refuses to start rather than posting elsewhere',
+    /no longer exists on this server/.test(cogSrc));
+  check('a missing permission names itself and starts nothing',
+    /Missing: /.test(cogSrc));
+  check('eligibility is checked at entry, not silently at draw time',
+    /_eligibility_error/.test(cogSrc));
+  check('the manager role can run giveaways without Manage Server',
+    /manager_role/.test(cogSrc));
 }
 
 // ── 7. Raid Alerts I–J: owner authorization still holds ─────────────────

@@ -850,14 +850,18 @@ export async function validateSelection(
   kind: 'channel' | 'category' | 'role' | 'member',
   id: string,
   require: string[] = [],
+  opts: { bypassCache?: boolean; timeoutMs?: number } = {},
 ): Promise<SelectionValidation> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12000);
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 12000);
   try {
     const resp = await fetch('/api/dashboard/resources/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ guildId, kind, id, require }),
+      // bypassCache is set on the save path: a cached answer may inform a
+      // selector the operator is still editing, but it must never be what
+      // authorises a write.
+      body: JSON.stringify({ guildId, kind, id, require, bypassCache: opts.bypassCache === true }),
       cache: 'no-store',
       signal: controller.signal,
     });

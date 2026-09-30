@@ -3110,6 +3110,198 @@ async def _health_server() -> None:
     app.router.add_get("/leveling/overview/{guild_id:\\d+}", leveling_overview)
     app.router.add_post("/self-test/gateway-drop", gateway_drop)
 
+    # ── Resource verification, from the gateway cache ──────────────────────
+    #
+    # The dashboard used to verify a channel or role by calling Discord's REST
+    # API directly, with its OWN copy of the bot token, from the site. That was
+    # a second Discord client for one bot, and it meant every selector did two
+    # to four blocking round-trips to discord.com inside a serverless function.
+    # Under a cold start, a throttle or a Cloudflare challenge those calls
+    # simply did not come back, and the panel reported "Discord did not respond
+    # in time" about a channel that was fine — which is how a giveaways save
+    # ended up both unverified and unwritable.
+    #
+    # Everything this endpoint needs is already in memory: the guild, its
+    # channels, its roles, their overwrites, and the bot's member object.
+    # Answering from the cache means zero Discord requests, so it cannot time
+    # out and cannot be rate limited. The dashboard keeps ONE credential, the
+    # bridge secret, and asks the process that already holds the state.
+
+    #: Permission keys the dashboard may request, mapped to the label an admin
+    #: recognises. Administrator is deliberately NOT here: it is never
+    #: required by a giveaway, and demanding it would reject setups that work.
+    _VERIFY_PERMS: dict = {
+        "view": (1024, "View Channel"),
+        "send": (2048, "Send Messages"),
+        "embed": (4096, "Embed Links"),
+        "history": (65536, "Read Message History"),
+        "react": (64, "Add Reactions"),
+        "manageMessages": (8192, "Manage Messages"),
+        "connect": (1048576, "Connect (voice)"),
+        "speak": (2097152, "Speak (voice)"),
+    }
+
+    def _verify_response(payload: dict, status: int) -> web.Response:
+        return web.json_response(payload, status=status)
+
+    async def resources_verify(request: web.Request) -> web.Response:
+        """POST /resources/verify — is this channel/role usable, and why not?
+
+        Body: { guildId, kind: channel|category|role|member, id, require: [] }
+
+        The outcome is always a code from a CLOSED set, and a code that means
+        "we could not find out" is never dressed up as a code that means "your
+        selection is wrong". That distinction is the whole point: a timeout must
+        never be able to mark a good channel invalid, and must never be able to
+        overwrite the configuration that is already working.
+        """
+        if not _authorized(request):
+            return _verify_response(
+                {"ok": False, "verified": False, "code": "AUTHENTICATION_ERROR",
+                 "message": "Bridge authentication failed."}, status=401)
+        try:
+            body = await request.json()
+        except Exception:
+            body = None
+        if not isinstance(body, dict):
+            return _verify_response(
+                {"ok": False, "verified": False, "code": "INVALID_REQUEST",
+                 "message": "An object body is required."}, status=400)
+        try:
+            guild_id = int(body.get("guildId"))
+            object_id = int(body.get("id"))
+        except (TypeError, ValueError):
+            return _verify_response(
+                {"ok": False, "verified": False, "code": "INVALID_GUILD_ID",
+                 "message": "Valid guildId and object id are required."}, status=400)
+        kind = str(body.get("kind") or "channel")
+        if kind not in ("channel", "category", "role", "member"):
+            return _verify_response(
+                {"ok": False, "verified": False, "code": "INVALID_OP",
+                 "message": "kind must be channel, category, role or member."}, status=400)
+        require = [str(r) for r in (body.get("require") or [])
+                   if str(r) in _VERIFY_PERMS]
+
+        base = {"ok": True, "guildId": str(guild_id), "kind": kind,
+                "id": str(object_id), "source": "gateway-cache", "checks": [],
+                "objectName": None, "missingPermissions": []}
+
+        # 1. Is the process even able to answer?
+        if bot.is_closed():
+            return _verify_response(
+                {**base, "ok": False, "verified": False, "retryable": True,
+                 "code": "DISCORD_SERVICE_UNAVAILABLE",
+                 "message": "Murabot has shut down. Nothing about this selection "
+                            "has been checked and nothing has been changed."}, status=503)
+        if not bot.is_ready():
+            return _verify_response(
+                {**base, "ok": False, "verified": False, "retryable": True,
+                 "code": "DISCORD_SERVICE_UNAVAILABLE",
+                 "message": "Murabot is not connected to Discord yet, so this "
+                            "selection has NOT been checked. Retry in a moment."},
+                status=503)
+        gateway_alive, hb_age, _ = gateway_liveness(bot)
+
+        # 2. Is it in the guild?
+        guild = bot.get_guild(guild_id)
+        if guild is None:
+            return _verify_response(
+                {**base, "ok": False, "verified": False, "retryable": False,
+                 "code": "BOT_NOT_IN_GUILD",
+                 "checks": [{"key": "installed", "label": "Bot installed on this server",
+                             "ok": False}],
+                 "message": "Murabot is not installed on this server. Invite it "
+                            "first — this selection has not been checked yet."},
+                status=404)
+        me = guild.me
+        if me is None:
+            return _verify_response(
+                {**base, "ok": False, "verified": False, "retryable": True,
+                 "code": "DISCORD_SERVICE_UNAVAILABLE",
+                 "message": "Murabot cannot read its own membership in this server."},
+                status=503)
+
+        checks: list = [{"key": "installed", "label": "Bot installed on this server",
+                         "ok": True}]
+
+        # 3. Does the object exist, in THIS guild?
+        obj = None
+        if kind in ("channel", "category"):
+            obj = guild.get_channel(object_id) or guild.get_thread(object_id)
+        elif kind == "role":
+            obj = guild.get_role(object_id)
+        elif kind == "member":
+            obj = guild.get_member(object_id)
+
+        if obj is None:
+            label = {"channel": "Channel", "category": "Category",
+                     "role": "Role", "member": "Member"}[kind]
+            return _verify_response(
+                {**base, "ok": True, "verified": True, "valid": False, "retryable": False,
+                 "code": "INVALID_SELECTION",
+                 "checks": checks + [{"key": "exists", "label": f"{label} found",
+                                      "ok": False}],
+                 "message": f"That {label.lower()} no longer exists on this server. "
+                            "It was probably deleted — select another one."},
+                status=404)
+
+        if kind == "category" and not hasattr(obj, "channels"):
+            return _verify_response(
+                {**base, "ok": True, "verified": True, "valid": False, "retryable": False,
+                 "code": "INVALID_SELECTION", "objectName": getattr(obj, "name", None),
+                 "checks": checks + [{"key": "type", "label": "Selection is a category",
+                                      "ok": False}],
+                 "message": f"“{getattr(obj, 'name', 'That')}” is not a category. "
+                            "Pick a category."}, status=404)
+
+        object_name = (f"#{getattr(obj, 'name', '')}" if kind in ("channel", "category")
+                       else f"@{getattr(obj, 'name', '')}" if kind == "role"
+                       else str(getattr(obj, "display_name", getattr(obj, "name", ""))))
+        checks.append({"key": "exists",
+                       "label": {"channel": "Channel found", "category": "Category found",
+                                 "role": "Role found", "member": "Member found"}[kind],
+                       "ok": True})
+
+        # 4. Permissions. discord.py resolves base roles, @everyone, role and
+        #    member overwrites for us, so this is the same answer the bot's own
+        #    runtime acts on rather than a re-implementation of it.
+        missing: list = []
+        if kind in ("channel", "category") and require:
+            perms = obj.permissions_for(me)
+            for rkey in require:
+                bit, label = _VERIFY_PERMS[rkey]
+                if not perms.value & bit:
+                    missing.append({"key": rkey, "label": label})
+        elif kind == "role" and require:
+            # A role cannot "send"; the meaningful check is that the bot can see
+            # and therefore assign it, and that it is not managed or above it.
+            if obj.managed:
+                missing.append({"key": "view", "label": "Role can be assigned by Murabot"})
+            elif obj >= me.top_role:
+                missing.append({"key": "view", "label": "Role is below Murabot's highest role"})
+
+        if missing:
+            names = ", ".join(m["label"] for m in missing)
+            return _verify_response(
+                {**base, "ok": True, "verified": True, "valid": False, "retryable": False,
+                 "code": "PERMISSION_DENIED", "objectName": object_name,
+                 "missingPermissions": missing,
+                 "checks": checks + [{"key": "permissions",
+                                      "label": f"Murabot can use {object_name}",
+                                      "ok": False}],
+                 "message": f"Murabot cannot use {object_name}. Missing: {names}."},
+                status=403)
+
+        return _verify_response(
+            {**base, "ok": True, "verified": True, "valid": True, "retryable": False,
+             "code": "VERIFIED", "objectName": object_name,
+             "gatewayHeartbeatAgeSeconds": round(hb_age, 1) if hb_age is not None else None,
+             "checks": checks + [{"key": "permissions",
+                                  "label": f"Murabot can use {object_name}", "ok": True}]},
+            status=200)
+
+    app.router.add_post("/resources/verify", resources_verify)
+
     # Read the route table off the router itself, after every add_* has run.
     # This is what makes "the deployed build does not have the endpoint" a
     # measurement rather than an inference from a 404.

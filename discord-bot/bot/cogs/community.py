@@ -19,6 +19,90 @@ import utils
 log = logging.getLogger("bot.community")
 
 
+async def giveaway_config(guild_id: int) -> dict:
+    """The Giveaways panel the dashboard saves, read from the SAME document.
+
+    The dashboard writes this section through /api/dashboard/config; if this
+    function read anything else the panel would be decorative, which is exactly
+    the bug that let "Giveaway settings cannot be saved" go unnoticed — the
+    command never consulted any config at all.
+    """
+    try:
+        cfg = await database.get_guild_config(guild_id)
+    except Exception:
+        log.warning("Giveaway config lookup failed — using defaults", exc_info=True)
+        return {}
+    raw = cfg.get("giveaways")
+    return raw if isinstance(raw, dict) else {}
+
+
+def _num(value, lo: int, hi: int, default: int) -> int:
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(lo, min(hi, n))
+
+
+async def _eligibility_error(guild, user, cfg: dict) -> str | None:
+    """None when `user` may enter, else the exact reason to show them.
+
+    Checked at ENTRY time rather than at draw time so an ineligible member is
+    told immediately instead of silently dropped after the giveaway ends.
+    """
+    if not guild or not user:
+        return None
+
+    required_role = str(cfg.get("requiredRoleId") or "").strip()
+    if required_role.isdigit():
+        role = guild.get_role(int(required_role))
+        # A role id that no longer resolves is a real problem — refusing entry
+        # beats admitting everyone to a giveaway the panel says is restricted.
+        if role is None:
+            return "This giveaway's required role no longer exists on the server."
+        if not any(r.id == role.id for r in user.roles):
+            return f"You need the **{role.name}** role to enter this giveaway."
+
+    min_days = _num(cfg.get("minAccountAge"), 0, 3650, 0)
+    if min_days > 0:
+        member = guild.get_member(user.id)
+        joined = getattr(member, "joined_at", None) or getattr(user, "joined_at", None)
+        if joined is not None and joined.tzinfo is None:
+            from datetime import timezone as _tz
+            joined = joined.replace(tzinfo=_tz.utc)
+        if joined is not None:
+            age_days = (discord.utils.utcnow() - joined).days
+            if age_days < min_days:
+                return (f"Your account must be at least **{min_days} day(s)** old "
+                        f"to enter — {age_days} day(s) so far.")
+
+    active_days = _num(cfg.get("requiredActivity"), 0, 3650, 0)
+    if active_days > 0:
+        member = guild.get_member(user.id)
+        joined = getattr(member, "joined_at", None) or getattr(user, "joined_at", None)
+        if joined is not None and joined.tzinfo is None:
+            from datetime import timezone as _tz
+            joined = joined.replace(tzinfo=_tz.utc)
+        if joined is not None:
+            active = (discord.utils.utcnow() - joined).days
+            if active < active_days:
+                return (f"You need **{active_days} day(s)** of activity on this server "
+                        f"to enter — {active} day(s) so far.")
+
+    required_level = _num(cfg.get("requiredLevel"), 0, 100, 0)
+    if required_level > 0:
+        try:
+            doc = await database._db.xp.find_one(
+                {"guildId": guild.id, "userId": user.id}) or {}
+        except Exception:
+            log.warning("Giveaway level gate lookup failed", exc_info=True)
+            return "Level requirements could not be checked. Try again shortly."
+        if _num(doc.get("level"), 0, 100, 0) < required_level:
+            return f"You need to be **level {required_level}** to enter this giveaway."
+
+    return None
+
+
 class GiveawayEntryView(utils.SafeView):
     """Persistent-style Join button attached to giveaway messages."""
 
@@ -28,6 +112,12 @@ class GiveawayEntryView(utils.SafeView):
     @discord.ui.button(label="Join Giveaway", style=discord.ButtonStyle.success, emoji="🎁")
     async def join(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
+        if interaction.guild is not None:
+            blocked = await _eligibility_error(
+                interaction.guild, interaction.user, await giveaway_config(interaction.guild.id))
+            if blocked:
+                await interaction.followup.send(f"✕ {blocked}", ephemeral=True)
+                return
         result = await database.enter_giveaway(interaction.message.id, interaction.user.id)
         if result is None:
             await interaction.followup.send("This giveaway has ended.", ephemeral=True)
@@ -80,22 +170,74 @@ class CommunityCog(commands.Cog):
     @app_commands.describe(prize="What are you giving away?", minutes="Duration in minutes",
                            winners="Number of winners")
     async def giveaway(self, interaction: discord.Interaction, prize: str,
-                       minutes: int, winners: int = 1):
+                       minutes: int | None = None, winners: int | None = None):
         await interaction.response.defer()
-        if not interaction.user.guild_permissions.manage_guild:
-            await interaction.followup.send("You need **Manage Server** permission.", ephemeral=True)
+        cfg = await giveaway_config(interaction.guild.id)
+        # Manage Server, OR the role the dashboard nominated as giveaway manager.
+        manager_role = str(cfg.get("managerRoleId") or "").strip()
+        allowed = bool(interaction.user.guild_permissions.manage_guild)
+        if not allowed and manager_role.isdigit():
+            role = interaction.guild.get_role(int(manager_role))
+            allowed = role is not None and any(
+                r.id == role.id for r in interaction.user.roles)
+        if not allowed:
+            await interaction.followup.send(
+                "You need **Manage Server** permission"
+                + (" (or the Giveaway Manager role)." if manager_role else "."),
+                ephemeral=True)
             return
+        # The dashboard's defaults apply when the operator did not override them
+        # on this specific command.
+        if minutes is None:
+            minutes = _num(cfg.get("defaultDuration"), 1, 24 * 14, 24) * 60
+        if winners is None:
+            winners = _num(cfg.get("defaultWinners"), 1, 20, 1)
         minutes = max(1, min(minutes, 60 * 24 * 14))
         ends_at = discord.utils.utcnow() + timedelta(minutes=minutes)
+
+        # Post where the dashboard says giveaways live. Falls back to the
+        # invoking channel only when no channel is configured, so an existing
+        # setup can never break by turning the panel on.
+        target = interaction.channel
+        configured_channel = str(cfg.get("channelId") or "").strip()
+        if configured_channel.isdigit():
+            resolved = interaction.guild.get_channel(int(configured_channel))
+            if resolved is None:
+                await interaction.followup.send(
+                    "✕ The configured Giveaway Channel no longer exists on this server. "
+                    "Nothing was started — fix it in the dashboard.", ephemeral=True)
+                return
+            if not isinstance(resolved, (discord.TextChannel, discord.Thread)):
+                await interaction.followup.send(
+                    "✕ The configured Giveaway Channel is not a text channel. "
+                    "Nothing was started.", ephemeral=True)
+                return
+            perms = resolved.permissions_for(interaction.guild.me)
+            if not perms or not (perms.view_channel and perms.send_messages and perms.embed_links):
+                missing = [n for n, ok in (("View Channel", perms.view_channel if perms else False),
+                                           ("Send Messages", perms.send_messages if perms else False),
+                                           ("Embed Links", perms.embed_links if perms else False)) if not ok]
+                await interaction.followup.send(
+                    f"✕ I cannot post giveaways in <#{resolved.id}>. "
+                    f"Missing: {', '.join(missing)}. Nothing was started.", ephemeral=True)
+                return
+            target = resolved
+
         e = embeds.embed("🎁 GIVEAWAY", f"**{prize[:150]}**", embeds.GOLD)
         e.add_field(name="⏰ Ends", value=f"<t:{int(ends_at.timestamp())}:R>", inline=True)
         e.add_field(name="🏆 Winners", value=str(max(1, min(winners, 20))), inline=True)
         e.add_field(name="🎉 Host", value=interaction.user.mention, inline=True)
         e.set_footer(text="Press the button to enter • MuraStream")
-        msg = await interaction.followup.send(embed=e, view=GiveawayEntryView())
+        msg = await target.send(embed=e, view=GiveawayEntryView())
         await database.create_giveaway(
-            interaction.guild.id, interaction.channel.id, msg.id,
+            interaction.guild.id, target.id, msg.id,
             prize, interaction.user.id, ends_at, winners)
+        if target.id != interaction.channel.id:
+            await interaction.followup.send(
+                f"🎁 Giveaway started in <#{target.id}> (the configured Giveaway Channel).",
+                ephemeral=True)
+        # The confirm above replaces the deferred placeholder in the invoking
+        # channel; nothing further is sent there.
 
     @app_commands.command(name="reroll", description="Reroll a giveaway winner (Manage Server).")
     @app_commands.describe(channel="Channel the giveaway ended in")
@@ -113,9 +255,20 @@ class CommunityCog(commands.Cog):
         winners = random.sample(doc["entries"], winners_n)
         mentions = " ".join(f"<@{w}>" for w in winners)
         try:
+            # A reroll may name the winning channel explicitly, but when the
+            # dashboard configured a Giveaway Logs channel that is where the
+            # audit trail belongs.
+            cfg = await giveaway_config(interaction.guild.id)
+            logs_id = str(cfg.get("logsChannelId") or "").strip()
+            logs = (interaction.guild.get_channel(int(logs_id))
+                    if logs_id.isdigit() else None)
             await channel.send(
                 content=f"🎉 Reroll! {mentions} — you won **{doc['prize']}**!",
                 embed=embeds.ok("🎁 Giveaway Rerolled", f"**{doc['prize']}**\nNew winner(s): {mentions}"))
+            if isinstance(logs, discord.TextChannel):
+                await logs.send(embed=embeds.ok(
+                    "📋 Giveaway Rerolled",
+                    f"**{str(doc.get('prize') or '')[:200]}**\nNew winner(s): {mentions}"))
             await interaction.followup.send("Reroll sent ✅", ephemeral=True)
         except discord.HTTPException as exc:
             await interaction.followup.send(f"Discord rejected the reroll: {exc.status}", ephemeral=True)
@@ -349,9 +502,36 @@ class CommunityCog(commands.Cog):
                                             f"{len(doc['entries'])} entries. Congratulations!"))
                     except discord.HTTPException:
                         pass
+                    # The winner announcement above stays public in the giveaway
+                    # channel; the audit line goes to the configured Giveaway
+                    # Logs channel when one is set.
+                    await self._log_giveaway(g, mentions, len(doc["entries"]))
             except Exception:
                 log.exception("Giveaway loop error")
             await asyncio.sleep(30)
+
+    async def _log_giveaway(self, g: dict, mentions: str, entries: int) -> None:
+        """Post the giveaway result to Giveaway Logs, if the panel set one."""
+        try:
+            cfg = await giveaway_config(g.get("guildId"))
+            logs_id = str(cfg.get("logsChannelId") or "").strip()
+            if not logs_id.isdigit():
+                return
+            guild = self.bot.get_guild(g.get("guildId"))
+            if guild is None:
+                return
+            logs = guild.get_channel(int(logs_id))
+            if not isinstance(logs, discord.TextChannel):
+                return
+            await logs.send(embed=embeds.ok(
+                "📋 Giveaway Ended",
+                f"**{str(g.get('prize') or '')[:200]}**\n"
+                f"Winners: {mentions}\nEntries: {entries}\n"
+                f"Winners configured: {g.get('winners', 1)}"))
+        except discord.HTTPException:
+            log.warning("Giveaway log post failed for %s", g.get("messageId"), exc_info=True)
+        except Exception:
+            log.exception("Giveaway logging error")
 
     async def _reminder_loop(self):
         await self.bot.wait_until_ready()

@@ -108,10 +108,25 @@ export default function ModuleSettings({ moduleId, title, description }: {
   // Save after re-checking the RESOURCE fields this session changed:
   // existence + bot permissions are verified live, never trusted from the UI.
   //
-  // A check that could not run (upstream down, throttled, timed out) is not a
-  // failed field — it is reported as unverified and does not block the write,
-  // because a toggle like "Raid Alerts: ON" requires no Discord access at all
-  // and must not be refused because Murabot was briefly unreachable.
+  // Two different failures, two different consequences, and conflating them was
+  // the bug:
+  //
+  //   verified && !valid  → a real verdict. The selection is wrong. Block, and
+  //                         say which field and why.
+  //   !verified           → we never found out (timeout, rate limit, Murabot
+  //                         down). The selection may be perfectly fine. Block
+  //                         the WRITE, because writing an unverified value over
+  //                         a known-good one is how a working giveaway channel
+  //                         gets replaced with a broken id — but do NOT call it
+  //                         invalid, and do NOT clear the stored value. Offer a
+  //                         retry instead.
+  //
+  // Only fields the operator actually CHANGED are gated. A plain toggle needs no
+  // Discord access and must never be refused because Murabot was briefly
+  // unreachable, so it is never in `checks` in the first place.
+  const [unverifiedFields, setUnverifiedFields] = useState<
+    Array<{ key: string; label: string; message: string; retryable: boolean }>
+  >([]);
   const saveWithValidation = async () => {
     setValidateError('');
     // Only fields the operator ACTUALLY CHANGED are worth pre-checking.
@@ -132,6 +147,7 @@ export default function ModuleSettings({ moduleId, title, description }: {
 
     // Warnings ride along with a successful save; they never block it.
     const warnings: string[] = [];
+    setUnverifiedFields([]);
     if (selected && checks.length > 0) {
       let results: Array<{ key: string; result: Awaited<ReturnType<typeof validateSelection>> }> | null = null;
       try {
@@ -139,15 +155,28 @@ export default function ModuleSettings({ moduleId, title, description }: {
           checks.map(async (c) => ({
             key: c.key,
             result: await validateSelection(
-              selected.id, c.kind, c.id, c.kind === 'channel' ? ['view', 'send'] : [],
+              selected.id, c.kind, c.id, c.kind === 'channel' ? ['view', 'send', 'embed'] : [],
+              // This check GUARDS A WRITE, so it must not be answered from cache.
+              { bypassCache: true },
             ),
           })),
         );
       } catch {
-        // Could not run the pre-checks at all. That is a service problem, not
-        // a reason to refuse a save of a toggle that needs no Discord access.
-        warnings.push('⚠ Could not verify your channel selections before saving (the bot service did not answer). '
-          + 'Your settings were saved; run the check again if something looks wrong.');
+        // The pre-checks could not run at all. Nothing was learned, so nothing
+        // is written: an unverifiable save is not a successful one.
+        const labels = checks.map((c) => mod?.fields.find((f) => f.key === c.key)?.label ?? c.key);
+        setUnverifiedFields(checks.map((c) => ({
+          key: c.key,
+          label: mod?.fields.find((f) => f.key === c.key)?.label ?? c.key,
+          message: 'The verification service did not answer.',
+          retryable: true,
+        })));
+        setValidateError(
+          `✕ Nothing was saved.\n\nMurabot could not be reached, so the following ${labels.length === 1 ? 'selection was' : 'selections were'} `
+          + `NOT checked:\n${labels.map((l) => `• ${l}`).join('\n')}\n\n`
+          + 'Your existing settings are unchanged. Use “Retry verification” and try again.',
+        );
+        return;
       }
       if (results) {
         setValidation((v) => {
@@ -185,9 +214,25 @@ export default function ModuleSettings({ moduleId, title, description }: {
           );
           return;
         }
-        for (const r of unverified) {
-          const label = mod?.fields.find((f) => f.key === r.key)?.label ?? r.key;
-          warnings.push(`⚠ ${label}: could not be checked — ${r.result.message}`);
+        if (unverified.length > 0) {
+          // We could not check these. Block the write, keep the stored values,
+          // and say plainly that nothing is known about the selection — never
+          // that it is wrong.
+          const rows = unverified.map((r) => ({
+            key: r.key,
+            label: mod?.fields.find((f) => f.key === r.key)?.label ?? r.key,
+            message: r.result.message,
+            retryable: r.result.failure?.retryable !== false,
+          }));
+          setUnverifiedFields(rows);
+          setValidateError(
+            `✕ Nothing was saved.\n\n${rows.length === 1 ? 'A selection could not be checked' : `${rows.length} selections could not be checked`} `
+            + 'because Discord did not confirm it:\n'
+            + rows.map((r) => `• ${r.label}: ${r.message}`).join('\n')
+            + '\n\nThis is NOT a statement that these selections are wrong — they were never examined. '
+            + 'Your existing settings are unchanged. Use “Retry verification” and try again.',
+          );
+          return;
         }
       }
     }
@@ -353,7 +398,24 @@ export default function ModuleSettings({ moduleId, title, description }: {
           {saveLabel}
         </button>
         {(error || validateError) && (
-          <span style={{ color: '#ff6b6b', fontSize: 13 }}>{validateError || error}</span>
+          <span style={{ color: '#ff6b6b', fontSize: 13, whiteSpace: 'pre-wrap' }}>
+            {validateError || error}
+          </span>
+        )}
+        {/* Retry without reloading. Re-running the check is the whole remedy
+            when Discord did not answer, and making the operator reload the
+            dashboard to try again is what turned a transient blip into
+            "I cannot save this at all". */}
+        {unverifiedFields.length > 0 && (
+          <button
+            type="button"
+            onClick={() => { void saveWithValidation(); }}
+            disabled={saveState === 'saving'}
+            className="cc-btn"
+            style={{ fontSize: 12, marginTop: 8 }}
+          >
+            {saveState === 'saving' ? 'Retrying…' : 'Retry verification'}
+          </button>
         )}
       </div>
 
