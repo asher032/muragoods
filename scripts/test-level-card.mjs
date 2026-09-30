@@ -40,7 +40,7 @@ const section = (t) => console.log(`\n${t}`);
 
 // ── Load the site's canonical theme module ───────────────────────────────
 const outDir = mkdtempSync(join(tmpdir(), 'level-card-'));
-for (const file of ['level-card-themes']) {
+for (const file of ['level-card-themes', 'level-background-diagnosis']) {
   const { outputText } = ts.transpileModule(
     readFileSync(join(root, 'app/lib', `${file}.ts`), 'utf8'),
     { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }, fileName: `${file}.ts` },
@@ -49,6 +49,7 @@ for (const file of ['level-card-themes']) {
 }
 const require = createRequire(import.meta.url);
 const themes = require(join(outDir, 'level-card-themes.js'));
+const diag = require(join(outDir, 'level-background-diagnosis.js'));
 const { LEVEL_CARD_THEMES, LEVEL_CARD_DEFAULT_THEME, resolveLevelCardTheme } = themes;
 
 section('[A] the canonical theme list');
@@ -281,6 +282,59 @@ section('[H] every card path goes through the shared resolver');
   check('the dashboard and the bot share one theme list',
     readFileSync(join(root, 'app/lib/server-card-backgrounds.ts'), 'utf8')
       .includes("from './level-card-themes'"));
+}
+
+section('[I] the diagnostic names the broken link');
+{
+  const bot = (raw, documentFound = true, db = 'murastream_bot') => ({
+    documentFound, database: db, databaseSource: 'MONGO_DB',
+    raw, field: raw ? 'serverBackground' : null,
+    resolved: raw || 'duck-toast', asset: 'x.jpg', assetPresent: true,
+    defaultTheme: 'duck-toast', valid: true,
+  });
+
+  const match = diag.diagnoseBackground('frog-sky', bot('frog-sky'), null);
+  check('agreeing sides report MATCH', match.verdict === 'MATCH', match.verdict);
+  check('a match says no restart is needed', /no restart/i.test(match.explanation), match.explanation);
+
+  // THE REPORTED BUG: the dashboard saved a selection the bot cannot see.
+  const ahead = diag.diagnoseBackground('frog-sky', bot(null), null);
+  check('a selection the bot cannot see is DASHBOARD_AHEAD', ahead.verdict === 'DASHBOARD_AHEAD', ahead.verdict);
+  check('the explanation names the database read as broken',
+    /BROKEN LINK: DATABASE READ/.test(ahead.explanation), ahead.explanation);
+  check('the explanation names the database being used',
+    ahead.explanation.includes('murastream_bot'), ahead.explanation);
+  check('the explanation tells the operator which variables to set',
+    /MURABOT_MONGODB_URI/.test(ahead.explanation), ahead.explanation);
+
+  const noDoc = diag.diagnoseBackground('frog-sky', bot(null, false), null);
+  check('a missing bot document is diagnosed as record-level',
+    noDoc.verdict === 'DASHBOARD_AHEAD' && /NO guild_config document/.test(noDoc.explanation),
+    noDoc.explanation);
+
+  const botAhead = diag.diagnoseBackground(null, bot('frog-sky'), null);
+  check('the bot being ahead is reported as such', botAhead.verdict === 'BOT_AHEAD', botAhead.verdict);
+
+  const neverSet = diag.diagnoseBackground(null, bot(null, false), null);
+  check('a never-configured server is NOT reported as broken',
+    neverSet.verdict === 'NO_DOCUMENT', neverSet.verdict);
+  check('and says what to do', /Pick one and save/.test(neverSet.explanation));
+
+  const offline = diag.diagnoseBackground('frog-sky', null, { code: 'BOT_OFFLINE', message: 'x' });
+  check('an unreachable bot is UNVERIFIED, never "broken"',
+    offline.verdict === 'UNVERIFIED', offline.verdict);
+  check('an unreachable bot does not accuse the database',
+    !/BROKEN LINK/.test(offline.explanation), offline.explanation);
+
+  // The dangerous regression: reporting a verdict we cannot support.
+  for (const [label, dash, b] of [
+    ['bot unreachable', 'frog-sky', null],
+    ['bot has no document', 'frog-sky', bot(null, false)],
+    ['values differ', 'frog-sky', bot('duck-toast')],
+  ]) {
+    const r = diag.diagnoseBackground(dash, b, b ? null : { code: 'BOT_OFFLINE', message: 'x' });
+    check(`${label}: the explanation is actionable`, r.explanation.length > 40, r.explanation);
+  }
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

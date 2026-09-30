@@ -2858,6 +2858,145 @@ async def _health_server() -> None:
             log.exception("economy config save failed")
             return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
     app.router.add_post("/economy/config/{guild_id:\\d+}", economy_config_save)
+    app.router.add_get("/leveling/background/{guild_id:\\d+}", leveling_background)
+
+    async def leveling_config_push(request: web.Request) -> web.Response:
+        """Write leveling config through the BOT's own database connection.
+
+        This exists because of a structural gap, not a missing feature. The
+        dashboard resolves the bot's cluster from its OWN environment, where
+        the bot URI is a fallback (`MURABOT_MONGODB_URI` → `MONGODB_URI` →
+        `MONGO_URI`) and the database name can come from a SHARED `MONGO_DB`.
+        When those resolve to the site's own cluster instead of the bot's, the
+        dashboard writes a perfectly valid `guild_config` document that this
+        process never reads — the picker updates, the save returns 200, the
+        preview redraws, and every Discord card keeps the default. Two sides,
+        two databases, no error anywhere.
+
+        Writing here removes the second guess entirely: the value lands in the
+        same collection this process renders from, because it is the same
+        connection. The dashboard's own write is kept as a fallback for when the
+        bot is unreachable, so a save is never lost — it just is not yet
+        rendered.
+
+        Bridge-secret auth; the payload is a flat set of scalars and the theme
+        id, all of which are validated against the shared schema before the
+        write.
+        """
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        try:
+            guild_id = int(request.match_info["guild_id"])
+        except (KeyError, TypeError, ValueError):
+            return web.json_response({"ok": False, "error": "Invalid guild id"}, status=400)
+        try:
+            body = await request.json()
+        except Exception:
+            body = None
+        if not isinstance(body, dict):
+            return web.json_response({"ok": False, "error": "Object required"}, status=400)
+
+        import leveling_sys as levels
+        try:
+            current = dict(await levels.get_level_config(database._db, guild_id))
+        except Exception:
+            current = dict(levels.LEVEL_DEFAULTS)
+
+        # Only keys the bot already understands, and never a raw theme string:
+        # an unknown id would be stored and then silently render the default,
+        # which is the exact failure this endpoint exists to make impossible.
+        for key, value in body.items():
+            if key not in levels.LEVEL_DEFAULTS:
+                continue
+            if key in ("serverBackground", "server_card_background"):
+                current[key] = levels.resolve_server_background(value)
+            else:
+                current[key] = value
+        current["server_card_background"] = current.get("serverBackground", levels.SERVER_CARD_DEFAULT)
+
+        try:
+            await database._db.guild_config.update_one(
+                {"guildId": str(guild_id)},
+                {"$set": {"leveling": current, "updatedAt": database._now()}},
+                upsert=True,
+            )
+        except Exception as exc:
+            log.exception("leveling config push failed")
+            return web.json_response(
+                {"ok": False, "error": "DATABASE_ERROR", "detail": type(exc).__name__}, status=502)
+
+        detail = _db_detail()
+        print(f"LEVEL CARD CONFIG SAVED guild_id={guild_id} "
+              f"server_card_background={current.get('server_card_background')!r} "
+              f"database={detail.get('database')}")
+        return web.json_response({
+            "ok": True,
+            "guildId": str(guild_id),
+            "server_card_background": current.get("server_card_background"),
+            "database": detail.get("database"),
+        })
+
+    app.router.add_post("/leveling/config/{guild_id:\\d+}", leveling_config_push)
+
+    async def leveling_background(request: web.Request) -> web.Response:
+        """What THIS PROCESS reads for a guild's level-card background.
+
+        The one question nobody could answer before: does the dashboard's
+        write and this process's read land on the same record? Every layer in
+        between can look correct — the picker updates, the save returns 200,
+        the preview redraws — while the two sides sit on different clusters or
+        different documents, in which case the bot sees the default forever.
+
+        So this answers from the bot's OWN connection, with no interpolation:
+        which document, which field, what it resolved to, whether the asset is
+        actually on disk, and which database name it came from. The dashboard
+        compares that against its own value and names the broken link.
+
+        Credential-free by construction: it reports the DATABASE NAME (public)
+        and the resolved THEME ID, never a URI, user or password.
+        """
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        try:
+            guild_id = int(request.match_info["guild_id"])
+        except (KeyError, TypeError, ValueError):
+            return web.json_response({"ok": False, "error": "Invalid guild id"}, status=400)
+
+        import leveling_sys as levels
+        try:
+            doc = await database._db.guild_config.find_one({"guildId": str(guild_id)})
+        except Exception as exc:
+            return web.json_response(
+                {"ok": False, "error": "DATABASE_UNAVAILABLE", "detail": type(exc).__name__},
+                status=503)
+
+        stored = (doc or {}).get("leveling")
+        stored = stored if isinstance(stored, dict) else {}
+        # Read BOTH names so a value saved under the other spelling is still
+        # honoured rather than silently defaulting.
+        raw = stored.get("server_card_background")
+        field_used = "server_card_background"
+        if raw is None:
+            raw = stored.get("serverBackground")
+            field_used = "serverBackground"
+        resolved = levels.resolve_server_background(raw)
+        meta = levels.server_background_meta(resolved)
+        asset = levels._LEVEL_BG_DIR / str(meta.get("file") or "")
+        detail = _db_detail()
+        return web.json_response({
+            "ok": True,
+            "guildId": str(guild_id),
+            "database": detail.get("database"),
+            "databaseSource": detail.get("database_source"),
+            "raw": raw,
+            "field": field_used,
+            "resolved": resolved,
+            "asset": meta.get("file"),
+            "assetPresent": asset.is_file(),
+            "defaultTheme": levels.SERVER_CARD_DEFAULT,
+            "documentFound": doc is not None,
+            "valid": raw == resolved,
+        })
 
     async def leveling_overview(request: web.Request) -> web.Response:
         """Dashboard leveling overview — same xp collection the listeners

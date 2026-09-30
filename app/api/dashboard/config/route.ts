@@ -9,6 +9,7 @@ import { ECONOMY_ERROR_CODES, ECONOMY_FIELDS, type EconomyFieldError } from '@/a
 import { mergeEconomySection, validateEconomyDraft } from '@/app/lib/economy-validate';
 import { invalidateBotPresence, validateChannelSetting } from '@/app/lib/discord-channels';
 import { isMurabotOwner, logOwnerCheck, ownerConfigurationProblem } from '@/app/lib/murabot-owner';
+import { pushLevelConfigToBot } from '@/app/lib/level-card-probe';
 
 const SERVER_CARD_IDS = new Set(SERVER_CARD_BACKGROUNDS.map((b) => b.id));
 
@@ -750,6 +751,28 @@ export async function PATCH(req: NextRequest) {
   } catch {
     // Audit is best-effort; the config write already succeeded.
   }
+  // ── Leveling goes through Murabot's own connection ────────────────────
+  // The dashboard's `guild_config` write above uses the dashboard's idea of
+  // the bot's cluster, and that idea resolves from ITS OWN environment where
+  // the bot URI is only a fallback. When it resolves to the site's own
+  // cluster, this write succeeds and the bot never reads it — the picker
+  // updates, the save returns 200, the preview redraws, and every Discord
+  // card keeps the default.
+  //
+  // So the same change is also pushed to the bot, which stores it with the
+  // connection it renders from. The site write stays as the fallback: a save
+  // is never lost, and the response says which path succeeded so the operator
+  // knows whether the Discord card will show it yet.
+  let levelingPush: { pushed: boolean; themeId: string | null; error: { code: string; message: string } | null } | null = null;
+  if (update.leveling && typeof update.leveling === 'object') {
+    levelingPush = await pushLevelConfigToBot(
+      guildId, update.leveling as Record<string, unknown>,
+    );
+    if (levelingPush.error) {
+      saveWarnings.push(`⚠ ${levelingPush.error.message}`);
+    }
+  }
+
   // Read the document back so the client renders what is actually STORED,
   // not what it hoped it sent. A success response that disagrees with the
   // database is worse than a failure, because nobody would go looking.
@@ -761,6 +784,12 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({
     success: true,
     ...(warnings.length > 0 ? { warnings } : {}),
+    // Whether the value reached the bot's own database — the record the
+    // Discord card is rendered from. Reported, never assumed.
+    levelingPushedToBot: levelingPush ? levelingPush.pushed : null,
+    levelCardBackground: levelingPush?.themeId
+      ?? (update.leveling as Record<string, unknown> | undefined)?.serverBackground
+      ?? null,
     config: persisted
       ? {
         modules: persisted.modules,
