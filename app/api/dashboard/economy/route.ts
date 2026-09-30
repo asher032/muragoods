@@ -240,7 +240,11 @@ async function buildSections(
     section('overview', () => economyOverview(db, guildId), (d) => d.users),
     section('config', () => economyConfig(db, guildId), () => 1),
     section('health', () => economyHealth(db, guildId), (d) => d.wallets),
-    section('audit', () => antiExploitAudit(db, guildId), (d) => d.findingCount),
+    // The audit's record count is its FINDING count, so a healthy economy
+    // scored 0 and rendered as "empty" — which reads as "nothing here", the
+    // exact opposite of "we checked and found nothing wrong". A section is
+    // empty when it had nothing to read, not when it had nothing to report.
+    section('audit', () => antiExploitAudit(db, guildId), () => 1),
     section('shop', () => shopSnapshot(db, guildId), (d) => d.items.length),
     section('transactions', () => economyTransactions(db, guildId, { limit: 25 }), (d) => d.total),
     section('leaderboard', () => topWallets(db, guildId, 'net', 10), (d) => d.length),
