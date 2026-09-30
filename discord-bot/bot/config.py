@@ -39,8 +39,28 @@ TMDB_API_KEY = _get("TMDB_API_KEY")
 # The website's own TMDB proxy (server-side key) — used when no direct key.
 TMDB_PROXY = f"{MURASTREAM_URL}/api/murastream/tmdb"
 
-MONGO_URI = _get("MONGO_URI") or _get("DATABASE_URL")
-MONGO_DB = _get("MONGO_DB", "murastream_bot")
+# ── Database ─────────────────────────────────────────────────────────────
+# The bot owns its own cluster. The variable NAME is the contract: the site
+# and the dashboard resolve the same name (see app/lib/db/clusters.ts), so
+# "the dashboard shows the same data as the bot" is a property of the
+# configuration instead of a convention. The legacy names are still accepted
+# so an existing deployment keeps running through the migration.
+#
+# The URI is never logged, never included in an error message, and never
+# returned by /health. `DATABASE_CLUSTER_STATE` carries a safe enum instead.
+MURABOT_MONGODB_URI = _get("MURABOT_MONGODB_URI")
+MONGO_URI = (MURABOT_MONGODB_URI
+             or _get("MONGODB_URI")
+             or _get("MONGO_URI")
+             or _get("DATABASE_URL"))
+MONGO_DB = _get("MURABOT_MONGO_DB") or _get("DISCORD_BOT_MONGO_DB") \
+    or _get("MONGO_DB", "murastream_bot")
+
+#: Which variable actually supplied the URI. Safe to log: a name, not a value.
+MONGO_URI_SOURCE = ("MURABOT_MONGODB_URI" if MURABOT_MONGODB_URI
+                    else "MONGODB_URI" if _get("MONGODB_URI")
+                    else "MONGO_URI" if _get("MONGO_URI")
+                    else "DATABASE_URL" if _get("DATABASE_URL") else None)
 
 DEPLOY_WEBHOOK_URL = _get("DEPLOY_WEBHOOK_URL")
 

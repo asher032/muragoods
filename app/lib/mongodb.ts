@@ -1,56 +1,19 @@
-import mongoose from 'mongoose';
-import { isMongoConnectionString, resolveMongoUri } from '@/app/lib/db-health';
+import { connectMongoose } from '@/app/lib/db/clusters';
 
-let cached: { conn: typeof mongoose | null; promise: Promise<typeof mongoose> | null } | null = null;
-
-async function dbConnect() {
-  if (cached && cached.conn) {
-    return cached.conn;
-  }
-
-  if (!cached) {
-    cached = { conn: null, promise: null };
-  }
-
-  if (!cached.promise) {
-    // Accept MONGO_URI as well: the dashboard routes and discord-config read
-    // `process.env.MONGO_URI || process.env.MONGODB_URI`, and a mismatch here is
-    // how one half of the app works while the other reports "database offline".
-    const MONGODB_URI = resolveMongoUri();
-    if (!MONGODB_URI) {
-      throw new Error('Please define the MONGODB_URI environment variable inside .env or .env.local');
-    }
-
-    // Fail fast with a safe message. Without this the raw driver error
-    // ("Invalid scheme, expected connection string to start with mongodb:// or
-    // mongodb+srv://") is returned to API callers, and the site silently 503s.
-    if (!isMongoConnectionString(MONGODB_URI)) {
-      throw new Error(
-        'MONGODB_URI is not a MongoDB connection string (expected mongodb:// or mongodb+srv://)',
-      );
-    }
-
-    const opts = {
-      bufferCommands: false,
-      // Bounded server selection: without these a dead cluster holds every
-      // dashboard request ~30s (default) instead of resolving to an error.
-      serverSelectionTimeoutMS: 6000,
-      connectTimeoutMS: 6000,
-      socketTimeoutMS: 10000,
-    };
-
-    // Reset the cached promise on failure so one bad connect does not poison
-    // the process forever (every later dbConnect would await the same
-    // rejected promise until restart).
-    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
-      return mongoose;
-    });
-    cached.promise.catch(() => {
-      if (cached) cached.promise = null;
-    });
-  }
-  cached.conn = await cached.promise;
-  return cached.conn;
+/**
+ * Mongoose connection for the SITE's own models (users, orders, content).
+ *
+ * This module is now a thin delegate. The connection string is resolved
+ * inside `@/app/lib/db/clusters`, which is the only place in the app that
+ * reads a Mongo URI — so no component, route or log line can pick it up by
+ * accident, and "which cluster is the site on" is a single question with a
+ * single answer in the codebase.
+ *
+ * The site is bound to the `muragoods` cluster because the site owns canonical
+ * identity. Bot data is read through the same clusters module with the raw
+ * driver, which is what keeps the two pools genuinely separate rather than
+ * one connection string quietly serving both.
+ */
+export default function dbConnect() {
+  return connectMongoose('muragoods');
 }
-
-export default dbConnect;

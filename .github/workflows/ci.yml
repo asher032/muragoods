@@ -60,6 +60,13 @@ jobs:
       - name: Secret scan
         run: node scripts/secret-scan.mjs
 
+      # A scanner that finds nothing is indistinguishable from a broken one.
+      # Plants one known credential at a time in a throwaway repo and asserts
+      # each is caught — plus the shapes that must NOT trip it, because a
+      # scanner that fires on every process.env read gets switched off.
+      - name: Secret scan control (catches planted credentials, no false alarms)
+        run: node scripts/test-secret-scan.mjs
+
       # The bot jobs catalog must mirror the authoritative site jobs table.
       - name: Jobs table parity
         run: node scripts/check-jobs-parity.mjs
@@ -111,6 +118,18 @@ jobs:
 
       - name: Install bot dependencies
         run: pip install "discord.py>=2.4,<3.0" davey "yt-dlp[default]" python-dotenv
+
+      # The database architecture is the one thing that cannot be verified by
+      # running the app: the site and the bot each resolve their cluster from
+      # the environment, and when they disagree nothing crashes — the dashboard
+      # just quietly shows a different database than the bot. This asserts the
+      # two sides declare the SAME contract, that no credential-shaped URI
+      # exists in any source file, that Discord linking can never mint a local
+      # user (the mechanism by which "one identity" becomes three), and that
+      # the audit/migration tooling cannot delete data. Hermetic: it reads
+      # source files and stubs the environment, so it needs no database.
+      - name: Database architecture (two clusters, one identity, no credentials)
+        run: python discord-bot/scripts/test_db_architecture.py
 
       - name: YouTube egress fallback (proxy configured)
         run: python discord-bot/scripts/test_youtube_egress_fallback.py

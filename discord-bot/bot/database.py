@@ -21,8 +21,9 @@ LAST_ERROR: str | None = None
 
 _ERROR_HINTS = {
     "NotConfigured": (
-        "No connection string on this host. Set MONGO_URI (or DATABASE_URL) "
-        "in the service's environment."
+        "No connection string on this host. Set MURABOT_MONGODB_URI in the "
+        "service's environment (MONGO_URI / DATABASE_URL are still accepted "
+        "for an unmigrated deployment)."
     ),
     "ServerSelectionTimeoutError": (
         "The cluster could not be reached within 8s. Most likely the cluster's "
@@ -403,8 +404,9 @@ async def _connect_inner() -> None:
     global _client, _db
     if not config.MONGO_URI:
         raise RuntimeError(
-            "MONGO_URI is not set — the bot needs a MongoDB database. "
-            "Use the website's cluster (see README) or a free MongoDB Atlas tier."
+            "MURABOT_MONGODB_URI is not set — the bot needs its own MongoDB "
+            "cluster. The variable NAME is the contract the dashboard also "
+            "resolves, so setting it makes both point at the same cluster."
         )
     # Reject an invalid database name with a precise message. Previously this
     # surfaced only as `database: offline`, which sent the reader looking for a
@@ -418,7 +420,23 @@ async def _connect_inner() -> None:
             "connection string, and the two must match.",
             DB_NAME, DB_NAME_SOURCE,
         )
-    _client = AsyncIOMotorClient(config.MONGO_URI, serverSelectionTimeoutMS=8000)
+    # One client for the whole process, shared by every collection access.
+    # The pool bounds are explicit so a burst of command traffic multiplexes
+    # over a handful of sockets instead of opening a connection per in-flight
+    # operation, and idle sockets are reaped so a long-lived idle bot does not
+    # sit on a cluster that has rotated its IP allowlist.
+    _client = AsyncIOMotorClient(
+        config.MONGO_URI,
+        serverSelectionTimeoutMS=8000,
+        connectTimeoutMS=8000,
+        socketTimeoutMS=20000,
+        maxPoolSize=50,
+        minPoolSize=1,
+        maxIdleTimeMS=60000,
+        waitQueueTimeoutMS=5000,
+        retryWrites=True,
+        appname="murabot",
+    )
     _db = _client[DB_NAME]
     await _client.admin.command("ping")
 
@@ -426,7 +444,8 @@ async def _connect_inner() -> None:
     INDEX_WARNINGS = await _ensure_indexes()
     # Log the RESOLVED name, never config.MONGO_DB: that variable has held a
     # full connection string (password included) on a real deployment.
-    log.info("Connected to MongoDB (%s)%s", DB_NAME,
+    log.info("Connected to MongoDB (%s, via %s)%s", DB_NAME,
+             config.MONGO_URI_SOURCE or "unset",
              f" — {len(INDEX_WARNINGS)} index warning(s)" if INDEX_WARNINGS else "")
 
 
