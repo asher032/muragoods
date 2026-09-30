@@ -37,6 +37,23 @@ export const LEVEL_CARD_THEMES: LevelCardTheme[] = [
   { id: 'chick-lily', name: 'Lily Rest', emoji: '🐤', file: '/images/level-backgrounds/chick-lily.jpg' },
   { id: 'frog-sky', name: 'Sky Gaze', emoji: '🐸', file: '/images/level-backgrounds/frog-sky.jpg' },
   { id: 'pixel-sunset', name: 'Pixel Sunset', emoji: '🌅', file: '/images/level-backgrounds/pixel-sunset.jpg' },
+  // ── Scene themes ────────────────────────────────────────────────────
+  // Procedural artwork rather than hand-drawn art. The generator that
+  // produces these lives in `scripts/generate_level_backgrounds.py` and is
+  // seeded, so every id below is reproducible from source instead of being an
+  // opaque binary: re-running it yields identical bytes, and a diff means a
+  // real change. Composition keeps the subject inside the middle band, because
+  // the renderer cover-fits into a 900x260 card and discards the edges.
+  { id: 'night-campus', name: 'Night Campus', emoji: '🌙', file: '/images/level-backgrounds/night-campus.jpg' },
+  { id: 'deep-space', name: 'Deep Space', emoji: '🛰️', file: '/images/level-backgrounds/deep-space.jpg' },
+  { id: 'mystic-forest', name: 'Mystic Forest', emoji: '🌲', file: '/images/level-backgrounds/mystic-forest.jpg' },
+  { id: 'neon-city', name: 'Neon City', emoji: '🌃', file: '/images/level-backgrounds/neon-city.jpg' },
+  { id: 'fantasy-castle', name: 'Fantasy Castle', emoji: '🏰', file: '/images/level-backgrounds/fantasy-castle.jpg' },
+  { id: 'arcade', name: 'Arcade', emoji: '🕹️', file: '/images/level-backgrounds/arcade.jpg' },
+  { id: 'sunset', name: 'Sunset', emoji: '🌇', file: '/images/level-backgrounds/sunset.jpg' },
+  { id: 'sky', name: 'Open Sky', emoji: '☁️', file: '/images/level-backgrounds/sky.jpg' },
+  { id: 'midnight', name: 'Midnight', emoji: '🌑', file: '/images/level-backgrounds/midnight.jpg' },
+  { id: 'muragoods', name: 'Muragoods', emoji: '🍞', file: '/images/level-backgrounds/muragoods.jpg' },
 ];
 
 const BY_ID = new Map(LEVEL_CARD_THEMES.map((t) => [t.id, t]));
