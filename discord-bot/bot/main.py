@@ -2624,6 +2624,31 @@ async def _health_server() -> None:
         "disabledItems", "bankCapacity",
     })
 
+    async def economy_owner_check(request: web.Request) -> web.Response:
+        """Is this Discord account the Murabot owner?
+
+        The bot is the only authority on who owns it — the site has no trusted
+        copy of that list, and guessing from the caller's guild role would let
+        any server admin claim ownership. The dashboard calls this before
+        applying an economic write; the answer is advisory to the site but the
+        write itself is re-checked in `economy_config_save` below, so neither
+        layer alone is load-bearing.
+        """
+        guild, deny = await _economy_guild(request)
+        if deny is not None:
+            return deny
+        body = await request.json() if request.can_read_body else {}
+        actor = body.get("actorId") if isinstance(body, dict) else None
+        if actor is None:
+            actor = request.query.get("actorId")
+        owner = _is_bot_owner(guild, actor)
+        return web.json_response({
+            "ok": True, "owner": owner,
+            "guildId": str(guild.id),
+            "actorId": str(actor) if actor is not None else None,
+        })
+    app.router.add_post("/economy/owner-check/{guild_id:\\d+}", economy_owner_check)
+
     async def economy_config_save(request: web.Request) -> web.Response:
         """Persist economy config. Owner-only for ECONOMIC_KEYS.
 

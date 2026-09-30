@@ -79,6 +79,13 @@ jobs:
       - name: Item catalog parity (five rarities, no Legendary, snapshot fresh)
         run: node scripts/check-items-parity.mjs
 
+      # The economy save route used to persist a hand-written whitelist of 12
+      # keys while the form showed 21, silently dropping nine of them. These
+      # tests pin the schema to the bot's own defaults and exercise the whole
+      # validate → verify → all-or-nothing write path (scenarios A–I).
+      - name: Economy settings save (schema parity, per-field errors, Discord verdicts)
+        run: node scripts/test-economy-config.mjs
+
       - name: Typecheck
         run: npx tsc --noEmit
 

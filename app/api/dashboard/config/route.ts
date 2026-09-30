@@ -5,6 +5,10 @@ import { discordConfigCollection } from '@/app/lib/discord-config';
 import { verifyBotInGuild, botToken } from '@/app/lib/discord-bot';
 import { apiFail, logApi } from '@/app/lib/dashboard-response';
 import { SERVER_CARD_BACKGROUNDS, SERVER_CARD_DEFAULT } from '@/app/lib/server-card-backgrounds';
+import { ECONOMY_ERROR_CODES, ECONOMY_FIELDS, type EconomyFieldError } from '@/app/lib/economy-schema';
+import { mergeEconomySection, validateEconomyDraft } from '@/app/lib/economy-validate';
+import { invalidateGuildSnapshot, validateChannelSetting } from '@/app/lib/discord-channels';
+import { isEconomyOwner } from '@/app/lib/economy-owner';
 
 const SERVER_CARD_IDS = new Set(SERVER_CARD_BACKGROUNDS.map((b) => b.id));
 
@@ -155,6 +159,10 @@ function collectIdFields(update: Record<string, unknown>): Array<{ section: stri
   const out: Array<{ section: string; field: string; value: string }> = [];
   for (const [section, val] of Object.entries(update)) {
     if (!val || typeof val !== 'object' || Array.isArray(val)) continue;
+    // Economy channels are already verified with a richer check (text
+    // capability + View/Send/Embed) just above. Re-running the generic sweep
+    // over them would replace that precise verdict with a generic one.
+    if (section === 'economy') continue;
     for (const [field, fval] of Object.entries(val as Record<string, unknown>)) {
       if (/(Channel|Category|Role|Member|User)Id$/.test(field) && typeof fval === 'string' && SNOWFLAKE.test(fval)) {
         out.push({ section, field, value: fval });
@@ -274,6 +282,7 @@ export async function PATCH(req: NextRequest) {
   const patch = (body as Record<string, unknown>).config;
   if (!patch || typeof patch !== 'object') return bad('config object required');
   const safe = patch as Record<string, Record<string, unknown>>;
+  const started = Date.now();
 
   // Whitelist updatable sections with type coercion + bounds.
   const update: Record<string, unknown> = {
@@ -281,6 +290,8 @@ export async function PATCH(req: NextRequest) {
     guildIcon: guild.icon || '',
     updatedAt: new Date(),
   };
+  // Non-fatal economy advice, surfaced on success without blocking the save.
+  let economyWarnings: EconomyFieldError[] = [];
   if (safe.modules && typeof safe.modules === 'object') {
     update.modules = Object.fromEntries(
       Object.entries(safe.modules).slice(0, 16).map(([k, v]) => [k.slice(0, 30), Boolean(v)]),
@@ -436,46 +447,79 @@ export async function PATCH(req: NextRequest) {
       rewards,
     };
   }
+  // ── Economy ────────────────────────────────────────────────────────
+  // Validated against the shared schema, reported per field, and written
+  // all-or-nothing. The previous hand-written whitelist silently discarded
+  // nine of the twenty-one fields the form showed (including the Economy Log
+  // Channel), reported success anyway, and produced a single generic
+  // "1 setting failed validation" for every other failure.
   if (safe.economy && typeof safe.economy === 'object') {
-    const e = safe.economy as Record<string, unknown>;
-    const num = (v: unknown, lo: number, hi: number, fb: number) => {
-      const n = Number(v);
-      return Number.isFinite(n) ? Math.max(lo, Math.min(hi, Math.floor(n))) : fb;
-    };
-    update.economy = {
-      currencyName: String(e.currencyName || 'coins').slice(0, 20),
-      currencySymbol: String(e.currencySymbol || '🪙').slice(0, 8),
-      startBalance: num(e.startBalance, 0, 100000, 100),
-      dailyAmount: num(e.dailyAmount, 0, 100000, 250),
-      weeklyAmount: num(e.weeklyAmount, 0, 500000, 1500),
-      monthlyAmount: num(e.monthlyAmount, 0, 2000000, 6000),
-      workMin: num(e.workMin, 0, 100000, 50),
-      workMax: num(e.workMax, 0, 100000, 300),
-      gambleMax: num(e.gambleMax, 10, 1000000, 10000),
-      workCooldownSec: num(e.workCooldownSec, 60, 86400, 3600),
-      jobCooldownSec: num(e.jobCooldownSec, 60, 86400, 3600),
-      jobFailRate: (() => {
-        const n = Number(e.jobFailRate);
-        return Number.isFinite(n) ? Math.max(0.05, Math.min(0.9, n)) : 0.3;
-      })(),
-      jobCooldownOverrides: (() => {
-        const out: Record<string, number> = {};
-        const raw = e.jobCooldownOverrides;
-        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-          for (const [k, v] of Object.entries(raw as Record<string, unknown>).slice(0, 60)) {
-            const n = Math.floor(Number(v));
-            if (/^[a-z0-9]{2,24}$/.test(k) && Number.isFinite(n) && n >= 60 && n <= 86400) out[k] = n;
-          }
-        }
-        return out;
-      })(),
-      disabledJobs: Array.isArray(e.disabledJobs)
-        ? e.disabledJobs.filter((s) => /^[a-z0-9]{2,24}$/.test(String(s))).map(String).slice(0, 60) : [],
-      begCooldownSec: num(e.begCooldownSec, 30, 86400, 300),
-      lotteryTicketPrice: num(e.lotteryTicketPrice, 1, 100000, 100),
-      disabledItems: Array.isArray(e.disabledItems)
-        ? e.disabledItems.map((s) => String(s).slice(0, 40)).slice(0, 50) : [],
-    };
+    const actorId = String((body as Record<string, unknown>).actorId || '');
+    const owner = await isEconomyOwner(guildId, actorId);
+    if (owner === 'unknown') {
+      // The owner list could not be determined. Refusing is the only safe
+      // answer: guessing would either lock out the owner or let an admin
+      // through. The stored config is untouched.
+      return NextResponse.json({
+        success: false,
+        code: ECONOMY_ERROR_CODES.OWNER_ONLY,
+        errors: [{
+          field: 'config', label: 'Economy settings',
+          code: ECONOMY_ERROR_CODES.OWNER_ONLY,
+          message: 'Could not confirm owner permissions with Murabot, so nothing was saved. Try again in a moment.',
+          retryable: true,
+        }],
+      }, { status: 503 });
+    }
+
+    const collection0 = await discordConfigCollection();
+    const existingDoc = await collection0.findOne({ guildId });
+    const existingEconomy = (existingDoc?.economy && typeof existingDoc.economy === 'object'
+      ? existingDoc.economy
+      : {}) as Record<string, unknown>;
+
+    const { values, errors, warnings } = validateEconomyDraft(safe.economy, {
+      existing: existingEconomy,
+      isOwner: owner === true,
+    });
+
+    // Every Discord-dependent setting is verified against LIVE guild state.
+    // Cached ids are never trusted, and a Discord outage produces a retryable
+    // error rather than a false "this channel is invalid".
+    for (const field of ECONOMY_FIELDS) {
+      if (field.kind !== 'channel') continue;
+      const channelId = values[field.key];
+      if (typeof channelId !== 'string' || channelId === '') continue;
+      const problem = await validateChannelSetting(
+        guildId, field.key, field.label, channelId, field.requires ?? ['view', 'send'],
+      );
+      if (problem) errors.push(problem);
+    }
+
+    if (errors.length > 0) {
+      // NOTHING is written. The previous configuration stays exactly as it
+      // was — a failed save must never blank a working setting.
+      logApi('/api/dashboard/config', 'PATCH', 422, Date.now() - started, 'ECONOMY_VALIDATION');
+      return NextResponse.json({
+        success: false,
+        code: errors[0].code,
+        // The per-field list is the payload. `error` is kept only as a short
+        // summary for anything still reading the old shape.
+        errors,
+        error: errors.length === 1
+          ? errors[0].message
+          : `${errors.length} settings could not be saved. Nothing was saved.`,
+        warnings,
+        retryable: errors.every((e) => e.retryable),
+      }, { status: errors.some((e) => e.retryable) ? 503 : 422 });
+    }
+
+    // All-or-nothing: one document, one write, every declared key present.
+    update.economy = mergeEconomySection(existingEconomy, values);
+    // The cached snapshot described the guild as it was when the last check
+    // ran; a save must not leave a stale one behind for the next render.
+    invalidateGuildSnapshot(guildId);
+    if (warnings.length > 0) economyWarnings = warnings;
   }
 
   const collection = await discordConfigCollection();
@@ -548,7 +592,27 @@ export async function PATCH(req: NextRequest) {
     update as Record<string, unknown>,
   );
 
-  await collection.updateOne({ guildId }, { $set: update }, { upsert: true });
+  try {
+    await collection.updateOne({ guildId }, { $set: update }, { upsert: true });
+  } catch {
+    // A database failure is its own failure, distinct from validation and from
+    // Discord. The document was not modified, so the previous configuration is
+    // still in place — say so rather than showing a generic error.
+    logApi('/api/dashboard/config', 'PATCH', 503, Date.now() - started, 'DATABASE_ERROR');
+    return NextResponse.json({
+      success: false,
+      code: ECONOMY_ERROR_CODES.DATABASE_ERROR,
+      errors: [{
+        field: 'config',
+        label: 'Server settings',
+        code: ECONOMY_ERROR_CODES.DATABASE_ERROR,
+        message: 'The settings could not be written to the database. Nothing was saved — your previous configuration is unchanged. Try again in a moment.',
+        retryable: true,
+      }],
+      error: 'The settings could not be written to the database. Nothing was saved.',
+      retryable: true,
+    }, { status: 503 });
+  }
   // The write is the truth now — drop the stale GET cache so the next read
   // (and any other tab) sees the saved settings immediately.
   getCache.delete(guildId);
@@ -594,5 +658,5 @@ export async function PATCH(req: NextRequest) {
   } catch {
     // Audit is best-effort; the config write already succeeded.
   }
-  return NextResponse.json({ success: true });
+  return NextResponse.json(economyWarnings.length > 0 ? { success: true, warnings: economyWarnings } : { success: true });
 }

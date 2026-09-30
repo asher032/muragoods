@@ -1,6 +1,7 @@
 import { sessionToken } from '@/app/lib/require-session';
 import { requireGuildManage } from '@/app/lib/discord-guilds';
 import { botEconomyGet } from '@/app/lib/economy-backend';
+import { isEconomyOwner } from '@/app/lib/economy-owner';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET ?guildId=…&endpoint=leaderboard|health|transactions|audit|shop
@@ -84,5 +85,22 @@ export async function GET(req: NextRequest) {
   }
   const { ok, ...payload } = res.data;
   void ok;
+
+  // Ownership is per-caller, so it is resolved on the way out and never
+  // cached. The UI uses it to disable economic controls; the API refuses the
+  // write regardless, so a wrong answer here cannot grant access.
+  if (endpoint === 'config') {
+    const actorId = params.get('actorId') || '';
+    const owner = await isEconomyOwner(guildId, actorId);
+    return NextResponse.json({
+      success: true,
+      cached: Boolean(res.cached),
+      // `unknown` is reported verbatim so the UI can say "could not confirm"
+      // rather than guessing either way.
+      isOwner: owner === true ? true : owner === false ? false : null,
+      ...payload,
+    });
+  }
+
   return NextResponse.json({ success: true, cached: Boolean(res.cached), ...payload });
 }
