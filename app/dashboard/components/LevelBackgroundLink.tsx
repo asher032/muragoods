@@ -14,7 +14,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // two values side by side. A green verdict here means the Discord card will
 // use the selection on the next /level, with no restart.
 
-type Verdict = 'MATCH' | 'BOT_AHEAD' | 'DASHBOARD_AHEAD' | 'NO_DOCUMENT' | 'UNVERIFIED';
+type Verdict = 'MATCH' | 'BOT_AHEAD' | 'DASHBOARD_AHEAD' | 'NO_DOCUMENT' | 'UNVERIFIED' | 'STALE_BOT';
 
 interface Probe {
   dashboard: string | null;
@@ -31,6 +31,12 @@ interface Probe {
     assetPresent: boolean;
   } | null;
   botError: { code: string; message: string } | null;
+  botHttp: {
+    status: number | null;
+    contentType: string | null;
+    bodySnippet: string | null;
+    durationMs: number;
+  } | null;
   verdict: Verdict;
   explanation: string;
 }
@@ -41,6 +47,7 @@ const TONE: Record<Verdict, { color: string; icon: string; label: string }> = {
   DASHBOARD_AHEAD: { color: '#ff8a8a', icon: '✕', label: 'Disconnected' },
   NO_DOCUMENT: { color: 'var(--cc-text-faint)', icon: '○', label: 'Not set yet' },
   UNVERIFIED: { color: '#e0a34a', icon: '?', label: 'Could not verify' },
+  STALE_BOT: { color: '#e0a34a', icon: '?', label: 'Bot out of date' },
 };
 
 export default function LevelBackgroundLink({ guildId, selectedTheme }: {
@@ -64,7 +71,7 @@ export default function LevelBackgroundLink({ guildId, selectedTheme }: {
         if (mine === seq.current) {
           setProbe({
             dashboard: selectedTheme, dashboardDatabase: null, dashboardUriSource: null,
-            bot: null,
+            bot: null, botHttp: null,
             botError: { code: `HTTP_${resp.status}`, message: 'The diagnostic could not be read.' },
             verdict: 'UNVERIFIED',
             explanation: 'The diagnostic could not be read, so what the Discord card is using is unknown.',
@@ -78,7 +85,7 @@ export default function LevelBackgroundLink({ guildId, selectedTheme }: {
       if (mine === seq.current) {
         setProbe({
           dashboard: selectedTheme, dashboardDatabase: null, dashboardUriSource: null,
-          bot: null,
+          bot: null, botHttp: null,
           botError: { code: 'NETWORK', message: 'The dashboard could not reach the diagnostic.' },
           verdict: 'UNVERIFIED',
           explanation: 'The diagnostic could not be reached.',
@@ -132,9 +139,26 @@ export default function LevelBackgroundLink({ guildId, selectedTheme }: {
           {row('Dashboard database', probe.dashboardDatabase
             ? `${probe.dashboardDatabase} (${probe.dashboardUriSource ?? 'default'})` : null)}
           {row('Murabot database', probe.bot?.database
-            ? `${probe.bot.database} (${probe.bot?.databaseSource ?? 'default'})` : null)}
+            ? `${probe.bot.database} (${probe.bot.databaseSource ?? 'default'})` : null)}
           {row('Murabot has stored', probe.bot?.raw ?? null)}
           {row('Murabot will render', probe.bot?.resolved ?? null)}
+          {/* The transport result, always shown. A bare "—" above was
+              indistinguishable between "Murabot has nothing" and "the question
+              never reached Murabot", which is the whole confusion this panel
+              exists to remove. */}
+          {row('Dashboard → Murabot', probe.bot
+            ? `HTTP ${probe.botHttp?.status ?? 200} · ${probe.botHttp?.durationMs ?? 0}ms`
+            : probe.botHttp
+              ? `HTTP ${probe.botHttp.status ?? '—'} · ${probe.botHttp.durationMs}ms`
+              : 'not attempted')}
+          {probe.botError && (
+            <div style={{ color: probe.botError.code === 'ROUTE_NOT_REGISTERED'
+              ? '#ff8a8a' : 'var(--cc-text-dim)' }}>
+              {probe.botError.code === 'ROUTE_NOT_REGISTERED'
+                ? `✕ ${probe.botError.message}`
+                : `${probe.botError.code} — ${probe.botError.message}`}
+            </div>
+          )}
           {probe.bot && !probe.bot.assetPresent && (
             <div style={{ color: '#ff8a8a' }}>
               ⚠ Murabot is missing its copy of <code>{probe.bot.asset}</code>. Cards will fall back to a

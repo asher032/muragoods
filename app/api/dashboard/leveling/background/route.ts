@@ -57,9 +57,9 @@ export async function GET(req: NextRequest) {
   }
 
   // 2. What the BOT holds — the record it actually renders from.
-  const { bot, error: botError } = await askBotLevelBackground(guildId);
+  const { bot, error: botError, http: botHttp } = await askBotLevelBackground(guildId);
 
-  const diagnosis = diagnoseBackground(dashboardValue, bot, botError ?? dashboardError);
+  const diagnosis = diagnoseBackground(dashboardValue, bot, botError ?? dashboardError, botHttp);
   const payload: BackgroundDiagnosis & { success: true; durationMs: number } = {
     success: true,
     dashboard: dashboardValue,
@@ -67,13 +67,15 @@ export async function GET(req: NextRequest) {
     dashboardUriSource: clusterUriSource('murabot'),
     bot,
     botError: botError ?? dashboardError,
+    botHttp: botHttp ?? null,
     verdict: diagnosis.verdict,
     explanation: diagnosis.explanation,
     durationMs: Date.now() - started,
   };
   console.log(
     `[level-bg] guild=${guildId} dashboard=${dashboardValue ?? '-'} `
-    + `bot=${bot?.raw ?? '-'} botDb=${bot?.database ?? '-'} verdict=${diagnosis.verdict}`,
+    + `bot=${bot?.raw ?? '-'} botDb=${bot?.database ?? '-'} `
+    + `http=${botHttp?.status ?? '-'} verdict=${diagnosis.verdict}`,
   );
   return NextResponse.json(payload);
 }

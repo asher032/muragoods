@@ -55,6 +55,27 @@ _last_api_check: dict | None = None
 GATEWAY_STALE_AFTER = 150.0
 
 
+#: When THIS build's source was written, as an ISO timestamp.
+#:
+#: The dashboard and this repository were out of step for a long time: the
+#: dashboard called endpoints the running bot had never heard of, and the only
+#: symptom was a generic "unavailable", which reads like a flaky network
+#: rather than "the process you are debugging is an older build".
+#:
+#: A build fingerprint makes that checkable instead of guessable. The
+#: dashboard shows this next to the deployment it expects, so a stale process
+#: is obvious in one glance. It is derived from the source file's mtime, which
+#: changes on every deploy, so it cannot drift from what actually ran.
+def _build_fingerprint() -> str:
+    try:
+        return datetime.fromtimestamp(
+            Path(__file__).resolve().stat().st_mtime, timezone.utc).isoformat()
+    except Exception:
+        return "unknown"
+
+
+BUILD_FINGERPRINT = _build_fingerprint()
+
 # ── Guild registry for event bookkeeping (no config decisions here) ──────
 # Owned by main.py. Cogs consult the DB themselves; this is only the shared
 # thread-safe bitset of guilds the bot is currently in, refreshed by gateway
@@ -1079,6 +1100,9 @@ async def _health_server() -> None:
             "guild_ids": [str(g.id) for g in bot.guilds],
             "subsystems": statuses,
             "bot_version": bot_version,
+            # When this build was written. Lets the dashboard tell "the bot is
+            # an older build" apart from "the bot is misconfigured".
+            "build_fingerprint": BUILD_FINGERPRINT,
             # Public identity (username, avatar CDN URL, application ID).
             # Never secrets: no token, client secret, or credentials here.
             "user": _bot_user(),
@@ -2859,7 +2883,6 @@ async def _health_server() -> None:
             log.exception("economy config save failed")
             return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
     app.router.add_post("/economy/config/{guild_id:\\d+}", economy_config_save)
-    app.router.add_get("/leveling/background/{guild_id:\\d+}", leveling_background)
 
     async def leveling_config_push(request: web.Request) -> web.Response:
         """Write leveling config through the BOT's own database connection.
@@ -2948,6 +2971,7 @@ async def _health_server() -> None:
             "guildId": str(guild_id),
             "server_card_background": current.get("server_card_background"),
             "database": detail.get("database"),
+            "buildFingerprint": BUILD_FINGERPRINT,
         })
 
     app.router.add_post("/leveling/config/{guild_id:\\d+}", leveling_config_push)
@@ -3002,6 +3026,7 @@ async def _health_server() -> None:
         return web.json_response({
             "ok": True,
             "guildId": str(guild_id),
+            "buildFingerprint": BUILD_FINGERPRINT,
             "database": detail.get("database"),
             "databaseSource": detail.get("database_source"),
             "raw": raw,
@@ -3013,6 +3038,21 @@ async def _health_server() -> None:
             "documentFound": doc is not None,
             "valid": raw == resolved,
         })
+
+    # Registered HERE, immediately after the handler is defined.
+    #
+    # This used to sit ~90 lines earlier, above the `def`. `app.router.add_get`
+    # takes the NAME `leveling_background`, so that line raised NameError the
+    # moment `_health_server()` ran — and because every handler is nested in
+    # this one function, the FIRST such failure aborts the whole thing: the
+    # TCPSite is never created and the bot serves no HTTP at all while still
+    # looking perfectly online on Discord. It 404'd here and only here because
+    # the live process was still on the pre-route build, so the crash never
+    # had a chance to show up.
+    #
+    # `scripts/check_route_registration.py` now fails the build on any handler
+    # registered before it is defined.
+    app.router.add_get("/leveling/background/{guild_id:\\d+}", leveling_background)
 
     async def leveling_overview(request: web.Request) -> web.Response:
         """Dashboard leveling overview — same xp collection the listeners

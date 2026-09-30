@@ -38,6 +38,12 @@ export interface BotLevelBackground {
   assetPresent: boolean;
   defaultTheme: string | null;
   valid: boolean;
+  /**
+   * When the running bot's source was written. Compared against the deployment
+   * to tell "the bot is an older build" apart from "the bot is misconfigured" —
+   * the two produce the same empty fields and completely different fixes.
+   */
+  buildFingerprint?: string | null;
 }
 
 export interface BackgroundDiagnosis {
@@ -51,8 +57,15 @@ export interface BackgroundDiagnosis {
   bot: BotLevelBackground | null;
   /** Why the bot could not be reached, when that is the case. */
   botError: { code: string; message: string } | null;
+  /** What actually came back over the wire. Null only when never sent. */
+  botHttp: {
+    status: number | null;
+    contentType: string | null;
+    bodySnippet: string | null;
+    durationMs: number;
+  } | null;
   /** The verdict, naming the broken link. */
-  verdict: 'MATCH' | 'BOT_AHEAD' | 'DASHBOARD_AHEAD' | 'NO_DOCUMENT' | 'UNVERIFIED';
+  verdict: 'MATCH' | 'BOT_AHEAD' | 'DASHBOARD_AHEAD' | 'NO_DOCUMENT' | 'UNVERIFIED' | 'STALE_BOT';
   /** One sentence the operator can act on. */
   explanation: string;
 }
@@ -66,12 +79,29 @@ export function diagnoseBackground(
   dashboardValue: string | null | undefined,
   bot: BotLevelBackground | null,
   botError: { code: string; message: string } | null,
+  botHttp?: { status: number | null } | null,
 ): Pick<BackgroundDiagnosis, 'verdict' | 'explanation'> {
   if (!bot && botError) {
+    // A missing route is not "unverified, try again" — it is a version
+    // mismatch between the running bot and this repository, and no amount of
+    // re-saving will change it. Saying so plainly is the whole point of this
+    // panel; the previous wording sent operators to re-pick a theme that was
+    // already correct.
+    if (botError.code === 'ROUTE_NOT_REGISTERED') {
+      return {
+        verdict: 'UNVERIFIED',
+        explanation:
+          'BROKEN LINK: DEPLOYMENT. Murabot is running, but the build it is running does not '
+          + `include the level-card endpoints this dashboard calls (HTTP ${botHttp?.status ?? 404}). `
+          + 'Nothing is wrong with your selection or your database — the running bot is an older '
+          + 'version than this repository. Redeploy Murabot, then save again.',
+      };
+    }
     return {
       verdict: 'UNVERIFIED',
       explanation:
-        `Murabot could not be asked what it has for this server (${botError.code}). `
+        `Murabot could not be asked what it has for this server (${botError.code}`
+        + `${botHttp?.status ? `, HTTP ${botHttp.status}` : ''}). `
         + 'The dashboard value cannot be confirmed against the bot, so the card may or may not be using it.',
     };
   }

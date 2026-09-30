@@ -20,6 +20,21 @@ export const dynamic = 'force-dynamic';
 export interface BotProbeResult {
   bot: BotLevelBackground | null;
   error: { code: string; message: string } | null;
+  /**
+   * What actually came back over the wire, when the call did not succeed.
+   * Collapsing every failure into one opaque code is what made this
+   * undiagnosable: a 404 (the running bot predates the route) and a 500 (the
+   * route exists and threw) both surfaced as the same "unavailable", so the
+   * report could not say which, and the operator could not act on it.
+   */
+  http?: {
+    status: number | null;
+    contentType: string | null;
+    /** First 200 chars of the body, for a 404/500 that is not JSON. */
+    bodySnippet: string | null;
+    /** How long the request took, in ms. */
+    durationMs: number;
+  };
 }
 
 function bridgeSecret(): string | null {
@@ -44,53 +59,14 @@ export async function askBotLevelBackground(guildId: string): Promise<BotProbeRe
       },
     };
   }
+  const started = Date.now();
+  let res: Response;
   try {
-    const res = await fetch(`${BOT_BASE}/leveling/background/${guildId}`, {
+    res = await fetch(`${BOT_BASE}/leveling/background/${guildId}`, {
       headers: { Authorization: `Bearer ${bridgeSecret()}` },
       cache: 'no-store',
       signal: AbortSignal.timeout(8000),
     });
-    if (res.status === 401 || res.status === 403) {
-      return {
-        bot: null,
-        error: {
-          code: 'AUTHENTICATION_ERROR',
-          message: 'Murabot refused the dashboard\'s request; the shared connection secret does not match.',
-        },
-      };
-    }
-    if (res.status === 503) {
-      return {
-        bot: null,
-        error: { code: 'DATABASE_UNAVAILABLE', message: 'Murabot cannot reach its database right now.' },
-      };
-    }
-    const payload = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-    if (!payload || payload.ok !== true) {
-      const code = typeof payload?.error === 'string' ? payload.error : 'BOT_API_UNAVAILABLE';
-      return {
-        bot: null,
-        error: {
-          code,
-          message: 'Murabot did not return its level-card configuration.',
-        },
-      };
-    }
-    return {
-      bot: {
-        documentFound: payload.documentFound === true,
-        database: typeof payload.database === 'string' ? payload.database : null,
-        databaseSource: typeof payload.databaseSource === 'string' ? payload.databaseSource : null,
-        raw: typeof payload.raw === 'string' ? payload.raw : null,
-        field: typeof payload.field === 'string' ? payload.field : null,
-        resolved: typeof payload.resolved === 'string' ? payload.resolved : null,
-        asset: typeof payload.asset === 'string' ? payload.asset : null,
-        assetPresent: payload.assetPresent === true,
-        defaultTheme: typeof payload.defaultTheme === 'string' ? payload.defaultTheme : null,
-        valid: payload.valid === true,
-      },
-      error: null,
-    };
   } catch {
     return {
       bot: null,
@@ -100,6 +76,92 @@ export async function askBotLevelBackground(guildId: string): Promise<BotProbeRe
       },
     };
   }
+
+  // Read the body ONCE as text, then decide what it is. Reading it as JSON
+  // first and falling back is what discarded the status code, which is the
+  // single most useful thing this probe can learn.
+  const contentType = res.headers.get('content-type');
+  const bodyText = await res.text().catch(() => '');
+  const http = {
+    status: res.status,
+    contentType,
+    bodySnippet: bodyText.slice(0, 200) || null,
+    durationMs: Date.now() - started,
+  };
+  let payload: Record<string, unknown> | null = null;
+  try {
+    payload = JSON.parse(bodyText) as Record<string, unknown>;
+  } catch {
+    payload = null;
+  }
+
+  if (res.status === 401 || res.status === 403) {
+    return {
+      bot: null,
+      http,
+      error: {
+        code: 'AUTHENTICATION_ERROR',
+        message: 'Murabot refused the dashboard\'s request; the shared connection secret does not match.',
+      },
+    };
+  }
+  if (res.status === 503) {
+    return {
+      bot: null,
+      http,
+      error: { code: 'DATABASE_UNAVAILABLE', message: 'Murabot cannot reach its database right now.' },
+    };
+  }
+  if (res.status === 404) {
+    // Named specifically, because the fix is completely different from every
+    // other failure here: the route is missing on the RUNNING process, which
+    // means the deployed build predates the code that added it. Retrying,
+    // re-saving, or changing the theme cannot help; the bot has to be
+    // redeployed.
+    return {
+      bot: null,
+      http,
+      error: {
+        code: 'ROUTE_NOT_REGISTERED',
+        message: 'Murabot answered, but it has no /leveling/background endpoint. '
+          + 'The running build predates that route, so it is serving an older '
+          + 'version than this repository. Redeploy Murabot; re-saving will not help.',
+      },
+    };
+  }
+  if (!payload || payload.ok !== true) {
+    const code = typeof payload?.error === 'string' ? payload.error
+      : res.ok ? 'BOT_API_UNAVAILABLE' : `HTTP_${res.status}`;
+    return {
+      bot: null,
+      http,
+      error: {
+        code,
+        message: payload
+          ? 'Murabot returned an error for this level-card lookup.'
+          : `Murabot returned HTTP ${res.status} with a non-JSON body, so its `
+            + 'configuration could not be read.',
+      },
+    };
+  }
+  return {
+    bot: {
+      documentFound: payload.documentFound === true,
+      database: typeof payload.database === 'string' ? payload.database : null,
+      databaseSource: typeof payload.databaseSource === 'string' ? payload.databaseSource : null,
+      raw: typeof payload.raw === 'string' ? payload.raw : null,
+      field: typeof payload.field === 'string' ? payload.field : null,
+      resolved: typeof payload.resolved === 'string' ? payload.resolved : null,
+      asset: typeof payload.asset === 'string' ? payload.asset : null,
+      assetPresent: payload.assetPresent === true,
+      defaultTheme: typeof payload.defaultTheme === 'string' ? payload.defaultTheme : null,
+      valid: payload.valid === true,
+      buildFingerprint: typeof payload.buildFingerprint === 'string'
+        ? payload.buildFingerprint : null,
+    },
+    error: null,
+    http,
+  };
 }
 
 /**
@@ -140,7 +202,38 @@ export async function pushLevelConfigToBot(
       cache: 'no-store',
       signal: controller.signal,
     });
-    const payload = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+    const bodyText = await res.text().catch(() => '');
+    let payload: Record<string, unknown> | null = null;
+    try {
+      payload = JSON.parse(bodyText) as Record<string, unknown>;
+    } catch {
+      payload = null;
+    }
+
+    if (res.status === 404) {
+      // The endpoint is missing on the running process. Saying "Murabot
+      // refused the change" here is wrong and sends the operator to fix a
+      // selection that was already valid: nothing was refused, the route is
+      // simply not deployed.
+      return {
+        pushed: false, themeId: null,
+        error: {
+          code: 'ROUTE_NOT_REGISTERED',
+          message: 'Murabot has no /leveling/config endpoint, so this change was never sent to it. '
+            + 'The running build predates that route. Your selection was saved on the '
+            + 'dashboard only; redeploy Murabot, then save again.',
+        },
+      };
+    }
+    if (res.status === 401 || res.status === 403) {
+      return {
+        pushed: false, themeId: null,
+        error: {
+          code: 'AUTHENTICATION_ERROR',
+          message: 'Murabot rejected the dashboard\'s bridge secret. The shared secret on the site and the bot do not match.',
+        },
+      };
+    }
     if (!res.ok || !payload || payload.ok !== true) {
       const code = typeof payload?.error === 'string' ? payload.error : `HTTP_${res.status}`;
       return {
@@ -148,8 +241,8 @@ export async function pushLevelConfigToBot(
         error: {
           code,
           message: res.status >= 500
-            ? 'Murabot could not store the change. The dashboard saved it; the Discord card will pick it up once Murabot responds.'
-            : 'Murabot refused the change. The dashboard saved it, but the Discord card still uses the previous background.',
+            ? `Murabot returned HTTP ${res.status} and could not store the change. Your selection is saved on the dashboard; it is not in the bot's database yet.`
+            : `Murabot returned HTTP ${res.status} and did not store the change. Your selection is saved on the dashboard only.`,
         },
       };
     }
