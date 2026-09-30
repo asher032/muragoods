@@ -599,12 +599,12 @@ console.log('[3b] economy authorization');
   check('economy leaderboard rejects non-admin', lb.status === 401 || read.status === 403,
     `status ${lb.status}`);
 
-  const cfg = await api('/api/dashboard/economy/config', {
+  const cfg = await api('/api/dashboard/config', {
     method: 'PATCH',
     body: JSON.stringify({
       guildId: GUILD,
       actorId: '123',
-      config: { dailyAmount: 999999 },
+      config: { economy: { dailyAmount: 999999 } },
     }),
   });
   check('owner-only economic write rejected', cfg.status === 401 || cfg.status === 403,
@@ -619,6 +619,33 @@ console.log('[3b] economy authorization');
     `/api/dashboard/economy/read?guildId=${GUILD}&endpoint=../../etc/passwd`);
   check('unknown read endpoint rejected', badEndpoint.status === 400 || badEndpoint.status === 401,
     `status ${badEndpoint.status}`);
+}
+
+// ─── 3d. One config system, and the new economy endpoints ─────────────
+// The Economy save system was duplicated at one point (a second
+// /api/dashboard/economy/config route) and then repaired by removing the
+// duplicate, not by keeping both. This block fails if it ever comes back, and
+// it checks that the new channel endpoint is auth-guarded like every other
+// Discord-reading route. The per-field validation itself needs a live guild,
+// so it is covered by scripts/test-economy-config.mjs instead.
+console.log('[3d] one config system');
+{
+  const GUILD = '1234567890123456789';
+
+  const dup = await apiWith(ADMIN_JAR, '/api/dashboard/economy/config', {
+    method: 'PATCH',
+    body: JSON.stringify({ guildId: GUILD, actorId: '123', config: { dailyAmount: 1 } }),
+  });
+  check('the duplicate economy config route is gone', dup.status === 404, `status ${dup.status}`);
+
+  const channels = await api('/api/dashboard/economy/channels?guildId=' + GUILD);
+  check('the channel selector endpoint rejects a non-admin',
+    channels.status === 401 || channels.status === 403, `status ${channels.status}`);
+
+  const anonChannels = await fetch(`${BASE}/api/dashboard/economy/channels?guildId=${GUILD}`)
+    .then((r) => r.status);
+  check('the channel selector endpoint rejects an anonymous caller', anonChannels === 401,
+    `status ${anonChannels}`);
 }
 
 // ─── 4. Cleanup (best effort) ───────────────────────────────────────

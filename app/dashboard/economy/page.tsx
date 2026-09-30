@@ -34,7 +34,7 @@ import { EconomyFeatureCards, EconomyInformationNav, SECTIONS, type SectionId } 
 
 export default function EconomyPage() {
   const { token, selected } = useGuild();
-  const { data, loading, error, code, reload, actorId } = useEconomyData();
+  const { data, loading, error, code, reload, actorId, isOwner } = useEconomyData();
   // The shop is a feature, so it opens at the top rather than below the fold.
   const [active, setActive] = useState<SectionId>('overview');
 
@@ -344,6 +344,7 @@ export default function EconomyPage() {
               config={data.config}
               guildId={selected.id}
               actorId={actorId}
+              isOwner={isOwner === true}
               onSaved={reload}
             />
             <div className="cc-section-label" style={{ margin: '18px 0 8px' }}>

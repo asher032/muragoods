@@ -1,74 +1,60 @@
-// ── Owner-only economic values ──────────────────────────────────────────
+// ── Who may change economic values ──────────────────────────────────────
 //
-// These keys define economic value: currency identity, reward amounts,
-// cooldowns, risk limits, ticket pricing and item economics.
+// The site has no trusted copy of "who owns Murabot". The bot does: it knows
+// the application owner, the guild owner, and its own admin list. So the
+// question is asked of the bot, over the same authenticated bridge every other
+// economy call uses, and the answer is cached briefly.
 //
-// The rule is enforced in THREE places, deliberately:
-//
-//   1. the UI disables these controls for non-owners (courtesy),
-//   2. /api/dashboard/economy/config refuses a non-owner economic write,
-//   3. Murabot re-checks the caller server-side before persisting.
-//
-// Only (2) and (3) are security. (1) exists so the page is not a wall of dead
-// buttons. Keeping the set in its own module means the client and the API
-// cannot drift by accident — importing a route file into a component would
-// pull server-only code across the boundary.
+// This module used to also carry a duplicated copy of the owner-only key set.
+// That copy is gone: the set now lives in `@/app/lib/economy-schema`, derived
+// from the field declarations, so a new setting cannot be added as
+// admin-editable by forgetting to update a second list.
 
-export const ECONOMIC_KEYS: ReadonlySet<string> = new Set([
-  'currencyName',
-  'currencySymbol',
-  'startBalance',
-  'dailyAmount',
-  'weeklyAmount',
-  'monthlyAmount',
-  'workMin',
-  'workMax',
-  'begMin',
-  'begMax',
-  'gambleMax',
-  'gambleCooldownSec',
-  'workCooldownSec',
-  'begCooldownSec',
-  'crimeCooldownSec',
-  'activityCooldownSec',
-  'robCooldownSec',
-  'robMinTarget',
-  'lotteryTicketPrice',
-  'lotteryMaxTickets',
-  'jobCooldownSec',
-  'jobFailRate',
-  'jobCooldownOverrides',
-  'disabledJobs',
-  'disabledItems',
-  'bankCapacity',
-]);
+export const dynamic = 'force-dynamic';
 
-/** Human-readable name for a key, used in validation and rejection messages. */
-export const ECONOMIC_LABELS: Readonly<Record<string, string>> = {
-  currencyName: 'Currency name',
-  currencySymbol: 'Currency symbol',
-  startBalance: 'Starting balance',
-  dailyAmount: 'Daily reward',
-  weeklyAmount: 'Weekly reward',
-  monthlyAmount: 'Monthly reward',
-  workMin: 'Work minimum payout',
-  workMax: 'Work maximum payout',
-  begMin: 'Beg minimum',
-  begMax: 'Beg maximum',
-  gambleMax: 'Maximum bet',
-  gambleCooldownSec: 'Gambling cooldown',
-  workCooldownSec: 'Work cooldown',
-  begCooldownSec: 'Beg cooldown',
-  crimeCooldownSec: 'Crime cooldown',
-  activityCooldownSec: 'Activity cooldown',
-  robCooldownSec: 'Rob cooldown',
-  robMinTarget: 'Rob minimum target balance',
-  lotteryTicketPrice: 'Lottery ticket price',
-  lotteryMaxTickets: 'Max tickets per round',
-  jobCooldownSec: 'Job cooldown',
-  jobFailRate: 'Job failure rate',
-  jobCooldownOverrides: 'Per-job cooldowns',
-  disabledJobs: 'Disabled jobs',
-  disabledItems: 'Disabled items',
-  bankCapacity: 'Base bank capacity',
-};
+const BOT_BASE =
+  process.env.BOT_HEALTH_URL?.replace(/\/health$/, '') || 'https://murastream-bot-pf11.onrender.com';
+
+const OWNER_TTL_MS = 30_000;
+const ownerCache = new Map<string, { at: number; owner: boolean }>();
+
+export type OwnerVerdict = true | false | 'unknown';
+
+export function invalidateOwnerCheck(guildId: string, actorId: string): void {
+  ownerCache.delete(`${guildId}|${actorId}`);
+}
+
+/**
+ * Ask Murabot whether this Discord account may change economic values.
+ *
+ * Returns `true`/`false` on a definitive answer and `'unknown'` when the bot
+ * could not be reached or the bridge secret is unset. `unknown` is
+ * deliberately NOT treated as `false` at the call sites that can retry, and it
+ * is never treated as `true` — an unverifiable owner check must fail closed.
+ */
+export async function isEconomyOwner(guildId: string, actorId: string): Promise<OwnerVerdict> {
+  if (!actorId) return false;
+  const key = `${guildId}|${actorId}`;
+  const hit = ownerCache.get(key);
+  if (hit && Date.now() - hit.at < OWNER_TTL_MS) return hit.owner;
+
+  const secret = process.env.DISCORD_BRIDGE_SECRET || '';
+  if (!secret) return 'unknown';
+
+  try {
+    const resp = await fetch(`${BOT_BASE}/economy/owner-check/${guildId}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actorId }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!resp.ok) return resp.status === 403 || resp.status === 404 ? false : 'unknown';
+    const data = (await resp.json().catch(() => null)) as { ok?: boolean; owner?: boolean } | null;
+    if (!data || data.ok !== true || typeof data.owner !== 'boolean') return 'unknown';
+    ownerCache.set(key, { at: Date.now(), owner: data.owner });
+    return data.owner;
+  } catch {
+    return 'unknown';
+  }
+}

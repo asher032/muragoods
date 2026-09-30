@@ -159,11 +159,13 @@ export interface EconomySnapshot {
   audit: Audit | null;
   shop: { sections: ShopSection[]; items: ShopItem[] } | null;
   transactions: { total: number; rows: TxnRow[]; actions: string[] } | null;
+  /** null = ownership could not be confirmed. */
+  isOwner: boolean | null;
 }
 
 const EMPTY: EconomySnapshot = {
   overview: null, config: null, leaderboard: [], health: null,
-  audit: null, shop: null, transactions: null,
+  audit: null, shop: null, transactions: null, isOwner: null,
 };
 
 export function useEconomyData() {
@@ -221,12 +223,13 @@ export function useEconomyData() {
         return;
       }
 
-      const [leaderboard, health, audit, shop, transactions] = await Promise.all([
+      const [leaderboard, health, audit, shop, transactions, owner] = await Promise.all([
         read<{ rows: LeaderboardRow[] }>('leaderboard', { limit: 10 }),
         read<{ health: Health }>('health'),
         read<Audit>('audit'),
         read<{ sections: ShopSection[]; items: ShopItem[] }>('shop'),
         read<{ total: number; rows: TxnRow[]; actions: string[] }>('transactions', { limit: 25 }),
+        read<{ isOwner: boolean | null }>('config', { actorId: user?.discordId ?? '' }),
       ]);
       if (id !== requestId.current) return;
       setData({
@@ -239,6 +242,7 @@ export function useEconomyData() {
         transactions: transactions
           ? { total: transactions.total ?? 0, rows: transactions.rows ?? [], actions: transactions.actions ?? [] }
           : null,
+        isOwner: owner?.isOwner ?? null,
       });
     } catch {
       if (id === requestId.current) {
@@ -249,7 +253,7 @@ export function useEconomyData() {
     } finally {
       if (id === requestId.current) setLoading(false);
     }
-  }, [token, guildId]);
+  }, [token, guildId, user?.discordId]);
 
   useEffect(() => {
     // Fetch-on-mount. `load` is async and every state write happens after an
@@ -276,6 +280,7 @@ export function useEconomyData() {
     // The Discord account performing the action. The backend re-checks this
     // against its own owner list — the client only reports who is asking.
     actorId: user?.discordId ?? null,
+    isOwner: data.isOwner,
     guildName: selected?.name ?? '',
   };
 }
