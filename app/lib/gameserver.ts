@@ -7,7 +7,7 @@ import GameReward from '@/app/lib/models/GameReward';
 import GameSession from '@/app/lib/models/GameSession';
 import UserActivity from '@/app/lib/models/UserActivity';
 import PromoCode from '@/app/lib/models/PromoCode';
-import { getSessionUser } from '@/app/lib/session';
+import { getIdentityWithId, ownerStamp } from '@/app/lib/identity';
 
 // ── Centralized game reward service ────────────────────────────────────
 // Game → Reward Service → User Account → Discord + Website + Dashboard.
@@ -90,29 +90,30 @@ export interface GameIdentity {
   email: string;
   emailLc: string;
   name: string;
+  /** Canonical Muragoods userId — the stable owner key for game data. */
   userId: string;
   discordId: string;
   discordUsername: string;
 }
 
-/** Resolve the caller's game identity server-side from the shop session. */
+/**
+ * Resolve the caller's game identity server-side from the secure session.
+ *
+ * Games are not a separate account: this returns the SAME canonical Muragoods
+ * identity the shop, orders and points use, so progress earned in a game lands
+ * on the one profile. `userId` is guaranteed non-empty, which is what stops a
+ * game reward from being written against an owner-less row.
+ */
 export async function gameIdentity(req: Request): Promise<GameIdentity | null> {
-  const session = await getSessionUser(req);
-  if (!session) return null;
-  await dbConnect();
-  const user = await User.findOne({ email: session.email })
-    .select('name email userId discord').lean() as {
-      name: string; email: string; userId?: string;
-      discord?: { discordId?: string; username?: string };
-    } | null;
-  if (!user) return null;
+  const identity = await getIdentityWithId(req);
+  if (!identity) return null;
   return {
-    email: user.email,
-    emailLc: user.email.toLowerCase(),
-    name: user.name,
-    userId: user.userId || '',
-    discordId: user.discord?.discordId || '',
-    discordUsername: user.discord?.username || '',
+    email: identity.email,
+    emailLc: identity.emailLc,
+    name: identity.name,
+    userId: identity.userId,
+    discordId: identity.discordUserId,
+    discordUsername: identity.discordUsername,
   };
 }
 
@@ -176,6 +177,9 @@ export interface AwardResult {
  */
 export async function awardPlay(id: GameIdentity, input: AwardInput): Promise<AwardResult> {
   await dbConnect();
+  // One owner key for every row this function writes: the canonical userId,
+  // plus the legacy email key so rows stay findable by either.
+  const stamp = ownerStamp(id);
   const gameId = String(input.gameId || '');
   const def = await GameDefinition.findOne({ gameId }).lean() as {
     enabled?: boolean; maxPlaysPerDay?: number; cooldownSec?: number;
@@ -217,7 +221,7 @@ export async function awardPlay(id: GameIdentity, input: AwardInput): Promise<Aw
   const cost = Math.max(0, Math.floor(Number(cfgEarly.cost ?? 0)));
   if (cost > 0) {
     const charged = await User.findOneAndUpdate(
-      { email: id.email, coinBalance: { $gte: cost } },
+      { userId: id.userId, coinBalance: { $gte: cost } },
       {
         $inc: { coinBalance: -cost },
         $push: { coinHistory: { $each: [{ type: 'spend', amount: cost, label: `${gameId} entry`, date: new Date() }], $slice: -200 } },
@@ -278,7 +282,7 @@ export async function awardPlay(id: GameIdentity, input: AwardInput): Promise<Aw
   const now = new Date();
   try {
     await GameReward.create({
-      idempotencyKey: `${idem}:coins`, userEmail: id.emailLc, discordId: id.discordId,
+      idempotencyKey: `${idem}:coins`, ...stamp, userEmail: id.emailLc, discordId: id.discordId,
       gameId, kind: 'coins', amount: coins, label: `${gameId} reward`, createdAt: now,
     });
   } catch (e) {
@@ -288,12 +292,12 @@ export async function awardPlay(id: GameIdentity, input: AwardInput): Promise<Aw
       : { ok: false, error: 'Could not record reward — try again', status: 500 };
   }
   await GameReward.create({
-    idempotencyKey: `${idem}:xp`, userEmail: id.emailLc, discordId: id.discordId,
+    idempotencyKey: `${idem}:xp`, ...stamp, userEmail: id.emailLc, discordId: id.discordId,
     gameId, kind: 'xp', amount: xp, label: `${gameId} xp`, createdAt: now,
   });
   if (coins !== 0) {
     await User.updateOne(
-      { email: id.email },
+      { userId: id.userId },
       {
         $inc: { coinBalance: coins },
         $push: { coinHistory: { $each: [{ type: coins > 0 ? 'earn' : 'spend', amount: Math.abs(coins), label: `${gameId} reward`, date: now }], $slice: -200 } },
@@ -310,7 +314,7 @@ export async function awardPlay(id: GameIdentity, input: AwardInput): Promise<Aw
   const prog = await GameProgress.findOneAndUpdate(
     { userEmail: id.emailLc, gameId },
     {
-      $setOnInsert: { discordId: id.discordId, level: 1 },
+      $setOnInsert: { ...stamp, discordId: id.discordId, level: 1 },
       $set: { lastPlayed: now, lastPlayedDay: today, updatedAt: now, discordId: id.discordId },
       $inc: { plays: 1, xp, playTimeSec: r.playTimeSec },
       $max: { bestScore: r.score },
@@ -323,7 +327,7 @@ export async function awardPlay(id: GameIdentity, input: AwardInput): Promise<Aw
     await GameProgress.updateOne({ userEmail: id.emailLc, gameId }, { $addToSet: { achievements: { $each: unseen } } });
     for (const a of unseen) {
       await GameReward.create({
-        idempotencyKey: `${idem}:ach:${a}`, userEmail: id.emailLc, discordId: id.discordId,
+        idempotencyKey: `${idem}:ach:${a}`, ...stamp, userEmail: id.emailLc, discordId: id.discordId,
         gameId, kind: 'achievement', amount: 0, label: a, createdAt: now,
       }).catch(() => undefined);
     }
@@ -332,7 +336,7 @@ export async function awardPlay(id: GameIdentity, input: AwardInput): Promise<Aw
     await GameProgress.updateOne({ userEmail: id.emailLc, gameId }, { $set: { streak: r.streak } });
   }
   await UserActivity.create({
-    userEmail: id.emailLc, discordId: id.discordId, type: 'game',
+    ...stamp, userEmail: id.emailLc, discordId: id.discordId, type: 'game',
     text: `Played ${gameId} (+${coins} coins)`, ref: gameId, visibility: 'private', createdAt: now,
   }).catch(() => undefined);
 
@@ -351,7 +355,7 @@ export async function awardPlay(id: GameIdentity, input: AwardInput): Promise<Aw
     }).catch(() => undefined);
     discountCode = code;
     await GameReward.create({
-      idempotencyKey: `${idem}:discount`, userEmail: id.emailLc, discordId: id.discordId,
+      idempotencyKey: `${idem}:discount`, ...stamp, userEmail: id.emailLc, discordId: id.discordId,
       gameId, kind: 'discount', amount: discountPct, label: code, createdAt: now,
     }).catch(() => undefined);
   }

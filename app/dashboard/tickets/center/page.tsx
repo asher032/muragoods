@@ -451,7 +451,7 @@ export default function TicketCenterPage() {
             {(error || success) && (
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', marginBottom: 16, borderRadius: 10, fontSize: 13,
-                background: error ? 'rgba(229,9,20,0.1)' : 'rgba(46,204,64,0.1)', border: `1px solid ${error ? 'rgba(229,9,20,0.3)' : 'rgba(46,204,64,0.3)'}`,
+                background: error ? 'var(--mg-error-soft)' : 'var(--mg-success-soft)', border: `1px solid ${error ? 'var(--mg-error)' : 'var(--mg-success)'}`,
                 color: error ? '#ff8585' : '#6ee7a0',
               }}>
                 {error ? <CircleX size={15} /> : <CheckCircle2 size={15} />}

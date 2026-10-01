@@ -1,6 +1,10 @@
 import mongoose from 'mongoose';
 
 const UnsentLetterSchema = new mongoose.Schema({
+  // A letter belongs to the canonical user who wrote it, so "my submissions"
+  // is the same person on every device and never leaks across accounts.
+  canonicalUserId: { type: String, default: '', index: true },
+  // LEGACY owner key, still written and still matched.
   authorEmail: { type: String, required: true },
   authorName: { type: String, required: true },
   recipientName: { type: String, required: true, index: true },

@@ -188,7 +188,7 @@ function MemberFinder({
             </div>
           )}
           {membersStatus !== null && membersStatus !== 200 && (
-            <div style={{ padding: '10px 8px', fontSize: 12, color: '#ffd60a' }}>
+            <div style={{ padding: '10px 8px', fontSize: 12, color: 'var(--mg-warning)' }}>
               Note: full roster unavailable (Discord status {membersStatus}) - type 2+ characters to use server search.
             </div>
           )}
@@ -214,7 +214,7 @@ function MemberFinder({
               <span style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {m.displayName}
-                  {m.bot && <span style={{ marginLeft: 6, fontSize: 9, background: 'rgba(88,101,242,0.4)', borderRadius: 4, padding: '1px 5px' }}>BOT</span>}
+                  {m.bot && <span style={{ marginLeft: 6, fontSize: 9, background: 'var(--cc-accent-soft)', color: 'var(--cc-accent)', borderRadius: 4, padding: '1px 5px' }}>BOT</span>}
                 </span>
                 <span style={{ display: 'block', fontSize: 10.5, color: 'var(--cc-text-faint)' }}>@{m.username}</span>
               </span>

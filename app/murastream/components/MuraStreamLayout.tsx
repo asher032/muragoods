@@ -95,18 +95,20 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
           position: fixed; top: 0; left: 0; right: 0; z-index: 200;
           height: 64px; display: flex; align-items: center;
           padding: 0 32px; gap: 8px;
-          background: rgba(10, 10, 10, 0.6);
+          background: rgba(15, 15, 26, 0.72);
           backdrop-filter: blur(20px) saturate(1.5);
           -webkit-backdrop-filter: blur(20px) saturate(1.5);
-          border-bottom: 1px solid rgba(255,255,255,0.04);
+          border-bottom: 1px solid var(--mg-border);
           transition: background 0.3s, box-shadow 0.3s;
         }
         .ms-topnav.scrolled {
-          background: rgba(10, 10, 10, 0.92);
+          background: var(--mg-overlay);
           box-shadow: 0 4px 30px rgba(0,0,0,0.4);
         }
+        /* The wordmark is Muragoods yellow, like every other Muragoods
+           wordmark. Murastream is a section of Muragoods, not a rival. */
         .ms-topnav-logo {
-          font-family: var(--font-arcade); font-size: 16px; color: #E50914;
+          font-family: var(--font-arcade); font-size: 16px; color: var(--ms-accent);
           text-decoration: none; letter-spacing: 0.08em; margin-right: 32px;
           display: flex; align-items: center; gap: 8px; white-space: nowrap;
         }
@@ -115,66 +117,80 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
           display: flex; gap: 4px; flex: 1;
         }
         .ms-topnav-link {
-          padding: 8px 16px; border-radius: 8px; text-decoration: none;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          font-size: 13px; font-weight: 500; color: var(--ms-text-muted);
-          transition: all 0.2s; white-space: nowrap;
+          padding: 8px 16px; border-radius: var(--mg-radius-sm); text-decoration: none;
+          font-family: var(--font-sans);
+          font-size: var(--mg-text-sm); font-weight: 600; color: var(--ms-text-muted);
+          transition: all var(--mg-transition-fast); white-space: nowrap;
         }
-        .ms-topnav-link:hover { color: #fff; background: rgba(255,255,255,0.06); }
-        .ms-topnav-link.active { color: #fff; background: rgba(229,9,20,0.15); }
+        .ms-topnav-link:hover { color: var(--mg-text-strong); background: var(--mg-glass-bg); }
+        .ms-topnav-link.active {
+          color: var(--ms-accent); background: var(--ms-accent-softer);
+        }
         .ms-topnav-right {
           display: flex; align-items: center; gap: 12px;
         }
         .ms-topnav-search {
-          background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 10px; padding: 8px 14px; color: #fff; font-size: 13px;
-          width: 200px; outline: none; transition: all 0.2s;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          background: var(--mg-glass-bg); border: 1px solid var(--mg-border);
+          border-radius: var(--mg-radius-sm); padding: 8px 14px; color: var(--mg-text);
+          font-size: var(--mg-text-sm);
+          width: 200px; outline: none; transition: all var(--mg-transition-fast);
+          font-family: var(--font-sans);
         }
         .ms-topnav-search::placeholder { color: var(--ms-text-ghost); }
-        .ms-topnav-search:focus { border-color: rgba(229,9,20,0.4); width: 280px; background: rgba(255,255,255,0.08); }
+        .ms-topnav-search:focus {
+          border-color: var(--ms-accent); width: 280px;
+          background: var(--mg-glass-bg-strong);
+          box-shadow: 0 0 0 3px var(--ms-accent-softer);
+        }
         .ms-topnav-more {
           background: none; border: none; padding: 8px; cursor: pointer;
-          border-radius: 8px; transition: background 0.2s; display: flex; align-items: center;
+          border-radius: var(--mg-radius-sm); transition: background var(--mg-transition-fast);
+          display: flex; align-items: center;
         }
-        .ms-topnav-more:hover { background: rgba(255,255,255,0.06); }
+        .ms-topnav-more:hover { background: var(--mg-glass-bg); }
         .ms-topnav-back {
           display: inline-flex; align-items: center; gap: 6px;
-          padding: 6px 12px; border-radius: 8px; text-decoration: none;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          font-size: 12px; color: var(--ms-text-dim); transition: all 0.2s;
-          border: 1px solid rgba(255,255,255,0.06);
+          padding: 6px 12px; border-radius: var(--mg-radius-sm); text-decoration: none;
+          font-family: var(--font-sans);
+          font-size: var(--mg-text-xs); color: var(--ms-text-dim);
+          transition: all var(--mg-transition-fast);
+          border: 1px solid var(--mg-border);
         }
-        .ms-topnav-back:hover { color: #fff; border-color: rgba(255,255,255,0.15); }
+        .ms-topnav-back:hover { color: var(--mg-brand); border-color: var(--mg-border-brand); }
         /* Dropdown menu */
         .ms-dropdown {
           position: absolute; top: 56px; right: 32px; z-index: 300;
           background: var(--ms-overlay); backdrop-filter: blur(20px);
           border: 1px solid var(--ms-line); border-radius: 12px;
           padding: 8px; min-width: 180px;
-          box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+          box-shadow: var(--mg-shadow-lg);
           opacity: 0; transform: translateY(-8px); pointer-events: none;
-          transition: all 0.2s ease;
+          transition: all var(--mg-transition-fast);
         }
         html.ms-light .ms-dropdown { box-shadow: 0 8px 32px rgba(0,0,0,0.18); }
         .ms-dropdown.open { opacity: 1; transform: translateY(0); pointer-events: all; }
         .ms-dropdown-link {
-          display: block; padding: 10px 14px; border-radius: 8px; text-decoration: none;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          font-size: 13px; color: var(--ms-text-muted); transition: all 0.15s;
+          display: block; padding: 10px 14px; border-radius: var(--mg-radius-sm);
+          text-decoration: none;
+          font-family: var(--font-sans);
+          font-size: var(--mg-text-sm); color: var(--ms-text-muted);
+          transition: all var(--mg-transition-fast);
         }
         .ms-dropdown-link { color: var(--ms-text-muted); }
-        .ms-dropdown-link:hover { background: rgba(229,9,20,0.1); color: var(--ms-text-strong); }
+        .ms-dropdown-link:hover { background: var(--ms-accent-softer); color: var(--ms-text-strong); }
+        .ms-dropdown-link:hover { color: var(--ms-accent); }
         html.ms-light .ms-topnav-more:hover { background: rgba(0,0,0,0.06); }
         .ms-dropdown-divider { height: 1px; background: rgba(255,255,255,0.06); margin: 4px 8px; }
         /* What's New badge */
         .ms-whatsnew-row { position: relative; }
+        /* "NEW" is a cinematic accent on purpose — one red chip in a
+           yellow product, not a red brand. */
         .ms-whatsnew-badge {
           position: absolute; top: 6px; right: 10px;
-          background: #E50914; color: #fff;
+          background: var(--ms-cinema); color: #fff;
           font-family: var(--font-arcade); font-size: 7px; letter-spacing: 0.08em;
           padding: 2px 6px; border-radius: 6px;
-          box-shadow: 0 0 10px rgba(229,9,20,0.7);
+          box-shadow: 0 0 10px var(--mg-accent-stream-soft);
           animation: ms-whatsnew-pulse 2.4s ease-in-out infinite;
         }
         @keyframes ms-whatsnew-pulse {
@@ -184,7 +200,7 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
         .ms-whatsnew-dot {
           position: absolute; top: 5px; right: 5px;
           width: 8px; height: 8px; border-radius: 50%;
-          background: #E50914; box-shadow: 0 0 8px rgba(229,9,20,0.8);
+          background: var(--ms-cinema); box-shadow: 0 0 8px var(--mg-accent-stream-soft);
           animation: ms-whatsnew-pulse 2.4s ease-in-out infinite;
         }
         /* ─── Main Content ────────────────────────────────── */
@@ -192,22 +208,24 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
         /* ─── Mobile Bottom Nav ──────────────────────────── */
         .ms-mobile-nav {
           display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
-          background: rgba(10, 10, 10, 0.92); backdrop-filter: blur(20px);
-          border-top: 1px solid rgba(255,255,255,0.06);
+          background: var(--mg-overlay); backdrop-filter: blur(20px);
+          border-top: 1px solid var(--mg-border);
           padding: 6px 0 env(safe-area-inset-bottom, 6px);
         }
         .ms-mobile-nav-inner { display: flex; justify-content: space-around; align-items: center; }
         .ms-mobile-tab {
           display: flex; flex-direction: column; align-items: center; gap: 3px;
-          padding: 6px 10px; border-radius: 10px; text-decoration: none; min-width: 52px;
-          transition: all 0.2s;
+          padding: 6px 10px; border-radius: var(--mg-radius-sm);
+          text-decoration: none; min-width: 52px;
+          transition: all var(--mg-transition-fast);
         }
-        .ms-mobile-tab.active { background: rgba(229,9,20,0.12); }
+        .ms-mobile-tab.active { background: var(--ms-accent-softer); }
         .ms-mobile-tab-label {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          font-size: 10px; color: var(--ms-text-faint); transition: color 0.2s;
+          font-family: var(--font-sans);
+          font-size: 10px; color: var(--ms-text-faint);
+          transition: color var(--mg-transition-fast);
         }
-        .ms-mobile-tab.active .ms-mobile-tab-label { color: #E50914; }
+        .ms-mobile-tab.active .ms-mobile-tab-label { color: var(--ms-accent); }
         /* ─── Mobile Hamburger ──────────────────────────── */
         .ms-hamburger {
           display: none; background: none; border: none; padding: 8px; cursor: pointer;
@@ -232,7 +250,7 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
       <nav className={`ms-topnav ${scrolled ? 'scrolled' : ''}`}>
         {/* Mobile hamburger */}
         <button className="ms-hamburger" onClick={() => setMenuOpen(!menuOpen)}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="#E50914" viewBox="0 0 16 16">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="var(--ms-accent)" viewBox="0 0 16 16">
             {menuOpen ? (
               <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708"/>
             ) : (
@@ -243,7 +261,7 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
 
         {/* Logo */}
         <Link href="/murastream" className="ms-topnav-logo">
-          <MuraStreamIcon size={22} color="#E50914" />
+          <MuraStreamIcon size={22} color="var(--ms-accent)" />
           MURASTREAM
         </Link>
 
@@ -311,7 +329,7 @@ export default function MuraStreamLayout({ children }: { children: React.ReactNo
             {BOTTOM_NAV.map(({ href, label, Icon }) => (
               <Link key={href} href={href}
                 className={`ms-mobile-tab ${isActive(href) ? 'active' : ''}`}>
-                <Icon size={20} color={isActive(href) ? '#E50914' : 'var(--ms-text-faint)'} strokeWidth={isActive(href) ? 2.4 : 2} />
+                <Icon size={20} color={isActive(href) ? 'var(--ms-accent)' : 'var(--ms-text-faint)'} strokeWidth={isActive(href) ? 2.4 : 2} />
                 <span className="ms-mobile-tab-label">{label}</span>
               </Link>
             ))}

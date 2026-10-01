@@ -133,7 +133,7 @@ function SearchContent() {
   return (
     <div className="ms-page-pad">
       <h1 style={{
-        fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+        fontFamily: 'var(--font-sans)',
         fontSize: '24px', fontWeight: 700, color: 'var(--ms-text-strong)', margin: '0 0 20px',
       }}>
         Search
@@ -154,10 +154,10 @@ function SearchContent() {
             width: '100%', padding: '14px 44px 14px 44px',
             background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
             borderRadius: '12px', color: 'var(--ms-text)', fontSize: '14px',
-            fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', outline: 'none',
+            fontFamily: 'var(--font-sans)', outline: 'none',
             transition: 'border-color 0.2s, background 0.2s',
           }}
-          onFocus={e => { e.currentTarget.style.borderColor = 'rgba(229,9,20,0.4)'; e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; setShowSuggestions(true); }}
+          onFocus={e => { e.currentTarget.style.borderColor = 'var(--mg-brand)'; e.currentTarget.style.background = 'var(--mg-glass-bg-strong)'; setShowSuggestions(true); }}
           onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; setTimeout(() => setShowSuggestions(false), 150); }}
         />
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="var(--ms-text-ghost)"
@@ -215,10 +215,10 @@ function SearchContent() {
           <button key={t} onClick={() => setType(t)}
             style={{
               padding: '8px 16px', borderRadius: '8px',
-              border: urlType === t ? '1px solid rgba(229,9,20,0.4)' : '1px solid rgba(255,255,255,0.06)',
-              background: urlType === t ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.03)',
-              color: urlType === t ? '#E50914' : 'var(--ms-text-dim)',
-              fontFamily: '-apple-system, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+              border: urlType === t ? '1px solid var(--ms-accent-border)' : '1px solid rgba(255,255,255,0.06)',
+              background: urlType === t ? 'var(--ms-accent-soft)' : 'var(--mg-glass-bg)',
+              color: urlType === t ? 'var(--ms-accent)' : 'var(--ms-text-dim)',
+              fontFamily: 'var(--font-sans)', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
               transition: 'all 0.2s',
             }}>
             {t === 'all' ? 'All' : t === 'movie' ? 'Movies' : t === 'tv' ? 'TV Series' : 'K-Drama'}
@@ -234,14 +234,14 @@ function SearchContent() {
       {/* Error — only for actual API failures */}
       {searchState === 'error' && (
         <div style={{ textAlign: 'center', padding: '48px', color: '#ef4444' }}>
-          <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
+          <p style={{ fontFamily: 'var(--font-sans)', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
             Search is temporarily unavailable
           </p>
           <button onClick={() => router.replace(`/murastream/search?q=${encodeURIComponent(urlQuery)}${urlType !== 'all' ? `&type=${urlType}` : ''}`)}
             style={{
-              padding: '10px 20px', borderRadius: '8px', border: '1px solid rgba(229,9,20,0.3)',
-              background: 'rgba(229,9,20,0.1)', color: '#E50914',
-              fontFamily: '-apple-system, sans-serif', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+              padding: '10px 20px', borderRadius: 'var(--mg-radius-sm)', border: '1px solid var(--ms-accent-border)',
+              background: 'var(--ms-accent-soft)', color: 'var(--ms-accent)',
+              fontFamily: 'var(--font-sans)', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
             }}>
             Retry
           </button>
@@ -251,10 +251,10 @@ function SearchContent() {
       {/* No results — NOT an error */}
       {searchState === 'no-results' && (
         <div style={{ textAlign: 'center', padding: '48px', color: 'var(--ms-text-faint)' }}>
-          <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>
+          <p style={{ fontFamily: 'var(--font-sans)', fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>
             No results found
           </p>
-          <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '13px', color: 'var(--ms-text-ghost)' }}>
+          <p style={{ fontFamily: 'var(--font-sans)', fontSize: '13px', color: 'var(--ms-text-ghost)' }}>
             Try a different search term or adjust your filters
           </p>
         </div>
@@ -275,10 +275,10 @@ function SearchContent() {
       {/* Idle */}
       {searchState === 'idle' && (
         <div style={{ textAlign: 'center', padding: '48px', color: '#444' }}>
-          <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '14px', marginBottom: '8px', color: 'var(--ms-text-faint)' }}>
+          <p style={{ fontFamily: 'var(--font-sans)', fontSize: '14px', marginBottom: '8px', color: 'var(--ms-text-faint)' }}>
             Search for movies & TV shows...
           </p>
-          <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '13px', color: 'var(--ms-text-ghost)' }}>
+          <p style={{ fontFamily: 'var(--font-sans)', fontSize: '13px', color: 'var(--ms-text-ghost)' }}>
             Try the K-Drama filter for Korean titles
           </p>
         </div>

@@ -121,9 +121,9 @@ export default function PrivacyPage() {
     <main
       style={{
         minHeight: '100vh',
-        background: 'radial-gradient(1200px 600px at 70% -10%, rgba(229,9,20,0.18), transparent), #0a0a0c',
+        background: 'radial-gradient(1200px 600px at 70% -10%, var(--mg-brand-softer), transparent), var(--mg-bg)',
         color: '#f5f5f7',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        fontFamily: 'var(--font-sans)',
         padding: '48px 20px 80px',
       }}
     >

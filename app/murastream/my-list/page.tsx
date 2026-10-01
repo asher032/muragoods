@@ -10,7 +10,7 @@ export default function MuraStreamMyListPage() {
   return (
     <div className="ms-page-pad">
       <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: 'var(--ms-text)', margin: '0 0 4px' }}>
-        <span style={{ color: '#E50914' }}><Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span> MY LIST
+        <span style={{ color: 'var(--ms-accent)' }}><Star color={'var(--mg-brand)'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span> MY LIST
       </h1>
       <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '12px', color: 'var(--ms-text-faint)', margin: '0 0 24px' }}>
         {myList.length} title{myList.length !== 1 ? 's' : ''} saved

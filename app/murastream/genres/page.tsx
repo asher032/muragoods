@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import Link from 'next/link';
 import MuraStreamCard from '../components/MuraStreamCard';
+import PlayButton from '../components/PlayButton';
 import MuraStreamLoader from '../components/MuraStreamLoader';
 import { FilmIcon, TvIcon, SparklesIcon, ShuffleIcon } from '../components/MuraStreamIcons';
 import type { MediaItem } from '../types';
@@ -262,11 +263,11 @@ function GenreBrowseContent() {
   return (
     <div className="ms-page-pad">
       <h1 style={{
-        fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+        fontFamily: 'var(--font-sans)',
         fontSize: 28, fontWeight: 800, color: 'var(--ms-text-strong)', margin: '0 0 6px',
         display: 'flex', alignItems: 'center', gap: 10,
       }}>
-        {type === 'movie' ? <FilmIcon size={24} color="#E50914" /> : <TvIcon size={24} color="#E50914" />}
+        {type === 'movie' ? <FilmIcon size={24} color="var(--ms-accent)" /> : <TvIcon size={24} color="var(--ms-accent)" />}
         Browse by Genre
       </h1>
       <p style={{ fontSize: 14, color: 'var(--ms-text-muted)', margin: '0 0 20px' }}>
@@ -279,10 +280,10 @@ function GenreBrowseContent() {
           <button key={t} onClick={() => { setFilter('type', t); setFilter('genre', ''); }}
             style={{
               padding: '10px 20px', borderRadius: 10, cursor: 'pointer',
-              border: type === t ? '1px solid rgba(229,9,20,0.5)' : '1px solid var(--ms-line)',
-              background: type === t ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.03)',
-              color: type === t ? '#E50914' : 'var(--ms-text-dim)',
-              fontFamily: '-apple-system, sans-serif', fontSize: 13, fontWeight: 600,
+              border: type === t ? '1px solid var(--ms-accent-border)' : '1px solid var(--ms-line)',
+              background: type === t ? 'var(--ms-accent-soft)' : 'var(--mg-glass-bg)',
+              color: type === t ? 'var(--ms-accent)' : 'var(--ms-text-dim)',
+              fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 600,
               display: 'flex', alignItems: 'center', gap: 6,
             }}>
             {t === 'movie' ? <FilmIcon size={14} /> : <TvIcon size={14} />}
@@ -313,20 +314,20 @@ function GenreBrowseContent() {
           }}>
             <span style={{
               display: 'inline-flex', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
-              background: '#E50914', color: '#fff', fontSize: 10, fontWeight: 700,
+              background: 'var(--ms-accent)', color: 'var(--ms-accent-ink)', fontSize: 10, fontWeight: 700,
               letterSpacing: '0.1em', padding: '4px 10px', borderRadius: 6,
             }}>
               <SparklesIcon size={11} /> TOP PICK FOR TODAY
             </span>
             <h2 style={{
-              fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+              fontFamily: 'var(--font-sans)',
               fontSize: 26, fontWeight: 800, color: '#fff', margin: 0, lineHeight: 1.2,
             }}>{hero.title}</h2>
             <p style={{
               fontSize: 13, color: 'rgba(255,255,255,0.75)', margin: 0,
               display: 'flex', gap: 10, alignItems: 'center',
             }}>
-              <span style={{ color: '#E50914', fontWeight: 700 }}><Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {Math.round((hero.voteAverage ?? 0) * 10) / 10}</span>
+              <span style={{ color: 'var(--ms-accent)', fontWeight: 700 }}><Star color={'var(--mg-brand)'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {Math.round((hero.voteAverage ?? 0) * 10) / 10}</span>
               {hero.year && <span>{hero.year}</span>}
               {genreName && <span>{genreName}</span>}
             </p>
@@ -337,20 +338,18 @@ function GenreBrowseContent() {
               }}>{hero.overview}</p>
             )}
             <div style={{ display: 'flex', gap: 10 }}>
-              <Link href={`/murastream/watch?type=${hero.mediaType || type}&id=${hero.id}`} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 7,
-                background: '#E50914', color: '#fff', padding: '10px 20px', borderRadius: 9,
-                fontFamily: '-apple-system, sans-serif', fontSize: 13, fontWeight: 700,
-                textDecoration: 'none', boxShadow: '0 4px 18px rgba(229,9,20,0.4)',
-              }}>
-                <svg width="13" height="13" fill="#fff" viewBox="0 0 16 16"><path d="M6.271 4.138a.5.5 0 0 1 .78-.172l4 2.8a.5.5 0 0 1 0 .824l-4 2.8A.5.5 0 0 1 6 10.2V5.8a.5.5 0 0 1 .271-.414z"/></svg>
-                Watch Now
-              </Link>
+              {/* Media type comes from the catalog record, not from the page it was
+                  rendered on, and "Watch Now" appears only when the resolver
+                  confirms a playable authorized source. */}
+              <PlayButton
+                mediaType={hero.mediaType === 'tv' ? 'tv' : 'movie'}
+                tmdbId={hero.id}
+              />
               <Link href={`/murastream/${hero.mediaType || type}/${hero.id}`} style={{
                 display: 'inline-flex', alignItems: 'center',
                 border: '1px solid rgba(255,255,255,0.35)', color: '#fff',
                 padding: '10px 18px', borderRadius: 9, textDecoration: 'none',
-                fontFamily: '-apple-system, sans-serif', fontSize: 13, fontWeight: 600,
+                fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 600,
               }}>
                 Details
               </Link>
@@ -404,8 +403,8 @@ function GenreBrowseContent() {
         <button onClick={surprise} disabled={surprising} style={{
           marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 7,
           padding: '8px 16px', borderRadius: 8, cursor: surprising ? 'wait' : 'pointer',
-          border: '1px solid rgba(229,9,20,0.5)', background: 'rgba(229,9,20,0.12)',
-          color: '#E50914', fontFamily: '-apple-system, sans-serif', fontSize: 13, fontWeight: 700,
+          border: '1px solid var(--ms-accent-border)', background: 'var(--ms-accent-soft)',
+          color: 'var(--ms-accent)', fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 700,
         }}>
           <SparklesIcon size={14} />
           {surprising ? 'Picking…' : 'Surprise Me'}
@@ -417,7 +416,7 @@ function GenreBrowseContent() {
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
           padding: '9px 14px', marginBottom: 16, borderRadius: 10,
-          background: 'rgba(229,9,20,0.08)', border: '1px solid rgba(229,9,20,0.25)',
+          background: 'var(--ms-accent-softer)', border: '1px solid var(--ms-accent-border)',
           color: 'var(--ms-text-dim)', fontSize: 12.5,
         }}>
           <span>{relaxNote}</span>
@@ -452,8 +451,8 @@ function GenreBrowseContent() {
             }}
             style={{
               padding: '9px 22px', borderRadius: 9, cursor: 'pointer',
-              border: '1px solid rgba(229,9,20,0.5)', background: 'rgba(229,9,20,0.14)',
-              color: '#E50914', fontFamily: '-apple-system, sans-serif', fontSize: 13, fontWeight: 700,
+              border: '1px solid var(--ms-accent-border)', background: 'var(--ms-accent-soft)',
+              color: 'var(--ms-accent)', fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 700,
             }}
           >Retry</button>
         </div>
@@ -499,7 +498,7 @@ function GenreBrowseContent() {
         rowItems[row.key]?.length ? (
           <section key={row.key} style={{ marginTop: 44 }}>
             <h2 style={{
-              fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+              fontFamily: 'var(--font-sans)',
               fontSize: 18, fontWeight: 700, color: 'var(--ms-text-strong)', margin: '0 0 16px',
             }}>
               {row.title}
@@ -533,15 +532,15 @@ export default function GenreBrowsePage() {
 function chipStyle(active: boolean): React.CSSProperties {
   return {
     padding: '7px 14px', borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 600,
-    border: active ? '1px solid rgba(229,9,20,0.5)' : '1px solid var(--ms-border-2)',
-    background: active ? 'rgba(229,9,20,0.15)' : 'transparent',
-    color: active ? '#E50914' : 'var(--ms-text-dim)',
-    fontFamily: '-apple-system, sans-serif',
+    border: active ? '1px solid var(--ms-accent-border)' : '1px solid var(--ms-border-2)',
+    background: active ? 'var(--ms-accent-soft)' : 'transparent',
+    color: active ? 'var(--ms-accent)' : 'var(--ms-text-dim)',
+    fontFamily: 'var(--font-sans)',
   };
 }
 
 const selectStyle: React.CSSProperties = {
   background: 'var(--ms-surface-2)', border: '1px solid var(--ms-border-2)', borderRadius: 8,
   color: 'var(--ms-text)', padding: '8px 12px', fontSize: 13, cursor: 'pointer',
-  fontFamily: '-apple-system, sans-serif',
+  fontFamily: 'var(--font-sans)',
 };

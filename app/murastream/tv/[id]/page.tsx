@@ -66,10 +66,10 @@ export default function TvDetailPage() {
   if (error || !show) {
     return (
       <div style={{ padding: '80px 24px', textAlign: 'center' }}>
-        <p style={{ fontFamily: '-apple-system, sans-serif', fontSize: '16px', color: '#ef4444' }}>
+        <p style={{ fontFamily: 'var(--font-sans)', fontSize: '16px', color: '#ef4444' }}>
           {error || 'Show not found'}
         </p>
-        <Link href="/murastream" style={{ color: '#E50914', fontSize: '14px', textDecoration: 'none' }}>
+        <Link href="/murastream" style={{ color: 'var(--ms-accent)', fontSize: '14px', textDecoration: 'none' }}>
           ← Back to MuraStream
         </Link>
       </div>
@@ -101,7 +101,7 @@ export default function TvDetailPage() {
           background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(12px)',
           border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px',
           padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
-          fontFamily: '-apple-system, sans-serif', fontSize: '13px', color: 'var(--ms-text)',
+          fontFamily: 'var(--font-sans)', fontSize: '13px', color: 'var(--ms-text)',
         }}>
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
             <path fillRule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8"/>
@@ -120,39 +120,39 @@ export default function TvDetailPage() {
           )}
           <div style={{ flex: 1, minWidth: '300px', paddingTop: '8px' }}>
             <h1 style={{
-              fontFamily: '-apple-system, sans-serif', fontSize: '32px', fontWeight: 800,
+              fontFamily: 'var(--font-sans)', fontSize: '32px', fontWeight: 800,
               color: 'var(--ms-text-strong)', margin: '0 0 10px', lineHeight: '1.1',
             }}>{show.name}</h1>
 
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px', alignItems: 'center' }}>
               {show.year && <span style={{ fontSize: '14px', color: 'var(--ms-text-muted)' }}>{show.year}</span>}
               {epCount > 0 && <span style={{ fontSize: '14px', color: 'var(--ms-text-faint)' }}>· {epCount} Episodes</span>}
-              {show.voteAverage > 0 && <span style={{ fontSize: '14px', color: '#E50914', fontWeight: 600 }}><Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {(show.voteAverage || 0).toFixed(1)}</span>}
+              {show.voteAverage > 0 && <span style={{ fontSize: '14px', color: 'var(--ms-accent)', fontWeight: 600 }}><Star color={'var(--mg-brand)'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {(show.voteAverage || 0).toFixed(1)}</span>}
             </div>
 
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px' }}>
               {show.genres?.map((g: any) => (
                 <span key={g.id} style={{
                   fontSize: '12px', fontWeight: 500, padding: '5px 14px', borderRadius: '8px',
-                  border: '1px solid rgba(229,9,20,0.25)', color: '#E50914',
-                  background: 'rgba(229,9,20,0.08)',
+                  border: '1px solid var(--ms-accent-border)', color: 'var(--ms-accent)',
+                  background: 'var(--ms-accent-softer)',
                 }}>{g.name}</span>
               ))}
             </div>
 
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '24px' }}>
               <Link href={`/murastream/watch?type=tv&id=${tvId}&season=1&episode=1`} style={{
-                background: '#E50914', color: '#FFF', padding: '14px 28px', borderRadius: '12px',
+                background: 'var(--ms-accent)', color: 'var(--ms-accent-ink)', padding: '14px 28px', borderRadius: 'var(--mg-radius-md)',
                 fontSize: '14px', fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px',
-                boxShadow: '0 4px 20px rgba(229,9,20,0.4)',
+                boxShadow: 'var(--mg-shadow-brand)',
               }}>
                 <svg width="16" height="16" fill="#fff" viewBox="0 0 16 16"><path d="M6.271 4.138a.5.5 0 0 1 .78-.172l4 2.8a.5.5 0 0 1 0 .824l-4 2.8A.5.5 0 0 1 6 10.2V5.8a.5.5 0 0 1 .271-.414z"/></svg>
                 Watch S1 E1
               </Link>
               <button onClick={() => toggleMyList({ id: Number(tvId), mediaType: 'tv', title: show.name, posterPath: show.posterPath, backdropPath: show.backdropPath, voteAverage: show.voteAverage, year: show.year })} style={{
-                background: inList ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.06)',
-                border: `1px solid ${inList ? 'rgba(229,9,20,0.4)' : 'rgba(255,255,255,0.1)'}`,
-                color: inList ? '#E50914' : 'var(--ms-text-muted)', padding: '14px 22px', borderRadius: '12px',
+                background: inList ? 'var(--ms-accent-soft)' : 'var(--mg-glass-bg)',
+                border: `1px solid ${inList ? 'var(--ms-accent-border)' : 'var(--ms-border-2)'}`,
+                color: inList ? 'var(--ms-accent)' : 'var(--ms-text-muted)', padding: '14px 22px', borderRadius: 'var(--mg-radius-md)',
                 fontSize: '13px', fontWeight: 600, cursor: 'pointer',
               }}>{inList ? 'In My List' : '+ My List'}</button>
               <button onClick={() => toggleLike({ id: Number(tvId), mediaType: 'tv', title: show.name, posterPath: show.posterPath, backdropPath: show.backdropPath, voteAverage: show.voteAverage, year: show.year })} style={{
@@ -202,9 +202,9 @@ export default function TvDetailPage() {
                 <button key={s.seasonNumber} onClick={() => setSelectedSeason(s.seasonNumber)} style={{
                   padding: '8px 16px', borderRadius: '8px', cursor: 'pointer',
                   fontSize: '13px', fontWeight: selectedSeason === s.seasonNumber ? 700 : 400,
-                  border: selectedSeason === s.seasonNumber ? '1px solid #E50914' : '1px solid rgba(255,255,255,0.1)',
-                  background: selectedSeason === s.seasonNumber ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.04)',
-                  color: selectedSeason === s.seasonNumber ? '#E50914' : 'var(--ms-text-dim)',
+                  border: selectedSeason === s.seasonNumber ? '1px solid var(--ms-accent)' : '1px solid rgba(255,255,255,0.1)',
+                  background: selectedSeason === s.seasonNumber ? 'var(--ms-accent-soft)' : 'var(--mg-glass-bg)',
+                  color: selectedSeason === s.seasonNumber ? 'var(--ms-accent)' : 'var(--ms-text-dim)',
                 }}>S{s.seasonNumber}</button>
               ))}
             </div>
@@ -222,7 +222,7 @@ export default function TvDetailPage() {
                       border: '1px solid rgba(255,255,255,0.06)', textDecoration: 'none',
                       transition: 'background 0.2s',
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(229,9,20,0.1)')}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--ms-accent-softer)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
                   >
                     {ep.stillPath ? (
@@ -233,8 +233,8 @@ export default function TvDetailPage() {
                     ) : (
                       <div style={{
                         width: '36px', height: '36px', borderRadius: '8px',
-                        background: 'rgba(229,9,20,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '13px', fontWeight: 700, color: '#E50914', flexShrink: 0,
+                        background: 'var(--ms-accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '13px', fontWeight: 700, color: 'var(--ms-accent)', flexShrink: 0,
                       }}>{ep.episodeNumber}</div>
                     )}
                     <div style={{ flex: 1 }}>

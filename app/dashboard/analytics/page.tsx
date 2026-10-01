@@ -229,7 +229,7 @@ export default function AnalyticsPage() {
             </div>
 
             {error && (
-              <div style={{ padding: 16, background: 'rgba(229,9,20,0.1)', border: '1px solid rgba(229,9,20,0.3)', borderRadius: 12, color: '#ff6b6b', fontSize: 13, marginBottom: 16 }}>
+              <div style={{ padding: 16, background: 'var(--mg-error-soft)', border: '1px solid var(--mg-error)', borderRadius: 'var(--mg-radius-md)', color: 'var(--mg-error)', fontSize: 13, marginBottom: 16 }}>
                 {error}
               </div>
             )}
@@ -408,7 +408,7 @@ export default function AnalyticsPage() {
                         <span style={{ flex: 1, color: '#fff', fontSize: 13 }}>{u.uptime_seconds.toLocaleString()}s</span>
                         <span style={{
                           padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
-                          background: u.status === 'online' ? 'rgba(46,204,64,0.15)' : u.status === 'degraded' ? 'rgba(255,214,10,0.15)' : 'rgba(229,9,20,0.15)',
+                          background: u.status === 'online' ? 'var(--mg-success-soft)' : u.status === 'degraded' ? 'var(--mg-warning-soft)' : 'var(--mg-error-soft)',
                           color: u.status === 'online' ? '#2ECC40' : u.status === 'degraded' ? '#f6c453' : '#ff6b6b',
                         }}>
                           {u.status.toUpperCase()}
@@ -488,7 +488,7 @@ function TestRow({ icon, name, label, description, result, onTest }: {
     : result?.status === 'warning'
       ? { bg: 'rgba(255,214,10,0.1)', border: 'rgba(255,214,10,0.3)', color: '#f6c453' }
       : result?.status === 'failed'
-        ? { bg: 'rgba(229,9,20,0.1)', border: 'rgba(229,9,20,0.3)', color: '#ff6b6b' }
+        ? { bg: 'var(--mg-error-soft)', border: 'var(--mg-error)', color: 'var(--mg-error)' }
         : { bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)' };
 
   const badge = result?.status === 'passed' ? '✓ Passed'

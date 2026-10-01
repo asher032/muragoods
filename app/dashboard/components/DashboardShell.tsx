@@ -52,16 +52,16 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     return (
       <div style={{
         minHeight: '100vh', display: 'grid', placeItems: 'center',
-        background: 'var(--cc-bg, #0a0a0e)',
+        background: 'var(--cc-bg, var(--mg-bg))',
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{
             width: 64, height: 64, margin: '0 auto 18px', borderRadius: 18,
             display: 'grid', placeItems: 'center',
-            background: 'linear-gradient(135deg, rgba(88,101,242,0.9), rgba(88,101,242,0.55))',
-            boxShadow: '0 12px 40px rgba(88,101,242,0.35)',
+            background: 'linear-gradient(135deg, var(--mg-brand), var(--mg-brand-deep))',
+            boxShadow: 'var(--mg-shadow-brand)',
           }}>
-            <Bot size={32} color="#fff" />
+            <Bot size={32} color="var(--mg-brand-ink)" />
           </div>
           <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 14, margin: 0 }}>
             Connecting to Discord…
@@ -78,14 +78,14 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     return (
       <div style={{
         minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24,
-        background: 'radial-gradient(1200px 700px at 15% -10%, rgba(88,101,242,0.16), transparent 60%), radial-gradient(1000px 600px at 110% 110%, rgba(229,9,20,0.12), transparent 60%), #0a0a0e',
+        background: 'radial-gradient(1200px 700px at 15% -10%, var(--mg-brand-softer), transparent 60%), radial-gradient(1000px 600px at 110% 110%, rgba(255,214,10,0.06), transparent 60%), var(--mg-bg)',
       }}>
         <div className="cc-card" style={{ maxWidth: 460, width: '100%', padding: '40px 36px', textAlign: 'center' }}>
           <div style={{
             width: 76, height: 76, margin: '0 auto 20px', borderRadius: 22,
             display: 'grid', placeItems: 'center',
-            background: 'linear-gradient(135deg, rgba(88,101,242,0.9), rgba(88,101,242,0.55))',
-            boxShadow: '0 12px 40px rgba(88,101,242,0.35)',
+            background: 'linear-gradient(135deg, var(--mg-brand), var(--mg-brand-deep))',
+            boxShadow: 'var(--mg-shadow-brand)',
           }}>
             <Bot size={40} color="#fff" />
           </div>
@@ -182,8 +182,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                     <img src={g.icon} alt="" width={28} height={28} style={{ borderRadius: 8 }} />
                   ) : (
                     <span style={{
-                      width: 28, height: 28, borderRadius: 8, background: 'rgba(88,101,242,0.35)',
-                      display: 'grid', placeItems: 'center', fontSize: 13, color: '#fff',
+                      width: 28, height: 28, borderRadius: 8, background: 'var(--cc-accent-soft)',
+                      display: 'grid', placeItems: 'center', fontSize: 13, color: 'var(--cc-accent)',
                     }}>
                       {g.name.charAt(0).toUpperCase()}
                     </span>

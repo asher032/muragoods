@@ -2,7 +2,12 @@ import { NextResponse, after } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import Order from '@/app/lib/models/Order';
 import PromoCode from '@/app/lib/models/PromoCode';
-import { getSessionUser, requireAdmin } from '@/app/lib/session';
+import { requireAdmin } from '@/app/lib/session';
+import { getIdentityWithId, ownerFilter, ownsResource } from '@/app/lib/identity';
+
+// Orders belong to the canonical `userId`. Identity comes from the session —
+// a client-supplied `userId` is never trusted, because that is how one
+// account ends up reading (or cancelling) another account's orders.
 
 export async function POST(req: Request) {
   try {
@@ -31,11 +36,17 @@ export async function POST(req: Request) {
     // Identity: a signed-in user always orders as themselves — the client
     // cannot place an order (or spend a promo code) on another account.
     // Guests without a session keep the supplied identifier.
-    try {
-      const { getSessionUser: getShopUser } = await import('@/app/lib/session');
-      const shopper = await getShopUser(req);
-      if (shopper) body.userId = shopper.email;
-    } catch { /* session lookup failed — continue as guest */ }
+    //
+    // The order records BOTH keys: `canonicalUserId` (the stable owner every
+    // surface now references) and the legacy `userId` field, which has always
+    // held the email. Writing both means orders placed today resolve
+    // identically whether a reader matches the new key or the old one.
+    const shopper = await getIdentityWithId(req);
+    if (shopper) {
+      body.userId = shopper.emailLc;
+      body.canonicalUserId = shopper.userId;
+      body.customer = shopper.name;
+    }
 
     // Game-reward promo codes are consumed here, server-side, so a code can
     // never be spent twice even if the checkout request is replayed. Only
@@ -90,15 +101,20 @@ export async function GET(req: Request) {
     const { user: admin } = await requireAdmin(req);
     if (admin) {
       const query: Record<string, unknown> = {};
-      if (userId) query.userId = userId.trim();
+      // An admin filter may be either the canonical id or the legacy email,
+      // because admins look orders up by whatever the customer told them.
+      if (userId) {
+        const key = userId.trim();
+        query.$or = [{ canonicalUserId: key }, { userId: key }, { userId: key.toLowerCase() }];
+      }
       const orders = await Order.find(query).sort({ createdAt: -1 });
       return NextResponse.json({ success: true, data: orders });
     }
-    const viewer = await getSessionUser(req);
+    const viewer = await getIdentityWithId(req);
     if (!viewer) {
       return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });
     }
-    const orders = await Order.find({ userId: viewer.email }).sort({ createdAt: -1 });
+    const orders = await Order.find(ownerFilter(viewer, 'userId')).sort({ createdAt: -1 });
     return NextResponse.json({ success: true, data: orders });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'An error occurred';
@@ -118,12 +134,11 @@ export async function PATCH(req: Request) {
     }
 
     // Capture the previous status so we only react to real transitions
-    const previous = await Order.findById(orderId).select('status userId').lean();
+    const previous = await Order.findById(orderId).select('status userId canonicalUserId').lean();
     if (!previous) {
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
     }
-    const prev = previous as { status?: string; userId?: string };
-    const prevStatus = prev.status;
+    const prevStatus = previous.status;
 
     // Owner self-cancel: the ONLY non-admin mutation. Anything else (status
     // advances, coins, notifications) stays behind the admin guard below.
@@ -132,9 +147,10 @@ export async function PATCH(req: Request) {
       keys.length === 1 && keys[0] === 'status' && body.status === 'Cancelled' &&
       prevStatus !== 'Delivered' && prevStatus !== 'Cancelled';
     if (isOwnerCancel) {
-      const { getSessionUser: getShopper } = await import('@/app/lib/session');
-      const shopper = await getShopper(req);
-      if (!shopper || !prev.userId || prev.userId !== shopper.email) {
+      const shopper = await getIdentityWithId(req);
+      // Ownership is checked against the order's own owner field, never
+      // against anything in the request.
+      if (!shopper || !ownsResource(shopper, previous, 'userId')) {
         return NextResponse.json({ success: false, error: 'You can only cancel your own orders' }, { status: 403 });
       }
       const order = await Order.findByIdAndUpdate(orderId, { status: 'Cancelled' }, { new: true });

@@ -54,7 +54,7 @@ export default function MuraStreamCard({
         {/* Rating badge */}
         {(item.voteAverage ?? 0) > 0 && (
           <div className="ms-card-rating">
-            <span><Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span> {(item.voteAverage ?? 0).toFixed(1)}
+            <span><Star color={'var(--mg-brand)'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span> {(item.voteAverage ?? 0).toFixed(1)}
           </div>
         )}
 

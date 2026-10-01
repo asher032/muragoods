@@ -567,13 +567,13 @@ export default function Home() {
       <section className="relative px-4 py-20 sm:px-8 overflow-hidden">
         <div className="absolute inset-0 z-0">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] rounded-full"
-            style={{ background: 'radial-gradient(ellipse, rgba(230,57,70,0.08) 0%, transparent 70%)' }} />
+            style={{ background: 'radial-gradient(ellipse, var(--mg-brand-softer) 0%, transparent 70%)' }} />
         </div>
         <div className="mario-container relative z-10 text-center">
           <Reveal direction="scale">
             <div className="text-6xl sm:text-8xl mb-6"><Clapperboard className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></div>
           </Reveal>            <Reveal delay={0.1}>
-              <h2 className="mario-title text-xl sm:text-3xl mb-4" style={{ color: '#E50914' }}>
+              <h2 className="mario-title text-xl sm:text-3xl mb-4" style={{ color: 'var(--mg-brand)' }}>
                 MuraStream
               </h2>
             </Reveal>
@@ -590,7 +590,7 @@ export default function Home() {
               <Link href="/murastream">
                 <AnimatedButton
                   className="px-10 py-4 font-arcade text-sm"
-                  style={{ background: 'rgba(229,9,20,0.2)', borderColor: 'rgba(229,9,20,0.4)', color: '#E50914' }}
+                  style={{ background: 'var(--mg-brand)', borderColor: 'var(--mg-brand)', color: 'var(--mg-brand-ink)' }}
                 >
                   <Clapperboard className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> EXPLORE MOVIES →
                 </AnimatedButton>
@@ -598,7 +598,7 @@ export default function Home() {
               <Link href="/murastream/library">
                 <AnimatedButton
                   className="px-10 py-4 font-arcade text-sm"
-                  style={{ background: 'rgba(255,214,10,0.15)', borderColor: 'rgba(255,214,10,0.3)', color: '#ffd60a' }}
+                  style={{ background: 'var(--mg-brand-soft)', borderColor: 'var(--mg-border-brand)', color: 'var(--mg-brand)' }}
                 >
                   <BookOpen className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> MY LIBRARY
                 </AnimatedButton>

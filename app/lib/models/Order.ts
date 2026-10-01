@@ -7,6 +7,14 @@ const StatusHistoryEntry = new mongoose.Schema({
 }, { _id: false });
 
 const OrderSchema = new mongoose.Schema({
+  // ── Owner ──
+  // `canonicalUserId` is the stable owner: the same Muragoods userId that
+  // orders, points, favorites and My Space all use. It never changes, even if
+  // the person changes their email.
+  canonicalUserId: { type: String, default: '', index: true },
+  // LEGACY: this field historically holds the owner's EMAIL, not an id. Kept
+  // in sync on write and still matched on read so orders placed before the
+  // canonical id existed keep resolving to their owner.
   userId: { type: String, required: true },
   customer: { type: String, required: true },
   phone: { type: String },

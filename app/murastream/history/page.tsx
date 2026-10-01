@@ -35,7 +35,7 @@ export default function MuraStreamHistoryPage() {
     <div className="ms-page-pad">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <h1 style={{ fontFamily: 'var(--font-arcade)', fontSize: '18px', color: 'var(--ms-text)', margin: 0 }}>
-          <span style={{ color: '#E50914', display: 'inline-flex', verticalAlign: 'middle', marginRight: 6 }}><ClockIcon size={15} /></span> WATCH HISTORY
+          <span style={{ color: 'var(--ms-accent)', display: 'inline-flex', verticalAlign: 'middle', marginRight: 6 }}><ClockIcon size={15} /></span> WATCH HISTORY
         </h1>
         {history.length > 0 && (
           <>
@@ -93,13 +93,13 @@ export default function MuraStreamHistoryPage() {
                   <div style={{ flex: 1 }}>
                     <p style={{ fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '13px', color: 'var(--ms-text)', margin: 0 }}>{item.title}</p>
                     {item.mediaType === 'tv' && item.season != null && (
-                      <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: '#E50914', margin: '4px 0 0' }}>
+                      <p style={{ fontFamily: 'var(--font-arcade)', fontSize: '9px', color: 'var(--ms-accent)', margin: '4px 0 0' }}>
                         Season {item.season} • Episode {item.episode}
                       </p>
                     )}
                     {item.progress != null && item.progress > 0 && (
                       <div style={{ marginTop: '6px', height: '3px', background: 'var(--ms-border-2)', borderRadius: '2px', maxWidth: '200px' }}>
-                        <div style={{ height: '100%', width: `${item.progress}%`, background: '#E50914', borderRadius: '2px' }} />
+                        <div style={{ height: '100%', width: `${item.progress}%`, background: 'var(--ms-accent)', borderRadius: '2px' }} />
                       </div>
                     )}
                   </div>

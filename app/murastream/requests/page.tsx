@@ -141,16 +141,16 @@ function RequestsContent() {
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => setTab('list')} style={{
             padding: '9px 18px', borderRadius: 12, cursor: 'pointer', fontSize: 13, fontWeight: 600,
-            border: `1px solid ${tab === 'list' ? 'rgba(229,9,20,0.5)' : 'rgba(255,255,255,0.15)'}`,
-            background: tab === 'list' ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.06)',
-            color: tab === 'list' ? '#E50914' : 'rgba(235,235,245,0.7)',
+            border: `1px solid ${tab === 'list' ? 'var(--ms-accent-border)' : 'var(--ms-border-2)'}`,
+            background: tab === 'list' ? 'var(--ms-accent-soft)' : 'var(--mg-glass-bg)',
+            color: tab === 'list' ? 'var(--ms-accent)' : 'var(--ms-text-dim)',
           }}>Browse Requests</button>
           <button onClick={() => setTab('new')} style={{
             padding: '9px 18px', borderRadius: 12, cursor: 'pointer', fontSize: 13, fontWeight: 700,
             display: 'inline-flex', alignItems: 'center', gap: 6,
-            border: `1px solid ${tab === 'new' ? 'rgba(229,9,20,0.5)' : 'rgba(255,255,255,0.15)'}`,
-            background: tab === 'new' ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.06)',
-            color: tab === 'new' ? '#E50914' : 'rgba(235,235,245,0.7)',
+            border: `1px solid ${tab === 'new' ? 'var(--ms-accent-border)' : 'var(--ms-border-2)'}`,
+            background: tab === 'new' ? 'var(--ms-accent-soft)' : 'var(--mg-glass-bg)',
+            color: tab === 'new' ? 'var(--ms-accent)' : 'var(--ms-text-dim)',
           }}><Plus size={14} /> New Request</button>
         </div>
       </div>
@@ -185,9 +185,9 @@ function RequestsContent() {
               <button key={t} onClick={() => setType(t)} style={{
                 padding: '8px 16px', borderRadius: 10, cursor: 'pointer', fontSize: 12.5, fontWeight: 600,
                 display: 'inline-flex', alignItems: 'center', gap: 6,
-                border: `1px solid ${type === t ? 'rgba(229,9,20,0.5)' : 'rgba(255,255,255,0.15)'}`,
-                background: type === t ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.06)',
-                color: type === t ? '#E50914' : 'rgba(235,235,245,0.7)',
+                border: `1px solid ${type === t ? 'var(--ms-accent-border)' : 'var(--ms-border-2)'}`,
+                background: type === t ? 'var(--ms-accent-soft)' : 'var(--mg-glass-bg)',
+                color: type === t ? 'var(--ms-accent)' : 'var(--ms-text-dim)',
               }}>{typeIcon(t)} {t === 'movie' ? 'Movie' : t === 'tv' ? 'TV Series' : 'Anime'}</button>
             ))}
           </div>
@@ -228,8 +228,10 @@ function RequestsContent() {
           </div>
           <button onClick={() => void submit()} disabled={!title.trim() || submitting} style={{
             width: '100%', padding: '13px', borderRadius: 12, cursor: title.trim() && !submitting ? 'pointer' : 'default',
-            border: '1px solid #E50914', background: title.trim() && !submitting ? '#E50914' : 'rgba(229,9,20,0.25)',
-            color: '#fff', fontSize: 14, fontWeight: 700,
+            border: '1px solid var(--ms-accent)',
+            background: title.trim() && !submitting ? 'var(--ms-accent)' : 'var(--ms-accent-soft)',
+            color: title.trim() && !submitting ? 'var(--ms-accent-ink)' : 'var(--ms-accent)',
+            fontSize: 14, fontWeight: 700,
           }}>
             {submitting ? 'Submitting…' : 'Submit Request'}
           </button>
@@ -282,8 +284,8 @@ function RequestsContent() {
                 <div key={r.id} style={{ ...GLASS, padding: '14px 16px', display: 'flex', gap: 14, alignItems: 'center' }}>
                   <div style={{
                     width: 38, height: 38, borderRadius: 12, flexShrink: 0,
-                    background: 'rgba(229,9,20,0.14)', border: '1px solid rgba(229,9,20,0.3)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#E50914',
+                    background: 'var(--ms-accent-soft)', border: '1px solid var(--ms-accent-border)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ms-accent)',
                   }}>{typeIcon(r.type)}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: 'rgba(245,245,250,0.95)', display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
@@ -310,9 +312,9 @@ function RequestsContent() {
                     <button onClick={() => void support(r)} disabled={r.supportedByMe} style={{
                       padding: '8px 14px', borderRadius: 10, cursor: r.supportedByMe ? 'default' : 'pointer',
                       fontSize: 12, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0,
-                      border: `1px solid ${r.supportedByMe ? 'rgba(229,9,20,0.5)' : 'rgba(255,255,255,0.2)'}`,
-                      background: r.supportedByMe ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.07)',
-                      color: r.supportedByMe ? '#E50914' : 'rgba(235,235,245,0.8)',
+                      border: `1px solid ${r.supportedByMe ? 'var(--ms-accent-border)' : 'var(--ms-border-2)'}`,
+                      background: r.supportedByMe ? 'var(--ms-accent-soft)' : 'var(--mg-glass-bg)',
+                      color: r.supportedByMe ? 'var(--ms-accent)' : 'var(--ms-text-dim)',
                     }}>
                       <ThumbsUp size={12} /> {r.supportedByMe ? 'Supported' : 'Support'}
                     </button>

@@ -2,15 +2,18 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import UserPreference, { PREFERENCE_TYPES, PREFERENCE_ACTIONS } from '@/app/lib/models/UserPreference';
 import UserActivity from '@/app/lib/models/UserActivity';
-import { gameIdentity, playerKey } from '@/app/lib/gameserver';
+import { playerKey } from '@/app/lib/gameserver';
 import User from '@/app/lib/models/User';
 import { rateLimit } from '@/app/lib/rate-limit';
+import { getIdentityWithId, ownerFilter, ownerStamp } from '@/app/lib/identity';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// Unified favorites/likes/saves across games, movies, anime, series,
-// products and music. Identity always comes from the session cookie.
+// ONE favorites collection for the whole ecosystem — movies, anime, series,
+// products, games and music all land here, owned by the canonical `userId`.
+// There is no per-service favorites account: `favorite.userId === canonical
+// userId` whether the row came from Murastream or from the shop.
 
 // GET /api/favorites?type=game&action=favorite — own rows.
 // GET /api/favorites?user=<playerKey> — another user's PUBLIC favorites.
@@ -19,19 +22,23 @@ export async function GET(req: Request) {
     await dbConnect();
     const { searchParams } = new URL(req.url);
     const key = searchParams.get('user');
-    let emailLc: string;
+    // Match either the canonical id or the legacy email key, so a favorite
+    // saved before this change is still visible to the person who saved it.
+    let q: Record<string, unknown>;
     if (key) {
       if (!/^[0-9a-f]{22}$/.test(key)) return NextResponse.json({ success: false, error: 'Unknown user' }, { status: 404 });
-      const pub = await User.find({ 'privacy.favorites': 'public' }).select('email').lean() as Array<{ email: string }>;
+      const pub = await User.find({ 'privacy.favorites': 'public' })
+        .select('email userId').lean() as Array<{ email: string; userId?: string }>;
       const match = pub.find((u) => playerKey(u.email.toLowerCase()) === key);
       if (!match) return NextResponse.json({ success: false, error: 'Unknown user' }, { status: 404 });
-      emailLc = match.email.toLowerCase();
+      // Another person's PUBLIC favorites, addressed by email because the
+      // caller only ever learns a privacy-preserving player key.
+      q = { $or: [{ canonicalUserId: match.userId }, { userEmail: match.email.toLowerCase() }] };
     } else {
-      const id = await gameIdentity(req);
-      if (!id) return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });
-      emailLc = id.emailLc;
+      const viewer = await getIdentityWithId(req);
+      if (!viewer) return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });
+      q = ownerFilter(viewer, 'userEmail');
     }
-    const q: Record<string, unknown> = { userEmail: emailLc };
     const type = searchParams.get('type');
     const action = searchParams.get('action');
     if (type) q.contentType = type;
@@ -52,9 +59,10 @@ export async function GET(req: Request) {
 // Toggles by default; {remove:true} forces removal. Upsert = idempotent.
 export async function POST(req: Request) {
   try {
-    const id = await gameIdentity(req);
-    if (!id) return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });
-    const rl = rateLimit(`fav:${id.emailLc}`, 60, 60_000);
+    const viewer = await getIdentityWithId(req);
+    if (!viewer) return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });
+    const id = { emailLc: viewer.emailLc, discordId: viewer.discordUserId };
+    const rl = rateLimit(`fav:${viewer.emailLc}`, 60, 60_000);
     if (!rl.ok) return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     const body = await req.json().catch(() => ({}));
     const contentType = String(body.contentType || '');
@@ -80,7 +88,9 @@ export async function POST(req: Request) {
     }
     const snap = (body.snapshot || {}) as Record<string, unknown>;
     await UserPreference.create({
-      ...filter, discordId: id.discordId,
+      ...filter,
+      ...ownerStamp(viewer),
+      discordId: id.discordId,
       snapshot: {
         title: String(snap.title || contentId).slice(0, 120),
         image: String(snap.image || '').slice(0, 500),
@@ -88,7 +98,7 @@ export async function POST(req: Request) {
       },
     });
     await UserActivity.create({
-      userEmail: id.emailLc, discordId: id.discordId, type: 'favorite',
+      ...ownerStamp(viewer), discordId: id.discordId, type: 'favorite',
       text: `${action}d ${contentType} ${String(snap.title || contentId).slice(0, 80)}`,
       ref: `${contentType}:${contentId}`, visibility: 'private',
     }).catch(() => undefined);
@@ -102,9 +112,10 @@ export async function POST(req: Request) {
 // One-shot migration of localStorage favorites into the account.
 export async function PUT(req: Request) {
   try {
-    const id = await gameIdentity(req);
-    if (!id) return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });
-    const rl = rateLimit(`favimp:${id.emailLc}`, 5, 60_000);
+    const viewer = await getIdentityWithId(req);
+    if (!viewer) return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });
+    const id = { emailLc: viewer.emailLc, discordId: viewer.discordUserId };
+    const rl = rateLimit(`favimp:${viewer.emailLc}`, 5, 60_000);
     if (!rl.ok) return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
     const body = await req.json().catch(() => ({}));
     const items = Array.isArray(body.items) ? body.items.slice(0, 200) : [];
@@ -122,6 +133,7 @@ export async function PUT(req: Request) {
         { userEmail: id.emailLc, contentType, contentId, action },
         {
           $setOnInsert: {
+            ...ownerStamp(viewer),
             discordId: id.discordId,
             snapshot: {
               title: String(snap.title || contentId).slice(0, 120),

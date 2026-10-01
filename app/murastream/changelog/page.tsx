@@ -18,7 +18,7 @@ export default function ChangelogPage() {
         {/* timeline rail */}
         <div style={{
           position: 'absolute', left: 7, top: 6, bottom: 6, width: 2,
-          background: 'linear-gradient(to bottom, rgba(229,9,20,0.5), rgba(229,9,20,0.05))',
+          background: 'linear-gradient(to bottom, var(--mg-brand-soft), var(--mg-brand-softer))',
         }} />
 
         {CHANGELOG.map((entry) => (
@@ -26,10 +26,10 @@ export default function ChangelogPage() {
             {/* node */}
             <div style={{
               position: 'absolute', left: -24, top: 4, width: 12, height: 12, borderRadius: '50%',
-              background: '#E50914', boxShadow: '0 0 10px rgba(229,9,20,0.6)',
+              background: 'var(--ms-accent)', boxShadow: '0 0 10px var(--mg-brand-glow)',
             }} />
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-              <h2 style={{ fontFamily: 'var(--font-arcade)', fontSize: 13, color: '#E50914', margin: 0, letterSpacing: '0.08em' }}>
+              <h2 style={{ fontFamily: 'var(--font-arcade)', fontSize: 13, color: 'var(--ms-accent)', margin: 0, letterSpacing: '0.08em' }}>
                 {entry.version.toUpperCase()}
               </h2>
               <span style={{ fontSize: 11, color: 'var(--ms-text-ghost)' }}>{entry.date}</span>
@@ -40,8 +40,8 @@ export default function ChangelogPage() {
                 <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                   <span style={{
                     flexShrink: 0, minWidth: 34, textAlign: 'center',
-                    fontSize: 10, fontWeight: 700, color: '#E50914',
-                    background: 'rgba(229,9,20,0.1)', border: '1px solid rgba(229,9,20,0.3)',
+                    fontSize: 10, fontWeight: 700, color: 'var(--ms-accent)',
+                    background: 'var(--ms-accent-soft)', border: '1px solid var(--ms-accent-border)',
                     borderRadius: 6, padding: '3px 6px', marginTop: 1,
                   }}>{item.label}</span>
                   <span style={{ fontSize: 13, color: 'var(--ms-text-muted)', lineHeight: 1.5 }}>{item.text}</span>
@@ -52,7 +52,7 @@ export default function ChangelogPage() {
         ))}
       </div>
 
-      <Link href="/murastream" style={{ color: '#E50914', fontSize: 13, textDecoration: 'none' }}>
+      <Link href="/murastream" style={{ color: 'var(--ms-accent)', fontSize: 13, textDecoration: 'none' }}>
         ← Back to MuraStream
       </Link>
     </div>

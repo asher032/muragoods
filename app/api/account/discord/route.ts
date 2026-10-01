@@ -14,13 +14,25 @@ export async function GET(req: Request) {
     if (!session) return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });
     await dbConnect();
     const user = await User.findOne({ email: session.email })
-      .select('discord').lean<{ discord?: { discordId?: string; username?: string; avatar?: string; linkedAt?: Date } } | null>();
+      .select('discord linkedAccounts').lean<{
+        discord?: { discordId?: string; username?: string; avatar?: string; linkedAt?: Date };
+        linkedAccounts?: { discordUserId?: string; discordUsername?: string; discordAvatar?: string; discordLinkedAt?: Date | null };
+      } | null>();
     const d = user?.discord;
+    const la = user?.linkedAccounts;
+    // Prefer the historical field so a link made before `linkedAccounts`
+    // existed still reads as connected.
+    const discordId = d?.discordId || la?.discordUserId || '';
     return NextResponse.json({
       success: true,
-      linked: Boolean(d?.discordId),
-      discord: d?.discordId
-        ? { username: d.username || '', avatar: d.avatar || '', linkedAt: d.linkedAt || null }
+      linked: Boolean(discordId),
+      discord: discordId
+        ? {
+          userId: discordId,
+          username: d?.username || la?.discordUsername || '',
+          avatar: d?.avatar || la?.discordAvatar || '',
+          linkedAt: d?.linkedAt || la?.discordLinkedAt || null,
+        }
         : null,
       connectUrl: '/api/auth/discord?mode=link&next=/account/connected',
     });

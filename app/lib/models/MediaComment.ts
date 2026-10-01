@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 // Owner email is stored for server-side ownership checks and never exposed
 // to the client (only a hash for avatar coloring).
 const MediaCommentSchema = new mongoose.Schema({
+  canonicalUserId: { type: String, default: '', index: true },
   mediaType: { type: String, enum: ['movie', 'tv'], required: true, index: true },
   tmdbId: { type: Number, required: true, index: true },
   parentId: { type: mongoose.Schema.Types.ObjectId, ref: 'MediaComment', default: null, index: true },

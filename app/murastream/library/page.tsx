@@ -93,9 +93,9 @@ export default function MuraStreamLibraryPage() {
             onClick={handleClear}
             title="Remove every title from your library"
             style={{
-              background: 'transparent', border: `1px solid ${confirmClear ? 'rgba(229,9,20,0.6)' : 'var(--ms-border-2)'}`,
+              background: 'transparent', border: `1px solid ${confirmClear ? 'var(--mg-error)' : 'var(--ms-border-2)'}`,
               borderRadius: 8, padding: '6px 12px', cursor: 'pointer',
-              color: confirmClear ? '#E50914' : 'var(--ms-text-faint)', fontSize: 12, fontWeight: 600,
+              color: confirmClear ? 'var(--mg-error)' : 'var(--ms-text-faint)', fontSize: 12, fontWeight: 600,
             }}
           >
             {confirmClear ? 'Tap again to confirm' : 'Clear all'}
@@ -115,7 +115,7 @@ export default function MuraStreamLibraryPage() {
             width: '100%', padding: '10px 14px',
             background: 'var(--ms-surface-2)', border: '1px solid var(--ms-border-2)',
             borderRadius: 10, color: 'var(--ms-text)', fontSize: 13,
-            fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', outline: 'none',
+            fontFamily: 'var(--font-sans)', outline: 'none',
           }}
         />
       </div>
@@ -125,9 +125,9 @@ export default function MuraStreamLibraryPage() {
         {TABS.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} aria-pressed={activeTab === tab.id} style={{
             padding: '6px 14px', borderRadius: '6px', cursor: 'pointer',
-            border: activeTab === tab.id ? '1px solid #E50914' : '1px solid var(--ms-border-2)',
-            background: activeTab === tab.id ? 'rgba(229,9,20,0.12)' : 'var(--ms-surface-2)',
-            color: activeTab === tab.id ? '#E50914' : 'var(--ms-text-dim)',
+            border: activeTab === tab.id ? '1px solid var(--ms-accent)' : '1px solid var(--ms-border-2)',
+            background: activeTab === tab.id ? 'var(--ms-accent-soft)' : 'var(--ms-surface-2)',
+            color: activeTab === tab.id ? 'var(--ms-accent)' : 'var(--ms-text-dim)',
             fontFamily: 'var(--font-arcade)', fontSize: '9px', whiteSpace: 'nowrap',
           }}>
             {tab.label}
@@ -141,9 +141,9 @@ export default function MuraStreamLibraryPage() {
         {SORTS.map(sort => (
           <button key={sort} onClick={() => setSortBy(sort)} aria-pressed={sortBy === sort} style={{
             padding: '4px 8px', borderRadius: '4px', cursor: 'pointer',
-            border: sortBy === sort ? '1px solid rgba(229,9,20,0.3)' : '1px solid transparent',
-            background: sortBy === sort ? 'rgba(229,9,20,0.08)' : 'transparent',
-            color: sortBy === sort ? '#E50914' : 'var(--ms-text-ghost)',
+            border: sortBy === sort ? '1px solid var(--ms-accent-border)' : '1px solid transparent',
+            background: sortBy === sort ? 'var(--ms-accent-softer)' : 'transparent',
+            color: sortBy === sort ? 'var(--ms-accent)' : 'var(--ms-text-ghost)',
             fontFamily: '"Lucida Sans", Geneva, Verdana, sans-serif', fontSize: '11px',
           }}>
             {sort}

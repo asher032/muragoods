@@ -10,6 +10,10 @@ import { rateLimit } from '@/app/lib/rate-limit';
 
 const MAX_AVATAR_CHARS = 900_000; // ~650KB image as data URL
 
+// Usernames are a public handle: letters, digits, underscore and dot, no
+// spaces, so a handle can be typed into a URL or a mention unambiguously.
+const USERNAME_RE = /^[a-zA-Z0-9._]{3,32}$/;
+
 export async function GET(req: Request) {
   try {
     const viewer = await getSessionUser(req);
@@ -18,20 +22,33 @@ export async function GET(req: Request) {
     }
 
     await dbConnect();
-    const user = await User.findOne({ email: viewer.email }).select('name email userId avatar createdAt coinBalance perks bio preferences');
+    const user = await User.findOne({ email: viewer.email })
+      .select('name username email userId avatar createdAt updatedAt coinBalance perks bio preferences discord linkedAccounts');
     if (!user) return NextResponse.json({ success: true, data: null });
+    const linked = (user as { linkedAccounts?: { discordUserId?: string; discordUsername?: string; discordLinkedAt?: Date | null } }).linkedAccounts;
     return NextResponse.json({
       success: true,
       data: {
         name: user.name,
+        displayName: user.name,
+        username: user.username || '',
         email: user.email,
+        // The canonical id. Stable for the life of the account and the key
+        // every other surface stores.
         userId: user.userId,
         avatar: user.avatar || '',
         bio: (user as { bio?: string }).bio || '',
         preferences: (user as { preferences?: Record<string, unknown> }).preferences || {},
         createdAt: user.createdAt,
+        updatedAt: (user as { updatedAt?: Date }).updatedAt || user.createdAt,
         coinBalance: user.coinBalance || 0,
         perks: user.perks || [],
+        discord: {
+          connected: Boolean(user.discord?.discordId || linked?.discordUserId),
+          userId: user.discord?.discordId || linked?.discordUserId || '',
+          username: user.discord?.username || linked?.discordUsername || '',
+          linkedAt: user.discord?.linkedAt || linked?.discordLinkedAt || null,
+        },
       },
     });
   } catch {
@@ -60,6 +77,33 @@ export async function PATCH(req: Request) {
         return NextResponse.json({ success: false, error: 'Name must be 2–40 characters' }, { status: 400 });
       }
       update.name = name;
+    }
+
+    // Public handle. Distinct from the display name so renaming yourself never
+    // changes the address other people link to. Cleared by sending ''.
+    if (body.username !== undefined) {
+      const username = String(body.username).trim();
+      if (username === '') {
+        update.username = '';
+      } else if (!USERNAME_RE.test(username)) {
+        return NextResponse.json(
+          { success: false, error: 'Username must be 3–32 characters (letters, numbers, _ or .)' },
+          { status: 400 },
+        );
+      } else {
+        // Uniqueness is enforced case-insensitively by a partial unique index;
+        // check it here too so the error is readable rather than a raw E11000.
+        // The collation MUST match the index's, or this check would pass for
+        // "Ash" while the index rejects it for "ash".
+        const taken = await User.findOne(
+          { username, email: { $ne: viewer.email } },
+          { collation: { locale: 'en', strength: 2 } },
+        ).select('email').lean();
+        if (taken) {
+          return NextResponse.json({ success: false, error: 'That username is already taken' }, { status: 409 });
+        }
+        update.username = username;
+      }
     }
 
     if (body.bio !== undefined) {
@@ -110,10 +154,11 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ success: false, error: 'Nothing to update' }, { status: 400 });
     }
 
-    const user = await User.findOneAndUpdate({ email: viewer.email }, update, {
-      new: true,
-      select: 'name email userId avatar bio preferences createdAt coinBalance',
-    });
+    const user = await User.findOneAndUpdate(
+      { email: viewer.email },
+      { ...update, updatedAt: new Date() },
+      { new: true, select: 'name username email userId avatar bio preferences createdAt updatedAt coinBalance' },
+    );
     if (!user) {
       return NextResponse.json({ success: false, error: 'Account not found' }, { status: 404 });
     }
@@ -121,12 +166,15 @@ export async function PATCH(req: Request) {
       success: true,
       data: {
         name: user.name,
+        displayName: user.name,
+        username: user.username || '',
         email: user.email,
         userId: user.userId,
         avatar: user.avatar || '',
         bio: (user as { bio?: string }).bio || '',
         preferences: (user as { preferences?: Record<string, unknown> }).preferences || {},
         createdAt: user.createdAt,
+        updatedAt: (user as { updatedAt?: Date }).updatedAt,
         coinBalance: user.coinBalance || 0,
       },
     });

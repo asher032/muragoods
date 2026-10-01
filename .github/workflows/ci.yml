@@ -123,6 +123,56 @@ jobs:
       - name: Murabot owner identity + bot-check codes
         run: node scripts/test-murabot-owner.mjs
 
+      # ONE person = ONE Muragoods account = ONE canonical userId. The bug this
+      # pins is identity SPLIT: `Order.userId` and `SupportTicket.userId` both
+      # held an EMAIL, `User.userId` keyed nothing at all, and My Space and
+      # /points answered from localStorage — so one person saw a different
+      # balance and a different watchlist on every device. These assert the
+      # ownership matcher never lets account A read account B's row (including
+      # the stale-email case), that every consumer route resolves identity from
+      # the session rather than a client-supplied id, that ACCOUNT has exactly
+      # six entries and the duplicate orders page is gone, that one logout
+      # clears both sessions, and that the migration never deletes or merges.
+      - name: Canonical identity (one userId, ownership isolation, safe migration)
+        run: node scripts/test-canonical-identity.mjs
+
+      # Murastream plays only what Muragoods is authorized to play. The
+      # architecture that shipped third-party embed aggregators also shipped an
+      # ad-stripping proxy, and "remove the ads with CSS/proxy" is not the same
+      # guarantee as "there is no third-party source to put ads in". These
+      # assert the guarantee is STRUCTURAL: the authorized-source registry
+      # holds no aggregator domain, first-party media must be same-origin,
+      # licensed entries are trailer/preview only, there is no ad-stripping
+      # code left, the player never sees a source the registry did not issue,
+      # every one of the five playback states and all nine reason codes exist
+      # with safe messages, diagnostics never reach the client, temporary
+      # failures are not cached as unavailable, and health reports each
+      # component independently instead of one blanket verdict.
+      - name: Murastream playback (authorized sources only, no ads, real states)
+        run: node scripts/test-murastream-playback.mjs
+
+      # Source scans cannot tell a working resolver from one that returns a
+      # movie URL for every episode. This compiles and runs the REAL resolver
+      # against a fake network, then asserts S01E01 / S01E02 / S02E01 each
+      # resolve to their OWN url, a missing episode is EPISODE_NOT_RESOLVED
+      # (not the nearest episode), an unknown series is SOURCE_404, a TV
+      # request can never take a movie source, and season 0 is rejected.
+      - name: Murastream episode resolution (real resolver, per-episode sources)
+        run: node scripts/test-playback-runtime.mjs
+
+      # Muragoods shipped as several sites wearing one name: the shop was
+      # yellow, Murastream was streaming-site red in the OS UI font, and the
+      # dashboard was indigo on a canvas of its own. Nothing failed — each
+      # page looked correct alone, which is exactly why the drift survived.
+      # These assert the ONE system structurally: a single token layer that
+      # the legacy tokens derive from, Muragoods gold as the primary accent,
+      # the streaming red demoted to a declared secondary accent, the
+      # dashboard accent retargeted to the brand with module colours kept as
+      # secondary, one font, one radius ramp, one motion ramp, one focus ring,
+      # and shared primitives for cards, buttons, inputs, badges and states.
+      - name: Design system (one brand, one token layer, no page-local identity)
+        run: node scripts/test-design-system.mjs
+
       - name: Typecheck
         run: npx tsc --noEmit
 

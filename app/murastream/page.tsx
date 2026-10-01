@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Users } from 'lucide-react';
 import MuraStreamCard from './components/MuraStreamCard';
+import PlayButton from './components/PlayButton';
 import MuraStreamLoader from './components/MuraStreamLoader';
 import { useMuraStreamStore } from './hooks/useMuraStreamStore';
 import type { MediaItem, ContinueWatchingItem } from './types';
@@ -53,20 +54,20 @@ function FeaturedHero({ item }: { item: MediaItem | null }) {
           {/* Badges */}
           <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
             <span style={{
-              fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-              fontSize: '11px', fontWeight: 700, color: '#E50914',
-              background: 'rgba(229,9,20,0.2)', padding: '4px 12px', borderRadius: '6px',
+              fontFamily: 'var(--font-sans)',
+              fontSize: '11px', fontWeight: 700, color: 'var(--ms-accent)',
+              background: 'var(--ms-accent-soft)', padding: '4px 12px', borderRadius: '6px',
               letterSpacing: '0.08em', textTransform: 'uppercase',
             }}>Featured</span>
             {year && (
               <span style={{
-                fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+                fontFamily: 'var(--font-sans)',
                 fontSize: '12px', color: 'var(--ms-text-dim)',
               }}>{year}</span>
             )}
             {genres && (
               <span style={{
-                fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+                fontFamily: 'var(--font-sans)',
                 fontSize: '12px', color: 'var(--ms-text-faint)',
               }}>· {genres}</span>
             )}
@@ -74,7 +75,7 @@ function FeaturedHero({ item }: { item: MediaItem | null }) {
 
           {/* Title */}
           <h1 style={{
-            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+            fontFamily: 'var(--font-sans)',
             fontSize: '36px', fontWeight: 800, color: '#FFF',
             margin: '0 0 12px', lineHeight: '1.1',
             textShadow: '0 2px 20px rgba(0,0,0,0.5)',
@@ -86,9 +87,9 @@ function FeaturedHero({ item }: { item: MediaItem | null }) {
           {/* Rating */}
           {(item.voteAverage ?? 0) > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
-              <span style={{ color: '#E50914', fontSize: '16px' }}><Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
+              <span style={{ color: 'var(--ms-accent)', fontSize: '16px' }}><Star color={'var(--mg-brand)'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
               <span style={{
-                fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+                fontFamily: 'var(--font-sans)',
                 fontSize: '14px', fontWeight: 600, color: 'var(--ms-text)'
               }}>{(item.voteAverage ?? 0).toFixed(1)}</span>
             </div>
@@ -96,33 +97,25 @@ function FeaturedHero({ item }: { item: MediaItem | null }) {
 
           {/* Description */}
           <p style={{
-            fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+            fontFamily: 'var(--font-sans)',
             fontSize: '14px', color: 'var(--ms-text-muted)', margin: '0 0 24px',
             lineHeight: '1.6', maxHeight: '60px', overflow: 'hidden',
           }}>
             {item.overview}
           </p>
 
-          {/* Buttons */}
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <span style={{
-              background: '#E50914', color: '#FFF', padding: '12px 28px',
-              borderRadius: '10px', display: 'inline-flex', alignItems: 'center', gap: '8px',
-              fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-              fontSize: '14px', fontWeight: 700,
-              boxShadow: '0 4px 20px rgba(229,9,20,0.4)',
-              transition: 'transform 0.2s, box-shadow 0.2s',
-            }}>
-              <svg width="16" height="16" fill="#fff" viewBox="0 0 16 16">
-                <path d="M6.271 4.138a.5.5 0 0 1 .78-.172l4 2.8a.5.5 0 0 1 0 .824l-4 2.8A.5.5 0 0 1 6 10.2V5.8a.5.5 0 0 1 .271-.414z"/>
-              </svg>
-              Watch Now
-            </span>
+          {/* Buttons — the primary action reflects the resolver's real state rather
+              than asserting playback for any catalogued title. */}
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <PlayButton
+              mediaType={item.mediaType === 'tv' ? 'tv' : 'movie'}
+              tmdbId={item.id}
+            />
             <span style={{
               background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
               color: 'var(--ms-text)', padding: '12px 28px', borderRadius: '10px',
               display: 'inline-flex', alignItems: 'center', gap: '8px',
-              fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+              fontFamily: 'var(--font-sans)',
               fontSize: '14px', fontWeight: 600,
               backdropFilter: 'blur(8px)',
             }}>
@@ -175,19 +168,19 @@ function WatchPartyCard({ partyCode, hero }: { partyCode: string | null; hero: M
     <div style={{
       marginTop: 4, marginBottom: 32, padding: '20px 24px',
       display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap',
-      background: 'linear-gradient(120deg, rgba(229,9,20,0.12) 0%, rgba(229,9,20,0.04) 55%, transparent 100%)',
-      border: '1px solid rgba(229,9,20,0.25)', borderRadius: 16,
+      background: 'linear-gradient(120deg, var(--ms-accent-softer) 0%, var(--mg-brand-softer) 55%, transparent 100%)',
+      border: '1px solid var(--ms-accent-border)', borderRadius: 'var(--mg-radius-lg)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: '1 1 260px' }}>
         <div style={{
           width: 44, height: 44, borderRadius: 12, flexShrink: 0,
-          background: 'rgba(229,9,20,0.18)', border: '1px solid rgba(229,9,20,0.4)',
+          background: 'var(--ms-accent-soft)', border: '1px solid var(--ms-accent-border)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <Users size={22} color="#E50914" />
+          <Users size={22} color="var(--ms-accent)" />
         </div>
         <div>
-          <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: 'var(--ms-text-strong)', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: 'var(--ms-text-strong)', fontFamily: 'var(--font-sans)', display: 'flex', alignItems: 'center', gap: 8 }}>
             {(partyCode || (savedParty && live)) ? (
               <>
                 Party {(partyCode || savedParty?.code)} is live
@@ -198,7 +191,7 @@ function WatchPartyCard({ partyCode, hero }: { partyCode: string | null; hero: M
               </>
             ) : 'Watch Party'}
           </p>
-          <p style={{ margin: '3px 0 0', fontSize: 12.5, color: 'var(--ms-text-dim)', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
+          <p style={{ margin: '3px 0 0', fontSize: 12.5, color: 'var(--ms-text-dim)', fontFamily: 'var(--font-sans)' }}>
             {(partyCode || (savedParty && live))
               ? 'Your party is still running — jump back in with playback and chat in sync.'
               : 'Watch in sync with friends. Start a party, share the code, chat live.'}
@@ -225,8 +218,10 @@ function WatchPartyCard({ partyCode, hero }: { partyCode: string | null; hero: M
           disabled={code.trim().length < 4}
           style={{
             padding: '10px 18px', borderRadius: 9, cursor: code.trim().length >= 4 ? 'pointer' : 'default',
-            border: '1px solid rgba(229,9,20,0.5)', background: code.trim().length >= 4 ? '#E50914' : 'rgba(229,9,20,0.25)',
-            color: '#fff', fontSize: 13, fontWeight: 700,
+            border: '1px solid var(--ms-accent-border)',
+            background: code.trim().length >= 4 ? 'var(--ms-accent)' : 'var(--ms-accent-soft)',
+            color: code.trim().length >= 4 ? 'var(--ms-accent-ink)' : 'var(--ms-accent)',
+            fontSize: 13, fontWeight: 700,
           }}
         >Join</button>
         {(savedParty && live) && (
@@ -284,7 +279,7 @@ function MediaRow({ title, items, loading, viewAllHref, ranked, icon: RowIcon }:
     <div className={`ms-row${ranked ? ' ms-rank-row' : ''}`}>
       <div className="ms-row-header">
         <p className="ms-row-title">
-          {RowIcon && <RowIcon size={15} color="#E50914" aria-hidden style={{ verticalAlign: '-0.15em', marginRight: '6px', flexShrink: 0 }} />}
+          {RowIcon && <RowIcon size={15} color="var(--ms-accent)" aria-hidden style={{ verticalAlign: '-0.15em', marginRight: '6px', flexShrink: 0 }} />}
           {title}
         </p>
         <div className="ms-row-tools">
@@ -504,10 +499,10 @@ function MuraStreamHomeContent() {
                 background: 'rgba(255,255,255,0.05)',
                 border: '1px solid rgba(255,255,255,0.08)',
                 borderRadius: '12px', color: 'var(--ms-text)', fontSize: '14px',
-                fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+                fontFamily: 'var(--font-sans)',
                 outline: 'none', transition: 'all 0.2s',
               }}
-              onFocus={e => { e.currentTarget.style.borderColor = 'rgba(229,9,20,0.4)'; e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; }}
+              onFocus={e => { e.currentTarget.style.borderColor = 'var(--mg-brand)'; e.currentTarget.style.background = 'var(--mg-glass-bg-strong)'; }}
               onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
             />
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="var(--ms-text-ghost)"
@@ -534,10 +529,10 @@ function MuraStreamHomeContent() {
                   onClick={() => setActiveTab(tab.id)}
                   style={{
                     padding: '10px 20px', borderRadius: '10px',
-                    border: activeTab === tab.id ? '1px solid rgba(229,9,20,0.4)' : '1px solid rgba(255,255,255,0.06)',
-                    background: activeTab === tab.id ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.03)',
-                    color: activeTab === tab.id ? '#E50914' : 'var(--ms-text-dim)',
-                    fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+                    border: activeTab === tab.id ? '1px solid var(--ms-accent-border)' : '1px solid rgba(255,255,255,0.06)',
+                    background: activeTab === tab.id ? 'var(--ms-accent-soft)' : 'rgba(255,255,255,0.03)',
+                    color: activeTab === tab.id ? 'var(--ms-accent)' : 'var(--ms-text-dim)',
+                    fontFamily: 'var(--font-sans)',
                     fontSize: '13px', fontWeight: 600, cursor: 'pointer',
                     transition: 'all 0.2s', whiteSpace: 'nowrap',
                   }}
@@ -608,27 +603,27 @@ function MuraStreamHomeContent() {
                 ))}
                 <div style={{
                   textAlign: 'center', marginTop: '20px', padding: '24px',
-                  background: 'rgba(229,9,20,0.05)', borderRadius: '16px',
-                  border: '1px solid rgba(229,9,20,0.12)',
+                  background: 'var(--ms-accent-softer)', borderRadius: 'var(--mg-radius-lg)',
+                  border: '1px solid var(--ms-accent-border)',
                 }}>
                   <p style={{
-                    fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-                    fontSize: '16px', fontWeight: 700, color: '#E50914', margin: '0 0 6px',
+                    fontFamily: 'var(--font-sans)',
+                    fontSize: '16px', fontWeight: 700, color: 'var(--ms-accent)', margin: '0 0 6px',
                   }}>
                     Full Drama Experience
                   </p>
                   <p style={{
-                    fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+                    fontFamily: 'var(--font-sans)',
                     fontSize: '13px', color: 'var(--ms-text-dim)', margin: '0 0 16px',
                   }}>
                     K-Dramas, C-Dramas & J-Dramas — genres, years, top-rated
                   </p>
                   <Link href="/murastream/kdrama" style={{
                     display: 'inline-flex', alignItems: 'center', gap: '6px',
-                    background: '#E50914', color: '#FFF', padding: '12px 28px',
-                    borderRadius: '10px', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+                    background: 'var(--ms-accent)', color: 'var(--ms-accent-ink)', padding: '12px 28px',
+                    borderRadius: 'var(--mg-radius-md)', fontFamily: 'var(--font-sans)',
                     fontSize: '13px', fontWeight: 700, textDecoration: 'none',
-                    boxShadow: '0 4px 20px rgba(229,9,20,0.3)',
+                    boxShadow: 'var(--mg-shadow-brand)',
                   }}>
                     Browse Dramas →
                   </Link>
@@ -642,12 +637,12 @@ function MuraStreamHomeContent() {
             onClick={loadMore}
             disabled={loadingMore}
             style={{
-              background: 'rgba(229,9,20,0.12)',
-              border: '1px solid rgba(229,9,20,0.35)',
-              color: '#E50914',
+              background: 'var(--ms-accent-soft)',
+              border: '1px solid var(--ms-accent-border)',
+              color: 'var(--ms-accent)',
               padding: '12px 40px',
-              borderRadius: '12px',
-              fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+              borderRadius: 'var(--mg-radius-md)',
+              fontFamily: 'var(--font-sans)',
               fontSize: '13px', fontWeight: 700,
               cursor: loadingMore ? 'wait' : 'pointer',
               opacity: loadingMore ? 0.6 : 1,
@@ -663,7 +658,7 @@ function MuraStreamHomeContent() {
           borderTop: '1px solid rgba(255,255,255,0.04)', marginTop: '40px',
         }}>
           <p style={{
-            fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+            fontFamily: 'var(--font-sans)',
             fontSize: '12px', color: '#444', letterSpacing: '0.05em',
           }}>
             MURASTREAM — Powered by TMDB
@@ -679,7 +674,7 @@ export default function MuraStreamHome() {
     <Suspense fallback={
       <div style={{ padding: '120px 24px', textAlign: 'center', color: '#666' }}>
         <div className="custom-loader" />
-        <p style={{ fontSize: 13, fontFamily: '-apple-system, sans-serif' }}>Loading MuraStream…</p>
+        <p style={{ fontSize: 13, fontFamily: 'var(--font-sans)' }}>Loading MuraStream…</p>
       </div>
     }>
       <MuraStreamHomeContent />

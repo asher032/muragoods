@@ -74,7 +74,7 @@ export default function EpisodeSwitcher({ type, id, season, currentEpisode, watc
         padding: '14px 16px 10px', borderBottom: '1px solid rgba(255,255,255,0.12)',
       }}>
         <div>
-          <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: '0.12em', color: '#E50914' }}>EPISODES</p>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: '0.12em', color: 'var(--ms-accent)' }}>EPISODES</p>
           <p style={{ margin: '2px 0 0', fontSize: 11, color: 'rgba(255,255,255,0.55)' }}>Season {season}</p>
         </div>
         <button onClick={onClose} aria-label="Close episode panel" style={{
@@ -110,8 +110,8 @@ export default function EpisodeSwitcher({ type, id, season, currentEpisode, watc
               style={{
                 display: 'flex', gap: 10, width: '100%', textAlign: 'left',
                 padding: 8, marginBottom: 6, cursor: active ? 'default' : 'pointer',
-                borderRadius: 14, border: `1px solid ${active ? 'rgba(229,9,20,0.55)' : 'rgba(255,255,255,0.1)'}`,
-                background: active ? 'rgba(229,9,20,0.16)' : 'rgba(255,255,255,0.05)',
+                borderRadius: 'var(--mg-radius-md)', border: `1px solid ${active ? 'var(--ms-accent-border)' : 'var(--ms-border-2)'}`,
+                background: active ? 'var(--ms-accent-soft)' : 'var(--mg-glass-bg)',
                 transition: 'background 0.15s, border-color 0.15s',
                 alignItems: 'center',
               }}
@@ -149,7 +149,7 @@ export default function EpisodeSwitcher({ type, id, season, currentEpisode, watc
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{
                   margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
-                  color: active ? '#E50914' : 'rgba(255,255,255,0.5)',
+                  color: active ? 'var(--ms-accent)' : 'rgba(255,255,255,0.5)',
                 }}>
                   EP {String(ep.episodeNumber).padStart(2, '0')}{watched ? ' · WATCHED' : ''}
                 </p>

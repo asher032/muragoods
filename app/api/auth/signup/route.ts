@@ -6,6 +6,7 @@ import { sendVerificationEmail } from '@/lib/email';
 import { hashPassword } from '@/app/lib/password';
 import { rateLimit, clientIp } from '@/app/lib/rate-limit';
 import { setSessionCookie } from '@/app/lib/session';
+import { mintUserId } from '@/app/lib/identity';
 
 export async function POST(req: Request) {
   // Rate limit: 4 signups per IP per hour, plus a burst guard of 5 per 10 min.
@@ -47,7 +48,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Email already exists' }, { status: 400 });
     }
 
-    const userId = 'MG-' + email.split('@')[0].toUpperCase().slice(0, 6) + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+    // The canonical internal identity. Minted here, once, and never changed
+// again — it is what orders, points, favorites, My Space and support will all
+    // reference. (Previously derived from a truncated email prefix plus
+    // Math.random, which is why existing accounts keep the id they have.)
+    const userId = await mintUserId(email);
     const verificationCode = crypto.randomInt(100000, 999999).toString();
     
     // Generate unique referral code for this user
@@ -74,6 +79,9 @@ export async function POST(req: Request) {
     const user = await User.create({
       name,
       email,
+      // Public handle defaults to the display name so /profile always has
+      // something to show; the person can claim a distinct one later.
+      username: name,
       password: await hashPassword(password), // bcrypt — plaintext is never stored
       userId,
       verificationCode,
@@ -96,6 +104,7 @@ export async function POST(req: Request) {
       success: true,
       data: {
         name: user.name,
+        username: user.username,
         email: user.email,
         userId: user.userId,
         role: user.role || 'user',

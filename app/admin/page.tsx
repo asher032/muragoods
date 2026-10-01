@@ -184,7 +184,7 @@ export default function AdminPage() {
           <div className="flex gap-3">
             <a href="/" className="deco-btn deco-btn-sm">Back to Shop</a>
             <a href="/admin/analytics" className="deco-btn deco-btn-sm deco-btn-gold"><BarChart3 className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Analytics</a>
-            <a href="/admin/source-reports" className="deco-btn deco-btn-sm deco-btn-gold"><Flag className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Source Reports</a>
+            <a href="/api/murastream/playback/health" className="deco-btn deco-btn-sm deco-btn-gold"><Flag className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Playback Health</a>
             <a href="/admin/promo-codes" className="deco-btn deco-btn-sm deco-btn-gold"><Gift color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Promos</a>
             <a href="/admin/support" className="deco-btn deco-btn-sm deco-btn-gold"><MessageCircle className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Support</a>
             <a href="/admin/delivered" className="deco-btn deco-btn-sm deco-btn-gold"><CircleCheck color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Delivered</a>

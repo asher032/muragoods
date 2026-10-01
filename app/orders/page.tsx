@@ -27,11 +27,13 @@ export default function OrdersPage() {
   useEffect(() => {
     const userStr = localStorage.getItem('user');
     if (!userStr) { router.push('/login'); return; }
-    const user = JSON.parse(userStr);
 
     async function fetchOrders() {
       try {
-        const res = await fetch(`/api/orders?userId=${encodeURIComponent(user.email)}`);
+        // No userId in the URL: the server resolves the owner from the
+        // session. Sending one from the client is how a page ends up
+        // rendering (or cancelling) somebody else's orders.
+        const res = await fetch('/api/orders', { cache: 'no-store' });
         const result = await res.json();
         if (result.success && Array.isArray(result.data)) {
           const safeOrders = result.data.map((o: Record<string, unknown>) => {
@@ -159,8 +161,8 @@ export default function OrdersPage() {
 
           {/* Error */}
           {error && (
-            <div className="mb-6 border-2 border-[var(--crimson)] bg-[rgba(229,37,33,0.1)] p-4 text-sm text-[var(--crimson)] rounded-xl" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>
-              <TriangleAlert color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {error}
+            <div className="mb-6 border-2 border-[var(--mg-error)] bg-[var(--mg-error-soft)] p-4 text-sm text-[var(--mg-error)] rounded-xl" style={{ fontFamily: 'var(--font-arcade)', fontSize: '10px' }}>
+              <TriangleAlert color={'var(--mg-error)'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {error}
             </div>
           )}
 

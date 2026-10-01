@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import UnsentLetter from '@/app/lib/models/UnsentLetter';
 import { getSessionUser, requireAdmin } from '@/app/lib/session';
+import { getIdentityWithId, ownsResource } from '@/app/lib/identity';
 
 // POST — Submit a new unsent letter
 export async function POST(req: Request) {
@@ -20,11 +21,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Please enter a recipient name' }, { status: 400 });
     }
 
+    // A signed-in author is stamped server-side with their canonical userId;
+    // guests keep the supplied address. The client cannot publish on another
+    // account.
+    const author = await getIdentityWithId(req).catch(() => null);
     const letter = await UnsentLetter.create({
-      // A signed-in author is stamped server-side; guests keep the supplied
-      // address. The client cannot publish on another account.
-      authorEmail: (await getSessionUser(req).catch(() => null))?.email || authorEmail,
-      authorName: authorName || 'Anonymous',
+      authorEmail: author?.emailLc || authorEmail,
+      ...(author ? { canonicalUserId: author.userId } : {}),
+      authorName: author?.name || authorName || 'Anonymous',
       recipientName: recipientName.trim(),
       content: content.trim(),
       category: category || 'Other',
@@ -52,9 +56,9 @@ export async function GET(req: Request) {
 
     // My submissions — session owner or admin only. Browsing stays public.
     if (email && !name) {
-      const viewer = await getSessionUser(req);
+      const viewer = await getIdentityWithId(req).catch(() => null);
       const { user: admin } = await requireAdmin(req);
-      const own = viewer && viewer.email === email.trim();
+      const own = viewer && viewer.emailLc === email.trim();
       if (!own && !admin) {
         return NextResponse.json({ success: false, error: 'Sign in required' }, { status: viewer ? 403 : 401 });
       }
@@ -176,11 +180,11 @@ export async function DELETE(req: Request) {
     if (!letter) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     }
-    const viewer = await getSessionUser(req);
+    const viewer = await getIdentityWithId(req).catch(() => null);
     const { user: admin } = await requireAdmin(req);
-    const own = Boolean(
-      viewer && letter.authorEmail && letter.authorEmail === viewer.email,
-    );
+    // Ownership on the canonical id, falling back to the legacy author email
+    // so letters written before the migration stay the author's to delete.
+    const own = Boolean(viewer && ownsResource(viewer, letter.toObject(), 'authorEmail'));
     if (!own && !admin) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: viewer ? 403 : 401 });
     }

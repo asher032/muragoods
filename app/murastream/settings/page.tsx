@@ -10,7 +10,7 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: () => void 
       onClick={onChange}
       style={{
         width: '40px', height: '22px', borderRadius: '11px',
-        background: enabled ? '#E50914' : 'var(--ms-border-2)',
+        background: enabled ? 'var(--ms-accent)' : 'var(--ms-border-2)',
         border: 'none', cursor: 'pointer', padding: 0,
         position: 'relative', transition: 'background 0.2s',
       }}
@@ -91,7 +91,7 @@ export default function MuraStreamSettingsPage() {
             type="range" min="75" max="200" step="25"
             value={settings.subtitleSize}
             onChange={e => update('subtitleSize', parseInt(e.target.value))}
-            style={{ width: '100px', accentColor: '#E50914' }}
+            style={{ width: '100px', accentColor: 'var(--ms-accent)' }}
           />
         </SettingRow>
       </Section>
@@ -109,9 +109,9 @@ export default function MuraStreamSettingsPage() {
             {(['dark', 'light', 'system'] as const).map(theme => (
               <button key={theme} onClick={() => update('appearance', theme)} style={{
                 padding: '5px 10px', borderRadius: '6px',
-                border: settings.appearance === theme ? '1px solid #E50914' : '1px solid var(--ms-border-2)',
-                background: settings.appearance === theme ? 'rgba(229,9,20,0.12)' : 'var(--ms-surface-2)',
-                color: settings.appearance === theme ? '#E50914' : 'var(--ms-text-dim)',
+                border: settings.appearance === theme ? '1px solid var(--ms-accent)' : '1px solid var(--ms-border-2)',
+                background: settings.appearance === theme ? 'var(--ms-accent-soft)' : 'var(--ms-surface-2)',
+                color: settings.appearance === theme ? 'var(--ms-accent)' : 'var(--ms-text-dim)',
                 fontFamily: 'var(--font-arcade)', fontSize: '8px', cursor: 'pointer',
                 textTransform: 'capitalize',
               }}>

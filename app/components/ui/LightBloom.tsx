@@ -141,7 +141,9 @@ export default function LightBloom(props: Props) {
         variant = 'shafts',
         direction = 'bottom',
         background = '#0a0a18',
-        baseColor = '#ffd60a',
+        // The numeric channel form of the brand token, because this value is
+        // parsed into RGB rather than handed to CSS.
+        baseColor = `rgb(${getComputedStyle(document.documentElement).getPropertyValue('--mg-brand-rgb').trim() || '255, 214, 10'})`,
         accentColor = '#ffe066',
         speed = 100,
         hover = 114,

@@ -10,7 +10,7 @@ export default function MuraStreamLoader({ fullScreen = true, text }: { fullScre
   if (!fullScreen) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', padding: '24px' }}>
       {loader}
-      {text && <p style={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: '13px', color: '#A0A0A0' }}>{text}</p>}
+      {text && <p style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--mg-text-sm)', color: 'var(--mg-text-muted)' }}>{text}</p>}
     </div>
   );
 
@@ -26,7 +26,7 @@ export default function MuraStreamLoader({ fullScreen = true, text }: { fullScre
         .ms-loader {
           width: 56px;
           height: 56px;
-          color: #E50914;
+          color: var(--mg-brand);
           position: relative;
           background: radial-gradient(14px, currentColor 94%, #0000);
         }
@@ -61,13 +61,13 @@ export default function MuraStreamLoader({ fullScreen = true, text }: { fullScre
       `}</style>
       <div style={{
         position: 'fixed', inset: 0, zIndex: 9999,
-        background: 'rgba(10,10,10,0.88)',
+        background: 'var(--mg-overlay)',
         backdropFilter: 'blur(8px)',
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         gap: '16px',
       }}>
         {loader}
-        <p style={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: '13px', color: '#A0A0A0', margin: 0 }}>
+        <p style={{ fontFamily: 'var(--font-sans)', fontSize: 'var(--mg-text-sm)', color: 'var(--mg-text-muted)', margin: 0 }}>
           {text || 'Loading…'}
         </p>
       </div>

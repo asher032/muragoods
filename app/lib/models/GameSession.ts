@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 // a captured request cannot be replayed for a second payout.
 const GameSessionSchema = new mongoose.Schema({
   token: { type: String, required: true, unique: true, index: true },
+  canonicalUserId: { type: String, default: '', index: true },
   userEmail: { type: String, required: true, index: true },
   gameId: { type: String, required: true },
   consumed: { type: Boolean, default: false },

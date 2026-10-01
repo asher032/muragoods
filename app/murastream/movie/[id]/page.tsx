@@ -110,16 +110,16 @@ export default function MovieDetailPage() {
   if (!movie || notFound) {
     return (
       <div style={{ padding: '80px 24px', textAlign: 'center' }}>
-        <p style={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: '16px', color: 'var(--ms-text-faint)' }}>Movie not found</p>
+        <p style={{ fontFamily: 'var(--font-sans)', fontSize: '16px', color: 'var(--ms-text-faint)' }}>Movie not found</p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 12 }}>
           <button
             type="button"
             onClick={() => void fetchMovie()}
-            style={{ color: '#E50914', fontSize: '14px', background: 'none', border: 'none', cursor: 'pointer' }}
+            style={{ color: 'var(--mg-brand)', fontSize: '14px', background: 'none', border: 'none', cursor: 'pointer' }}
           >
             Retry
           </button>
-          <Link href="/murastream" style={{ color: '#E50914', fontSize: '14px', textDecoration: 'none' }}>← Back to MuraStream</Link>
+          <Link href="/murastream" style={{ color: 'var(--mg-brand)', fontSize: '14px', textDecoration: 'none' }}>← Back to MuraStream</Link>
         </div>
       </div>
     );
@@ -156,9 +156,9 @@ export default function MovieDetailPage() {
         .msmd-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
         .msmd-back { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.12); color: #fff; cursor: pointer; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); transition: background 0.2s, transform 0.2s; flex-shrink: 0; }
         .msmd-back:hover { background: rgba(255,255,255,0.14); transform: translateX(-2px); }
-        .msmd-logo { display: inline-flex; align-items: center; gap: 8px; color: #E50914; font-family: var(--font-arcade); font-size: 15px; letter-spacing: 0.08em; text-decoration: none; white-space: nowrap; }
+        .msmd-logo { display: inline-flex; align-items: center; gap: 8px; color: var(--mg-brand); font-family: var(--font-display); font-size: 15px; letter-spacing: 0.08em; text-decoration: none; white-space: nowrap; }
         .msmd-pill { display: flex; align-items: center; gap: 4px; background: rgba(8,12,14,0.55); border: 1px solid rgba(255,255,255,0.1); border-radius: 999px; padding: 6px; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 8px 32px rgba(0,0,0,0.35); max-width: 100%; }
-        .msmd-pill a { display: inline-flex; align-items: center; gap: 7px; padding: 9px 18px; border-radius: 999px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13.5px; font-weight: 600; color: rgba(255,255,255,0.72); text-decoration: none; white-space: nowrap; transition: all 0.2s; }
+        .msmd-pill a { display: inline-flex; align-items: center; gap: 7px; padding: 9px 18px; border-radius: 999px; font-family: var(--font-sans); font-size: 13.5px; font-weight: 600; color: rgba(255,255,255,0.72); text-decoration: none; white-space: nowrap; transition: all 0.2s; }
         .msmd-pill a:hover { color: #fff; background: rgba(255,255,255,0.08); }
         .msmd-pill a.on { background: #f4f6f8; color: #0b0e11; }
         .msmd-pill .ic { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; color: rgba(255,255,255,0.72); transition: all 0.2s; }
@@ -166,55 +166,55 @@ export default function MovieDetailPage() {
         .msmd-pill-sep { width: 1px; height: 22px; background: rgba(255,255,255,0.12); margin: 0 4px; flex-shrink: 0; }
         .msmd-grid { display: flex; gap: 48px; align-items: flex-end; justify-content: space-between; padding: 88px 0 64px; }
         .msmd-info { flex: 1 1 auto; min-width: 0; max-width: 780px; }
-        .msmd-title { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif; font-size: clamp(34px, 4.6vw, 64px); font-weight: 800; line-height: 1.04; letter-spacing: -0.02em; color: #fff; margin: 0; text-wrap: balance; }
-        .msmd-genres { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 16px; font-family: -apple-system, sans-serif; font-size: 15px; font-weight: 600; color: #fff; }
+        .msmd-title { font-family: var(--font-sans); font-size: clamp(34px, 4.6vw, 64px); font-weight: 800; line-height: 1.04; letter-spacing: -0.02em; color: #fff; margin: 0; text-wrap: balance; }
+        .msmd-genres { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 16px; font-family: var(--font-sans); font-size: 15px; font-weight: 600; color: #fff; }
         .msmd-genres .dot { color: rgba(255,255,255,0.4); font-weight: 400; }
         .msmd-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 22px; }
-        .msmd-play { display: inline-flex; align-items: center; gap: 9px; background: #f4f6f8; color: #0b0e11; border: none; padding: 13px 30px; border-radius: 999px; font-family: -apple-system, sans-serif; font-size: 15px; font-weight: 700; text-decoration: none; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 6px 24px rgba(0,0,0,0.35); }
+        .msmd-play { display: inline-flex; align-items: center; gap: 9px; background: var(--mg-brand); color: var(--mg-brand-ink); border: none; padding: 13px 30px; border-radius: var(--mg-radius-pill); font-family: var(--font-sans); font-size: 15px; font-weight: 700; text-decoration: none; cursor: pointer; transition: transform var(--mg-transition-fast), box-shadow var(--mg-transition-fast); box-shadow: var(--mg-shadow-brand); }
         .msmd-play:hover { transform: translateY(-1px); box-shadow: 0 10px 30px rgba(0,0,0,0.45); }
         .msmd-circ { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 50%; background: rgba(10,14,16,0.55); border: 1px solid rgba(255,255,255,0.16); color: #fff; cursor: pointer; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); transition: all 0.2s; flex-shrink: 0; }
         .msmd-circ:hover { background: rgba(255,255,255,0.14); transform: translateY(-1px); }
-        .msmd-circ.lit { border-color: rgba(229,9,20,0.6); color: #ff5b5b; background: rgba(229,9,20,0.16); }
+        .msmd-circ.lit { border-color: var(--ms-accent-border); color: var(--mg-brand); background: var(--ms-accent-soft); }
         .msmd-circ.shared { border-color: rgba(6,214,160,0.6); color: #06d6a0; }
-        .msmd-meta { display: flex; gap: 14px; align-items: center; flex-wrap: nowrap; margin-top: 22px; font-family: -apple-system, sans-serif; font-size: 14.5px; color: #fff; font-weight: 600; }
+        .msmd-meta { display: flex; gap: 14px; align-items: center; flex-wrap: nowrap; margin-top: 22px; font-family: var(--font-sans); font-size: 14.5px; color: #fff; font-weight: 600; }
         .msmd-meta .dim { color: rgba(255,255,255,0.66); font-weight: 500; }
         .msmd-meta .cert { border: 1px solid rgba(255,255,255,0.35); border-radius: 5px; padding: 1px 7px; font-size: 12.5px; font-weight: 700; }
-        .msmd-meta .star { color: #ffd60a; display: inline-flex; align-items: center; gap: 5px; }
+        .msmd-meta .star { color: var(--mg-brand); display: inline-flex; align-items: center; gap: 5px; }
         .msmd-meta .votes { color: rgba(255,255,255,0.55); font-weight: 500; font-size: 13px; }
-        .msmd-director { margin-top: 10px; font-family: -apple-system, sans-serif; font-size: 14px; color: rgba(255,255,255,0.55); }
+        .msmd-director { margin-top: 10px; font-family: var(--font-sans); font-size: 14px; color: rgba(255,255,255,0.55); }
         .msmd-director strong { color: #fff; font-weight: 600; }
-        .msmd-overview { margin: 16px 0 0; max-width: 720px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 15.5px; line-height: 1.65; color: rgba(255,255,255,0.78); }
+        .msmd-overview { margin: 16px 0 0; max-width: 720px; font-family: var(--font-sans); font-size: 15.5px; line-height: 1.65; color: rgba(255,255,255,0.78); }
         .msmd-overview.clamped { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-        .msmd-more { margin-top: 8px; background: none; border: none; padding: 0; color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; font-family: -apple-system, sans-serif; }
+        .msmd-more { margin-top: 8px; background: none; border: none; padding: 0; color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; font-family: var(--font-sans); }
         .msmd-more:hover { text-decoration: underline; }
         .msmd-card { width: 300px; flex-shrink: 0; background: rgba(10,15,18,0.55); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,0.35); }
         .msmd-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 20px; font-size: 13.5px; }
         .msmd-row + .msmd-row { border-top: 1px solid rgba(255,255,255,0.08); }
-        .msmd-row .k { color: rgba(255,255,255,0.5); font-family: -apple-system, sans-serif; }
-        .msmd-row .v { color: #fff; font-weight: 600; font-family: -apple-system, sans-serif; text-align: right; }
+        .msmd-row .k { color: rgba(255,255,255,0.5); font-family: var(--font-sans); }
+        .msmd-row .v { color: #fff; font-weight: 600; font-family: var(--font-sans); text-align: right; }
         .msmd-studios { display: flex; gap: 22px; align-items: center; justify-content: flex-end; flex-wrap: wrap; margin-top: 20px; }
         .msmd-studios img { height: 26px; width: auto; max-width: 120px; object-fit: contain; opacity: 0.62; filter: brightness(0) invert(1); transition: opacity 0.2s; }
         .msmd-studios img:hover { opacity: 1; }
         .msmd-body { max-width: 1600px; margin: 0 auto; padding: 8px 56px 40px; }
         .msmd-sec { margin-top: 64px; }
-        .msmd-sec-h { font-family: -apple-system, sans-serif; font-size: 22px; font-weight: 800; color: #fff; margin: 0 0 22px; letter-spacing: -0.01em; }
+        .msmd-sec-h { font-family: var(--font-sans); font-size: 22px; font-weight: 800; color: #fff; margin: 0 0 22px; letter-spacing: -0.01em; }
         .msmd-rail { display: flex; gap: 28px; overflow-x: auto; overflow-y: hidden; padding: 4px 4px 14px; scroll-behavior: smooth; }
         .msmd-rail::-webkit-scrollbar { height: 6px; }
         .msmd-rail::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 3px; }
         .msmd-rail::-webkit-scrollbar-track { background: transparent; }
         .msmd-cast { flex-shrink: 0; width: 104px; text-align: center; }
         .msmd-cast img, .msmd-cast .ph { width: 88px; height: 88px; border-radius: 50%; object-fit: cover; margin: 0 auto 10px; border: 2px solid rgba(255,255,255,0.09); display: block; }
-        .msmd-cast .ph { background: #161616; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700; color: #4a4a4a; font-family: -apple-system, sans-serif; }
-        .msmd-cast .n { font-size: 13px; font-weight: 700; color: #fff; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: -apple-system, sans-serif; }
-        .msmd-cast .c { font-size: 12px; color: var(--ms-text-faint); margin: 3px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: -apple-system, sans-serif; }
+        .msmd-cast .ph { background: #161616; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700; color: #4a4a4a; font-family: var(--font-sans); }
+        .msmd-cast .n { font-size: 13px; font-weight: 700; color: #fff; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-sans); }
+        .msmd-cast .c { font-size: 12px; color: var(--ms-text-faint); margin: 3px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-sans); }
         .msmd-trailer { position: relative; flex-shrink: 0; width: min(360px, 78vw); aspect-ratio: 16/9; border-radius: 14px; overflow: hidden; border: 1px solid rgba(255,255,255,0.09); cursor: pointer; background: #0d0d0d; padding: 0; text-align: left; transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s; }
         .msmd-trailer:hover { transform: translateY(-3px); border-color: rgba(255,255,255,0.22); box-shadow: 0 14px 40px rgba(0,0,0,0.5); }
         .msmd-trailer img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .msmd-trailer .shade { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.15) 55%, rgba(0,0,0,0.1) 100%); }
         .msmd-trailer .play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 52px; height: 52px; border-radius: 50%; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.3); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px); }
         .msmd-trailer .cap { position: absolute; left: 14px; right: 14px; bottom: 12px; }
-        .msmd-trailer .cap .t { font-size: 13.5px; font-weight: 700; color: #fff; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: -apple-system, sans-serif; }
-        .msmd-trailer .cap .y { font-size: 11.5px; color: rgba(255,255,255,0.6); margin: 2px 0 0; font-family: -apple-system, sans-serif; }
+        .msmd-trailer .cap .t { font-size: 13.5px; font-weight: 700; color: #fff; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-sans); }
+        .msmd-trailer .cap .y { font-size: 11.5px; color: rgba(255,255,255,0.6); margin: 2px 0 0; font-family: var(--font-sans); }
         @media (max-width: 1100px) {
           .msmd-grid { flex-direction: column; align-items: stretch; gap: 32px; padding-top: 64px; }
           .msmd-info { max-width: 100%; }
@@ -236,6 +236,15 @@ export default function MovieDetailPage() {
           .msmd-cast { width: 88px; }
           .msmd-cast img, .msmd-cast .ph { width: 76px; height: 76px; }
         }
+
+        /* ─── One type system ──────────────────────────────────
+           Every rule above named the OS UI stack explicitly, which is
+           why this page read as a different website from the shop and
+           the account pages. Declared last so it wins the cascade for
+           the whole subtree: the Muragoods sans everywhere, with the
+           arcade display face reserved for the wordmark. */
+        .msmd-root, .msmd-root * { font-family: var(--font-sans); }
+        .msmd-root .msmd-logo { font-family: var(--font-display); }
       `}</style>
 
       {/* ─── Cinematic hero ─── */}
@@ -260,7 +269,7 @@ export default function MovieDetailPage() {
                 </svg>
               </button>
               <Link href="/murastream" className="msmd-logo" aria-label="Murastream home">
-                <MuraStreamIcon size={24} color="#E50914" />
+                <MuraStreamIcon size={24} color="var(--mg-brand)" />
                 <span>MURASTREAM</span>
               </Link>
             </div>
@@ -354,7 +363,7 @@ export default function MovieDetailPage() {
                 {certLabel && <span className="cert">{certLabel}</span>}
                 {ratingLabel && (
                   <span className="star">
-                    <Star size={14} color="#ffd60a" fill="#ffd60a" aria-hidden /> {ratingLabel}
+                    <Star size={14} color="var(--mg-brand)" fill="var(--mg-brand)" aria-hidden /> {ratingLabel}
                     {movie.voteCount > 0 && <span className="votes">({fmtCount(movie.voteCount)})</span>}
                   </span>
                 )}

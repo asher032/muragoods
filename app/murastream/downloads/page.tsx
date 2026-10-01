@@ -16,7 +16,7 @@ function VaultCard({ item, posterPath }: { item: VaultItem; posterPath?: string 
         background: 'var(--ms-surface)', border: '1px solid var(--ms-border-2)', borderRadius: 10,
         padding: 10, textDecoration: 'none', transition: 'all 0.3s', cursor: 'pointer',
       }}
-      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-10px)'; e.currentTarget.style.borderColor = '#E50914'; }}
+      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-10px)'; e.currentTarget.style.borderColor = 'var(--mg-brand)'; }}
       onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'var(--ms-border-2)'; }}
     >
       <div style={{
@@ -36,8 +36,9 @@ function VaultCard({ item, posterPath }: { item: VaultItem; posterPath?: string 
           <span style={{ color: 'var(--ms-text-ghost)', display: 'flex' }}><PopcornIcon size={40} strokeWidth={1.4} /></span>
         )}
         <span style={{
-          position: 'absolute', top: 8, left: 8, background: 'rgba(229,9,20,0.9)',
-          color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
+          position: 'absolute', top: 8, left: 8,
+          background: 'rgba(15,15,26,0.78)', border: '1px solid var(--ms-accent-border)',
+          color: 'var(--ms-accent)', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
           letterSpacing: '0.06em',
         }}>
           FREE · DOWNLOADABLE
@@ -47,7 +48,7 @@ function VaultCard({ item, posterPath }: { item: VaultItem; posterPath?: string 
         {item.title}
       </div>
       <div style={{ fontSize: 12, color: 'var(--ms-text-muted)', marginBottom: 6 }}>
-        {item.year} · {item.runtime} · <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {item.rating.toFixed(1)}
+        {item.year} · {item.runtime} · <Star color={'var(--mg-brand)'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {item.rating.toFixed(1)}
       </div>
       <div style={{
         fontSize: 12, color: 'var(--ms-text-muted)', display: '-webkit-box', WebkitLineClamp: 2,
@@ -92,15 +93,15 @@ export default function MuraStreamVaultPage() {
           border: 1px solid var(--ms-border-2); padding: 40px 36px; margin-bottom: 36px;
         }
         .vault-hero h1 {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          font-family: var(--font-sans);
           font-size: 30px; font-weight: 800; color: #fff; margin: 0 0 10px;
         }
         .vault-hero p {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          font-family: var(--font-sans);
           font-size: 14px; color: var(--ms-text-muted); max-width: 560px; margin: 0; line-height: 1.6;
         }
         .vault-badge {
-          display: inline-block; background: rgba(229,9,20,0.15); color: #E50914;
+          display: inline-block; background: var(--mg-brand-soft); color: var(--mg-brand);
           font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
           padding: 5px 12px; border-radius: 8px; margin-bottom: 14px;
         }

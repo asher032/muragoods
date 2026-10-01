@@ -26,15 +26,19 @@ export default function HubPage() {
     {
       title: 'Profile',
       icon: <Icon name="person" size={24} />,
-      description: 'View your profile, ID, stats, and account settings.',
+      description: 'Your one Muragoods account — profile, orders, points, favorites and support.',
       color: 'var(--mario-blue)',
       bgColor: 'rgba(72,149,239,0.1)',
       borderColor: 'rgba(72,149,239,0.2)',
       href: '/profile',
+      // The SAME six destinations as the sidebar's ACCOUNT section. These are
+      // the same pages, not a second account menu.
       items: [
         { label: 'My Profile', href: '/profile', icon: <Icon name="person" size={24} /> },
+        { label: 'My Space', href: '/account/my-space', icon: <Icon name="star" size={16} /> },
         { label: 'My Orders', href: '/orders', icon: <Icon name="box" size={16} /> },
-        { label: 'Order History', href: '/orders', icon: <Icon name="clipboard" size={16} /> },
+        { label: 'Points', href: '/points', icon: <Icon name="coin" size={16} /> },
+        { label: 'Favorites', href: '/favorites', icon: <Icon name="heart" size={16} color="#e63946" /> },
         { label: 'Support', href: '/support', icon: <Icon name="chat" size={16} /> },
       ],
     },

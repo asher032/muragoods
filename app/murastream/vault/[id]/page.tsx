@@ -36,7 +36,7 @@ export default function VaultDetailPage() {
         <p style={{ color: '#A0A0A0', fontFamily: 'var(--font-arcade)', fontSize: 14 }}>
           This vault film doesn&apos;t exist.
         </p>
-        <Link href="/murastream/downloads" style={{ color: '#E50914', fontSize: 14, textDecoration: 'none' }}>
+        <Link href="/murastream/downloads" style={{ color: 'var(--ms-accent)', fontSize: 14, textDecoration: 'none' }}>
           ← Back to the Free Vault
         </Link>
       </div>
@@ -88,23 +88,23 @@ export default function VaultDetailPage() {
           {/* Info */}
           <div style={{ flex: 1, minWidth: 280, paddingTop: 40 }}>
             <span style={{
-              display: 'inline-block', background: 'rgba(229,9,20,0.15)', color: '#E50914',
+              display: 'inline-block', background: 'var(--ms-accent-soft)', color: 'var(--ms-accent)',
               fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
               padding: '4px 10px', borderRadius: 6, marginBottom: 12,
             }}>
               FREE VAULT · {item.license} LICENSE
             </span>
             <h1 style={{
-              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+              fontFamily: "var(--font-sans)",
               fontSize: 34, fontWeight: 800,
               color: '#fff', margin: '0 0 10px', lineHeight: 1.1,
             }}>
               {item.title}
             </h1>
             <div style={{ fontSize: 14, color: '#A0A0A0', marginBottom: 16 }}>
-              {item.year} · {item.runtime} · <Star color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {item.rating.toFixed(1)} · {item.studio}
+              {item.year} · {item.runtime} · <Star color={'var(--mg-brand)'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> {item.rating.toFixed(1)} · {item.studio}
             </div>
-            <div style={{ fontSize: 12, color: '#E50914', marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: 'var(--ms-accent)', marginBottom: 16 }}>
               {item.genres.join(' • ')}
             </div>
             <p style={{ fontSize: 15, color: '#E5E5E5', lineHeight: 1.7, maxWidth: 560, margin: '0 0 28px' }}>
@@ -115,7 +115,7 @@ export default function VaultDetailPage() {
               <button
                 onClick={() => router.push(`/murastream/vault-watch?id=${item.id}`)}
                 style={{
-                  background: '#E50914', color: '#fff', border: 'none', borderRadius: 10,
+                  background: 'var(--ms-accent)', color: 'var(--ms-accent-ink)', border: 'none', borderRadius: 'var(--mg-radius-md)',
                   padding: '13px 28px', fontSize: 15, fontWeight: 700, cursor: 'pointer',
                 }}
               >

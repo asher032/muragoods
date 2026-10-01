@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 // the consume query itself. Consumed rows double as work history.
 const JobShiftSchema = new mongoose.Schema({
   token: { type: String, required: true, unique: true, index: true },
+  canonicalUserId: { type: String, default: '', index: true },
   userEmail: { type: String, required: true, index: true },
   jobId: { type: String, required: true },
   game: { type: String, required: true },

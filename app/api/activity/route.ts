@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import UserActivity from '@/app/lib/models/UserActivity';
 import { gameIdentity } from '@/app/lib/gameserver';
+import { ownerFilter } from '@/app/lib/identity';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -14,7 +15,7 @@ export async function GET(req: Request) {
     await dbConnect();
     const { searchParams } = new URL(req.url);
     const limit = Math.max(1, Math.min(100, Number(searchParams.get('limit')) || 30));
-    const rows = await UserActivity.find({ userEmail: id.emailLc })
+    const rows = await UserActivity.find(ownerFilter(id, 'userEmail'))
       .sort({ createdAt: -1 }).limit(limit).lean();
     return NextResponse.json({ success: true, activity: rows });
   } catch {
