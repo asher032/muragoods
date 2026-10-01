@@ -7,6 +7,7 @@ import {
   sessionCookie,
 } from '@/app/lib/discord-session';
 import { getRedirectUri } from '../route';
+import { getIdentityWithId } from '@/app/lib/identity';
 
 // ── OAuth step 2: Discord redirects here with ?code&state ────────────────
 // Verify state → exchange code server-side → fetch user + guilds → create
@@ -164,12 +165,22 @@ async function linkDiscordAccount(
     const emailLc = session.email.toLowerCase();
     // One Discord identity → one Muragoods account, enforced by the unique
     // sparse index and re-checked here for a readable error.
-    const taken = await User.findOne({ 'discord.discordId': user.id, email: { $ne: session.email } })
+    const taken = await User.findOne({
+      $or: [{ 'discord.discordId': user.id }, { 'linkedAccounts.discordUserId': user.id }],
+      email: { $ne: session.email },
+    })
       .select('_id').lean();
     if (taken) return done(false, 'That Discord account is already linked to another Muragoods account.');
     const avatar = user.avatar
       ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=128`
       : '';
+    // Linking Discord NEVER creates a second Muragoods account — it attaches
+    // the external identity to the account that is already signed in:
+    //
+    //   userId -> linkedAccounts.discordUserId -> Discord -> Murabot
+    //
+    // Both field names are written so the historical index and every existing
+    // query keep working while the canonical name takes over.
     await User.updateOne(
       { email: session.email },
       {
@@ -178,11 +189,19 @@ async function linkDiscordAccount(
           'discord.username': user.username,
           'discord.avatar': avatar,
           'discord.linkedAt': new Date(),
+          'linkedAccounts.discordUserId': user.id,
+          'linkedAccounts.discordUsername': user.username,
+          'linkedAccounts.discordAvatar': avatar,
+          'linkedAccounts.discordLinkedAt': new Date(),
+          updatedAt: new Date(),
         },
       },
     );
-    // Backfill the join key onto existing ecosystem rows so history,
-    // progress and favorites instantly become cross-platform.
+    // Backfill the join keys onto existing ecosystem rows so history,
+    // progress and favorites instantly become cross-platform. Both the
+    // Discord id and the canonical userId are stamped, which is what lets
+    // Murabot find this person's wallets through either key.
+    const identity = await getIdentityWithId(req);
     const [{ default: GameProgress }, { default: UserPreference }, { default: UserActivity }, { default: GameReward }] =
       await Promise.all([
         import('@/app/lib/models/GameProgress'),
@@ -190,13 +209,17 @@ async function linkDiscordAccount(
         import('@/app/lib/models/UserActivity'),
         import('@/app/lib/models/GameReward'),
       ]);
+    const joinKeys = identity
+      ? { discordId: user.id, canonicalUserId: identity.userId }
+      : { discordId: user.id };
     await Promise.all([
-      GameProgress.updateMany({ userEmail: emailLc }, { $set: { discordId: user.id } }),
-      UserPreference.updateMany({ userEmail: emailLc }, { $set: { discordId: user.id } }),
-      UserActivity.updateMany({ userEmail: emailLc }, { $set: { discordId: user.id } }),
-      GameReward.updateMany({ userEmail: emailLc }, { $set: { discordId: user.id } }),
+      GameProgress.updateMany({ userEmail: emailLc }, { $set: joinKeys }),
+      UserPreference.updateMany({ userEmail: emailLc }, { $set: joinKeys }),
+      UserActivity.updateMany({ userEmail: emailLc }, { $set: joinKeys }),
+      GameReward.updateMany({ userEmail: emailLc }, { $set: joinKeys }),
     ]);
     await UserActivity.create({
+      ...(identity ? { canonicalUserId: identity.userId } : {}),
       userEmail: emailLc, discordId: user.id, type: 'link',
       text: `Connected Discord @${user.username}`, visibility: 'private',
     }).catch(() => undefined);
@@ -235,7 +258,9 @@ async function autoLinkDiscordToShopUser(
     if (!me) return;
     if (me.discord?.discordId === discordId) return; // already linked
     if (me.discord?.discordId) return; // linked to a different Discord id — keep explicit link flow
-    const taken = await User.findOne({ 'discord.discordId': discordId }).select('_id').lean();
+    const taken = await User.findOne({
+      $or: [{ 'discord.discordId': discordId }, { 'linkedAccounts.discordUserId': discordId }],
+    }).select('_id').lean();
     if (taken) {
       // Linked elsewhere: do NOT silently merge. Surface the conflict at the
       // dashboard gate instead of creating a duplicate identity.
@@ -246,6 +271,7 @@ async function autoLinkDiscordToShopUser(
     const avatarUrl = avatar
       ? `https://cdn.discordapp.com/avatars/${discordId}/${avatar}.png?size=128`
       : '';
+    const now = new Date();
     await User.updateOne(
       { email: session.email },
       {
@@ -253,11 +279,17 @@ async function autoLinkDiscordToShopUser(
           'discord.discordId': discordId,
           'discord.username': username,
           'discord.avatar': avatarUrl,
-          'discord.linkedAt': new Date(),
+          'discord.linkedAt': now,
+          'linkedAccounts.discordUserId': discordId,
+          'linkedAccounts.discordUsername': username,
+          'linkedAccounts.discordAvatar': avatarUrl,
+          'linkedAccounts.discordLinkedAt': now,
+          updatedAt: now,
         },
       },
     );
     const emailLc = session.email.toLowerCase();
+    const identity = await getIdentityWithId(req);
     const [{ default: GameProgress }, { default: UserPreference }, { default: UserActivity }, { default: GameReward }] =
       await Promise.all([
         import('@/app/lib/models/GameProgress'),
@@ -265,11 +297,12 @@ async function autoLinkDiscordToShopUser(
         import('@/app/lib/models/UserActivity'),
         import('@/app/lib/models/GameReward'),
       ]);
+    const joinKeys = identity ? { discordId, canonicalUserId: identity.userId } : { discordId };
     await Promise.all([
-      GameProgress.updateMany({ userEmail: emailLc }, { $set: { discordId } }),
-      UserPreference.updateMany({ userEmail: emailLc }, { $set: { discordId } }),
-      UserActivity.updateMany({ userEmail: emailLc }, { $set: { discordId } }),
-      GameReward.updateMany({ userEmail: emailLc }, { $set: { discordId } }),
+      GameProgress.updateMany({ userEmail: emailLc }, { $set: joinKeys }),
+      UserPreference.updateMany({ userEmail: emailLc }, { $set: joinKeys }),
+      UserActivity.updateMany({ userEmail: emailLc }, { $set: joinKeys }),
+      GameReward.updateMany({ userEmail: emailLc }, { $set: joinKeys }),
     ]);
   } catch (err) {
     // Re-throw linking conflicts so GET can redirect with the message;

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import MuraStreamCard from '../components/MuraStreamCard';
+import PlayButton from '../components/PlayButton';
 import MuraStreamLoader from '../components/MuraStreamLoader';
 import { DRAMA_SECTIONS, type DramaSection } from '../data/dramas';
 import type { MediaItem } from '../types';
@@ -119,7 +120,7 @@ export default function DramaBrowsePage() {
   return (
     <div className="ms-page-enter ms-page-pad">
       <h1 style={{
-        fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+        fontFamily: 'var(--font-sans)',
         fontSize: 28, fontWeight: 800, color: 'var(--ms-text-strong)', margin: '0 0 6px',
       }}>
         {section.label}
@@ -133,10 +134,10 @@ export default function DramaBrowsePage() {
         {DRAMA_SECTIONS.map(s => (
           <button key={s.id} onClick={() => setSection(s)} style={{
             padding: '10px 20px', borderRadius: 10, cursor: 'pointer',
-            border: section.id === s.id ? '1px solid rgba(229,9,20,0.4)' : '1px solid rgba(255,255,255,0.06)',
-            background: section.id === s.id ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.03)',
-            color: section.id === s.id ? '#E50914' : 'var(--ms-text-dim)',
-            fontFamily: '-apple-system, sans-serif', fontSize: 13, fontWeight: 600,
+            border: section.id === s.id ? '1px solid var(--ms-accent-border)' : '1px solid rgba(255,255,255,0.06)',
+            background: section.id === s.id ? 'var(--ms-accent-soft)' : 'var(--mg-glass-bg)',
+            color: section.id === s.id ? 'var(--ms-accent)' : 'var(--ms-text-dim)',
+            fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 600,
           }}>
             {s.label}
           </button>
@@ -148,9 +149,9 @@ export default function DramaBrowsePage() {
         {GENRES.map(g => (
           <button key={g.id || 'all'} onClick={() => setGenre(g.id)} style={{
             padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 500,
-            border: genre === g.id ? '1px solid rgba(229,9,20,0.4)' : '1px solid rgba(255,255,255,0.06)',
-            background: genre === g.id ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.03)',
-            color: genre === g.id ? '#E50914' : 'var(--ms-text-dim)',
+            border: genre === g.id ? '1px solid var(--ms-accent-border)' : '1px solid rgba(255,255,255,0.06)',
+            background: genre === g.id ? 'var(--ms-accent-soft)' : 'var(--mg-glass-bg)',
+            color: genre === g.id ? 'var(--ms-accent)' : 'var(--ms-text-dim)',
           }}>
             {g.label}
           </button>
@@ -192,14 +193,14 @@ export default function DramaBrowsePage() {
               }} />
               <div style={{ position: 'relative', padding: '44px 40px', maxWidth: 580 }}>
                 <span style={{
-                  display: 'inline-block', background: 'rgba(229,9,20,0.9)', color: '#fff',
+                  display: 'inline-block', background: 'var(--ms-accent)', color: 'var(--ms-accent-ink)',
                   fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
                   padding: '4px 10px', borderRadius: 6, marginBottom: 14,
                 }}>
                   {section.label.toUpperCase()} · #1 TRENDING
                 </span>
                 <h2 style={{
-                  fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+                  fontFamily: 'var(--font-sans)',
                   fontSize: 30, fontWeight: 800, color: '#fff', margin: '0 0 8px', lineHeight: 1.15,
                 }}>
                   {hero.title}
@@ -216,13 +217,9 @@ export default function DramaBrowsePage() {
                   </p>
                 )}
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                  <Link href={`/murastream/watch?type=tv&id=${hero.id}&season=1&episode=1`} style={{
-                    background: '#E50914', color: '#fff', border: 'none', borderRadius: 10,
-                    padding: '12px 24px', fontSize: 14, fontWeight: 700, textDecoration: 'none',
-                    boxShadow: '0 4px 20px rgba(229,9,20,0.35)',
-                  }}>
-                    Watch Now
-                  </Link>
+                  {/* Shows "Watch Now" only when the resolver confirms a
+                      validated authorized source; otherwise "View details". */}
+                  <PlayButton mediaType="tv" tmdbId={hero.id} season={1} episode={1} />
                   <Link href={`/murastream/tv/${hero.id}`} style={{
                     background: 'rgba(255,255,255,0.08)', color: '#fff',
                     border: '1px solid rgba(255,255,255,0.15)', borderRadius: 10,

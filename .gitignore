@@ -68,3 +68,8 @@ __pycache__/
 **/.env.*
 !**/.env.example
 !**/.env.sample
+
+# Temporary compile harness for the playback runtime suite. It is written into
+# the repo root (so its relative imports of the real modules resolve) and must
+# never be committed.
+.playback-harness-*

@@ -108,13 +108,13 @@ export default function MuraStreamComments({ mediaType, tmdbId, title }: {
   return (
     <div style={{ marginTop: 48, marginBottom: 80 }}>
       <h3 style={{
-        fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: 18,
+        fontFamily: 'var(--font-sans)', fontSize: 18,
         fontWeight: 700, color: 'var(--ms-text-strong)', margin: '0 0 4px',
         display: 'flex', alignItems: 'center', gap: 8,
       }}>
         <span style={{
           width: 8, height: 8, borderRadius: '50%', background: '#e50914', display: 'inline-block',
-          boxShadow: '0 0 8px rgba(229,9,20,0.8)',
+          boxShadow: '0 0 8px var(--mg-brand-glow)',
         }} />
         The Screening Room
       </h3>
@@ -139,7 +139,7 @@ export default function MuraStreamComments({ mediaType, tmdbId, title }: {
           aria-label="Write a comment"
           style={{
             flex: 1, resize: 'none', background: 'transparent', border: 'none', outline: 'none',
-            color: 'var(--ms-text)', fontSize: 13.5, fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+            color: 'var(--ms-text)', fontSize: 13.5, fontFamily: 'var(--font-sans)',
             lineHeight: 1.5, padding: '4px 2px',
           }}
         />
@@ -149,8 +149,10 @@ export default function MuraStreamComments({ mediaType, tmdbId, title }: {
           style={{
             alignSelf: 'flex-end', padding: '8px 18px', borderRadius: 8,
             cursor: draft.trim() && !sending ? 'pointer' : 'default',
-            border: '1px solid #e50914', background: draft.trim() && !sending ? '#e50914' : 'rgba(229,9,20,0.25)',
-            color: '#fff', fontSize: 12.5, fontWeight: 700, flexShrink: 0,
+            border: '1px solid var(--ms-accent)',
+            background: draft.trim() && !sending ? 'var(--ms-accent)' : 'var(--ms-accent-soft)',
+            color: draft.trim() && !sending ? 'var(--ms-accent-ink)' : 'var(--ms-accent)',
+            fontSize: 12.5, fontWeight: 700, flexShrink: 0,
           }}
         >{sending ? 'Posting…' : 'Post'}</button>
       </div>
@@ -181,15 +183,15 @@ export default function MuraStreamComments({ mediaType, tmdbId, title }: {
             return (
               <div key={c.id} style={{
                 display: 'flex', gap: 10, alignItems: 'flex-start',
-                background: c.self ? 'rgba(229,9,20,0.05)' : 'rgba(255,255,255,0.03)',
-                border: `1px solid ${c.self ? 'rgba(229,9,20,0.25)' : 'rgba(255,255,255,0.06)'}`,
+                background: c.self ? 'var(--ms-accent-softer)' : 'var(--mg-glass-bg)',
+                border: `1px solid ${c.self ? 'var(--ms-accent-border)' : 'var(--mg-border)'}`,
                 borderRadius: 12, padding: '10px 14px',
               }}>
                 <div style={{
                   width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
                   background: color, color: '#fff', fontSize: 13, fontWeight: 800,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+                  fontFamily: 'var(--font-sans)',
                 }}>{initials(c.name)}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: 'var(--ms-text)', display: 'flex', gap: 8, alignItems: 'baseline' }}>

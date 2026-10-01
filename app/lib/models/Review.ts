@@ -2,6 +2,10 @@ import mongoose from 'mongoose';
 
 const ReviewSchema = new mongoose.Schema({
   orderId: { type: String, required: true },
+  // Owner of the review, as the canonical userId. A review is only writable
+  // by the account that placed the order it belongs to.
+  canonicalUserId: { type: String, default: '', index: true },
+  // LEGACY: holds the owner's email, not an id.
   userId: { type: String, required: true },
   userName: { type: String, required: true },
   productName: { type: String, required: true },

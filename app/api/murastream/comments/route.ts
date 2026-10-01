@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import dbConnect from '@/app/lib/mongodb';
 import MediaComment from '@/app/lib/models/MediaComment';
 import { getSessionUser } from '@/app/lib/session';
+import { getIdentityWithId } from '@/app/lib/identity';
 import { rateLimit, clientIp } from '@/app/lib/rate-limit';
 
 // MuraStream comments API — session-authenticated where signed in, with
@@ -102,6 +103,9 @@ export async function POST(req: Request) {
 
     const viewer = await getSessionUser(req);
     const email: string = viewer?.email || '';
+    // A signed-in comment carries the canonical owner id alongside the email.
+    // Guests have no account, so theirs stays owner-less by design.
+    const identity = viewer ? await getIdentityWithId(req) : null;
 
     const rlKey = email ? `comment:user:${email}` : `comment:ip:${clientIp(req)}`;
     const rl = rateLimit(rlKey, RATE_LIMIT, RATE_WINDOW_MS);
@@ -133,6 +137,7 @@ export async function POST(req: Request) {
 
     const doc = await MediaComment.create({
       mediaType, tmdbId, email, name, text, at: new Date(),
+      ...(identity ? { canonicalUserId: identity.userId } : {}),
       parentId,
       likes: [],
     });

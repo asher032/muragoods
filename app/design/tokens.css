@@ -1,0 +1,435 @@
+/* ============================================================
+   MURAGOODS DESIGN SYSTEM — the single source of truth.
+   ============================================================
+
+   Every colour, radius, shadow, transition and type step used by
+   any page resolves to a token declared here. Pages must not
+   invent their own; if a value is missing, it is added here once
+   and consumed everywhere.
+
+   Brand: Muragoods yellow. Dark navy/near-black foundation.
+   Glass surfaces. Product accents (Murastream cinematic red,
+   Murabot module colours) are SECONDARY and never replace the
+   brand.
+
+   The brand yellow is the project's established one (#FFD60A,
+   the gold already used for the logo ring, primary buttons and
+   points), not an invented new hue.
+   ============================================================ */
+
+:root {
+  /* ─── Brand ───────────────────────────────────────────── */
+  --mg-brand: #ffd60a;
+  --mg-brand-hover: #ffe066;
+  --mg-brand-deep: #d4a017;
+  /* Translucent brand wash for tints, glows and active states. */
+  --mg-brand-soft: rgba(255, 214, 10, 0.14);
+  --mg-brand-softer: rgba(255, 214, 10, 0.08);
+  --mg-brand-glow: rgba(255, 214, 10, 0.3);
+  /* Text/icon colour that sits ON a solid brand fill. */
+  --mg-brand-ink: #17130a;
+  --mg-brand-ink-soft: rgba(23, 19, 10, 0.72);
+  /* The same brand as raw channels, for the few places that need numeric RGB
+     (canvas/WebGL tints, colour maths). Without this, the brand hex gets
+     re-spelled at each of those call sites — which is how a second palette
+     starts. */
+  --mg-brand-rgb: 255, 214, 10;
+
+  /* ─── Neutral foundation ──────────────────────────────── */
+  --mg-bg: #0f0f1a;
+  --mg-bg-deep: #0a0a12;
+  --mg-bg-tint: #16213e;
+  --mg-surface: #1e1e32;
+  --mg-surface-2: #252540;
+  --mg-surface-3: #2a2a45;
+  --mg-overlay: rgba(15, 15, 26, 0.92);
+
+  --mg-text: #e8e8f0;
+  --mg-text-strong: #ffffff;
+  --mg-text-muted: #9090a8;
+  --mg-text-dim: #b0b0c0;
+  --mg-text-faint: #707090;
+  --mg-text-inverse: #17130a;
+
+  --mg-border: rgba(255, 255, 255, 0.08);
+  --mg-border-strong: rgba(255, 255, 255, 0.16);
+  --mg-border-brand: rgba(255, 214, 10, 0.45);
+
+  /* ─── Semantic ────────────────────────────────────────── */
+  --mg-success: #06d6a0;
+  --mg-success-soft: rgba(6, 214, 160, 0.14);
+  --mg-warning: #fbbf24;
+  --mg-warning-soft: rgba(251, 191, 36, 0.14);
+  --mg-error: #f87171;
+  --mg-error-soft: rgba(248, 113, 113, 0.14);
+  --mg-info: #60a5fa;
+  --mg-info-soft: rgba(96, 165, 250, 0.14);
+
+  /* ─── Product accents (secondary; never replace brand) ── */
+  /* Murastream: cinematic red, used sparingly inside the movie
+     experience (poster affordances, NEW badge, progress). */
+  --mg-accent-stream: #e63946;
+  --mg-accent-stream-soft: rgba(230, 57, 70, 0.16);
+  /* Murabot modules — these identify a MODULE, not the brand. */
+  --mg-accent-bot: #a78bfa;
+  --mg-accent-economy: #34d399;
+  --mg-accent-music: #818cf8;
+  --mg-accent-leveling: #60a5fa;
+  --mg-accent-tickets: #fb923c;
+  --mg-accent-games: #f472b6;
+  --mg-accent-letters: #5eead4;
+  --mg-accent-shop: var(--mg-brand);
+
+  /* ─── Typography ──────────────────────────────────────── */
+  --font-sans: var(--font-body), "Josefin Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-arcade), "Press Start 2P", ui-monospace, monospace;
+
+  --mg-text-2xs: 10px;
+  --mg-text-xs: 12px;
+  --mg-text-sm: 13px;
+  --mg-text-base: 15px;
+  --mg-text-lg: 17px;
+  --mg-text-xl: 20px;
+  --mg-text-2xl: 24px;
+  --mg-text-3xl: 30px;
+  --mg-text-4xl: 38px;
+
+  --mg-leading-tight: 1.2;
+  --mg-leading-snug: 1.35;
+  --mg-leading-normal: 1.6;
+
+  /* ─── Radius ──────────────────────────────────────────── */
+  --mg-radius-sm: 8px;
+  --mg-radius-md: 12px;
+  --mg-radius-lg: 18px;
+  --mg-radius-xl: 24px;
+  --mg-radius-pill: 9999px;
+
+  /* ─── Elevation ───────────────────────────────────────── */
+  --mg-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.28);
+  --mg-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.32);
+  --mg-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.4);
+  --mg-shadow-brand: 0 6px 24px var(--mg-brand-glow);
+
+  /* ─── Glass ───────────────────────────────────────────── */
+  --mg-glass-bg: rgba(255, 255, 255, 0.06);
+  --mg-glass-bg-strong: rgba(255, 255, 255, 0.1);
+  --mg-glass-border: var(--mg-border);
+  --mg-glass-blur: 14px;
+
+  /* ─── Motion ──────────────────────────────────────────── */
+  --mg-transition-fast: 150ms ease;
+  --mg-transition-normal: 250ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --mg-transition-slow: 400ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --mg-lift: translateY(-3px);
+}
+
+/* ============================================================
+   SHARED SURFACES
+   ============================================================ */
+
+.mg-glass {
+  background: var(--mg-glass-bg);
+  backdrop-filter: blur(var(--mg-glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur)) saturate(1.4);
+  border: 1px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-lg);
+}
+
+/* The one card. Every panel, tile and container in the product
+   uses this geometry so a Murastream poster tile and a Murabot
+   settings panel still read as the same object. */
+.mg-card {
+  background: var(--mg-glass-bg);
+  backdrop-filter: blur(var(--mg-glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur)) saturate(1.4);
+  border: 1px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-lg);
+  box-shadow: var(--mg-shadow-sm);
+  transition: transform var(--mg-transition-fast), box-shadow var(--mg-transition-fast),
+    border-color var(--mg-transition-fast);
+}
+
+.mg-card-hover:hover {
+  transform: var(--mg-lift);
+  border-color: var(--mg-border-brand);
+  box-shadow: var(--mg-shadow-md), 0 0 28px rgba(255, 214, 10, 0.08);
+}
+
+/* ============================================================
+   BUTTONS — one geometry, five intents
+   ============================================================ */
+
+.mg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: var(--mg-radius-md);
+  border: 1px solid transparent;
+  font-family: var(--font-sans);
+  font-size: var(--mg-text-sm);
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--mg-transition-fast), border-color var(--mg-transition-fast),
+    color var(--mg-transition-fast), transform var(--mg-transition-fast),
+    box-shadow var(--mg-transition-fast);
+}
+
+.mg-btn:disabled,
+.mg-btn[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.mg-btn-primary {
+  background: var(--mg-brand);
+  color: var(--mg-brand-ink);
+  box-shadow: var(--mg-shadow-brand);
+}
+.mg-btn-primary:hover:not(:disabled) {
+  background: var(--mg-brand-hover);
+  transform: translateY(-1px);
+}
+.mg-btn-primary:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.mg-btn-secondary {
+  background: var(--mg-glass-bg);
+  color: var(--mg-text);
+  border-color: var(--mg-border-strong);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.mg-btn-secondary:hover:not(:disabled) {
+  background: var(--mg-glass-bg-strong);
+  border-color: var(--mg-border-brand);
+  color: var(--mg-text-strong);
+}
+
+.mg-btn-ghost {
+  background: transparent;
+  color: var(--mg-text-muted);
+}
+.mg-btn-ghost:hover:not(:disabled) {
+  background: var(--mg-glass-bg);
+  color: var(--mg-text-strong);
+}
+
+.mg-btn-danger {
+  background: var(--mg-error-soft);
+  color: var(--mg-error);
+  border-color: rgba(248, 113, 113, 0.4);
+}
+.mg-btn-danger:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.22);
+}
+
+.mg-btn-success {
+  background: var(--mg-success-soft);
+  color: var(--mg-success);
+  border-color: rgba(6, 214, 160, 0.4);
+}
+.mg-btn-success:hover:not(:disabled) {
+  background: rgba(6, 214, 160, 0.22);
+}
+
+/* ============================================================
+   FORM CONTROLS
+   ============================================================ */
+
+.mg-input,
+.mg-select,
+.mg-textarea {
+  width: 100%;
+  padding: 10px 13px;
+  background: var(--mg-glass-bg);
+  border: 1px solid var(--mg-border-strong);
+  border-radius: var(--mg-radius-md);
+  color: var(--mg-text);
+  font-family: var(--font-sans);
+  font-size: var(--mg-text-base);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color var(--mg-transition-fast), box-shadow var(--mg-transition-fast),
+    background var(--mg-transition-fast);
+}
+
+.mg-input::placeholder,
+.mg-textarea::placeholder {
+  color: var(--mg-text-faint);
+}
+
+.mg-input:focus,
+.mg-select:focus,
+.mg-textarea:focus {
+  border-color: var(--mg-border-brand);
+  background: var(--mg-glass-bg-strong);
+  box-shadow: 0 0 0 3px var(--mg-brand-softer);
+}
+
+/* Native <select> option lists render with the OS theme, which on
+   a dark UI means white-on-white options. Force the dark surface. */
+.mg-select option,
+select.mg-input option {
+  background-color: var(--mg-surface);
+  color: var(--mg-text);
+}
+
+.mg-label {
+  display: block;
+  font-size: var(--mg-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--mg-text-muted);
+  margin-bottom: 6px;
+}
+
+/* ============================================================
+   BADGES, CHIPS, STATUS
+   ============================================================ */
+
+.mg-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--mg-radius-pill);
+  border: 1px solid var(--mg-border-strong);
+  background: var(--mg-glass-bg);
+  color: var(--mg-text-muted);
+  font-size: var(--mg-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.mg-badge-brand {
+  border-color: var(--mg-border-brand);
+  background: var(--mg-brand-soft);
+  color: var(--mg-brand);
+}
+.mg-badge-success {
+  border-color: rgba(6, 214, 160, 0.4);
+  background: var(--mg-success-soft);
+  color: var(--mg-success);
+}
+.mg-badge-warning {
+  border-color: rgba(251, 191, 36, 0.4);
+  background: var(--mg-warning-soft);
+  color: var(--mg-warning);
+}
+.mg-badge-error {
+  border-color: rgba(248, 113, 113, 0.4);
+  background: var(--mg-error-soft);
+  color: var(--mg-error);
+}
+.mg-badge-info {
+  border-color: rgba(96, 165, 250, 0.4);
+  background: var(--mg-info-soft);
+  color: var(--mg-info);
+}
+
+/* ============================================================
+   TYPOGRAPHY HELPERS + FOCUS
+   ============================================================ */
+
+.mg-section-title {
+  font-size: var(--mg-text-xl);
+  font-weight: 700;
+  color: var(--mg-text-strong);
+  letter-spacing: -0.01em;
+}
+
+.mg-section-label {
+  font-size: var(--mg-text-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--mg-brand);
+}
+
+/* One focus treatment for the whole product. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--mg-brand);
+  outline-offset: 2px;
+  border-radius: var(--mg-radius-sm);
+}
+
+/* ============================================================
+   LOADING / ERROR STATES
+   ============================================================ */
+
+.mg-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.09) 37%,
+    rgba(255, 255, 255, 0.04) 63%
+  );
+  background-size: 400% 100%;
+  animation: mg-shimmer 1.4s ease infinite;
+  border-radius: var(--mg-radius-md);
+}
+
+@keyframes mg-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+.mg-spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 3px solid var(--mg-brand-soft);
+  border-top-color: var(--mg-brand);
+  animation: mg-spin 0.8s linear infinite;
+}
+
+@keyframes mg-spin {
+  to { transform: rotate(360deg); }
+}
+
+.mg-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 20px;
+  border-radius: var(--mg-radius-lg);
+  border: 1px dashed var(--mg-border-strong);
+  background: var(--mg-glass-bg);
+  text-align: center;
+  color: var(--mg-text-muted);
+  font-size: var(--mg-text-sm);
+}
+
+.mg-state-error {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: var(--mg-error-soft);
+  color: var(--mg-error);
+}
+
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .mg-card,
+  .mg-btn,
+  .mg-card-hover:hover,
+  .mg-btn-primary:hover:not(:disabled) {
+    transition: none;
+    transform: none;
+  }
+  .mg-skeleton,
+  .mg-spinner {
+    animation: none;
+  }
+}

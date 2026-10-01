@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 // Per-user, per-job progression: successes drive promotion bonuses, fails
 // drive firing. Resigning deletes the row (history in job_shifts is kept).
 const JobProgressSchema = new mongoose.Schema({
+  canonicalUserId: { type: String, default: '', index: true },
   userEmail: { type: String, required: true, index: true },
   jobId: { type: String, required: true, index: true },
   successes: { type: Number, default: 0 },

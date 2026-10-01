@@ -6,6 +6,10 @@ import mongoose from 'mongoose';
 // User.coinBalance in the same request via atomic $inc.
 const GameRewardSchema = new mongoose.Schema({
   idempotencyKey: { type: String, required: true, unique: true, index: true },
+  // Points/rewards ledger. Every entry belongs to the canonical userId, so the
+  // balance a person sees is one balance no matter which surface earned it.
+  canonicalUserId: { type: String, default: '', index: true },
+  // LEGACY owner key (lowercased email), still written and still matched.
   userEmail: { type: String, required: true, index: true },
   discordId: { type: String, default: '' },
   gameId: { type: String, required: true, index: true },

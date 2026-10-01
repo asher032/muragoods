@@ -46,7 +46,14 @@ async function apiWith(jar, path, opts = {}) {
     if (eq > 0) {
       const name = pair.slice(0, eq).trim();
       const value = pair.slice(eq + 1).trim();
-      if (value && value !== '') jar.set(name, value);
+      // Mirror the browser: a cookie the server CLEARS is removed from the
+      // jar. Clearing looks like an empty value or Max-Age=0 — never a
+      // present `Expires`, which a normal session cookie also carries (set 30
+      // days ahead). Treating any `Expires` as a deletion silently threw away
+      // every session the moment it was issued.
+      const cleared = value === '' || /;\s*max-age=0(?:\s*;|\s*$)/i.test(raw);
+      if (cleared) jar.delete(name);
+      else jar.set(name, value);
     }
   }
   let body = null;
@@ -706,6 +713,106 @@ console.log('[3e] save failure taxonomy');
   const readBack = await api('/api/dashboard/config?guildId=' + GUILD);
   check('reading config without a Discord session is refused',
     readBack.status === 401 || readBack.status === 403, `status ${readBack.status}`);
+}
+
+// ─── 3f. ONE canonical identity across the ecosystem ────────────────
+// The acceptance path from the account-unification work, run against a real
+// database: two separate accounts, and nothing crosses between them.
+//
+// Account A is created here; account B is a second, completely separate
+// signup. Both then read EVERY personal surface. Each must see only its own
+// data, and both must report the SAME canonical userId on every surface —
+// which is the definition of one account per person.
+console.log('[3f] canonical identity (two accounts, no data crossing)');
+{
+  const makeJar = () => new Map();
+  const jarA = makeJar();
+  const jarB = makeJar();
+  const stampB = `${stamp}b`.toUpperCase();
+  const EMAIL_B = `itest-${stampB}@muragoods.test`;
+
+  // Account A is the suite's own account (created in section [1]), so it is
+  // signed IN rather than signed up again — the email is already taken.
+  const signA = await apiWith(jarA, '/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
+  });
+  check('account A signs in', signA.status === 200 && signA.body?.success, `status ${signA.status}`);
+  const meA0 = await apiWith(jarA, '/api/me');
+  const userIdA = meA0.body?.user?.id;
+  check('account A has a canonical userId', Boolean(userIdA && userIdA.startsWith('MG-')), String(userIdA));
+
+  // Account B: an entirely separate person.
+  const signB = await apiWith(jarB, '/api/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify({ name: 'Identity B', email: EMAIL_B, password: PASSWORD }),
+  });
+  check('account B signs up', signB.status === 201 || signB.status === 200, `status ${signB.status}`);
+  const userIdB = signB.body?.data?.userId;
+  check('account B received a DIFFERENT canonical userId',
+    Boolean(userIdB) && userIdB !== userIdA, `${userIdA} vs ${userIdB}`);
+
+  // Give A a favorite so there is something that could leak.
+  await apiWith(jarA, '/api/favorites', {
+    method: 'POST',
+    body: JSON.stringify({ contentType: 'product', contentId: `leak-probe-${stamp}`, action: 'favorite', snapshot: { title: 'Leak probe' } }),
+  });
+
+  // Every surface must report the same id for A.
+  for (const path of ['/api/me', '/api/account/my-space', '/api/account/points']) {
+    const r = await apiWith(jarA, path);
+    check(`A: ${path} resolves the session`, r.status === 200, `status ${r.status}`);
+    const reported = r.body?.userId || r.body?.user?.id;
+    check(`A: ${path} reports the canonical userId`, reported === userIdA, `${reported} != ${userIdA}`);
+  }
+
+  // Isolation: B must see none of A's data, and A's order must not be listable
+  // by B.
+  const bFav = await apiWith(jarB, '/api/favorites?type=product&action=favorite');
+  const bFavIds = (bFav.body?.rows || []).map((r) => r.contentId);
+  check('B cannot see A\'s favorites', !bFavIds.includes(`leak-probe-${stamp}`), bFavIds.join(','));
+
+  const bOrders = await apiWith(jarB, '/api/orders');
+  check('B\'s order list excludes A\'s order', Array.isArray(bOrders.body?.data) && !bOrders.body.data.some((o) => o.userId === EMAIL));
+
+  // Forged identity must not work: asking for A's id explicitly changes nothing.
+  const forged = await apiWith(jarB, `/api/orders?userId=${encodeURIComponent(userIdA)}`);
+  check('a client-supplied userId does not switch accounts',
+    forged.status === 403 || (Array.isArray(forged.body?.data) && !forged.body.data.some((o) => o.userId === EMAIL)),
+    `status ${forged.status}`);
+
+  // Unauthenticated access to every personal surface must be refused.
+  for (const path of ['/api/me', '/api/account/my-space', '/api/account/points']) {
+    const anon = await fetch(`${BASE}${path}`).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }));
+    check(`${path} refuses an anonymous caller`,
+      anon.status === 401 || anon.body?.authenticated === false, `status ${anon.status}`);
+  }
+
+  // Logout, log back in: the same canonical id must be reissued, so data
+  // stays attached to the same account.
+  await apiWith(jarA, '/api/auth/logout', { method: 'POST' });
+  const afterLogout = await apiWith(jarA, '/api/me');
+  check('after logout the session is gone', afterLogout.body?.authenticated === false, JSON.stringify(afterLogout.body));
+
+  const relogin = await apiWith(jarA, '/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
+  });
+  check('A logs back in', relogin.status === 200 && relogin.body?.success, `status ${relogin.status}`);
+  const meAfter = await apiWith(jarA, '/api/me');
+  check('the canonical userId is unchanged after re-login',
+    meAfter.body?.user?.id === userIdA, `${meAfter.body?.user?.id} != ${userIdA}`);
+
+  const favAfter = await apiWith(jarA, '/api/favorites?type=product&action=favorite');
+  const idsAfter = (favAfter.body?.rows || []).map((r) => r.contentId);
+  check('A\'s data is still attached to the same account after re-login',
+    idsAfter.includes(`leak-probe-${stamp}`), idsAfter.join(','));
+
+  // Connected Services must describe the ONE account, not four accounts.
+  const services = meAfter.body?.connectedServices || [];
+  check('connected services covers all four', services.length === 4, JSON.stringify(services.map((s) => s.id)));
+  check('Muragoods is connected for a signed-in account',
+    services.find((s) => s.id === 'muragoods')?.connected === true);
 }
 
 // ─── 4. Cleanup (best effort) ───────────────────────────────────────

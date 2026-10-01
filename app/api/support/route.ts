@@ -2,7 +2,13 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import SupportTicket from '@/app/lib/models/SupportTicket';
 import { adminEmails } from '@/app/lib/muragoods-data';
-import { getSessionUser, requireAdmin } from '@/app/lib/session';
+import { requireAdmin } from '@/app/lib/session';
+import { getIdentityWithId, ownerFilter, ownsResource } from '@/app/lib/identity';
+
+// A ticket belongs to the canonical `userId` that opened it. The support
+// system therefore already knows which Muragoods account a request belongs to:
+// it reads the session, and verifies the ticket's stored owner before every
+// read, reply or close.
 
 // Auto-reply keywords and responses
 const autoReplies: Record<string, string> = {
@@ -34,13 +40,13 @@ export async function GET(req: Request) {
     // Identity comes from the session — the old ?isAdmin=true client flag
     // (any visitor could list every ticket) and arbitrary ?userId= are gone.
     const { user: admin } = await requireAdmin(req);
-    const viewer = await getSessionUser(req);
+    const viewer = await getIdentityWithId(req).catch(() => null);
 
     // Get specific ticket — owner or admin only.
     if (ticketId) {
       const ticket = await SupportTicket.findById(ticketId);
       if (!ticket) return NextResponse.json({ success: false, error: 'Ticket not found' }, { status: 404 });
-      const own = viewer && ticket.userId && String(ticket.userId) === viewer.email;
+      const own = viewer && ownsResource(viewer, ticket.toObject(), 'userId');
       if (!own && !admin) {
         return NextResponse.json({ success: false, error: 'Sign in required' }, { status: viewer ? 403 : 401 });
       }
@@ -57,7 +63,7 @@ export async function GET(req: Request) {
     if (!viewer) {
       return NextResponse.json({ success: false, error: 'Sign in required' }, { status: 401 });
     }
-    const tickets = await SupportTicket.find({ userId: viewer.email }).sort({ lastActivity: -1 });
+    const tickets = await SupportTicket.find(ownerFilter(viewer, 'userId')).sort({ lastActivity: -1 });
     return NextResponse.json({ success: true, data: tickets });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'An error occurred';
@@ -70,15 +76,18 @@ export async function POST(req: Request) {
     await dbConnect();
     const body = await req.json();
     const { action, userId, userName, subject, category, text, ticketId, senderName } = body;
-    const viewer = await getSessionUser(req);
+    const viewer = await getIdentityWithId(req).catch(() => null);
     const { user: admin } = await requireAdmin(req);
 
     // Create new ticket — guests may open one, but a signed-in user always
     // files as themselves (no filing on another account).
     if (action === 'create') {
-      const ownerId = viewer ? viewer.email : userId;
-      const ownerName = viewer ? viewer.name : userName;
+      // The owner is the session, full stop. A signed-in user's ticket carries
+      // their canonical userId; a guest's carries only what they typed.
+      const ownerId = viewer ? viewer.emailLc : String(userId || userName || 'guest');
+      const ownerName = viewer ? viewer.name : String(userName || 'Guest');
       const ticket = await SupportTicket.create({
+        canonicalUserId: viewer?.userId || '',
         userId: ownerId,
         userName: ownerName,
         subject: subject || 'Support Request',
@@ -109,12 +118,12 @@ export async function POST(req: Request) {
     if (action === 'message') {
       const ticket = await SupportTicket.findById(ticketId);
       if (!ticket) return NextResponse.json({ success: false, error: 'Ticket not found' }, { status: 404 });
-      const own = viewer && ticket.userId && String(ticket.userId) === viewer.email;
+      const own = viewer && ownsResource(viewer, ticket.toObject(), 'userId');
       if (!own && !admin) {
         return NextResponse.json({ success: false, error: 'Sign in required' }, { status: viewer ? 403 : 401 });
       }
 
-      const isAdminSender = Boolean(admin) || adminEmails.includes(viewer?.email || '');
+      const isAdminSender = Boolean(admin) || adminEmails.includes(viewer?.emailLc || '');
       ticket.messages.push({
         sender: isAdminSender ? 'admin' : 'user',
         senderName: senderName || (isAdminSender ? 'Admin' : ticket.userName),
@@ -132,7 +141,7 @@ export async function POST(req: Request) {
     if (action === 'close') {
       const ticket = await SupportTicket.findById(ticketId);
       if (!ticket) return NextResponse.json({ success: false, error: 'Ticket not found' }, { status: 404 });
-      const own = viewer && ticket.userId && String(ticket.userId) === viewer.email;
+      const own = viewer && ownsResource(viewer, ticket.toObject(), 'userId');
       if (!own && !admin) {
         return NextResponse.json({ success: false, error: 'Sign in required' }, { status: viewer ? 403 : 401 });
       }

@@ -1,30 +1,59 @@
-/* New command-center shell — old glassmorphism/Netflix-red system fully retired.
-Palette: dark-neutral surfaces, indigo accent, subtle glass panels. */
+/* Murabot command-center shell.
+
+   It used to carry its own near-black canvas and its own INDIGO accent,
+   which is why the dashboard read as a different website from the shop and
+   from Murastream. It now resolves to the ONE Muragoods design system:
+   the shared dark navy canvas, the shared surface ramp, the shared type
+   ramp, and Muragoods yellow as the accent for navigation and primary
+   actions.
+
+   Module colours stay — they identify a MODULE, not the brand:
+
+     moderation red · music indigo · economy green
+     leveling blue  · tickets orange · games pink · letters teal
+
+   Those are declared once, below, so a module colour can never be mistaken
+   for the brand colour. */
 
 :root {
-  --cc-bg: #0a0a0e;
-  --cc-panel: rgba(255, 255, 255, 0.04);
-  --cc-panel-solid: #121218;
-  --cc-border: rgba(255, 255, 255, 0.08);
-  --cc-border-strong: rgba(255, 255, 255, 0.16);
-  --cc-text: #f4f4f6;
-  --cc-text-dim: rgba(255, 255, 255, 0.55);
-  --cc-text-faint: rgba(255, 255, 255, 0.35);
-  --cc-accent: #6366f1;
-  --cc-accent-soft: rgba(99, 102, 241, 0.16);
-  --cc-accent-border: rgba(99, 102, 241, 0.45);
-  --cc-ok: #34d399;
-  --cc-warn: #fbbf24;
-  --cc-err: #f87171;
+  --cc-bg: var(--mg-bg);
+  --cc-panel: var(--mg-glass-bg);
+  --cc-panel-solid: var(--mg-surface);
+  --cc-border: var(--mg-border);
+  --cc-border-strong: var(--mg-border-strong);
+  --cc-text: var(--mg-text);
+  --cc-text-dim: var(--mg-text-muted);
+  --cc-text-faint: var(--mg-text-faint);
+
+  /* Primary accent = the Muragoods brand, everywhere. */
+  --cc-accent: var(--mg-brand);
+  --cc-accent-hover: var(--mg-brand-hover);
+  --cc-accent-soft: var(--mg-brand-soft);
+  --cc-accent-border: var(--mg-border-brand);
+  /* Text/icon colour ON a solid brand fill. */
+  --cc-accent-ink: var(--mg-brand-ink);
+
+  --cc-ok: var(--mg-success);
+  --cc-warn: var(--mg-warning);
+  --cc-err: var(--mg-error);
+
+  /* Secondary module accents. */
+  --cc-mod-moderation: var(--mg-error);
+  --cc-mod-music: var(--mg-accent-music);
+  --cc-mod-economy: var(--mg-accent-economy);
+  --cc-mod-leveling: var(--mg-accent-leveling);
+  --cc-mod-tickets: var(--mg-accent-tickets);
+  --cc-mod-games: var(--mg-accent-games);
+  --cc-mod-letters: var(--mg-accent-letters);
 }
 
 /* ─── Panel ─── */
 .cc-card {
   background: var(--cc-panel);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--cc-border);
-  border-radius: 16px;
+  border-radius: var(--mg-radius-lg);
 }
 
 .cc-card-title {
@@ -35,7 +64,7 @@ Palette: dark-neutral surfaces, indigo accent, subtle glass panels. */
 }
 
 .cc-section-label {
-  font-size: 10.5px;
+  font-size: var(--mg-text-2xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -47,68 +76,71 @@ Palette: dark-neutral surfaces, indigo accent, subtle glass panels. */
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 16px;
-  border-radius: 10px;
+  padding: 10px 18px;
+  border-radius: var(--mg-radius-md);
   border: 1px solid var(--cc-border-strong);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--mg-glass-bg);
   color: var(--cc-text);
-  font-size: 13px;
+  font-family: var(--font-sans);
+  font-size: var(--mg-text-sm);
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  transition: background var(--mg-transition-fast), border-color var(--mg-transition-fast),
+    transform var(--mg-transition-fast);
   text-decoration: none;
 }
-.cc-btn:hover { background: rgba(255, 255, 255, 0.09); }
+.cc-btn:hover { background: var(--mg-glass-bg-strong); border-color: var(--cc-accent-border); }
 .cc-btn:active { transform: translateY(1px); }
 .cc-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .cc-btn-primary {
   background: var(--cc-accent);
-  border-color: var(--cc-accent-border);
-  color: #fff;
-  box-shadow: 0 4px 18px rgba(99, 102, 241, 0.25);
+  border-color: var(--cc-accent);
+  color: var(--cc-accent-ink);
+  box-shadow: var(--mg-shadow-brand);
 }
-.cc-btn-primary:hover { background: #7c7ff5; }
+.cc-btn-primary:hover { background: var(--cc-accent-hover); border-color: var(--cc-accent-hover); }
 
 .cc-btn-danger {
   border-color: rgba(248, 113, 113, 0.4);
   color: var(--cc-err);
 }
-.cc-btn-danger:hover { background: rgba(248, 113, 113, 0.12); }
+.cc-btn-danger:hover { background: var(--mg-error-soft); }
 
 .cc-icon-btn {
   display: inline-grid;
   place-items: center;
   width: 34px;
   height: 34px;
-  border-radius: 9px;
+  border-radius: var(--mg-radius-sm);
   border: 1px solid var(--cc-border);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--mg-glass-bg);
   color: var(--cc-text-dim);
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background var(--mg-transition-fast), color var(--mg-transition-fast);
 }
-.cc-icon-btn:hover { background: rgba(255, 255, 255, 0.09); color: var(--cc-text); }
+.cc-icon-btn:hover { background: var(--mg-glass-bg-strong); color: var(--cc-text); }
 
-.cc-link { font-size: 13px; text-decoration: none; transition: color 0.15s ease; }
-.cc-link:hover { color: #fff; }
+.cc-link { font-size: var(--mg-text-sm); text-decoration: none; transition: color var(--mg-transition-fast); }
+.cc-link:hover { color: var(--mg-brand); }
 
 /* ─── Inputs ─── */
 .cc-input, .cc-select {
   width: 100%;
   padding: 10px 13px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--mg-glass-bg);
   border: 1px solid var(--cc-border-strong);
-  border-radius: 10px;
+  border-radius: var(--mg-radius-md);
   color: var(--cc-text);
-  font-size: 13.5px;
+  font-family: var(--font-sans);
+  font-size: var(--mg-text-base);
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color var(--mg-transition-fast), box-shadow var(--mg-transition-fast);
   box-sizing: border-box;
 }
 .cc-input:focus, .cc-select:focus {
   border-color: var(--cc-accent-border);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 0 0 3px var(--mg-brand-softer);
 }
 .cc-input::placeholder { color: var(--cc-text-faint); }
 /* Native <select> dropdown lists render with the OS theme (white), which
@@ -116,22 +148,25 @@ Palette: dark-neutral surfaces, indigo accent, subtle glass panels. */
    dark surface on options everywhere a .cc-input select is used. */
 select.cc-input option,
 .cc-select option {
-  background-color: #15151d;
-  color: #fff;
+  background-color: var(--mg-surface);
+  color: var(--mg-text);
 }
 
-.cc-tabs { display: inline-flex; gap: 4; background: rgba(255,255,255,0.04); border-radius: 10px; padding: 4; }
+.cc-tabs {
+  display: inline-flex; gap: 4px; background: var(--mg-glass-bg);
+  border-radius: var(--mg-radius-md); padding: 4px;
+}
 .cc-tab {
   border: none; background: transparent; color: var(--cc-text-dim);
-  padding: 7px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; transition: background .15s;
+  padding: 7px 14px; border-radius: var(--mg-radius-sm); font-family: var(--font-sans);
+  font-size: var(--mg-text-sm); cursor: pointer; transition: background var(--mg-transition-fast);
 }
-.cc-tab:hover { background: rgba(255,255,255,0.06); }
-.cc-tab-active { background: var(--cc-accent); color: #fff; }
-.cc-tab-active:hover { background: var(--cc-accent); }
-.cc-select option { background: #16161d; color: var(--cc-text); }
+.cc-tab:hover { background: var(--mg-glass-bg-strong); }
+.cc-tab-active { background: var(--cc-accent); color: var(--cc-accent-ink); font-weight: 600; }
+.cc-tab-active:hover { background: var(--cc-accent-hover); }
 .cc-label {
   display: block;
-  font-size: 12px;
+  font-size: var(--mg-text-xs);
   font-weight: 600;
   color: var(--cc-text-dim);
   margin-bottom: 6px;
@@ -145,12 +180,12 @@ select.cc-input option,
   gap: 14px;
   padding: 12px 14px;
   border: 1px solid var(--cc-border);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--mg-radius-md);
+  background: var(--mg-glass-bg);
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background var(--mg-transition-fast), border-color var(--mg-transition-fast);
 }
-.cc-toggle-row:hover { background: rgba(255, 255, 255, 0.06); }
+.cc-toggle-row:hover { background: var(--mg-glass-bg-strong); }
 .cc-toggle-row.on { border-color: var(--cc-accent-border); background: var(--cc-accent-soft); }
 .cc-toggle {
   position: relative;
@@ -159,7 +194,7 @@ select.cc-input option,
   flex-shrink: 0;
   border-radius: 11px;
   background: rgba(255, 255, 255, 0.14);
-  transition: background 0.2s ease;
+  transition: background var(--mg-transition-normal);
 }
 .cc-toggle.on { background: var(--cc-accent); }
 .cc-toggle-knob {
@@ -169,8 +204,8 @@ select.cc-input option,
   width: 17px;
   height: 17px;
   border-radius: 9px;
-  background: #fff;
-  transition: left 0.2s ease;
+  background: var(--cc-accent-ink);
+  transition: left var(--mg-transition-normal);
 }
 .cc-toggle.on .cc-toggle-knob { left: 19px; }
 
@@ -187,47 +222,47 @@ select.cc-input option,
   align-items: center;
   gap: 7px;
   padding: 5px 12px;
-  border-radius: 999px;
+  border-radius: var(--mg-radius-pill);
   font-size: 12px;
   font-weight: 600;
   border: 1px solid var(--cc-border);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--mg-glass-bg);
   color: var(--cc-text-dim);
 }
-.cc-status-online { color: var(--cc-ok); border-color: rgba(52, 211, 153, 0.35); background: rgba(52, 211, 153, 0.08); }
-.cc-status-online .cc-dot { background: var(--cc-ok); box-shadow: 0 0 8px rgba(52, 211, 153, 0.7); }
-.cc-status-degraded { color: var(--cc-warn); border-color: rgba(251, 191, 36, 0.35); background: rgba(251, 191, 36, 0.08); }
+.cc-status-online { color: var(--cc-ok); border-color: rgba(6, 214, 160, 0.35); background: var(--mg-success-soft); }
+.cc-status-online .cc-dot { background: var(--cc-ok); box-shadow: 0 0 8px var(--mg-success-soft); }
+.cc-status-degraded { color: var(--cc-warn); border-color: rgba(251, 191, 36, 0.35); background: var(--mg-warning-soft); }
 .cc-status-degraded .cc-dot { background: var(--cc-warn); }
-.cc-status-offline { color: var(--cc-err); border-color: rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.08); }
+.cc-status-offline { color: var(--cc-err); border-color: rgba(248, 113, 113, 0.35); background: var(--mg-error-soft); }
 .cc-status-offline .cc-dot { background: var(--cc-err); }
 
 /* ─── Alerts ─── */
 .cc-alert {
   padding: 11px 14px;
-  border-radius: 11px;
-  font-size: 13px;
+  border-radius: var(--mg-radius-md);
+  font-size: var(--mg-text-sm);
   border: 1px solid var(--cc-border);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--mg-glass-bg);
   color: var(--cc-text-dim);
 }
 .cc-alert-error {
   border-color: rgba(248, 113, 113, 0.4);
-  background: rgba(248, 113, 113, 0.1);
-  color: #fca5a5;
+  background: var(--mg-error-soft);
+  color: var(--mg-error);
 }
 .cc-alert-success {
-  border-color: rgba(52, 211, 153, 0.4);
-  background: rgba(52, 211, 153, 0.1);
-  color: #6ee7b7;
+  border-color: rgba(6, 214, 160, 0.4);
+  background: var(--mg-success-soft);
+  color: var(--mg-success);
 }
 .cc-alert-warning {
   border-color: rgba(251, 191, 36, 0.4);
-  background: rgba(251, 191, 36, 0.1);
-  color: #fcd34d;
+  background: var(--mg-warning-soft);
+  color: var(--mg-warning);
 }
 
 /* ─── Tables ─── */
-.cc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cc-table { width: 100%; border-collapse: collapse; font-size: var(--mg-text-sm); }
 .cc-table th {
   text-align: left;
   padding: 10px 12px;
@@ -253,17 +288,17 @@ select.cc-input option,
   align-items: center;
   gap: 5px;
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--mg-radius-pill);
   font-size: 11px;
   font-weight: 600;
   border: 1px solid var(--cc-border);
   color: var(--cc-text-dim);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--mg-glass-bg);
 }
-.cc-chip-ok { color: var(--cc-ok); border-color: rgba(52, 211, 153, 0.35); background: rgba(52, 211, 153, 0.08); }
-.cc-chip-err { color: var(--cc-err); border-color: rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.08); }
-.cc-chip-warn { color: var(--cc-warn); border-color: rgba(251, 191, 36, 0.35); background: rgba(251, 191, 36, 0.08); }
-.cc-chip-accent { color: #a5b4fc; border-color: var(--cc-accent-border); background: var(--cc-accent-soft); }
+.cc-chip-ok { color: var(--cc-ok); border-color: rgba(6, 214, 160, 0.35); background: var(--mg-success-soft); }
+.cc-chip-err { color: var(--cc-err); border-color: rgba(248, 113, 113, 0.35); background: var(--mg-error-soft); }
+.cc-chip-warn { color: var(--cc-warn); border-color: rgba(251, 191, 36, 0.35); background: var(--mg-warning-soft); }
+.cc-chip-accent { color: var(--cc-accent); border-color: var(--cc-accent-border); background: var(--cc-accent-soft); }
 
 /* ─── Mobile drawer button — hidden on desktop ─── */
 .cc-drawer-btn { display: none; }
@@ -315,7 +350,7 @@ select.cc-input option,
   justify-content: center;
   width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: var(--mg-radius-sm);
   border: 1px solid transparent;
   background: transparent;
   color: var(--cc-text-dim);
@@ -323,8 +358,8 @@ select.cc-input option,
   flex-shrink: 0;
 }
 .cc-back:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: #fff;
+  background: var(--mg-glass-bg);
+  color: var(--mg-brand);
   border-color: var(--cc-border);
 }
 
@@ -341,9 +376,9 @@ select.cc-input option,
   padding: 14px 28px;
   position: relative;
   z-index: 100;
-  background: rgba(10, 10, 14, 0.72);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(15, 15, 26, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--cc-border);
 }
 
@@ -413,10 +448,10 @@ select.cc-input option,
   max-width: calc(100vw - 16px); /* never exceed the viewport */
   box-sizing: border-box;
   padding: 8px;
-  background: #131319;
+  background: var(--mg-surface);
   border: 1px solid var(--cc-border-strong);
-  border-radius: 14px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  border-radius: var(--mg-radius-lg);
+  box-shadow: var(--mg-shadow-lg);
 }
 
 /* ─── 768-1199px: tablet / small laptop ────────────────────────────────── */

@@ -185,7 +185,7 @@ export default function VaultWatchPage() {
             <p style={{ color: '#E5E5E5', fontSize: 14, margin: 0 }}>{error}</p>
             {item.mp4Url && (
               <a href={item.mp4Url} download target="_blank" rel="noreferrer"
-                style={{ background: '#E50914', color: '#fff', padding: '10px 20px', borderRadius: 8, textDecoration: 'none', fontWeight: 700 }}>
+                style={{ background: 'var(--ms-accent)', color: 'var(--ms-accent-ink)', padding: '10px 20px', borderRadius: 'var(--mg-radius-sm)', textDecoration: 'none', fontWeight: 700 }}>
                 ⬇ Download instead
               </a>
             )}
@@ -209,7 +209,7 @@ export default function VaultWatchPage() {
         <h1 style={{ color: '#fff', fontSize: 22, margin: '0 0 6px', fontWeight: 700 }}>{item.title}</h1>
         <div style={{ color: '#A0A0A0', fontSize: 13, marginBottom: 18 }}>
           {item.year} · {item.runtime} · {playing
-            ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><svg width="10" height="10" viewBox="0 0 16 16" fill="#E50914"><path d="M6.271 4.138a.5.5 0 0 1 .78-.172l4 2.8a.5.5 0 0 1 0 .824l-4 2.8A.5.5 0 0 1 6 10.2V5.8a.5.5 0 0 1 .271-.414z"/></svg> Playing</span>
+            ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><svg width="10" height="10" viewBox="0 0 16 16" fill="var(--ms-accent)"><path d="M6.271 4.138a.5.5 0 0 1 .78-.172l4 2.8a.5.5 0 0 1 0 .824l-4 2.8A.5.5 0 0 1 6 10.2V5.8a.5.5 0 0 1 .271-.414z"/></svg> Playing</span>
             : progress > 0
               ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><svg width="10" height="10" viewBox="0 0 16 16" fill="#888"><rect x="3" y="3" width="3.5" height="10" rx="1"/><rect x="9.5" y="3" width="3.5" height="10" rx="1"/></svg> {fmt(progress)} / {fmt(duration)}</span>
               : 'Ready'}
@@ -226,9 +226,9 @@ export default function VaultWatchPage() {
                 onClick={() => pickLevel(-1)}
                 style={{
                   padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12,
-                  background: currentLevel === -1 ? '#E50914' : '#171717',
+                  background: currentLevel === -1 ? 'var(--ms-accent)' : 'var(--ms-surface)',
                   color: currentLevel === -1 ? '#fff' : '#A0A0A0',
-                  border: '1px solid ' + (currentLevel === -1 ? '#E50914' : '#2A2A2A'),
+                  border: '1px solid ' + (currentLevel === -1 ? 'var(--ms-accent)' : 'var(--ms-border-2)'),
                 }}
               >
                 Auto
@@ -239,9 +239,9 @@ export default function VaultWatchPage() {
                   onClick={() => pickLevel(levels.indexOf(l))}
                   style={{
                     padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12,
-                    background: currentLevel === levels.indexOf(l) ? '#E50914' : '#171717',
+                    background: currentLevel === levels.indexOf(l) ? 'var(--ms-accent)' : 'var(--ms-surface)',
                     color: currentLevel === levels.indexOf(l) ? '#fff' : '#A0A0A0',
-                    border: '1px solid ' + (currentLevel === levels.indexOf(l) ? '#E50914' : '#2A2A2A'),
+                    border: '1px solid ' + (currentLevel === levels.indexOf(l) ? 'var(--ms-accent)' : 'var(--ms-border-2)'),
                   }}
                 >
                   {l.height ? `${l.height}p` : `${Math.round(l.bitrate / 1000)} kbps`}

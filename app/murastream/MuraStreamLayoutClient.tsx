@@ -59,36 +59,57 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
   return (
     <div className="ms-root">
       <style jsx global>{`
-        /* ─── Theme variables (light mode via html.ms-light) ── */
+        /* ─── Theme variables ──────────────────────────────────
+           Murastream sits on the ONE Muragoods foundation: the dark
+           navy canvas, the shared surface ramp, the shared type
+           ramp, and Muragoods yellow as the accent. The red that
+           used to drive this whole product is now a SECONDARY
+           cinematic accent (--ms-cinema) used only inside poster
+           affordances, never for navigation, CTAs or focus. */
         .ms-root {
-          --ms-bg: #0A0A0A;
-          --ms-surface: #111;
-          --ms-surface-2: #171717;
-          --ms-border: #1A1A1A;
-          --ms-border-2: #2A2A2A;
-          --ms-text: #E5E5E5;
-          --ms-text-strong: #F5F5F5;
-          --ms-text-muted: #A0A0A0;
-          --ms-text-dim: #888;
-          --ms-text-faint: #666;
-          --ms-text-ghost: #555;
-          --ms-overlay: rgba(20,20,20,0.97);
-          --ms-line: rgba(255,255,255,0.06);
+          --ms-bg: var(--mg-bg);
+          --ms-surface: var(--mg-surface);
+          --ms-surface-2: var(--mg-surface-2);
+          --ms-border: var(--mg-border);
+          --ms-border-2: var(--mg-border-strong);
+          --ms-text: var(--mg-text);
+          --ms-text-strong: var(--mg-text-strong);
+          --ms-text-muted: var(--mg-text-muted);
+          --ms-text-dim: var(--mg-text-dim);
+          --ms-text-faint: var(--mg-text-faint);
+          --ms-text-ghost: var(--mg-text-faint);
+          --ms-overlay: var(--mg-overlay);
+          --ms-line: var(--mg-border);
+          --ms-font: var(--font-sans);
+          /* Primary accent = the brand. */
+          --ms-accent: var(--mg-brand);
+          --ms-accent-hover: var(--mg-brand-hover);
+          --ms-accent-soft: var(--mg-brand-soft);
+          --ms-accent-softer: var(--mg-brand-softer);
+          --ms-accent-border: var(--mg-border-brand);
+          --ms-accent-ink: var(--mg-brand-ink);
+          /* Secondary, cinematic only. */
+          --ms-cinema: var(--mg-accent-stream);
+          --ms-cinema-soft: var(--mg-accent-stream-soft);
         }
         html.ms-light .ms-root {
-          --ms-bg: #E9E9EF;
-          --ms-surface: #F7F7FB;
-          --ms-surface-2: #FDFDFE;
-          --ms-border: #D8D8E2;
-          --ms-border-2: #C6C6D4;
-          --ms-text: #2A2A33;
-          --ms-text-strong: #17171E;
-          --ms-text-muted: #5A5A66;
-          --ms-text-dim: #6E6E7A;
-          --ms-text-faint: #8A8A96;
-          --ms-text-ghost: #A2A2AE;
-          --ms-overlay: rgba(247,247,251,0.98);
-          --ms-line: rgba(20,20,40,0.1);
+          --ms-bg: #f4f4f8;
+          --ms-surface: #ffffff;
+          --ms-surface-2: #fbfbfd;
+          --ms-border: rgba(15, 15, 26, 0.12);
+          --ms-border-2: rgba(15, 15, 26, 0.22);
+          --ms-text: #23232c;
+          --ms-text-strong: #10101a;
+          --ms-text-muted: #55555f;
+          --ms-text-dim: #6a6a76;
+          --ms-text-faint: #8b8b97;
+          --ms-text-ghost: #a0a0ac;
+          --ms-overlay: rgba(255, 255, 255, 0.98);
+          --ms-line: rgba(20, 20, 40, 0.1);
+          --ms-accent: var(--mg-brand-deep);
+          --ms-accent-hover: var(--mg-brand);
+          --ms-accent-ink: #ffffff;
+          --ms-accent-border: rgba(212, 160, 23, 0.5);
         }
         /* ─── Card System ────────────────────────────────── */
         .ms-card {
@@ -117,7 +138,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           aspect-ratio: 2/3;
           border-radius: 12px;
           overflow: hidden;
-          background-color: #141414;
+          background-color: var(--mg-bg-deep);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -139,7 +160,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           justify-content: center;
           width: 100%;
           height: 100%;
-          background: linear-gradient(135deg, #141414 0%, #1A1A2E 100%);
+          background: linear-gradient(135deg, var(--mg-bg-deep) 0%, var(--mg-surface) 100%);
         }
         .ms-card-rating {
           position: absolute;
@@ -152,22 +173,24 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           display: flex;
           align-items: center;
           gap: 3px;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          font-family: var(--font-sans);
           font-size: 11px;
           font-weight: 600;
-          color: #fff;
+          color: var(--mg-text-strong);
           z-index: 2;
         }
-        .ms-card-rating span { color: #E50914; }
+        .ms-card-rating span { color: var(--ms-accent); }
         .ms-card-country {
           position: absolute;
           top: 8px;
           left: 8px;
-          background: rgba(229,9,20,0.85);
+          /* The one place the cinematic red earns its keep: a small
+             country flag chip on a poster. Accent, not identity. */
+          background: rgba(230, 57, 70, 0.85);
           backdrop-filter: blur(8px);
           border-radius: 6px;
           padding: 3px 8px;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          font-family: var(--font-sans);
           font-size: 9px;
           font-weight: 700;
           letter-spacing: 0.06em;
@@ -193,13 +216,13 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           width: 44px;
           height: 44px;
           border-radius: 50%;
-          background: rgba(229, 9, 20, 0.9);
+          background: var(--ms-accent);
           display: flex;
           align-items: center;
           justify-content: center;
           transform: scale(0.8);
           transition: transform 0.2s ease;
-          box-shadow: 0 4px 20px rgba(229,9,20,0.4);
+          box-shadow: 0 4px 20px var(--mg-brand-glow);
         }
         .ms-card:hover .ms-card-play { transform: scale(1); }
         .ms-card-actions-row {
@@ -219,7 +242,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           padding: 6px 0;
           border-radius: 6px;
           border: none;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          font-family: var(--font-sans);
           font-size: 10px;
           font-weight: 600;
           cursor: pointer;
@@ -230,13 +253,13 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           transition: all 0.15s;
         }
         .ms-card-action-btn.primary {
-          background: #E50914;
-          color: #fff;
+          background: var(--ms-accent);
+          color: var(--ms-accent-ink);
         }
-        .ms-card-action-btn.primary:hover { background: #a04fe0; }
+        .ms-card-action-btn.primary:hover { background: var(--ms-accent-hover); }
         .ms-card-action-btn.secondary {
           background: rgba(255,255,255,0.12);
-          color: #fff;
+          color: var(--mg-text-strong);
           backdrop-filter: blur(4px);
         }
         .ms-card-action-btn.secondary:hover { background: rgba(255,255,255,0.2); }
@@ -251,7 +274,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
         }
         .ms-card-progress-bar {
           height: 100%;
-          background: linear-gradient(90deg, #E50914, #B20710);
+          background: linear-gradient(90deg, var(--mg-brand), var(--mg-brand-deep));
           border-radius: 0 3px 0 0;
           transition: width 0.3s;
         }
@@ -261,7 +284,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
         .ms-card-title {
           margin: 0;
           font-size: 13px;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          font-family: var(--font-sans);
           font-weight: 600;
           color: var(--ms-text);
           cursor: default;
@@ -276,15 +299,15 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           margin-top: 3px;
           min-height: 15px;
           font-size: 12px;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          font-family: var(--font-sans);
           color: var(--ms-text-faint);
         }
-        .ms-card-episode { color: #E50914; font-weight: 600; }
+        .ms-card-episode { color: var(--ms-accent); font-weight: 600; }
         /* ─── Scroll Row ──────────────────────────────── */
         .ms-scroll::-webkit-scrollbar { height: 4px; }
         .ms-scroll::-webkit-scrollbar-track { background: transparent; }
-        .ms-scroll::-webkit-scrollbar-thumb { background: #2A2A2A; border-radius: 2px; }
-        .ms-scroll::-webkit-scrollbar-thumb:hover { background: #3A3A3A; }
+        .ms-scroll::-webkit-scrollbar-thumb { background: var(--mg-surface-3); border-radius: 2px; }
+        .ms-scroll::-webkit-scrollbar-thumb:hover { background: var(--mg-text-faint); }
         .ms-row { margin-bottom: 56px; }
         .ms-row-header {
           display: flex;
@@ -294,7 +317,7 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           padding: 0 4px;
         }
         .ms-row-title {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          font-family: var(--font-sans);
           font-size: 18px;
           font-weight: 700;
           color: var(--ms-text-strong);
@@ -302,9 +325,9 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           letter-spacing: -0.01em;
         }
         .ms-row-more {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          font-family: var(--font-sans);
           font-size: 13px;
-          color: #E50914;
+          color: var(--ms-accent);
           text-decoration: none;
           font-weight: 500;
           transition: opacity 0.2s;
@@ -341,10 +364,10 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           transition: background 0.2s;
           flex-shrink: 0;
         }
-        .ms-row-nav:hover { background: rgba(229,9,20,0.35); }
+        .ms-row-nav:hover { background: var(--ms-accent-soft); border-color: var(--ms-accent); color: var(--ms-accent); }
         /* ─── Keyboard focus (accessibility) ─────────────── */
         .ms-card:focus-visible {
-          outline: 2px solid #E50914;
+          outline: 2px solid var(--ms-accent);
           outline-offset: 4px;
           border-radius: 12px;
         }
@@ -358,18 +381,18 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
         .ms-root input:focus-visible,
         .ms-root select:focus-visible,
         .ms-root [tabindex]:focus-visible {
-          outline: 2px solid #E50914;
+          outline: 2px solid var(--ms-accent);
           outline-offset: 2px;
           border-radius: 8px;
         }
         /* ─── Section Labels ───────────────────────────── */
         .ms-section-label {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          font-family: var(--font-sans);
           font-size: 11px;
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.12em;
-          color: #E50914;
+          color: var(--ms-accent);
           margin-bottom: 16px;
         }
         /* ─── Smooth page transitions ──────────────────── */
@@ -406,8 +429,8 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           width: 42px;
           height: 42px;
           border-radius: 50%;
-          border: 4px solid rgba(229, 9, 20, 0.15);
-          border-top-color: #E50914;
+          border: 4px solid var(--ms-accent-soft);
+          border-top-color: var(--ms-accent);
           animation: customLoaderSpin 0.9s linear infinite;
         }
         @keyframes customLoaderSpin {
@@ -439,11 +462,11 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
           backdrop-filter: blur(8px);
           border-radius: 8px;
           padding: 3px 9px;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          font-family: var(--font-sans);
           font-size: 11px;
           font-weight: 700;
           letter-spacing: 0.06em;
-          color: #fff;
+          color: var(--mg-text-strong);
           z-index: 2;
           pointer-events: none;
         }
@@ -458,21 +481,21 @@ export default function MuraStreamLayoutWrapper({ children }: { children: React.
       {toast && (
         <div style={{
           position: 'fixed', bottom: 84, right: 20, zIndex: 500,
-          background: 'var(--ms-overlay)', border: '1px solid rgba(229,9,20,0.4)',
+          background: 'var(--ms-overlay)', border: '1px solid var(--ms-accent-soft)',
           borderRadius: 12, padding: '14px 16px', width: 300, maxWidth: 'calc(100vw - 32px)',
           boxShadow: '0 8px 32px rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)',
         }}>
           <p style={{ margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <ScrollIcon size={13} color="#E50914" />
-            <span style={{ fontFamily: 'var(--font-arcade)', fontSize: 9, color: '#E50914', letterSpacing: '0.1em' }}>WHAT'S NEW IN MURASTREAM</span>
+            <ScrollIcon size={13} color="var(--ms-accent)" />
+            <span style={{ fontFamily: 'var(--font-arcade)', fontSize: 9, color: 'var(--ms-accent)', letterSpacing: '0.1em' }}>WHAT'S NEW IN MURASTREAM</span>
           </p>
-          <p style={{ margin: '0 0 12px', fontSize: 13, color: '#E5E5E5', fontWeight: 600 }}>
+          <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--ms-text-strong)', fontWeight: 600 }}>
             {LATEST_CHANGELOG.title}
           </p>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => dismissToast(true)} style={{
-              flex: 1, padding: '8px', borderRadius: 6, border: '1px solid #E50914',
-              background: 'rgba(229,9,20,0.15)', color: '#E50914', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              flex: 1, padding: '8px', borderRadius: 6, border: '1px solid var(--ms-accent)',
+              background: 'var(--ms-accent-soft)', color: 'var(--ms-accent)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
             }}>See what's new</button>
             <button onClick={() => dismissToast(false)} style={{
               padding: '8px 12px', borderRadius: 6, border: '1px solid var(--ms-border-2)',

@@ -13,6 +13,7 @@ const GroupOrderItem = new mongoose.Schema({
 }, { _id: true });
 
 const GroupOrderSchema = new mongoose.Schema({
+  canonicalUserId: { type: String, default: '', index: true },
   code: { type: String, required: true, unique: true },
   hostUserId: { type: String, required: true },
   hostName: { type: String, required: true },

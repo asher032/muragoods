@@ -19,12 +19,12 @@ interface Transaction {
 const earnMethods = [
   { icon: <Icon name="cart" size={20} />, title: 'Place an Order', desc: 'Earn 0.5 coins per peso spent on every order', link: '/menu', coins: '0.5x', color: 'var(--gold)' },
   { icon: <Icon name="calendar" size={20} />, title: 'Daily Check-In', desc: 'Log in daily for 5-50 coins over 7 days', link: '/play/checkin', coins: '5-50', color: 'var(--emerald-bright)' },
-  { icon: <Brain color={'#ff4d8d'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, title: 'Trivia Challenge', desc: 'Answer campus questions for 5-15 coins each', link: '/play/trivia', coins: '5-15', color: 'var(--crimson)' },
+  { icon: <Brain color={'var(--mg-accent-games)'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, title: 'Trivia Challenge', desc: 'Answer campus questions for 5-15 coins each', link: '/play/trivia', coins: '5-15', color: 'var(--mg-accent-games)' },
   { icon: <Users className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, title: 'Refer a Friend', desc: 'Invite friends and earn 50 coins per referral', link: '/play/refer', coins: '50', color: 'var(--gold-bright)' },
 ];
 
 const spendMethods = [
-  { icon: <Icon name="gift" size={20} />, title: 'Mystery Box', desc: 'Spend 10 coins for a chance to win coins, discounts, or a free musubi', link: '/play/mysterybox', coins: '-10', color: 'var(--crimson)' },
+  { icon: <Icon name="gift" size={20} />, title: 'Mystery Box', desc: 'Spend 10 coins for a chance to win coins, discounts, or a free musubi', link: '/play/mysterybox', coins: '-10', color: 'var(--mg-brand)' },
   { icon: <Store className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden />, title: 'Rewards Shop', desc: 'Redeem coins for free food, vouchers, and special perks (100 - 2,000 coins)', link: '/rewards', coins: '100-2K', color: 'var(--gold-bright)' },
 ];
 
@@ -32,6 +32,10 @@ export default function PointsPage() {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [history, setHistory] = useState<Transaction[]>([]);
+  // Balance and history come from the canonical account, not from this
+  // device's cache. A localStorage ledger showed one person two different
+  // balances on two devices — and vanished entirely on a third.
+  const [balance, setBalance] = useState<number | null>(null);
   const { coins } = useCoins();
 
   useEffect(() => {
@@ -39,14 +43,23 @@ export default function PointsPage() {
     if (!user) { router.push('/login'); return; }
     setIsLoggedIn(true);
 
-    const saved = localStorage.getItem('muragoods_points_history');
-    if (saved) {
-      try { setHistory(JSON.parse(saved)); } catch { /* empty */ }
-    }
+    (async () => {
+      try {
+        const res = await fetch('/api/account/points', { cache: 'no-store' });
+        if (res.status === 401) return;
+        const body = await res.json().catch(() => null);
+        if (body?.success) {
+          setBalance(body.balance ?? 0);
+          setHistory((body.history || []) as Transaction[]);
+        }
+      } catch { /* offline: fall back to the badge */ }
+    })();
   }, [router]);
 
   if (!isLoggedIn) return null;
 
+  // While the canonical ledger loads, show the badge rather than a false 0.
+  const shownBalance = balance ?? coins;
   const totalEarned = history.filter(t => t.type === 'earn').reduce((sum, t) => sum + t.amount, 0);
   const totalSpent = history.filter(t => t.type === 'spend').reduce((sum, t) => sum + t.amount, 0);
 
@@ -72,7 +85,7 @@ export default function PointsPage() {
             <div className="flex items-center justify-center gap-3 mb-4">
               <span className="coin-float text-4xl"><Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></span>
               <span className="text-4xl sm:text-5xl text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)', textShadow: '0 0 20px rgba(242,201,76,0.4)' }}>
-                {coins}
+                {shownBalance}
               </span>
             </div>
             <CoinBalance size="md" />

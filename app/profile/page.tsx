@@ -8,9 +8,17 @@ import { useAuth } from '@/app/contexts/AuthContext';
 
 // ── Canonical Muragoods profile ──────────────────────────────────────────
 // ONE page, ONE user record (/api/me) for the whole ecosystem: shop,
-// Murastream, games, letters, rewards and the Murabot dashboard all read
-// this same identity. Product-specific pages are views — never second
-// profiles.
+// Murastream, games, letters, rewards, support and the Murabot dashboard all
+// read this same canonical `userId`. Product pages are views of this profile,
+// never second profiles.
+
+interface ConnectedService {
+  id: string;
+  name: string;
+  connected: boolean;
+  detail: string;
+  href: string;
+}
 
 interface MeResponse {
   success: boolean;
@@ -27,14 +35,17 @@ interface MeResponse {
     coins: number;
     perks: number;
     memberSince: string | null;
-    discord: { connected: boolean; userId: string | null; username: string | null; avatar: string };
+    discord: { connected: boolean; userId: string | null; username: string | null };
   };
+  connectedServices?: ConnectedService[];
   discord?: { connected: boolean; userId: string; username: string };
   connectUrl?: string;
   muragoods?: { orders: { count: number; totalSpent: number } };
   murastream?: { watchlist: number; likes: number; history: number; favorites: number };
+  points?: { balance: number; earned: number; spent: number; entries: number };
   games?: { gamesPlayed: number; totalXp: number; achievements: number };
   letters?: { letters: number };
+  support?: { tickets: number };
   error?: string;
 }
 
@@ -55,7 +66,7 @@ function Stat({ label, value }: { label: string; value: string | number }) {
       <div className="text-2xl text-[var(--gold-bright)]" style={{ fontFamily: 'var(--font-arcade)' }}>
         {value}
       </div>
-      <div className="text-xs uppercase" style={{ color: 'var(--muted, #9a8c6a)' }}>
+      <div className="text-xs uppercase" style={{ color: 'var(--mg-text-muted)' }}>
         {label}
       </div>
     </div>
@@ -81,6 +92,36 @@ function RowLink({ href, label, sub }: { href: string; label: string; sub?: stri
   );
 }
 
+/** One row per service attached to this ONE account — not one row per account. */
+function ServiceRow({ service }: { service: ConnectedService }) {
+  return (
+    <div
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+        padding: '12px 4px', borderBottom: '1px solid rgba(255,255,255,0.08)',
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+          background: service.connected ? 'var(--mario-green, #06d6a0)' : 'rgba(255,255,255,0.25)',
+        }}
+      />
+      <span style={{ flex: '1 1 160px', minWidth: 0 }}>
+        <span style={{ display: 'block', fontWeight: 600 }}>{service.name}</span>
+        <span style={{ display: 'block', fontSize: 12, opacity: 0.65 }}>{service.detail}</span>
+      </span>
+      <span style={{ fontSize: 12, opacity: 0.8 }}>
+        {service.connected ? 'Connected' : 'Not connected'}
+      </span>
+      <Link className="deco-btn deco-btn-sm" href={service.href}>
+        {service.connected ? 'Open' : 'Connect'}
+      </Link>
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const router = useRouter();
   const { state, logout, refresh } = useAuth();
@@ -89,6 +130,7 @@ export default function ProfilePage() {
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
+  const [usernameDraft, setUsernameDraft] = useState('');
   const [bioDraft, setBioDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -147,7 +189,7 @@ export default function ProfilePage() {
       const res = await fetch('/api/account/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, bio: bioDraft.trim() }),
+        body: JSON.stringify({ name, bio: bioDraft.trim(), username: usernameDraft.trim() }),
       });
       const body = (await res.json().catch(() => null)) as { success?: boolean; error?: string } | null;
       if (body?.success) {
@@ -205,7 +247,7 @@ export default function ProfilePage() {
   if (state === 'checking' || (loading && !data && !error)) {
     return (
       <main className="min-h-screen">
-        <NavBar pageLabel="Profile" />
+        <NavBar pageLabel="My Profile" />
         <p className="text-center" style={{ padding: 60, color: 'var(--cream)' }}>LOADING PROFILE…</p>
       </main>
     );
@@ -214,7 +256,7 @@ export default function ProfilePage() {
   if (error || !data?.authenticated) {
     return (
       <main className="min-h-screen">
-        <NavBar pageLabel="Profile" />
+        <NavBar pageLabel="My Profile" />
         <div className="deco-container" style={{ maxWidth: '36rem', margin: '40px auto', padding: 32, textAlign: 'center' }}>
           <h1 className="text-xl text-[var(--cream)]">Couldn&apos;t load your profile</h1>
           <p style={{ opacity: 0.7, margin: '8px 0 20px' }}>{error || 'Sign in to view your profile.'}</p>
@@ -231,7 +273,7 @@ export default function ProfilePage() {
   if (data.linked === false || !data.user) {
     return (
       <main className="min-h-screen">
-        <NavBar pageLabel="Profile" />
+        <NavBar pageLabel="My Profile" />
         <div className="deco-container" style={{ maxWidth: '36rem', margin: '40px auto', padding: 32, textAlign: 'center' }}>
           <h1 className="text-xl text-[var(--cream)]">Connect your Muragoods account</h1>
           <p style={{ opacity: 0.7, margin: '8px 0 20px' }}>
@@ -251,10 +293,15 @@ export default function ProfilePage() {
   const ms = data.murastream || { watchlist: 0, likes: 0, history: 0, favorites: 0 };
   const g = data.games || { gamesPlayed: 0, totalXp: 0, achievements: 0 };
   const mo = data.muragoods?.orders || { count: 0, totalSpent: 0 };
+  const pts = data.points || { balance: 0, earned: 0, spent: 0, entries: 0 };
+  const services = data.connectedServices || [];
+  const memberSince = u.memberSince
+    ? new Date(u.memberSince).toLocaleDateString('en', { year: 'numeric', month: 'long', day: 'numeric' })
+    : '—';
 
   return (
     <main className="min-h-screen" style={{ paddingBottom: 80 }}>
-      <NavBar pageLabel="Profile" />
+      <NavBar pageLabel="My Profile" />
 
       {/* Identity header — the ONE profile */}
       <section className="deco-container" style={{ maxWidth: '72rem', marginTop: 24, padding: 24 }}>
@@ -293,6 +340,14 @@ export default function ProfilePage() {
                   aria-label="Display name"
                 />
                 <input
+                  value={usernameDraft}
+                  onChange={(e) => setUsernameDraft(e.target.value)}
+                  maxLength={32}
+                  placeholder="Username (3–32 characters)"
+                  style={{ padding: 8, borderRadius: 8 }}
+                  aria-label="Username"
+                />
+                <input
                   value={bioDraft}
                   onChange={(e) => setBioDraft(e.target.value)}
                   maxLength={200}
@@ -313,25 +368,37 @@ export default function ProfilePage() {
             ) : (
               <>
                 <h1 className="text-2xl text-[var(--cream)]" style={{ margin: 0 }}>{u.displayName}</h1>
-                <p style={{ margin: '4px 0', opacity: 0.7, fontSize: 13 }}>{u.email}</p>
-                {u.bio && <p style={{ margin: '4px 0 0', fontSize: 14 }}>{u.bio}</p>}
-                <button
-                  type="button"
-                  className="deco-btn deco-btn-sm"
-                  style={{ marginTop: 8 }}
-                  onClick={() => { setNameDraft(u.username); setBioDraft(u.bio); setSaveError(''); setEditing(true); }}
-                >
-                  Edit profile
-                </button>
-                <button
-                  type="button"
-                  className="deco-btn deco-btn-sm"
-                  style={{ marginTop: 8, marginLeft: 8 }}
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={avatarBusy}
-                >
-                  {avatarBusy ? 'Uploading…' : 'Change avatar'}
-                </button>
+                <p style={{ margin: '4px 0', opacity: 0.7, fontSize: 13 }}>
+                  @{u.username} · {u.email}
+                </p>
+                {u.bio ? (
+                  <p style={{ margin: '4px 0 0', fontSize: 14 }}>{u.bio}</p>
+                ) : (
+                  <p style={{ margin: '4px 0 0', fontSize: 13, opacity: 0.55 }}>No bio yet.</p>
+                )}
+                <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="deco-btn deco-btn-sm"
+                    onClick={() => {
+                      setNameDraft(u.displayName);
+                      setUsernameDraft(u.username);
+                      setBioDraft(u.bio);
+                      setSaveError('');
+                      setEditing(true);
+                    }}
+                  >
+                    Edit profile
+                  </button>
+                  <button
+                    type="button"
+                    className="deco-btn deco-btn-sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={avatarBusy}
+                  >
+                    {avatarBusy ? 'Uploading…' : 'Change avatar'}
+                  </button>
+                </div>
                 {saveError && !editing && (
                   <span style={{ display: 'block', color: '#ff8a8a', fontSize: 12, marginTop: 6 }}>{saveError}</span>
                 )}
@@ -346,26 +413,33 @@ export default function ProfilePage() {
                 <Link href="/api/auth/discord?mode=link">Connect Discord</Link>
               )}
             </div>
-            <div style={{ opacity: 0.65, marginTop: 4 }}>ID: {u.id}</div>
+            <div style={{ opacity: 0.65, marginTop: 4, fontSize: 12 }}>
+              Account created {memberSince}
+            </div>
+            <div style={{ opacity: 0.65, fontSize: 12 }}>ID: {u.id}</div>
           </div>
         </div>
       </section>
 
-      <Section title="Account">
-        <RowLink href="/account/connected" label="Connected accounts" sub="Discord link, disconnect, reconnect" />
-        <RowLink href="/account/my-space" label="Account settings & security" sub="Preferences, privacy, password" />
+      {/* Connected Services — services on this ONE account, not separate accounts */}
+      <Section title="Connected Services">
+        <p style={{ margin: '0 0 8px', fontSize: 12, opacity: 0.65 }}>
+          These are services on your single Muragoods account — not separate accounts.
+        </p>
+        {services.map((service) => <ServiceRow key={service.id} service={service} />)}
+        <RowLink href="/account/connected" label="Manage connections & privacy" sub="Disconnect Discord, export your data, privacy controls" />
       </Section>
 
-      <Section title="Muragoods — orders · rewards · points">
+      <Section title="Muragoods — orders · points · rewards">
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 8 }}>
           <Stat label="Orders" value={mo.count} />
           <Stat label="Total spent ₱" value={mo.totalSpent.toLocaleString()} />
-          <Stat label="Coins" value={u.coins.toLocaleString()} />
+          <Stat label="Points" value={pts.balance.toLocaleString()} />
           <Stat label="Perks" value={u.perks} />
         </div>
-        <RowLink href="/account/orders" label="My orders" sub={`${mo.count} orders`} />
-        <RowLink href="/rewards" label="Rewards & points" sub={`${u.coins.toLocaleString()} coins`} />
-        <RowLink href="/support" label="Support tickets" sub="Help and order issues" />
+        <RowLink href="/orders" label="My orders" sub={`${mo.count} orders`} />
+        <RowLink href="/points" label="Points & history" sub={`${pts.balance.toLocaleString()} points`} />
+        <RowLink href="/support" label="Support tickets" sub={`${data.support?.tickets ?? 0} tickets`} />
       </Section>
 
       <Section title="Murastream — watchlist · favorites · history">
@@ -376,7 +450,7 @@ export default function ProfilePage() {
           <Stat label="Watched" value={ms.history} />
         </div>
         <RowLink href="/murastream" label="Open Murastream" sub="Same profile, same lists" />
-        <RowLink href="/murastream/my-list" label="My watchlist" sub={`${ms.watchlist} saved`} />
+        <RowLink href="/account/my-space" label="My Space" sub="Everything on one page" />
       </Section>
 
       <Section title="Games — progress · achievements · scores">
@@ -394,15 +468,6 @@ export default function ProfilePage() {
           <Stat label="Letters written" value={data.letters?.letters || 0} />
         </div>
         <RowLink href="/untold-words" label="Untold Words" sub="Letters tied to this account" />
-      </Section>
-
-      <Section title="Murabot — Discord">
-        <RowLink
-          href="/dashboard"
-          label="Open Murabot dashboard"
-          sub={u.discord.connected ? `Discord linked (@${u.discord.username || 'connected'})` : 'Connect Discord to manage servers'}
-        />
-        <RowLink href="/account/connected" label="Discord connection" sub={u.discord.connected ? 'Manage or reconnect' : 'Not connected'} />
       </Section>
 
       <div style={{ maxWidth: '72rem', margin: '24px auto 0', textAlign: 'center' }}>

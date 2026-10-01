@@ -46,28 +46,26 @@ export default function ContentLockGate({ children }: { children: React.ReactNod
   if (state === 'locked-for-me') {
     return (
       <div style={{
-        minHeight: '100vh', background: '#0A0A0A', color: '#fff',
+        minHeight: '100vh', background: 'var(--mg-bg)', color: 'var(--mg-text)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px',
       }}>
-        <div style={{ textAlign: 'center', maxWidth: '440px' }}>
-          <Lock color="#E50914" size={44} style={{ marginBottom: '20px' }} aria-hidden />
+        <div className="mg-card" style={{ textAlign: 'center', maxWidth: '440px', padding: '40px 36px' }}>
+          <Lock color="var(--mg-brand)" size={44} style={{ marginBottom: '20px' }} aria-hidden />
           <h1 style={{
-            fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-            fontSize: '24px', fontWeight: 800, margin: '0 0 12px', letterSpacing: '-0.02em',
+            fontFamily: 'var(--font-sans)',
+            fontSize: 'var(--mg-text-2xl)', fontWeight: 800, margin: '0 0 12px', letterSpacing: '-0.02em',
+            color: 'var(--mg-text-strong)',
           }}>
             MuraStream is taking a break
           </h1>
           <p style={{
-            fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-            fontSize: '14px', color: '#999', margin: '0 0 28px', lineHeight: 1.6,
+            fontFamily: 'var(--font-sans)',
+            fontSize: 'var(--mg-text-base)', color: 'var(--mg-text-muted)', margin: '0 0 28px',
+            lineHeight: 'var(--mg-leading-normal)',
           }}>
             Streaming is temporarily unavailable. Please check back soon.
           </p>
-          <Link href="/hub" style={{
-            display: 'inline-block', padding: '12px 28px', borderRadius: '10px',
-            background: '#E50914', color: '#fff', textDecoration: 'none',
-            fontFamily: '-apple-system, sans-serif', fontSize: '13px', fontWeight: 700,
-          }}>
+          <Link href="/hub" className="mg-btn mg-btn-primary">
             Back to Hub
           </Link>
         </div>
@@ -80,15 +78,16 @@ export default function ContentLockGate({ children }: { children: React.ReactNod
       {state === 'locked-for-others' && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center',
-          background: 'rgba(245,158,11,0.12)', borderBottom: '1px solid rgba(245,158,11,0.3)',
+          background: 'var(--mg-warning-soft)', borderBottom: '1px solid rgba(251,191,36,0.3)',
           padding: '8px 16px', position: 'sticky', top: 0, zIndex: 60,
         }}>
-          <ShieldAlert color="#f59e0b" size={14} aria-hidden />
+          <ShieldAlert color="var(--mg-warning)" size={14} aria-hidden />
           <span style={{
-            fontFamily: '-apple-system, sans-serif', fontSize: '12px', color: '#f59e0b', fontWeight: 600,
+            fontFamily: 'var(--font-sans)', fontSize: 'var(--mg-text-xs)',
+            color: 'var(--mg-warning)', fontWeight: 600,
           }}>
             Content lock is ON — only you can see this.{' '}
-            <Link href="/admin" style={{ color: '#fbbf24', textDecoration: 'underline' }}>Open the switch</Link>
+            <Link href="/admin" style={{ color: 'var(--mg-warning)', textDecoration: 'underline' }}>Open the switch</Link>
           </span>
         </div>
       )}

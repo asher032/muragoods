@@ -1,22 +1,74 @@
 @import "tailwindcss";
 
+/* ONE Muragoods design system. Imported first so every legacy token below
+   can resolve against it and every page inherits the same foundation. */
+@import "./design/tokens.css";
+
 /* ============================================================
    MARIO GAME WORLD — Dark Night Theme
    "A nighttime Mario adventure through dark castles and starlit skies."
+
+   The GAME palette below (mario-red / green / blue / orange / pink /
+   purple / brick / wood) is CONTENT colour — it belongs to the games and
+   the illustrated world, and is deliberately allowed to be playful.
+
+   Everything that is UI — backgrounds, surfaces, text, borders, the brand
+   yellow, semantic states, radius, elevation, motion — is NOT defined
+   here. It resolves to the single design system in app/design/tokens.css,
+   so a Murastream poster tile, a Murabot panel and an account page cannot
+   drift apart.
    ============================================================ */
+
+/* Tailwind utilities generated from the same tokens, so `bg-brand`,
+   `text-brand`, `rounded-md` and `font-sans` cannot disagree with the
+   hand-written CSS. `inline` keeps them pointing at the live token. */
+@theme inline {
+  --color-brand: var(--mg-brand);
+  --color-brand-hover: var(--mg-brand-hover);
+  --color-brand-soft: var(--mg-brand-soft);
+  --color-brand-ink: var(--mg-brand-ink);
+  --color-bg: var(--mg-bg);
+  --color-surface: var(--mg-surface);
+  --color-surface-2: var(--mg-surface-2);
+  --color-line: var(--mg-border);
+  --color-ink: var(--mg-text);
+  --color-ink-muted: var(--mg-text-muted);
+  --color-ink-faint: var(--mg-text-faint);
+  --color-success: var(--mg-success);
+  --color-warning: var(--mg-warning);
+  --color-error: var(--mg-error);
+  --color-info: var(--mg-info);
+  --color-accent-stream: var(--mg-accent-stream);
+
+  --radius-sm: var(--mg-radius-sm);
+  --radius-md: var(--mg-radius-md);
+  --radius-lg: var(--mg-radius-lg);
+  --radius-xl: var(--mg-radius-xl);
+
+  --shadow-sm: var(--mg-shadow-sm);
+  --shadow-md: var(--mg-shadow-md);
+  --shadow-lg: var(--mg-shadow-lg);
+
+  --font-sans: var(--font-body), "Josefin Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-arcade), "Press Start 2P", ui-monospace, monospace;
+}
 
 @theme {
   --font-arcade: "Press Start 2P", monospace;
   --font-body: "Josefin Sans", sans-serif;
 }
 
-/* ─── Mario Dark Color System ────────────────────────────────── */
+/* ─── Legacy aliases → the ONE design system ──────────────────
+   These names predate the design system and are still referenced all
+   over the app. They no longer hold their own values: each resolves to
+   the canonical token, so there is a single place to change a colour,
+   a radius or a shadow. */
 :root {
   /* Backgrounds - Deep Night */
-  --mario-bg: #0f0f1a;
-  --mario-bg-light: #1a1a2e;
-  --mario-bg-card: #1e1e32;
-  --mario-bg-input: #252540;
+  --mario-bg: var(--mg-bg);
+  --mario-bg-light: var(--mg-bg-tint);
+  --mario-bg-card: var(--mg-surface);
+  --mario-bg-input: var(--mg-surface-2);
 
   /* Sky - Night */
   --mario-sky: #16213e;
@@ -30,8 +82,8 @@
   --mario-green-dark: #059669;
   --mario-blue: #4895ef;
   --mario-blue-dark: #3b82f6;
-  --mario-yellow: #ffd60a;
-  --mario-yellow-dark: #f59e0b;
+  --mario-yellow: var(--mg-brand);
+  --mario-yellow-dark: var(--mg-brand-deep);
   --mario-orange: #fb8500;
   --mario-pink: #ff006e;
   --mario-purple: #7209b7;
@@ -49,19 +101,19 @@
   --mario-wood-light: #8b5e3c;
 
   /* UI - Dark readable */
-  --mario-white: #f0f0f0;
-  --mario-cream: #1e1e32;
-  --mario-cream-alt: #252540;
-  --mario-brown: #f0f0f0;
-  --mario-brown-light: #b0b0b0;
-  --mario-text: #e8e8f0;
-  --mario-text-muted: #9090a8;
+  --mario-white: var(--mg-text);
+  --mario-cream: var(--mg-surface);
+  --mario-cream-alt: var(--mg-surface-2);
+  --mario-brown: var(--mg-text);
+  --mario-brown-light: var(--mg-text-dim);
+  --mario-text: var(--mg-text);
+  --mario-text-muted: var(--mg-text-muted);
 
   /* Functional */
-  --mario-success: #06d6a0;
-  --mario-danger: #e63946;
-  --mario-warning: #ffd60a;
-  --mario-info: #4895ef;
+  --mario-success: var(--mg-success);
+  --mario-danger: var(--mg-error);
+  --mario-warning: var(--mg-warning);
+  --mario-info: var(--mg-info);
 
   /* Shadows */
   --shadow-mario: 0 4px 0 rgba(0,0,0,0.4);
@@ -70,43 +122,43 @@
   --shadow-card: 0 4px 16px rgba(0,0,0,0.3);
   --shadow-glow: 0 0 20px rgba(255,214,10,0.2);
 
-  /* Legacy Aliases */
-  --obsidian: #0f0f1a;
-  --charcoal: #1e1e32;
-  --charcoal-light: #252540;
-  --charcoal-mid: #2a2a45;
-  --cream: #e8e8f0;
-  --cream-muted: #b0b0b0;
-  --gold: #ffd60a;
-  --gold-bright: #ffe066;
-  --gold-dark: #d4a017;
-  --gold-glow: rgba(255,214,10,0.2);
-  --gold-glow-strong: rgba(255,214,10,0.35);
-  --crimson: #e63946;
+  /* Legacy Aliases — all derived, none independent. */
+  --obsidian: var(--mg-bg);
+  --charcoal: var(--mg-surface);
+  --charcoal-light: var(--mg-surface-2);
+  --charcoal-mid: var(--mg-surface-3);
+  --cream: var(--mg-text);
+  --cream-muted: var(--mg-text-dim);
+  --gold: var(--mg-brand);
+  --gold-bright: var(--mg-brand-hover);
+  --gold-dark: var(--mg-brand-deep);
+  --gold-glow: var(--mg-brand-soft);
+  --gold-glow-strong: var(--mg-brand-glow);
+  --crimson: var(--mg-error);
   --crimson-dark: #b81b18;
-  --crimson-glow: rgba(230,57,70,0.2);
-  --emerald: #06d6a0;
+  --crimson-glow: var(--mg-error-soft);
+  --emerald: var(--mg-success);
   --emerald-bright: #2dd4a8;
   --emerald-dark: #059669;
-  --pewter: #707090;
-  --pewter-light: #9090a8;
-  --surface: #1e1e32;
-  --surface-elevated: #252540;
-  --surface-overlay: rgba(15,15,26,0.85);
-  --border-gold: 2px solid var(--mario-yellow);
-  --border-gold-strong: 3px solid var(--mario-yellow);
-  --border-cream: 1px solid rgba(255,255,255,0.08);
-  --shadow-soft: 0 4px 24px rgba(0,0,0,0.4);
-  --shadow-hard: 0 4px 0 rgba(0,0,0,0.4);
-  --shadow-glow-gold: 0 0 20px rgba(255,214,10,0.15);
-  --shadow-glow-gold-strong: 0 0 30px rgba(255,214,10,0.25);
-  --shadow-coin: 0 0 15px rgba(255,214,10,0.2);
-  --radius-pixel: 12px;
-  --radius-card: 16px;
-  --radius-lg: 16px;
-  --radius-pill: 9999px;
-  --transition-fast: 0.15s ease;
-  --transition-medium: 0.25s ease;
+  --pewter: var(--mg-text-faint);
+  --pewter-light: var(--mg-text-muted);
+  --surface: var(--mg-surface);
+  --surface-elevated: var(--mg-surface-2);
+  --surface-overlay: var(--mg-overlay);
+  --border-gold: 2px solid var(--mg-brand);
+  --border-gold-strong: 3px solid var(--mg-brand);
+  --border-cream: 1px solid var(--mg-border);
+  --shadow-soft: var(--mg-shadow-md);
+  --shadow-hard: 0 4px 0 rgba(0, 0, 0, 0.4);
+  --shadow-glow-gold: 0 0 20px var(--mg-brand-soft);
+  --shadow-glow-gold-strong: 0 0 30px var(--mg-brand-glow);
+  --shadow-coin: 0 0 15px var(--mg-brand-soft);
+  --radius-pixel: var(--mg-radius-md);
+  --radius-card: var(--mg-radius-lg);
+  --radius-lg: var(--mg-radius-lg);
+  --radius-pill: var(--mg-radius-pill);
+  --transition-fast: var(--mg-transition-fast);
+  --transition-medium: var(--mg-transition-normal);
 }
 
 /* ─── Global Reset ───────────────────────────────────────────── */
@@ -116,9 +168,11 @@ html { scroll-behavior: smooth; }
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--mario-bg);
-  color: var(--mario-text);
-  font-family: var(--font-body);
+  background: var(--mg-bg);
+  color: var(--mg-text);
+  font-family: var(--font-sans);
+  font-size: var(--mg-text-base);
+  line-height: var(--mg-leading-normal);
   -webkit-font-smoothing: antialiased;
 }
 

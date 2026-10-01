@@ -169,9 +169,9 @@ export default function TransactionsPanel({ guildId, symbol }: { guildId: string
                   <tr
                     onClick={() => setOpen(open === t.txId ? null : t.txId)}
                     style={{
-                      borderBottom: '1px solid var(--cc-border, #1e1e2a)',
+                      borderBottom: '1px solid var(--cc-border)',
                       cursor: 'pointer',
-                      background: open === t.txId ? 'rgba(88,101,242,0.10)' : undefined,
+                      background: open === t.txId ? 'var(--cc-accent-softer, var(--mg-brand-softer))' : undefined,
                     }}
                   >
                     <td style={{ ...td, fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>

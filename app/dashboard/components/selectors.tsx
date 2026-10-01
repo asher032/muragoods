@@ -722,7 +722,7 @@ export function DiscordMemberSelect({
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {m.name}
-                {m.bot && <span style={{ marginLeft: 6, fontSize: 9, background: 'rgba(88,101,242,0.4)', borderRadius: 4, padding: '1px 5px' }}>BOT</span>}
+                {m.bot && <span style={{ marginLeft: 6, fontSize: 9, background: 'var(--cc-accent-soft)', color: 'var(--cc-accent)', borderRadius: 4, padding: '1px 5px' }}>BOT</span>}
               </span>
               <span style={{ display: 'block', fontSize: 10.5, color: 'var(--cc-text-faint)' }}>@{m.username ?? m.name}</span>
             </span>
@@ -771,7 +771,7 @@ export function DiscordMultiSelect({
               key={id}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5,
-                background: 'var(--cc-accent-soft)', borderRadius: 8, padding: '5px 6px 5px 10px', color: '#fff',
+                background: 'var(--cc-accent-soft)', borderRadius: 8, padding: '5px 6px 5px 10px', color: 'var(--mg-brand)',
               }}
             >
               {o?.icon}

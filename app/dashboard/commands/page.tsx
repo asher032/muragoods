@@ -162,7 +162,7 @@ export default function CommandsPage() {
         <div style={{ display: 'grid', gap: 10 }}>
           {filteredCommands.map((cmd) => {
             const statusColor = cmd.status === 'working' ? '#2ECC40' : cmd.status === 'disabled' ? 'rgba(255,255,255,0.4)' : '#e50914';
-            const statusBg = cmd.status === 'working' ? 'rgba(46,204,64,0.12)' : cmd.status === 'disabled' ? 'rgba(255,255,255,0.04)' : 'rgba(229,9,20,0.1)';
+            const statusBg = cmd.status === 'working' ? 'var(--mg-success-soft)' : cmd.status === 'disabled' ? 'var(--mg-glass-bg)' : 'var(--mg-error-soft)';
             return (
               <button key={cmd.id} onClick={() => setSelectedCommand(cmd)} style={{
                 display: 'flex', alignItems: 'center', gap: 14, width: '100%', textAlign: 'left',
@@ -215,7 +215,7 @@ function DetailModal({ command, executions, onClose }: DetailModalProps) {
   }, [onClose]);
 
   const statusColor = command.status === 'working' ? '#2ECC40' : command.status === 'disabled' ? 'rgba(255,255,255,0.4)' : '#e50914';
-  const statusBg = command.status === 'working' ? 'rgba(46,204,64,0.12)' : command.status === 'disabled' ? 'rgba(255,255,255,0.04)' : 'rgba(229,9,20,0.1)';
+  const statusBg = command.status === 'working' ? 'var(--mg-success-soft)' : command.status === 'disabled' ? 'var(--mg-glass-bg)' : 'var(--mg-error-soft)';
 
   return (
     <div style={{
@@ -274,7 +274,7 @@ function DetailModal({ command, executions, onClose }: DetailModalProps) {
               <p style={{ margin: 0, fontSize: 11, color: 'var(--cc-text-faint)', marginBottom: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Required Permissions</p>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {command.requiredPermissions.map((p) => (
-                  <span key={p} style={{ padding: '4px 10px', borderRadius: 6, fontSize: 11, background: 'rgba(88,101,242,0.12)', color: '#8b95f6' }}>{p}</span>
+                  <span key={p} style={{ padding: '4px 10px', borderRadius: 6, fontSize: 11, background: 'var(--cc-accent-soft)', color: 'var(--cc-accent)' }}>{p}</span>
                 ))}
               </div>
             </div>

@@ -40,7 +40,7 @@ export default function LevelBackgroundSelector({
               cursor: 'pointer',
               border: selected ? '2px solid var(--cc-accent)' : '2px solid rgba(255,255,255,0.10)',
               background: '#14141c',
-              boxShadow: selected ? '0 0 0 2px rgba(88,101,242,0.35), 0 8px 24px rgba(0,0,0,0.45)' : 'none',
+              boxShadow: selected ? '0 0 0 2px var(--mg-brand-glow), 0 8px 24px rgba(0,0,0,0.45)' : 'none',
               transition: 'transform .15s ease, border-color .15s ease, box-shadow .15s ease',
               transform: 'none',
             }}
@@ -70,7 +70,7 @@ export default function LevelBackgroundSelector({
                 style={{
                   position: 'absolute', top: 6, right: 6,
                   width: 22, height: 22, borderRadius: 11,
-                  background: 'var(--cc-accent)', color: '#fff',
+                  background: 'var(--cc-accent)', color: 'var(--cc-accent-ink)',
                   fontSize: 13, fontWeight: 800, lineHeight: '22px', textAlign: 'center',
                 }}
               >

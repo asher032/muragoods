@@ -5,6 +5,8 @@ import mongoose from 'mongoose';
 // joins. NEVER written from client-supplied totals — only through the
 // validated award endpoint.
 const GameProgressSchema = new mongoose.Schema({
+  canonicalUserId: { type: String, default: '', index: true },
+  // LEGACY owner key (lowercased email), still written and still matched.
   userEmail: { type: String, required: true, index: true },
   discordId: { type: String, default: '', index: true },
   gameId: { type: String, required: true, index: true },

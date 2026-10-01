@@ -51,6 +51,12 @@ const SettingsSchema = new mongoose.Schema({
 }, { _id: false });
 
 const UserLibrarySchema = new mongoose.Schema({
+  // Murastream's library is not a separate account — it is this user's
+  // Murastream data, owned by the same canonical userId as their orders and
+  // favorites. Watchlist, history and likes therefore follow the person to
+  // every device, not the other way round.
+  canonicalUserId: { type: String, default: '', index: true },
+  // LEGACY owner key (lowercased email), still written and still matched.
   email: { type: String, required: true, unique: true },
   likes: { type: [MediaItemSchema], default: [] },
   myList: { type: [MediaItemSchema], default: [] },

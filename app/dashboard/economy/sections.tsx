@@ -76,7 +76,7 @@ export function EconomyFeatureCards({ active, onSelect, shopItemCount }: {
               cursor: 'pointer',
               padding: '12px 14px',
               borderRadius: 10,
-              background: isActive ? 'rgba(88,101,242,0.16)' : 'var(--cc-card, #16161f)',
+              background: isActive ? 'var(--cc-accent-soft)' : 'var(--cc-panel-solid)',
               border: `1px solid ${isActive ? 'var(--cc-accent)' : 'var(--cc-border, #2a2a3a)'}`,
               color: 'inherit',
               transition: 'border-color 120ms ease, background 120ms ease',
@@ -119,7 +119,7 @@ export function EconomyInformationNav({ active, onSelect }: {
               fontSize: 12,
               borderRadius: 999,
               border: `1px solid ${isActive ? 'var(--cc-accent)' : 'var(--cc-border, #2a2a3a)'}`,
-              background: isActive ? 'rgba(88,101,242,0.16)' : 'transparent',
+              background: isActive ? 'var(--cc-accent-soft)' : 'transparent',
               color: isActive ? '#fff' : 'var(--cc-text-dim)',
             }}
           >

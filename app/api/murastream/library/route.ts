@@ -2,14 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import UserLibrary from '@/app/lib/models/UserLibrary';
 import UserPreference from '@/app/lib/models/UserPreference';
-import UserActivity from '@/app/lib/models/UserActivity';
-import User from '@/app/lib/models/User';
-import { getSessionUser } from '@/app/lib/session';
+import { getIdentityWithId, ownerFilter, ownerStamp } from '@/app/lib/identity';
 
-// Murastream library — identity ALWAYS comes from the signed session cookie.
-// The old ?email= parameter trusted whoever typed it (IDOR: any visitor
-// could read or overwrite anyone's watchlist). Unauthenticated devices keep
-// working fully offline via localStorage; nothing syncs until sign-in.
+// Murastream library — the SAME canonical Muragoods account, not a separate
+// Murastream account. Identity ALWAYS comes from the signed session cookie;
+// the old ?email= parameter trusted whoever typed it (IDOR: any visitor could
+// read or overwrite anyone's watchlist). Unauthenticated devices keep working
+// fully offline via localStorage; nothing syncs until sign-in.
 type Media = {
   id: number; mediaType?: string; title?: string; posterPath?: string | null;
   backdropPath?: string | null; voteAverage?: number; year?: string; overview?: string;
@@ -32,21 +31,22 @@ function snapOf(m: Media) {
 
 // Mirror likes/watchlist into the unified preferences table so favorites
 // stay cross-platform (site, dashboard, Discord). Idempotent upserts.
-async function mirrorPreferences(emailLc: string, discordId: string, likes: Media[], myList: Media[]) {
+async function mirrorPreferences(user: { userId: string; emailLc: string; discordUserId: string }, likes: Media[], myList: Media[]) {
+  const stamp = ownerStamp(user);
   const ops: Array<Promise<unknown>> = [];
   for (const m of likes || []) {
     if (typeof m?.id !== 'number') continue;
     ops.push(UserPreference.updateOne(
-      { userEmail: emailLc, contentType: normType(m.mediaType), contentId: String(m.id), action: 'like' },
-      { $setOnInsert: { discordId, snapshot: snapOf(m), createdAt: new Date() } },
+      { userEmail: user.emailLc, contentType: normType(m.mediaType), contentId: String(m.id), action: 'like' },
+      { $setOnInsert: { ...stamp, discordId: user.discordUserId, snapshot: snapOf(m), createdAt: new Date() } },
       { upsert: true },
     ));
   }
   for (const m of myList || []) {
     if (typeof m?.id !== 'number') continue;
     ops.push(UserPreference.updateOne(
-      { userEmail: emailLc, contentType: normType(m.mediaType), contentId: String(m.id), action: 'save' },
-      { $setOnInsert: { discordId, snapshot: snapOf(m), createdAt: new Date() } },
+      { userEmail: user.emailLc, contentType: normType(m.mediaType), contentId: String(m.id), action: 'save' },
+      { $setOnInsert: { ...stamp, discordId: user.discordUserId, snapshot: snapOf(m), createdAt: new Date() } },
       { upsert: true },
     ));
   }
@@ -57,10 +57,10 @@ async function mirrorPreferences(emailLc: string, discordId: string, likes: Medi
 // GET /api/murastream/library — own library (session).
 export async function GET(request: NextRequest) {
   try {
-    const viewer = await getSessionUser(request);
-    if (!viewer) return NextResponse.json({ likes: [], myList: [], history: [], episodeProgress: [], settings: {} });
+    const identity = await getIdentityWithId(request);
+    if (!identity) return NextResponse.json({ likes: [], myList: [], history: [], episodeProgress: [], settings: {} });
     await dbConnect();
-    const library = await UserLibrary.findOne({ email: viewer.email.toLowerCase() }).lean<Record<string, unknown>>();
+    const library = await UserLibrary.findOne(ownerFilter(identity, 'email')).lean<Record<string, unknown>>();
     if (!library) {
       return NextResponse.json({ likes: [], myList: [], history: [], episodeProgress: [], settings: {} });
     }
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
 // POST /api/murastream/library — save/merge own library (session).
 export async function POST(request: NextRequest) {
   try {
-    const viewer = await getSessionUser(request);
+    const viewer = await getIdentityWithId(request);
     if (!viewer) return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     await dbConnect();
     const body = await request.json();
@@ -94,16 +94,12 @@ export async function POST(request: NextRequest) {
     if (episodeProgress !== undefined) update.episodeProgress = Array.isArray(episodeProgress) ? episodeProgress.slice(0, 50) : [];
     if (settings !== undefined && typeof settings === 'object') update.settings = settings;
 
-    const emailLc = viewer.email.toLowerCase();
     const library = await UserLibrary.findOneAndUpdate(
-      { email: emailLc },
-      { $set: update },
+      { email: viewer.emailLc },
+      { $set: { ...update, ...ownerStamp(viewer) } },
       { upsert: true, new: true },
     ).lean();
-    const me = await User.findOne({ email: viewer.email }).select('discord').lean<{
-      discord?: { discordId?: string };
-    } | null>();
-    await mirrorPreferences(emailLc, me?.discord?.discordId || '', (update.likes || []) as Media[], (update.myList || []) as Media[]);
+    await mirrorPreferences(viewer, (update.likes || []) as Media[], (update.myList || []) as Media[]);
 
     return NextResponse.json({ success: true, updatedAt: library.updatedAt });
   } catch (error) {
@@ -115,11 +111,11 @@ export async function POST(request: NextRequest) {
 // DELETE /api/murastream/library — clear own library (session).
 export async function DELETE(request: NextRequest) {
   try {
-    const viewer = await getSessionUser(request);
+    const viewer = await getIdentityWithId(request);
     if (!viewer) return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     await dbConnect();
     await UserLibrary.findOneAndUpdate(
-      { email: viewer.email.toLowerCase() },
+      { email: viewer.emailLc },
       { $set: { likes: [], myList: [], history: [], episodeProgress: [], updatedAt: new Date() } }
     );
     return NextResponse.json({ success: true });
