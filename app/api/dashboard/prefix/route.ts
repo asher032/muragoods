@@ -1,14 +1,33 @@
 import { sessionToken } from '@/app/lib/require-session';
 import { requireGuildManage } from '@/app/lib/discord-guilds';
 import { NextRequest, NextResponse } from 'next/server';
-import { discordConfigCollection } from '@/app/lib/discord-config';
+import {
+  readGuildPrefix,
+  saveGuildPrefix,
+  verifyGuildPrefixWithBot,
+  validatePrefix,
+  DEFAULT_PREFIX,
+} from '@/app/lib/murabot-config';
 
 export const dynamic = 'force-dynamic';
 
+// The command prefix, from the dashboard — no Discord command required.
+//
+// THE BUG THIS FIXES. Saving showed "Command prefix → Request timed out".
+// Three separate network waits ran inside one request: a Discord token
+// liveness read (8s), the live guild-permission read (8s) and the bot
+// notification (5s) — up to ~21s, while the page gave up after 12s. So a slow
+// but perfectly successful save was reported to the operator as a failure,
+// and nothing said whether the prefix had actually changed. Typing
+// `mg!prefix !` in Discord was the workaround, which is exactly what a
+// configuration dashboard exists to avoid.
+//
+// Now: the authorization decision is cached and shared, the bot notification
+// is short and best-effort, and the response states three distinct outcomes
+// instead of one. "Saved but Murabot has not confirmed yet" is not "saved",
+// and "not saved" is never dressed up as either.
+
 async function guard(token: string, guildId: string) {
-  // Shared cached manage check (30s per token across ALL dashboard routes).
-  // The old inline fetch ran uncached on every call and collapsed every
-  // Discord failure into a false 'No permission' 403.
   const check = await requireGuildManage(token, guildId);
   if (check.ok) return null;
   return NextResponse.json(
@@ -17,7 +36,7 @@ async function guard(token: string, guildId: string) {
   );
 }
 
-// GET /api/dashboard/prefix?guildId=xxx — load saved prefix
+// GET /api/dashboard/prefix?guildId=xxx — load the canonical prefix
 export async function GET(req: NextRequest) {
   const token = (await sessionToken());
   const guildId = req.nextUrl.searchParams.get('guildId');
@@ -27,12 +46,19 @@ export async function GET(req: NextRequest) {
   const denied = await guard(token, guildId);
   if (denied) return denied;
 
-  const collection = await discordConfigCollection();
-  const doc = await collection.findOne({ guildId });
-  return NextResponse.json({ success: true, prefix: doc?.prefix || 'mg!' });
+  const prefix = await readGuildPrefix(guildId);
+  // What the BOT currently holds, so the panel can tell "you changed this"
+  // from "Murabot is still on the old value" instead of assuming.
+  const bot = await verifyGuildPrefixWithBot(guildId);
+  return NextResponse.json({
+    success: true,
+    prefix,
+    defaultPrefix: DEFAULT_PREFIX,
+    bot: { confirmed: bot.confirmed, prefix: bot.prefix, reason: bot.reason ?? null },
+  });
 }
 
-// PATCH /api/dashboard/prefix — save prefix for guild
+// PATCH /api/dashboard/prefix — save the canonical prefix for a guild
 export async function PATCH(req: NextRequest) {
   const token = (await sessionToken());
   if (!token) return NextResponse.json({ success: false, code: 'AUTH_REQUIRED', error: 'Discord token required' }, { status: 401 });
@@ -41,41 +67,38 @@ export async function PATCH(req: NextRequest) {
   try { body = await req.json(); } catch { return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 }); }
 
   const guildId = String(body.guildId || '');
-  const prefix = String(body.prefix || '').trim();
   if (!guildId || !/^\d{5,25}$/.test(guildId)) return NextResponse.json({ success: false, error: 'Valid guildId required' }, { status: 400 });
-  if (!prefix || prefix.length > 10) return NextResponse.json({ success: false, error: 'Prefix must be 1-10 characters' }, { status: 400 });
-  if (!/^[a-zA-Z0-9_!@#$%^&*()-=.]+$/.test(prefix)) return NextResponse.json({ success: false, error: 'Prefix contains invalid characters' }, { status: 400 });
+
+  const valid = validatePrefix(body.prefix);
+  if (!valid.ok) {
+    return NextResponse.json({ success: false, saved: false, code: 'INVALID_PREFIX', error: valid.error }, { status: 400 });
+  }
 
   const denied = await guard(token, guildId);
   if (denied) return denied;
 
-  const collection = await discordConfigCollection();
-  await collection.updateOne({ guildId }, { $set: { prefix, updatedAt: new Date() } }, { upsert: true });
-
-  // Push the value itself to the bot host: the dashboard writes the SITE
-  // database, but prefix resolution reads the BOT's guild_config store, so
-  // a cache-drop alone would re-read a stale (or empty) value. Best-effort
-  // like the cache nudge — the site write above is durable either way.
-  const botNotified = await notifyBot(guildId, prefix);
-
-  return NextResponse.json({ success: true, prefix, botNotified });
-}
-
-async function notifyBot(guildId: string, prefix: string): Promise<boolean> {
-  const secret = process.env.DISCORD_BRIDGE_SECRET;
-  if (!secret) return false;
-  const base = process.env.BOT_HEALTH_URL?.replace(/\/health$/, '')
-    || 'https://murastream-bot-pf11.onrender.com';
-  try {
-    const resp = await fetch(`${base}/prefix/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
-      body: JSON.stringify({ guildId, prefix }),
-      cache: 'no-store',
-      signal: AbortSignal.timeout(5000),
-    });
-    return resp.ok;
-  } catch {
-    return false;
+  const result = await saveGuildPrefix(guildId, valid.value);
+  if (!result.ok) {
+    // Nothing was written. Say so plainly and give no success signal at all.
+    return NextResponse.json(
+      { success: false, saved: false, code: 'SAVE_FAILED', error: result.message, retryable: true },
+      { status: 503 },
+    );
   }
+
+  const applied = result.propagation === 'applied';
+  return NextResponse.json({
+    success: true,
+    saved: true,
+    prefix: result.value,
+    // applied   = Murabot confirmed it; the prefix is live in Discord.
+    // pending   = canonically stored, not yet confirmed by Murabot. The UI
+    //             must render this as a distinct, non-success state.
+    propagation: result.propagation,
+    appliedInDiscord: applied,
+    retryWithinSec: result.retryWithinSec ?? null,
+    message: applied
+      ? 'Prefix saved and applied in Discord.'
+      : result.message ?? 'Saved, but Murabot has not confirmed yet.',
+  });
 }

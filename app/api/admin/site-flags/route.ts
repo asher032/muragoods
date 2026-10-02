@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import SiteFlag from '@/app/lib/models/SiteFlag';
-import { requireAdmin } from '@/app/lib/session';
+import { requireStaff } from '@/app/lib/access-control';
 
 // Site flags API — the admin-only content lock.
 //  GET   /api/admin/site-flags                  → { contentLocked, lockedAt, ... }
 //  PATCH /api/admin/site-flags { contentLocked } → flips the lock (admin session only)
 //
 // GET stays public: the gate on MuraStream/hub pages must be readable by
-// every visitor (that's the point of a lock). PATCH mutates — admin session.
+// every visitor (that's the point of a lock). PATCH mutates — technical staff
+// or the owner, because flipping maintenance mode takes the site down for
+// everyone and is not a support-tier action.
 
 export async function GET() {
   try {
@@ -30,8 +32,8 @@ export async function GET() {
 
 export async function PATCH(req: Request) {
   try {
-    const auth = await requireAdmin(req);
-    if (auth.response) return auth.response;
+    const guard = await requireStaff(req, ['technical']);
+    if (!guard.ok) return guard.response;
 
     await dbConnect();
     const body = await req.json().catch(() => ({}));

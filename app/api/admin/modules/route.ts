@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import DiscordGuildConfig from '@/app/lib/models/DiscordGuildConfig';
-import { requireAdmin } from '@/app/lib/session';
+import { requireStaff } from '@/app/lib/access-control';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 const BOT_TOKEN = process.env.DISCORD_TOKEN;
@@ -49,8 +49,8 @@ function apply(p: number, ow: any) {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAdmin(req);
-  if (auth.response) return auth.response;
+  const guard = await requireStaff(req, ['technical']);
+  if (!guard.ok) return guard.response;
   await dbConnect();
 
   const url = new URL(req.url);
@@ -157,8 +157,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAdmin(req);
-  if (auth.response) return auth.response;
+  const guard = await requireStaff(req, ['technical']);
+  if (!guard.ok) return guard.response;
   await dbConnect();
 
   if (!BOT_TOKEN) {

@@ -3,9 +3,9 @@
 import Image from 'next/image';
 import { products, type InventoryStatus, type Order, type OrderStatus, type Product } from '@/app/lib/muragoods-data';
 import { useMemo, useState, useEffect, useCallback } from 'react';
-import { useAuth } from '@/app/contexts/AuthContext';
 import { UsersCoinsPanel } from '@/app/components/UsersCoinsPanel';
 import LockPanel from '@/app/components/LockPanel';
+import { AdminHeader } from './components/AdminShell';
 import { BarChart3, CircleCheck, Coins, Flag, Gift, Megaphone, MessageCircle, X } from 'lucide-react';
 const statusOptions = [
   'Pending Payment',
@@ -19,22 +19,18 @@ const statusOptions = [
 const inventoryCycle: InventoryStatus[] = ['In Stock', 'Out of Stock', 'Pre-Order Only'];
 
 export default function AdminPage() {
-  const { user, isAdmin } = useAuth();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [email, setEmail] = useState('');
+  // No login gate here, and no "log out" button either. This page used to
+  // render its own sign-in card and decided in the browser whether the
+  // visitor was an admin — which meant the page SHELL was public and the real
+  // protection lived only in the APIs behind it. app/admin/layout.tsx now
+  // resolves access on the server and redirects anyone who does not belong,
+  // so a second client-side gate would be a second, weaker answer to the same
+  // question.
   const [orders, setOrders] = useState<(Order & { userId: string; _id?: string })[]>([]);
   const [catalog, setCatalog] = useState<(Product & { dbInventory?: InventoryStatus })[]>(products);
   const [alert, setAlert] = useState<{ show: boolean; message: string; orderId?: string }>({ show: false, message: '' });
   const [previewReceipt, setPreviewReceipt] = useState('');
   const [loadingCatalog, setLoadingCatalog] = useState(false);
-
-  // Auto-authenticate if user is already logged in as admin via AuthContext
-  useEffect(() => {
-    if (isAdmin && user) {
-      setIsAuthenticated(true);
-      setEmail(user.email);
-    }
-  }, [isAdmin, user]);
 
   const syncCatalog = useCallback(async () => {
     setLoadingCatalog(true);
@@ -65,7 +61,6 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
     syncCatalog();
     fetchOrders();
 
@@ -84,7 +79,7 @@ export default function AdminPage() {
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [isAuthenticated, orders.length, fetchOrders, syncCatalog]);
+  }, [orders.length, fetchOrders, syncCatalog]);
 
   const summary = useMemo(() => {
     // Exclude cancelled orders from all stats
@@ -143,30 +138,9 @@ export default function AdminPage() {
     } catch (err) { console.error(err); }
   };
 
-  // ─── Not Authenticated / Not Admin ──────────────────────────
-  if (!isAuthenticated) {
-    return (
-      <main className="min-h-screen flex items-center justify-center px-4">
-        <div className="w-full max-w-md border-2 border-[var(--gold)] bg-[var(--charcoal)] p-8 rounded-2xl text-center">
-          <div className="flex flex-col items-center gap-4 mb-6">
-            <div className="relative h-16 w-16 border-2 border-[var(--gold)] overflow-hidden rounded-full">
-              <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
-            </div>
-            <p className="text-[11px] text-[var(--gold-bright)] uppercase tracking-[0.2em]" style={{ fontFamily: 'var(--font-arcade)' }}>
-              Admin Portal
-            </p>
-          </div>
-          <h1 className="text-lg text-[var(--cream)] mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>ADMIN ACCESS</h1>
-          <p className="text-sm text-[var(--pewter)] mb-6">Sign in with an admin account to access the dashboard.</p>
-          <a href="/login" className="deco-btn deco-btn-crimson w-full inline-block">GO TO LOGIN</a>
-        </div>
-      </main>
-    );
-  }
-
   // ─── Dashboard ─────────────────────────────────────────────
   return (
-    <main className="min-h-screen px-4 py-8 sm:px-8">
+    <main>
       <div className="deco-container">
         {/* Alert Banner */}
         {alert.show && (
@@ -176,21 +150,23 @@ export default function AdminPage() {
         )}
 
         {/* Header */}
-        <header className="mb-8 flex flex-col gap-4 border-2 border-[var(--gold)] bg-[var(--charcoal)] p-6 md:flex-row md:items-center md:justify-between rounded-2xl">
-          <div>
-            <p className="text-[11px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>Admin</p>
-            <h1 className="mt-2 text-xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Muragoods Dashboard</h1>
-          </div>
-          <div className="flex gap-3">
-            <a href="/" className="deco-btn deco-btn-sm">Back to Shop</a>
-            <a href="/admin/analytics" className="deco-btn deco-btn-sm deco-btn-gold"><BarChart3 className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Analytics</a>
-            <a href="/api/murastream/playback/health" className="deco-btn deco-btn-sm deco-btn-gold"><Flag className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Playback Health</a>
-            <a href="/admin/promo-codes" className="deco-btn deco-btn-sm deco-btn-gold"><Gift color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Promos</a>
-            <a href="/admin/support" className="deco-btn deco-btn-sm deco-btn-gold"><MessageCircle className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Support</a>
-            <a href="/admin/delivered" className="deco-btn deco-btn-sm deco-btn-gold"><CircleCheck color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Delivered</a>
-            <button type="button" onClick={() => setIsAuthenticated(false)} className="deco-btn deco-btn-crimson">LOG OUT</button>
-          </div>
-        </header>
+        <AdminHeader
+          title="Overview"
+          subtitle="Live orders, inventory and the state of the shop. Everything else in the ecosystem is in the sidebar."
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <span style={{ position: 'relative', width: 34, height: 34, borderRadius: '50%', overflow: 'hidden', border: '2px solid var(--mg-brand)', display: 'inline-block', flexShrink: 0 }}>
+                <Image src="/images/muragoods-logo.png" alt="Muragoods Logo" fill className="object-cover" />
+              </span>
+              <a href="/" className="deco-btn deco-btn-sm">Back to Shop</a>
+              <a href="/admin/analytics" className="deco-btn deco-btn-sm deco-btn-gold"><BarChart3 className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Analytics</a>
+              <a href="/admin/health" className="deco-btn deco-btn-sm deco-btn-gold"><Flag className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> System health</a>
+              <a href="/admin/promo-codes" className="deco-btn deco-btn-sm deco-btn-gold"><Gift color={'#e63946'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Promos</a>
+              <a href="/admin/support" className="deco-btn deco-btn-sm deco-btn-gold"><MessageCircle className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Support</a>
+              <a href="/admin/delivered" className="deco-btn deco-btn-sm deco-btn-gold"><CircleCheck color={'#06d6a0'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /> Delivered</a>
+            </div>
+          }
+        />
 
         {/* Summary Cards */}
         <section className="grid gap-4 md:grid-cols-5">
@@ -282,7 +258,7 @@ export default function AdminPage() {
         </section>
 
         {/* ─── Users & Coins Panel ──────────────────────────── */}
-        <UsersCoinsPanel userName={email} />
+        <UsersCoinsPanel />
 
         {/* ─── Content Lock Switch ─────────────────────────── */}
         <LockPanel />

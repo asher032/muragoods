@@ -10,6 +10,7 @@ import {
   promoLevelFor, FIRED_STREAK, fmtCoins,
 } from '@/app/lib/jobs';
 import { jobsTuning } from '@/app/lib/jobs-config';
+import { grantPoints } from '@/app/lib/services/points';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -154,16 +155,20 @@ export async function POST(req: Request) {
       }
       throw e;
     }
-    await User.updateOne(
-      { email: id.email },
+    // The payout moves through the points service so it lands in the ledger with
+    // a transaction id, rather than as a second, unlogged balance writer.
+    await grantPoints(
       {
-        $inc: { coinBalance: payout },
-        $push: {
-          coinHistory: {
-            $each: [{ type: 'earn', amount: payout, label: `${job.name} shift`, date: now }],
-            $slice: -200,
-          },
-        },
+        userId: id.userId, email: id.email, emailLc: id.emailLc, name: id.name,
+        username: '', avatar: '', bio: '', role: 'user',
+        discordUserId: id.discordId, discordUsername: id.discordUsername, createdAt: null,
+      },
+      {
+        txId: `job:${id.emailLc}:${token}:coins`,
+        source: 'game',
+        amount: payout,
+        reason: `${job.name} shift (${verdict.won ? 'success' : 'failed'})`,
+        reference: `job:${job.id}`,
       },
     );
     const user = await User.findOne({ email: id.email }).select('coinBalance').lean<{ coinBalance?: number } | null>();

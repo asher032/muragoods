@@ -34,6 +34,19 @@ const UserSchema = new mongoose.Schema({
   name: { type: String, required: true },
   avatar: { type: String, default: '' },
   role: { type: String, default: 'user' },
+  // Granular Muragoods STAFF access, as distinct from `role: 'admin'` which is
+  // the ecosystem OWNER. "Admin" used to be one boolean, so the only way to
+  // let someone answer support tickets was to hand them the user table and
+  // the economy ledger too. Staff now hold named scopes and nothing else;
+  // only the owner can change them, and an owner account ignores them.
+  staffScopes: {
+    type: [String],
+    default: [],
+    enum: [
+      'support', 'moderation', 'content', 'shop',
+      'murastream', 'economy', 'technical', 'analytics',
+    ],
+  },
   perks: { type: [PerkSchema], default: [] },
   coinBalance: { type: Number, default: 0 },
   coinHistory: { type: [CoinHistorySchema], default: [] },

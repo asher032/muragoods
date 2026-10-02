@@ -15,10 +15,13 @@ interface UserData {
 }
 
 interface UsersCoinsPanelProps {
-  userName: string;
+  // Accepted for backwards compatibility and intentionally unused: identity
+  // comes from the session, never from a prop. The Admin Panel layout now
+  // resolves access on the server, so a panel cannot be handed an identity.
+  userName?: string;
 }
 
-export function UsersCoinsPanel({ userName }: UsersCoinsPanelProps) {
+export function UsersCoinsPanel(_props: UsersCoinsPanelProps) {
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');

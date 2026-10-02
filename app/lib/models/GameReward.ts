@@ -17,6 +17,16 @@ const GameRewardSchema = new mongoose.Schema({
   amount: { type: Number, default: 0 },
   label: { type: String, default: '' },
   meta: { type: mongoose.Schema.Types.Mixed, default: {} },
+  /**
+   * The PointsTransaction.txId this row corresponds to, when the grant went
+   * through the canonical ledger. Rows written before the ledger existed have
+   * no value here and are treated as legacy history.
+   *
+   * It exists so the two records can be reconciled exactly instead of by
+   * guessing from amounts and timestamps: /api/account/points uses it to count
+   * a reward once rather than once per system.
+   */
+  ledgerTxId: { type: String, default: '', index: true },
   createdAt: { type: Date, default: Date.now },
 });
 

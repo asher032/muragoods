@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import GameDefinition from '@/app/lib/models/GameDefinition';
-import { requireAdminEither as requireAdmin } from '@/app/lib/admin-guard';
+import { requireStaff } from '@/app/lib/access-control';
 import { ensureCatalog } from '@/app/lib/gameserver';
 
 export const dynamic = 'force-dynamic';
@@ -10,8 +10,8 @@ export const runtime = 'nodejs';
 // Admin game management: list/tune games without deploys. No secrets here —
 // tuning fields only (rewards, cooldowns, visibility).
 export async function GET(req: Request) {
-  const gate = await requireAdmin(req);
-  if (gate.response) return gate.response;
+  const gate = await requireStaff(req, ['content']);
+  if (!gate.ok) return gate.response;
   try {
     await ensureCatalog();
     await dbConnect();
@@ -24,8 +24,8 @@ export async function GET(req: Request) {
 
 // PATCH /api/admin/games { gameId, patch: {enabled?, featured?, isNew?, maxPlaysPerDay?, cooldownSec?, xpPerPlay?, title?, description?, category?} }
 export async function PATCH(req: Request) {
-  const gate = await requireAdmin(req);
-  if (gate.response) return gate.response;
+  const gate = await requireStaff(req, ['content']);
+  if (!gate.ok) return gate.response;
   try {
     const body = await req.json().catch(() => ({}));
     const gameId = String(body.gameId || '');

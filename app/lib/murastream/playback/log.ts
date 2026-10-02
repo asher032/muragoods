@@ -65,6 +65,57 @@ export function logPlaybackFailure(input: FailureLogInput): void {
   } catch {
     // Logging must never be the reason a playback request fails.
   }
+  rememberFailure(input);
+}
+
+// ── Recent-failure ring buffer ─────────────────────────────────────────
+//
+// A log line is only useful if someone is reading it. The admin panel needs
+// "what has been failing lately" without shell access to the deploy logs, so
+// the last N failures are kept in memory — bounded, oldest dropped, and
+// holding ONLY the already-redacted fields above. This is a diagnostic aid,
+// not an audit store: it resets when the process restarts, and nothing
+// sensitive is retained because `safe()` runs before anything is kept.
+
+export interface RecentFailure {
+  at: string;
+  requestId: string;
+  mediaType: string;
+  tmdbId: number;
+  season: number | null;
+  episode: number | null;
+  reason: string;
+  status: string;
+}
+
+const RECENT_LIMIT = 100;
+const recentFailures: RecentFailure[] = [];
+export const PLAYBACK_FAILURE_COUNT = { value: 0 };
+
+function rememberFailure(input: FailureLogInput): void {
+  try {
+    PLAYBACK_FAILURE_COUNT.value += 1;
+    recentFailures.unshift({
+      at: new Date().toISOString(),
+      requestId: safe(input.requestId),
+      mediaType: safe(input.mediaType),
+      tmdbId: Number(input.tmdbId) || 0,
+      season: input.season ?? null,
+      episode: input.episode ?? null,
+      reason: safe(input.reason),
+      status: safe(input.status),
+    });
+    if (recentFailures.length > RECENT_LIMIT) recentFailures.length = RECENT_LIMIT;
+  } catch { /* never let diagnostics break playback */ }
+}
+
+/** The most recent failures, newest first. Never throws. */
+export function recentPlaybackFailures(limit = 25): RecentFailure[] {
+  try {
+    return recentFailures.slice(0, Math.max(0, Math.min(RECENT_LIMIT, limit)));
+  } catch {
+    return [];
+  }
 }
 
 /** Successful resolutions are logged at debug level, not warn. */

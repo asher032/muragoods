@@ -1,14 +1,17 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import User from '@/app/lib/models/User';
-import { requireAdmin } from '@/app/lib/session';
+import { requireStaff } from '@/app/lib/access-control';
 import { rateLimit, clientIp } from '@/app/lib/rate-limit';
 
-// GET — Fetch a user's coin balance (admin session required)
+// Economy ledger. Scope: `economy` — so support staff can answer "where did my
+// coins go?" by handing them that scope alone, not by making them an admin.
+
+// GET — Fetch a user's coin balance
 export async function GET(req: Request) {
   try {
-    const auth = await requireAdmin(req);
-    if (auth.response) return auth.response;
+    const guard = await requireStaff(req, ['economy']);
+    if (!guard.ok) return guard.response;
 
     await dbConnect();
     const { searchParams } = new URL(req.url);
@@ -30,12 +33,12 @@ export async function GET(req: Request) {
   }
 }
 
-// PATCH — Add or deduct coins from a user (admin session required)
+// PATCH — Add or deduct coins from a user
 export async function PATCH(req: Request) {
   try {
-    const auth = await requireAdmin(req);
-    if (auth.response) return auth.response;
-    const rl = rateLimit(`coins:${auth.user.email}:${clientIp(req)}`, 30, 60_000);
+    const guard = await requireStaff(req, ['economy']);
+    if (!guard.ok) return guard.response;
+    const rl = rateLimit(`coins:${guard.access.email ?? 'anon'}:${clientIp(req)}`, 30, 60_000);
     if (!rl.ok) return NextResponse.json({ success: false, error: 'Too many requests' }, { status: 429 });
 
     await dbConnect();

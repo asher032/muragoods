@@ -1,21 +1,42 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import PromoCode from '@/app/lib/models/PromoCode';
+import { requireStaff, requireOwner } from '@/app/lib/access-control';
 
-const ADMIN_EMAILS = ['muragoods0@gmail.com', 'mhaxthedog@gmail.com'];
+export const dynamic = 'force-dynamic';
+
+// ─────────────────────────────────────────────────────────────────────────
+// Promo codes.
+//
+// Every handler here used to authorize with an email taken FROM THE REQUEST —
+// `createdBy` in the POST body, `userEmail` in the PATCH body, `?email=` in
+// GET and DELETE — checked against a hardcoded list in THIS file. That meant:
+//
+//   curl -X DELETE '/api/promo-codes?id=…&email=muragoods0@gmail.com'
+//
+// deleted a promo code, as anyone, because the caller was allowed to name
+// themselves an admin. A request field is not an authorization decision, and
+// the hardcoded list was a second copy of ADMIN_EMAILS, which drifts.
+//
+// Fixed by resolving access through app/lib/access-control, which reads the
+// session. The hardcoded list is gone: there is now one definition of who is
+// an admin.
+//
+// The PUBLIC path is unchanged: `?code=` validates a code at checkout, which a
+// signed-out shopper must be able to do.
+// ─────────────────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
   try {
+    const guard = await requireStaff(req, ['shop']);
+    if (!guard.ok) return guard.response;
+
     await dbConnect();
     const body = await req.json();
-    const { code, type, value, description, minOrder, maxUses, validUntil, createdBy } = body;
+    const { code, type, value, description, minOrder, maxUses, validUntil } = body;
 
     if (!code || !type || !value) {
       return NextResponse.json({ success: false, error: 'Code, type, and value required' }, { status: 400 });
-    }
-
-    if (!ADMIN_EMAILS.includes(createdBy)) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
     }
 
     const existing = await PromoCode.findOne({ code: code.toUpperCase() });
@@ -31,7 +52,8 @@ export async function POST(req: Request) {
       minOrder: minOrder || 0,
       maxUses: maxUses || -1,
       validUntil: validUntil || null,
-      createdBy,
+      // Attribution comes from the session, not from a field the caller sent.
+      createdBy: guard.access.email || '',
     });
 
     return NextResponse.json({ success: true, data: promoCode }, { status: 201 });
@@ -46,7 +68,8 @@ export async function GET(req: Request) {
     await dbConnect();
     const { searchParams } = new URL(req.url);
     const code = searchParams.get('code');
-    const isAdmin = searchParams.get('isAdmin') === 'true';
+    // `?isAdmin=true` is gone: it never was an authorization decision. Listing
+    // every code is now decided by the caller's session.
     const userEmail = searchParams.get('email');
 
     // Validate a specific code (customer use)
@@ -94,13 +117,11 @@ export async function GET(req: Request) {
       });
     }
 
-    // Admin: list all promo codes
-    if (isAdmin && userEmail && ADMIN_EMAILS.includes(userEmail)) {
-      const codes = await PromoCode.find({}).sort({ createdAt: -1 });
-      return NextResponse.json({ success: true, data: codes });
-    }
-
-    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
+    // Admin: list all promo codes — proven from the session, not from the URL.
+    const guard = await requireStaff(req, ['shop']);
+    if (!guard.ok) return guard.response;
+    const codes = await PromoCode.find({}).sort({ createdAt: -1 });
+    return NextResponse.json({ success: true, data: codes });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'An error occurred';
     return NextResponse.json({ success: false, error: message }, { status: 400 });
@@ -109,20 +130,20 @@ export async function GET(req: Request) {
 
 export async function PATCH(req: Request) {
   try {
+    const guard = await requireStaff(req, ['shop']);
+    if (!guard.ok) return guard.response;
+
     await dbConnect();
     const body = await req.json();
     const { id, updates, userEmail } = body;
 
-    if (!userEmail || !ADMIN_EMAILS.includes(userEmail)) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
-    }
-
     if (id) {
-      // Increment used count and track user
-      const userEmail = body.userEmail;
+      // Record a redemption. `userEmail` here is who USED the code, which is
+      // data about the redemption — not a claim about who is calling, which
+      // was proven above from the session.
       const update: Record<string, unknown> = { $inc: { usedCount: 1 } };
-      if (userEmail) {
-        update.$addToSet = { usedBy: userEmail };
+      if (typeof userEmail === 'string' && userEmail) {
+        update.$addToSet = { usedBy: userEmail.toLowerCase() };
       }
       await PromoCode.findByIdAndUpdate(id, update);
       return NextResponse.json({ success: true });
@@ -144,14 +165,14 @@ export async function PATCH(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
+    // Deleting a discount is destructive and revenue-affecting, so it is
+    // owner-only — no staff scope grants it.
+    const guard = await requireOwner(req);
+    if (!guard.ok) return guard.response;
+
     await dbConnect();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
-    const userEmail = searchParams.get('email');
-
-    if (!userEmail || !ADMIN_EMAILS.includes(userEmail)) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
-    }
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'ID required' }, { status: 400 });

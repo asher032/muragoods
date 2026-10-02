@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import User from '@/app/lib/models/User';
-import { requireAdmin, isAdminEmail } from '@/app/lib/session';
+import { requireOwner } from '@/app/lib/access-control';
+import { isAdminEmail } from '@/app/lib/session';
 
-// DELETE — Remove a user account (admin session required; the request's
-// target email is data, never proof of authority).
+// DELETE — Remove a user account.
+//
+// Irreversible, so this stays OWNER-only even for staff: no staff scope grants
+// the ability to destroy an account. The request's target email is data, never
+// proof of authority.
 export async function DELETE(req: Request) {
   try {
-    const auth = await requireAdmin(req);
-    if (auth.response) return auth.response;
+    const guard = await requireOwner(req);
+    if (!guard.ok) return guard.response;
 
     await dbConnect();
     const { searchParams } = new URL(req.url);
