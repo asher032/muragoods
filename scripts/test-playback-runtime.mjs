@@ -51,7 +51,8 @@ const ALICE = { slug: 'authorized-film', tmdbId: 101, mediaType: 'movie', title:
 const SERIES = { slug: 'authorized-series', tmdbId: 202, mediaType: 'tv', title: 'Authorized Series', file: 's1e1.mp4', season: 1, episode: 1 };
 const SERIES_E2 = { slug: 'authorized-series', tmdbId: 202, mediaType: 'tv', title: 'Authorized Series', file: 's1e2.mp4', season: 1, episode: 2 };
 const SERIES_S2 = { slug: 'authorized-series', tmdbId: 202, mediaType: 'tv', title: 'Authorized Series', file: 's2e1.mp4', season: 2, episode: 1 };
-(FIRST_PARTY_MANIFEST as any[]).push(ALICE, SERIES, SERIES_E2, SERIES_S2);
+const SPECIALS_S1E1 = { slug: 'authorized-specials', tmdbId: 303, mediaType: 'tv', title: 'Authorized Specials', file: 'specials-s1e1.mp4', season: 0, episode: 1 };
+(FIRST_PARTY_MANIFEST as any[]).push(ALICE, SERIES, SERIES_E2, SERIES_S2, SPECIALS_S1E1);
 
 async function run() {
   out.movie = await resolvePlayback({ mediaType: 'movie', tmdbId: 101 });
@@ -62,7 +63,8 @@ async function run() {
   out.epMissing = await resolvePlayback({ mediaType: 'tv', tmdbId: 202, season: 1, episode: 99 });
   out.seriesUnknown = await resolvePlayback({ mediaType: 'tv', tmdbId: 888, season: 1, episode: 1 });
   out.badId = await resolvePlayback({ mediaType: 'movie', tmdbId: 0 });
-  out.negativeSeason = await resolvePlayback({ mediaType: 'tv', tmdbId: 202, season: 0, episode: 1 });
+  out.specialsS1E1 = await resolvePlayback({ mediaType: 'tv', tmdbId: 303, season: 0, episode: 1 });
+  out.specialsMissing = await resolvePlayback({ mediaType: 'tv', tmdbId: 303, season: 0, episode: 9 });
   out.inventory = firstPartyInventory();
   console.log(JSON.stringify(out));
 }
@@ -153,12 +155,12 @@ section('TV / series resolution');
 
 check('S01E01 resolves to its own source', () => {
   assert.equal(r.ep1.status, 'PLAYABLE');
-  assert.equal(r.ep1.sources[0].url, '/media/authorized-series/s1e1.mp4');
+  assert.equal(r.ep1.sources[0].url, '/media/s1e1.mp4');
 });
 
 check('S01E02 resolves to a DIFFERENT source', () => {
   assert.equal(r.ep2.status, 'PLAYABLE');
-  assert.equal(r.ep2.sources[0].url, '/media/authorized-series/s1e2.mp4');
+  assert.equal(r.ep2.sources[0].url, '/media/s1e2.mp4');
 });
 
 check('S01E01 and S01E02 do not share a cached answer', () => {
@@ -169,19 +171,19 @@ check('S01E01 and S01E02 do not share a cached answer', () => {
 check('a different season resolves independently', () => {
   assert.equal(r.s2e1.status, 'PLAYABLE');
   assert.equal(r.s2e1.season, 2);
-  assert.equal(r.s2e1.sources[0].url, '/media/authorized-series/s2e1.mp4');
+  assert.equal(r.s2e1.sources[0].url, '/media/s2e1.mp4');
 });
 
 check('a missing episode is refused, never served from a neighbour', () => {
   assert.notEqual(r.epMissing.status, 'PLAYABLE');
   assert.equal(r.epMissing.sources.length, 0);
-  assert.equal(r.epMissing.reason, 'EPISODE_NOT_RESOLVED',
+  assert.equal(r.epMissing.reason, 'EPISODE_NOT_FOUND',
     'the reason must say the episode is missing, not the series');
 });
 
 check('an unknown series is distinguished from a missing episode', () => {
   assert.equal(r.seriesUnknown.status, 'METADATA_AVAILABLE');
-  assert.notEqual(r.seriesUnknown.reason, 'EPISODE_NOT_RESOLVED');
+  assert.notEqual(r.seriesUnknown.reason, 'EPISODE_NOT_FOUND');
 });
 
 check('an episode never falls back to a movie source', () => {
@@ -200,13 +202,25 @@ section('Invalid requests');
 
 check('a non-positive tmdbId is rejected', () => {
   assert.equal(r.badId.status, 'UNAVAILABLE');
-  assert.equal(r.badId.reason, 'INVALID_REQUEST');
+  assert.equal(r.badId.reason, 'MEDIA_ID_INVALID');
   assert.equal(r.badId.sources.length, 0);
 });
 
-check('season 0 is rejected rather than silently defaulting to 1', () => {
-  assert.equal(r.negativeSeason.status, 'UNAVAILABLE');
-  assert.equal(r.negativeSeason.reason, 'INVALID_REQUEST');
+// Season 0 is TMDB's specials bucket. It used to be rejected outright and then
+// silently coerced to 1 in the resolver. It is now a real, separately
+// addressable season — but it must NEVER borrow season 1's sources, which is
+// the bug that would show a viewer the wrong episode.
+check('season 0 (specials) is addressable, not coerced to season 1', () => {
+  assert.equal(r.specialsS1E1.status, 'PLAYABLE',
+    'specials must resolve through their own manifest entry');
+  assert.equal(r.specialsS1E1.season, 0);
+  assert.ok(r.specialsS1E1.sources[0].url.includes('specials-s1e1.mp4'),
+    'a specials episode must not be served season 1 media');
+});
+
+check('a missing episode is still refused rather than falling back to a special', () => {
+  assert.notEqual(r.specialsMissing.status, 'PLAYABLE');
+  assert.equal(r.specialsMissing.sources.length, 0);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

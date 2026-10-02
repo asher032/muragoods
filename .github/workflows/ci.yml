@@ -144,7 +144,7 @@ jobs:
       # holds no aggregator domain, first-party media must be same-origin,
       # licensed entries are trailer/preview only, there is no ad-stripping
       # code left, the player never sees a source the registry did not issue,
-      # every one of the five playback states and all nine reason codes exist
+      # every one of the five playback states and all thirteen reason codes exist
       # with safe messages, diagnostics never reach the client, temporary
       # failures are not cached as unavailable, and health reports each
       # component independently instead of one blanket verdict.
@@ -154,11 +154,20 @@ jobs:
       # Source scans cannot tell a working resolver from one that returns a
       # movie URL for every episode. This compiles and runs the REAL resolver
       # against a fake network, then asserts S01E01 / S01E02 / S02E01 each
-      # resolve to their OWN url, a missing episode is EPISODE_NOT_RESOLVED
-      # (not the nearest episode), an unknown series is SOURCE_404, a TV
-      # request can never take a movie source, and season 0 is rejected.
+      # resolve to their OWN url, a missing episode is EPISODE_NOT_FOUND
+      # (not the nearest episode), an unknown series is SOURCE_NOT_FOUND, a TV
+      # request can never take a movie source, and season 0 (specials) is
+      # addressable without ever borrowing season 1's media.
       - name: Murastream episode resolution (real resolver, per-episode sources)
         run: node scripts/test-playback-runtime.mjs
+
+      # The matrix the playback spec requires, driven through the real
+      # modules: movies, TV, anime, K-drama, season/episode switching, missing
+      # episodes, ID/type confusion, retry honesty, and an explicit ad-free
+      # assertion over the whole failure path. The previous suites proved the
+      # contract was shaped correctly; this proves each branch behaves.
+      - name: Playback matrix (movies, TV, anime, K-drama, player states, no ads)
+        run: node scripts/test-playback-matrix.mjs
 
       # Muragoods shipped as several sites wearing one name: the shop was
       # yellow, Murastream was streaming-site red in the OS UI font, and the

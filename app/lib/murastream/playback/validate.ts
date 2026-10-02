@@ -52,10 +52,11 @@ const VALIDATE_TIMEOUT_MS = 8000;
 
 /** A provider timeout is temporary; a 404 on our own file is not. */
 function reasonForStatus(status: number): PlaybackReason {
-  if (status === 404) return 'SOURCE_404';
+  if (status === 404) return 'SOURCE_NOT_FOUND';
   if (status === 401 || status === 403) return 'REGION_BLOCKED';
   if (status === 408 || status === 504) return 'PROVIDER_TIMEOUT';
   if (status === 429) return 'PLAYBACK_SERVICE_UNAVAILABLE';
+  if (status >= 500) return 'PROVIDER_ERROR';
   return 'SOURCE_INVALID';
 }
 
