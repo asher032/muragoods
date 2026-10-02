@@ -58,7 +58,16 @@ function walk(dir) {
   }
   return out;
 }
-const ALL_SOURCE = [...walk('app'), ...walk('scripts')];
+// Root-level config is included deliberately. The scan used to cover only
+// app/ and scripts/, which meant `next.config.ts` was never inspected — and
+// `https://vidlink.pro` sat in script-src, connect-src and frame-src for
+// months while every "no ad domain anywhere" check passed. The CSP is the
+// browser-enforced half of the ad-free guarantee; a policy that quietly
+// allowlists an ad host defeats the whole thing regardless of how correct the
+// resolver is.
+const ROOT_CONFIG = ['next.config.ts', 'middleware.ts', 'vercel.json']
+  .filter((f) => existsSync(f));
+const ALL_SOURCE = [...walk('app'), ...walk('scripts'), ...ROOT_CONFIG];
 
 // ═══════════════════════════════════════════════════════════════════════════
 section('No ads: no ad-serving domain is reachable from playback code');
@@ -81,6 +90,61 @@ check('no ad network or aggregator domain remains anywhere in app/', () => {
     }
   }
   assert.deepEqual(hits, [], `ad/aggregator references remain:\n      ${hits.join('\n      ')}`);
+});
+
+check('no ad host or embed aggregator is allowlisted in any security header', () => {
+  const offenders = [];
+  for (const file of ROOT_CONFIG) {
+    const src = readFileSync(file, 'utf8');
+    for (const domain of FORBIDDEN) {
+      if (src.includes(domain)) offenders.push(`${file} → ${domain}`);
+    }
+  }
+  assert.deepEqual(offenders, [],
+    `an aggregator is allowlisted in a security header, which lets it run script/frame on our origin:\n      ${offenders.join('\n      ')}`);
+});
+
+check('the CSP allowlists no origin beyond our own and licensed trailers', () => {
+  // The only external origins permitted anywhere in the policy, each with a
+  // real reason:
+  //   api.themoviedb.org     metadata (never a streaming provider)
+  //   image.tmdb.org         catalog artwork
+  //   api.tvmaze.com         episode metadata
+  //   cdn.discordapp.com     Discord avatars
+  //   i.ytimg.com            trailer thumbnails
+  //   www.youtube-nocookie.com  licensed trailer embed only
+  const allowed = [
+    'api.themoviedb.org', 'image.tmdb.org', 'api.tvmaze.com',
+    'cdn.discordapp.com', 'i.ytimg.com', 'www.youtube-nocookie.com',
+  ];
+  const src = readFileSync('next.config.ts', 'utf8');
+  const found = [...code('next.config.ts').matchAll(/https:\/\/([a-z0-9.-]+)/gi)].map((m) => m[1].toLowerCase());
+  const unexpected = [...new Set(found)].filter((h) => !allowed.includes(h));
+  assert.deepEqual(unexpected, [], `unexpected origin(s) in the CSP: ${unexpected.join(', ')}`);
+});
+
+check('the CSP does not permit any third-party media origin', () => {
+  // The policy is assembled by array literal and join()'d at runtime, so the
+  // directives must be parsed as individual quoted elements — a regex over the
+  // source would find no ';' and swallow every following directive.
+  const src = readFileSync('next.config.ts', 'utf8');
+  const directives = [...src.matchAll(/^\s*"([a-z-]+-src|default-src)\s([^"]*)"/gm)]
+    .map((m) => ({ name: m[1], value: m[2].trim() }));
+  assert.ok(directives.length >= 8, `expected a full CSP, found ${directives.length} directives`);
+
+  const media = directives.find((d) => d.name === 'media-src');
+  assert.ok(media, 'media-src must be declared');
+  const external = media.value.split(/\s+/).filter((d) => d.startsWith('http'));
+  assert.deepEqual(external, [],
+    `media-src must not allow third-party origins: ${external.join(', ')}`);
+  assert.ok(media.value.includes("'self'"), "media-src must keep 'self' so our own files can play");
+
+  // script-src is the one an ad host would abuse to run code on our origin.
+  const script = directives.find((d) => d.name === 'script-src');
+  assert.ok(script, 'script-src must be declared');
+  const scriptExternal = script.value.split(/\s+/).filter((d) => d.startsWith('http'));
+  assert.deepEqual(scriptExternal, [],
+    `script-src must not allow any third-party origin: ${scriptExternal.join(', ')}`);
 });
 
 check('the ad-stripping proxy route is gone', () => {
