@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useGameSession } from '@/app/hooks/useGameSession';
+import { useGameSave } from '@/app/lib/use-game-save';
 import { DiscordNudge } from '@/app/components/DiscordNudge';
 import { ThemedGameBackground } from '@/app/components/GameBackgroundSettings';
 import { Icon } from '@/app/components/Icon';
@@ -98,17 +99,46 @@ export default function TriviaPage() {
   const [isLegendaryMode, setIsLegendaryMode] = useState(false);
   const [legendaryHighScore, setLegendaryHighScore] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  // Server-authoritative save. `saveUpdate` writes the record; the local
+  // high-score keys above are only a display cache for instant paint.
+  const { save: serverSave, update: saveUpdate, status: saveStatus } = useGameSave('trivia');
 
   useEffect(() => {
     const user = localStorage.getItem('user');
     if (!user) { router.push('/login'); return; }
     setIsLoggedIn(true);
+    // The high score now lives on the server, keyed by canonical userId, so
+    // it follows the person to another device. `useGameSave` seeds from the
+    // local cache immediately and then replaces it with the server's value —
+    // a localStorage key is a cache now, not the record.
     const saved = parseInt(localStorage.getItem('muragoods_trivia_highscore') || '0', 10);
     setHighScore(saved);
     const savedLegHS = parseInt(localStorage.getItem('muragoods_trivia_legendary_hs') || '0', 10);
     setLegendaryHighScore(savedLegHS);
+  }, [router]);
 
-    // Load daily plays
+  // When the server's save arrives it wins over the local cache — it is the
+  // record, and it may be higher than anything this browser has seen (played
+  // on another device) or lower (save reset elsewhere).
+  useEffect(() => {
+    if (!serverSave) return;
+    const serverHigh = Number(serverSave.highScore || 0);
+    if (serverHigh > highScore) {
+      setHighScore(serverHigh);
+      localStorage.setItem('muragoods_trivia_highscore', String(serverHigh));
+    }
+    const serverLeg = Number((serverSave.state as { legendaryHighScore?: number } | undefined)?.legendaryHighScore || 0);
+    if (serverLeg > legendaryHighScore) {
+      setLegendaryHighScore(serverLeg);
+      localStorage.setItem('muragoods_trivia_legendary_hs', String(serverLeg));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverSave]);
+
+  // Daily play counter. This stays a local hint because the AUTHORITATIVE
+  // daily cap is enforced server-side by /api/games/award against its own
+  // tables — this only decides what the button says before the request.
+  useEffect(() => {
     try {
       const playsData = JSON.parse(localStorage.getItem(TRIVIA_PLAYS_KEY) || '{}');
       const today = new Date().toISOString().split('T')[0];
@@ -125,7 +155,7 @@ export default function TriviaPage() {
       const today = new Date().toISOString().split('T')[0];
       localStorage.setItem(TRIVIA_PLAYS_KEY, JSON.stringify({ date: today, count: 0 }));
     }
-  }, [router]);
+  }, []);
 
   // Timer
   useEffect(() => {
@@ -238,10 +268,13 @@ export default function TriviaPage() {
         if (finalScore > highScore) {
           setHighScore(finalScore);
           localStorage.setItem('muragoods_trivia_highscore', String(finalScore));
+          // Write the record to the server, not just this browser.
+          saveUpdate({ highScore: finalScore });
         }
         if (isLegendaryMode && finalScore > legendaryHighScore) {
           setLegendaryHighScore(finalScore);
           localStorage.setItem('muragoods_trivia_legendary_hs', String(finalScore));
+          saveUpdate({ highScore: finalScore, state: { legendaryHighScore: finalScore } });
         }
         setServerCoins(null);
         setAwardNote('');
@@ -253,10 +286,12 @@ export default function TriviaPage() {
         if (finalScore > highScore) {
           setHighScore(finalScore);
           localStorage.setItem('muragoods_trivia_highscore', String(finalScore));
+          saveUpdate({ highScore: finalScore });
         }
         if (isLegendaryMode && finalScore > legendaryHighScore) {
           setLegendaryHighScore(finalScore);
           localStorage.setItem('muragoods_trivia_legendary_hs', String(finalScore));
+          saveUpdate({ highScore: finalScore, state: { legendaryHighScore: finalScore } });
         }
         setServerCoins(null);
         setAwardNote('');
@@ -302,6 +337,15 @@ export default function TriviaPage() {
                 <div className="border-2 border-[var(--gold)] bg-[rgba(212,175,55,0.1)] p-4 rounded-2xl text-center">
                   <p className="text-[8px] text-[var(--gold)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Normal High Score</p>
                   <p className="coin-price text-lg mt-1">{highScore} <Coins color={'#ffd60a'} className="inline-block" style={{ verticalAlign: '-0.15em', flexShrink: 0 }} aria-hidden /></p>
+                  {/* Honest save state: a score that only reached this browser
+                      must not look like a synced cross-device record. */}
+                  {saveStatus === 'error' || saveStatus === 'offline' ? (
+                    <p className="text-[9px] text-[var(--mario-red)] mt-1">
+                      {saveStatus === 'offline' ? 'Sign in to sync across devices' : 'Not synced to your account yet'}
+                    </p>
+                  ) : saveStatus === 'saving' || saveStatus === 'loading' ? (
+                    <p className="text-[9px] text-[var(--mario-text-muted)] mt-1">Syncing…</p>
+                  ) : null}
                 </div>
               )}
               {legendaryHighScore > 0 && (

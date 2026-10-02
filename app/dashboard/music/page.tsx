@@ -122,9 +122,10 @@ function fmt(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-// Per-guild prefix talks to its own route (top-level `prefix` key, pushed
-// to the bot with the value) — not the music section, so there is exactly
-// one source of truth.
+// Per-guild prefix talks to its own route (the canonical top-level `prefix`
+// field, pushed to the bot with the value) — not the music section, so there
+// is exactly one source of truth. The three outcomes are reported distinctly:
+// saved-and-live, saved-but-not-yet-live, and not saved.
 function PrefixField({ guildId, token }: { guildId: string; token: string }) {
   const [prefix, setPrefix] = useState('');
   const [loaded, setLoaded] = useState(false);
@@ -155,13 +156,17 @@ function PrefixField({ guildId, token }: { guildId: string; token: string }) {
     }
     setSaving(true);
     setMsg('');
-    const resp = await apiFetch<{ success: boolean; prefix?: string; botNotified?: boolean; error?: string }>(
-      '/api/dashboard/prefix', { method: 'PATCH', token, body: { guildId, prefix: clean } });
+    const resp = await apiFetch<{
+      success: boolean; prefix?: string; error?: string;
+      propagation?: 'applied' | 'pending';
+    }>('/api/dashboard/prefix', { method: 'PATCH', token, body: { guildId, prefix: clean } });
     if (resp.ok && resp.data.success) {
       setPrefix(resp.data.prefix || clean);
-      setMsg(resp.data.botNotified ? '✓ Saved and live on the bot.' : '✓ Saved (bot will pick it up shortly).');
+      setMsg(resp.data.propagation === 'applied'
+        ? '✓ Saved and live on the bot.'
+        : '⚠ Saved, but the bot has not confirmed it yet — not live in Discord until it does.');
     } else {
-      setMsg(resp.ok ? resp.data.error || 'Save failed.' : resp.error);
+      setMsg(resp.ok ? resp.data.error || 'Save failed — nothing was changed.' : resp.error);
     }
     setSaving(false);
   };

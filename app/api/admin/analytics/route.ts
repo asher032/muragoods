@@ -1,9 +1,20 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import Order from '@/app/lib/models/Order';
+import { requireStaff } from '@/app/lib/access-control';
 
-export async function GET() {
+// Site analytics: every order in the ecosystem, itemised.
+//
+// This route previously had NO guard at all — it answered any unauthenticated
+// caller with the full order book. Money-adjacent data is exactly the thing
+// the three-level model exists to protect, so analytics now requires the
+// Muragoods owner or staff holding the analytics scope. (The page has always
+// been inside /admin, but a page is not a guard.)
+export async function GET(req: Request) {
   try {
+    const guard = await requireStaff(req, ['analytics']);
+    if (!guard.ok) return guard.response;
+
     await dbConnect();
     const orders = await Order.find({}).sort({ createdAt: -1 });
 

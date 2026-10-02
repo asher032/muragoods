@@ -7,7 +7,9 @@ import GameReward from '@/app/lib/models/GameReward';
 import GameSession from '@/app/lib/models/GameSession';
 import UserActivity from '@/app/lib/models/UserActivity';
 import PromoCode from '@/app/lib/models/PromoCode';
-import { getIdentityWithId, ownerStamp } from '@/app/lib/identity';
+import { getIdentityWithId, ownerStamp, type CanonicalUser } from '@/app/lib/identity';
+import { grantPoints, spendPointsAtomic } from '@/app/lib/services/points';
+import { grantItems } from '@/app/lib/services/inventory';
 
 // ── Centralized game reward service ────────────────────────────────────
 // Game → Reward Service → User Account → Discord + Website + Dashboard.
@@ -177,6 +179,13 @@ export interface AwardResult {
  */
 export async function awardPlay(id: GameIdentity, input: AwardInput): Promise<AwardResult> {
   await dbConnect();
+  // The canonical identity shape the services expect. Built once, up front,
+  // because both the entry-fee debit and the reward credit need it.
+  const identityShape = {
+    userId: id.userId, email: id.email, emailLc: id.emailLc, name: id.name,
+    username: '', avatar: '', bio: '', role: 'user',
+    discordUserId: id.discordId, discordUsername: id.discordUsername, createdAt: null,
+  } satisfies CanonicalUser;
   // One owner key for every row this function writes: the canonical userId,
   // plus the legacy email key so rows stay findable by either.
   const stamp = ownerStamp(id);
@@ -213,21 +222,26 @@ export async function awardPlay(id: GameIdentity, input: AwardInput): Promise<Aw
       const wait = Math.ceil(cooldownSec - (Date.now() - new Date(last.createdAt).getTime()) / 1000);
       return { ok: false, error: `On cooldown — try again in ${wait}s`, status: 429 };
     }
-  }
-
-  // 2a. Entry costs (spin, mystery box) are charged atomically first —
-  // the guarded update refuses when the balance cannot cover it.
+  }// 2a. Entry costs (spin, mystery box) are charged atomically first — the
+  // guarded update refuses when the balance cannot cover it, so two
+  // simultaneous taps on "play" cannot both spend the same coins. The debit
+  // goes through the points service so it lands in the ledger too, keyed to
+  // this play's session token so a retry cannot charge twice.
   const cfgEarly = (def.config || {}) as Record<string, unknown>;
   const cost = Math.max(0, Math.floor(Number(cfgEarly.cost ?? 0)));
   if (cost > 0) {
-    const charged = await User.findOneAndUpdate(
-      { userId: id.userId, coinBalance: { $gte: cost } },
-      {
-        $inc: { coinBalance: -cost },
-        $push: { coinHistory: { $each: [{ type: 'spend', amount: cost, label: `${gameId} entry`, date: new Date() }], $slice: -200 } },
-      },
-    );
-    if (!charged) return { ok: false, error: 'Not enough coins to play', status: 402 };
+    const charged = await spendPointsAtomic(identityShape, {
+      txId: `entry:${id.emailLc}:${gameId}:${session.token}`,
+      source: 'game',
+      amount: cost,
+      reason: `${gameId} entry`,
+      reference: gameId,
+    });
+    if (!charged.ok) {
+      return charged.code === 'INSUFFICIENT_FUNDS'
+        ? { ok: false, error: 'Not enough coins to play', status: 402 }
+        : { ok: false, error: 'Could not charge the entry fee', status: 500 };
+    }
   }
 
   // 2b. Compute the prize server-side from validated facts.
@@ -280,10 +294,14 @@ export async function awardPlay(id: GameIdentity, input: AwardInput): Promise<Aw
     ? `play:${id.emailLc}:${gameId}:${today}`
     : `play:${id.emailLc}:${gameId}:${session.token}`;
   const now = new Date();
+  // The points ledger is the record; GameReward is kept as the play-counting
+  // ledger and carries ledgerTxId so the two reconcile exactly instead of by
+  // comparing amounts.
+  const ledgerTxId = `${idem}:coins`;
   try {
     await GameReward.create({
-      idempotencyKey: `${idem}:coins`, ...stamp, userEmail: id.emailLc, discordId: id.discordId,
-      gameId, kind: 'coins', amount: coins, label: `${gameId} reward`, createdAt: now,
+      idempotencyKey: ledgerTxId, ...stamp, userEmail: id.emailLc, discordId: id.discordId,
+      gameId, kind: 'coins', amount: coins, label: `${gameId} reward`, ledgerTxId, createdAt: now,
     });
   } catch (e) {
     const dup = e instanceof Error && /E11000|duplicate/i.test(e.message);
@@ -291,19 +309,20 @@ export async function awardPlay(id: GameIdentity, input: AwardInput): Promise<Aw
       ? { ok: false, error: 'Reward already granted for this play', status: 409 }
       : { ok: false, error: 'Could not record reward — try again', status: 500 };
   }
+  // Move the balance through the one writer rather than a second `$inc` here.
+  // The GameReward row above already claimed the event, so an `already_applied`
+  // result is expected on a replay and is not treated as a failure.
+  await grantPoints(identityShape, {
+    txId: ledgerTxId,
+    source: 'game',
+    amount: coins,
+    reason: `${gameId} reward`,
+    reference: gameId,
+  }).catch(() => undefined);
   await GameReward.create({
     idempotencyKey: `${idem}:xp`, ...stamp, userEmail: id.emailLc, discordId: id.discordId,
     gameId, kind: 'xp', amount: xp, label: `${gameId} xp`, createdAt: now,
   });
-  if (coins !== 0) {
-    await User.updateOne(
-      { userId: id.userId },
-      {
-        $inc: { coinBalance: coins },
-        $push: { coinHistory: { $each: [{ type: coins > 0 ? 'earn' : 'spend', amount: Math.abs(coins), label: `${gameId} reward`, date: now }], $slice: -200 } },
-      },
-    );
-  }
 
   // 4. Progress (best score, plays, xp, streak, achievements).
   // Read the previous best BEFORE the $max update so "new best"
@@ -358,6 +377,24 @@ export async function awardPlay(id: GameIdentity, input: AwardInput): Promise<Aw
       idempotencyKey: `${idem}:discount`, ...stamp, userEmail: id.emailLc, discordId: id.discordId,
       gameId, kind: 'discount', amount: discountPct, label: code, createdAt: now,
     }).catch(() => undefined);
+    // A won discount is an ITEM the user owns, so it belongs in the unified
+    // inventory — not in a localStorage key on the device that happened to
+    // win it. The grant key is the same event key, so a retry credits once.
+    // kind stays 'website': a discount is checkout-scoped and is deliberately
+    // NOT a Discord deliverable, so it can never become server currency.
+    await grantItems(identityShape, [{
+      itemId: 'game-discount',
+      name: `${gameId} discount (${discountPct}%)`,
+      icon: '%',
+      description: `One-time ${discountPct}% off a shop order over ₱100.`,
+      kind: 'website',
+      quantity: 1,
+      stackable: true,
+      grantKey: `${idem}:discount:item`,
+      source: 'game',
+      reference: gameId,
+      metadata: { code, discountPct: String(discountPct), expiresAt: new Date(Date.now() + 7 * 86400000).toISOString() },
+    }]).catch(() => undefined);
   }
 
   const leftToday = await GameReward.countDocuments({

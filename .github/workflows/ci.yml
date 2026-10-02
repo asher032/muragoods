@@ -173,6 +173,31 @@ jobs:
       - name: Design system (one brand, one token layer, no page-local identity)
         run: node scripts/test-design-system.mjs
 
+      # The Admin Panel and the Discord Server Dashboard were two answers to
+      # "may I?" — an email list for /admin, a live Discord permission bit for
+      # /dashboard — and the split was invisible: nothing errored, each page
+      # looked correct alone, and meanwhile /api/admin/analytics answered anyone
+      # with the whole order book. These fail when a registry entry points at a
+      # page or API that does not exist, when an admin route is not guarded by
+      # the single authority (access-control.ts), when a second authority or a
+      # client-side page gate creeps back, when the command prefix grows a
+      # duplicate field, or when an admin API reaches into the public
+      # dashboard's permission model.
+      - name: Admin architecture (registry coverage, one authority, one prefix, honest saves)
+        run: node scripts/check-admin-coverage.mjs
+
+      # ONE identity across the whole ecosystem. The failure mode this pins
+      # was silent: game saves lived in localStorage (so a new device started
+      # at zero and clearing site data destroyed them), there was no unified
+      # inventory at all, points had no transaction-id ledger, and
+      # /api/reviews trusted `?isAdmin=true` to return every review in the
+      # database. These assert the invariants structurally: identity from the
+      # session only, one writer per system, idempotent grants, a save that
+      # can never pay, guild data never merged into personal data, and
+      # full access that never bypasses Discord's own checks.
+      - name: Unified identity (one user, server-side saves, one points writer, no client authority)
+        run: node scripts/test-unified-identity.mjs
+
       - name: Typecheck
         run: npx tsc --noEmit
 

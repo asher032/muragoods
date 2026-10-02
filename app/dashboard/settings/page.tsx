@@ -60,6 +60,10 @@ export default function SettingsPage() {
   const [prefixState, setPrefixState] = useState<'idle' | 'loading' | 'saving'>('loading');
   const [prefixMsg, setPrefixMsg] = useState('');
   const [prefixErr, setPrefixErr] = useState('');
+  // What Murabot actually held at load time, when it could be asked. A value
+  // saved here but not yet applied in Discord is shown as its own state —
+  // "saved" and "live" are different claims.
+  const [botPrefix, setBotPrefix] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selected) return;
@@ -71,7 +75,8 @@ export default function SettingsPage() {
     setPrefixMsg('');
     fetch(`/api/dashboard/prefix?guildId=${encodeURIComponent(selected.id)}`, { cache: 'no-store', signal: controller.signal })
       .then(async (resp) => {
-        const data = (await resp.json().catch(() => null)) as { success?: boolean; prefix?: string; error?: string } | null;
+        const data = (await resp.json().catch(() => null)) as
+          { success?: boolean; prefix?: string; error?: string; bot?: { prefix: string | null } } | null;
         if (!alive) return;
         if (!resp.ok || !data?.success) {
           setPrefixErr(data?.error || `Could not load the prefix (HTTP ${resp.status})`);
@@ -80,12 +85,18 @@ export default function SettingsPage() {
         }
         setPrefix(data.prefix || DEFAULT_PREFIX);
         setSavedPrefix(data.prefix || DEFAULT_PREFIX);
+        setBotPrefix(data.bot?.prefix ?? null);
         setPrefixState('idle');
       })
       .catch((err) => {
         if (!alive) return;
         const timedOut = err instanceof DOMException && err.name === 'AbortError';
-        setPrefixErr(timedOut ? 'Prefix request timed out — retry.' : 'Network error loading the prefix');
+        // Honest wording: we do not know whether the read completed. We do not
+        // tell the operator their prefix is broken when we simply did not hear
+        // back — and we do not overwrite what is on screen with a guess.
+        setPrefixErr(timedOut
+          ? 'The prefix could not be loaded in time. Nothing was changed — press Save to try again.'
+          : 'Network error loading the prefix. Nothing was changed.');
         setPrefixState('idle');
       })
       .finally(() => clearTimeout(timer));
@@ -94,36 +105,69 @@ export default function SettingsPage() {
 
   async function savePrefix(next: string) {
     if (!selected) return;
+    const guildId = selected.id;
     setPrefixState('saving');
     setPrefixErr('');
     setPrefixMsg('');
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 12000);
+    // Generous enough to cover the server's own bounded waits (a cached
+    // permission check plus a short bot notification), so a slow network no
+    // longer manufactures a failure.
+    const timer = setTimeout(() => controller.abort(), 25000);
     try {
       const resp = await fetch('/api/dashboard/prefix', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guildId: selected.id, prefix: next }),
+        body: JSON.stringify({ guildId, prefix: next }),
         cache: 'no-store',
         signal: controller.signal,
       });
-      const data = (await resp.json().catch(() => null)) as { success?: boolean; prefix?: string; error?: string; botNotified?: boolean } | null;
+      const data = (await resp.json().catch(() => null)) as {
+        success?: boolean; saved?: boolean; prefix?: string;
+        error?: string; propagation?: 'applied' | 'pending'; message?: string;
+      } | null;
       if (!resp.ok || !data?.success) {
-        setPrefixErr(data?.error || `Save failed (HTTP ${resp.status})`);
+        setPrefixErr(data?.error || `Save failed (HTTP ${resp.status}). Your previous prefix was not changed.`);
         setPrefixState('idle');
         return;
       }
       const applied = data.prefix || next;
       setPrefix(applied);
       setSavedPrefix(applied);
-      setPrefixMsg(
-        data.botNotified
-          ? `✓ Saved — \`${applied}\` is live in Discord now.`
-          : `✓ Saved. The bot will pick it up within ~30s (it did not acknowledge the refresh).`,
-      );
+      // Three distinct outcomes, never collapsed into one green tick.
+      if (data.propagation === 'applied') {
+        setBotPrefix(applied);
+        setPrefixMsg(`✓ Prefix saved — \`${applied}\` is live in Discord now.`);
+      } else {
+        setPrefixMsg(`⚠ Saved as \`${applied}\`, but Murabot has not confirmed it yet. `
+          + 'It is not live in Discord until it does — it is picked up automatically within about a minute.');
+      }
     } catch (err) {
       const timedOut = err instanceof DOMException && err.name === 'AbortError';
-      setPrefixErr(timedOut ? 'Save timed out — your change was NOT saved. Retry.' : 'Network error while saving — your change was NOT saved.');
+      if (timedOut) {
+        // A timeout is NOT proof of failure, and saying "NOT saved" is a lie
+        // in the other direction. Re-read the canonical value and report what
+        // is actually stored.
+        let confirmed: string | null = null;
+        try {
+          const probe = await fetch(`/api/dashboard/prefix?guildId=${encodeURIComponent(guildId)}`, { cache: 'no-store' });
+          const body = (await probe.json().catch(() => null)) as { success?: boolean; prefix?: string } | null;
+          if (body?.success) confirmed = body.prefix ?? null;
+        } catch { /* still unknown */ }
+        if (confirmed === next) {
+          setSavedPrefix(next);
+          setPrefixMsg(`⚠ The reply timed out, but \`${next}\` is saved. Murabot has not confirmed it yet.`);
+        } else if (confirmed) {
+          setSavedPrefix(confirmed);
+          setPrefix(confirmed);
+          setPrefixErr(`⚠ Murabot did not respond in time. Your prefix is still \`${confirmed}\` — it was not changed.`);
+        } else {
+          setPrefixErr('⚠ Murabot did not respond in time, and the stored prefix could not be re-read. '
+            + 'We cannot confirm whether it changed — check again in a moment before saving again.');
+        }
+      } else {
+        setPrefixErr('Network error while saving. Your previous prefix was not changed.');
+      }
     } finally {
       clearTimeout(timer);
       setPrefixState('idle');
@@ -265,11 +309,24 @@ export default function SettingsPage() {
             </div>
             <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--cc-text-faint)' }}>
               1–10 characters. Example: <code>{prefix || DEFAULT_PREFIX}play</code>
+              {botPrefix !== null && botPrefix !== savedPrefix ? (
+                <span style={{ color: 'var(--cc-warn)' }}>
+                  {' '}— Murabot is still using <code>{botPrefix}</code>.
+                </span>
+              ) : null}
             </p>
           </>
         )}
 
-        {prefixMsg && <div className="cc-alert" role="status" style={{ marginTop: 10, fontSize: 12.5 }}>{prefixMsg}</div>}
+        {prefixMsg && (
+          <div
+            className={prefixMsg.startsWith('⚠') ? 'cc-alert cc-alert-warning' : 'cc-alert cc-alert-success'}
+            role="status"
+            style={{ marginTop: 10, fontSize: 12.5 }}
+          >
+            {prefixMsg}
+          </div>
+        )}
         {prefixErr && <div className="cc-alert cc-alert-error" role="alert" style={{ marginTop: 10, fontSize: 12.5 }}>{prefixErr}</div>}
       </section>
 

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { NavBar } from '@/app/components/NavBar';
 import { useCoins } from '@/app/hooks/useCoins';
 import { useGameSession } from '@/app/hooks/useGameSession';
+import { useGameSave } from '@/app/lib/use-game-save';
 import { DiscordNudge } from '@/app/components/DiscordNudge';
 import { ThemedGameBackground } from '@/app/components/GameBackgroundSettings';
 import { Icon } from '@/app/components/Icon';
@@ -63,6 +64,8 @@ const rarityColors: Record<string, string> = {
 
 // Serializable history entry — React elements can NEVER go into
 // localStorage (they come back as plain objects and crash React on render).
+interface WonCode { code: string; label: string; wonAt: string; server: boolean }
+
 interface HistoryEntry {
   id: string;
   label: string;
@@ -89,6 +92,14 @@ export default function MysteryBoxPage() {
   const [currentStreak, setCurrentStreak] = useState(0);
   const [notice, setNotice] = useState('');
   const [wonCode, setWonCode] = useState<string | null>(null);
+  // Server-authoritative save for this game (history, totals, streak, codes).
+  const { save: mysterySave, update: saveMystery } = useGameSave('mysterybox');
+  // Won discount codes, persisted server-side so they are visible on any
+  // device. The authoritative record of a won discount is the unified
+  // inventory entry written by the award path; this is the display list.
+  const [wonCodes, setWonCodes] = useState<WonCode[]>([]);
+  // Guards against writing the cache-seeded values back over the server's.
+  const [hydrated, setHydrated] = useState(false);
   const { coins } = useCoins();
   const { award } = useGameSession('mysterybox');
 
@@ -121,6 +132,8 @@ export default function MysteryBoxPage() {
     if (!user) { router.push('/login'); return; }
     setIsLoggedIn(true);
 
+    // Seed instantly from the cache so the box does not flash empty, then
+    // let the server save win (see the effect below).
     const savedHistory = localStorage.getItem('muragoods_mystery_history');
     if (savedHistory) {
       try {
@@ -159,6 +172,38 @@ export default function MysteryBoxPage() {
     const savedStreak = parseInt(localStorage.getItem('muragoods_mystery_maxstreak') || '0', 10);
     setMaxStreak(savedStreak);
   }, [router]);
+
+  // History, totals, rarity counts, best streak and won discount codes used
+  // to live in six separate localStorage keys — per browser, so a new device
+  // showed an empty box history and a phone could not see a discount won on a
+  // laptop. They are now one server-side save.
+  useEffect(() => {
+    if (!mysterySave) return;
+    const st = (mysterySave.state || {}) as Record<string, unknown>;
+    if (Array.isArray(st.history)) setHistory(st.history as HistoryEntry[]);
+    if (typeof st.totalOpened === 'number') setTotalOpened(st.totalOpened);
+    if (typeof st.totalSpent === 'number') setTotalSpent(st.totalSpent);
+    if (typeof st.legendaryCount === 'number') setLegendaryCount(st.legendaryCount);
+    if (typeof st.mythicCount === 'number') setMythicCount(st.mythicCount);
+    if (typeof st.maxStreak === 'number') setMaxStreak(st.maxStreak);
+    if (Array.isArray(st.discountCodes)) setWonCodes(st.discountCodes as WonCode[]);
+    setHydrated(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mysterySave]);
+
+  // Persist once hydrated, so the cache seeded above is never written back
+  // over the server's newer value.
+  useEffect(() => {
+    if (!hydrated) return;
+    saveMystery({
+      state: {
+        history, totalOpened, totalSpent,
+        legendaryCount, mythicCount, maxStreak,
+        discountCodes: wonCodes,
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [history, totalOpened, totalSpent, legendaryCount, mythicCount, maxStreak, wonCodes, hydrated]);
 
   const handleOpen = () => {
     if (isOpening || coins < BOX_COST) return;
@@ -226,7 +271,14 @@ export default function MysteryBoxPage() {
       const newHistory = [entry, ...history].slice(0, 50);
       setHistory(newHistory);
       try { localStorage.setItem('muragoods_mystery_history', JSON.stringify(newHistory)); } catch { /* cache */ }
+      setHistory(newHistory);
       setTotalOpened(prev => prev + 1);
+      // Discount wins are recorded in the unified INVENTORY server-side by the
+      // award path; this list is only what the page displays.
+      if (res.discountCode) {
+        const won: WonCode = { code: res.discountCode, label: shown.label, wonAt: new Date().toISOString(), server: true };
+        setWonCodes(prev => [won, ...prev].slice(0, 50));
+      }
 
       // Reveal prize (0.5s after opening)
       setTimeout(() => {

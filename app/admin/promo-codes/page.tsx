@@ -38,12 +38,14 @@ export default function AdminPromoCodesPage() {
     const adminEmails = ['muragoods0@gmail.com', 'mhaxthedog@gmail.com'];
     if (!adminEmails.includes(user.email)) { router.push('/admin'); return; }
     setUserEmail(user.email);
-    fetchCodes(user.email);
+    fetchCodes();
   }, [router]);
 
-  const fetchCodes = async (email: string) => {
+  const fetchCodes = async () => {
     try {
-      const res = await fetch(`/api/promo-codes?isAdmin=true&email=${encodeURIComponent(email)}`);
+      // No `?isAdmin=true` and no email: the session proves authority, so
+      // there is nothing for the caller to claim or spoof.
+      const res = await fetch('/api/promo-codes');
       const result = await res.json();
       if (result.success) setCodes(result.data);
     } catch { /* empty */ }
@@ -59,7 +61,9 @@ export default function AdminPromoCodesPage() {
       const res = await fetch('/api/promo-codes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, createdBy: userEmail }),
+        // Attribution comes from the session server-side; `createdBy` is no
+        // longer sent because the server would ignore it anyway.
+        body: JSON.stringify({ ...form }),
       });
       const result = await res.json();
       if (result.success) {
@@ -89,7 +93,7 @@ export default function AdminPromoCodesPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this promo code?')) return;
     try {
-      await fetch(`/api/promo-codes?id=${id}&email=${encodeURIComponent(userEmail)}`, { method: 'DELETE' });
+      await fetch(`/api/promo-codes?id=${id}`, { method: 'DELETE' });
       setCodes(prev => prev.filter(c => c._id !== id));
     } catch { /* empty */ }
   };

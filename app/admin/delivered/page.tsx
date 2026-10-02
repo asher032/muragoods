@@ -3,7 +3,7 @@
 import { type Order } from '@/app/lib/muragoods-data';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
-import { useAuth } from '@/app/contexts/AuthContext';
+import { AdminHeader } from '../components/AdminShell';
 import { CircleCheck, Coins } from 'lucide-react';
 
 type StatusEntry = { status: string; timestamp: string | number | Date };
@@ -12,13 +12,11 @@ type AdminOrder = Order & { userId: string; _id?: string; coinsAwarded?: boolean
 // Admin — Delivered Orders history. Orders whose status is 'Delivered' move
 // here from the Live Order Feed so the dashboard only shows work in progress.
 export default function AdminDeliveredPage() {
-  const { user, isAdmin } = useAuth();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // No client-side admin gate: app/admin/layout.tsx resolves access on the
+  // server and redirects anyone who does not belong. The sign-in card this
+  // page used to render was unreachable dead weight that also implied the
+  // page itself was the thing being protected.
   const [orders, setOrders] = useState<AdminOrder[]>([]);
-
-  useEffect(() => {
-    if (isAdmin && user) setIsAuthenticated(true);
-  }, [isAdmin, user]);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -33,9 +31,8 @@ export default function AdminDeliveredPage() {
   }, []);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
     fetchOrders();
-  }, [isAuthenticated, fetchOrders]);
+  }, [fetchOrders]);
 
   const stats = useMemo(() => {
     const revenue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
@@ -43,30 +40,14 @@ export default function AdminDeliveredPage() {
     return { count: orders.length, revenue, coins };
   }, [orders]);
 
-  if (!isAuthenticated) {
-    return (
-      <main className="min-h-screen flex items-center justify-center px-4">
-        <div className="w-full max-w-md border-2 border-[var(--gold)] bg-[var(--charcoal)] p-8 rounded-2xl text-center">
-          <h1 className="text-lg text-[var(--cream)] mb-2" style={{ fontFamily: 'var(--font-arcade)' }}>ADMIN ACCESS</h1>
-          <p className="text-sm text-[var(--pewter)] mb-6">Sign in with an admin account to view delivered orders.</p>
-          <a href="/login" className="deco-btn deco-btn-crimson w-full inline-block">GO TO LOGIN</a>
-        </div>
-      </main>
-    );
-  }
-
   return (
-    <main className="min-h-screen px-4 py-8 sm:px-8">
+    <main>
       <div className="deco-container">
-        <header className="mb-8 flex flex-col gap-4 border-2 border-[var(--gold)] bg-[var(--charcoal)] p-6 md:flex-row md:items-center md:justify-between rounded-2xl">
-          <div>
-            <p className="text-[11px] text-[var(--gold)] uppercase tracking-[0.15em]" style={{ fontFamily: 'var(--font-arcade)' }}>Admin</p>
-            <h1 className="mt-2 text-xl text-[var(--cream)] uppercase" style={{ fontFamily: 'var(--font-arcade)' }}>Delivered Orders</h1>
-          </div>
-          <div className="flex gap-3">
-            <Link href="/admin" className="deco-btn deco-btn-sm">Back to Dashboard</Link>
-          </div>
-        </header>
+        <AdminHeader
+          title="Delivered orders"
+          subtitle="Completed orders, moved out of the live feed so the overview only shows work in progress."
+          actions={<Link href="/admin" className="deco-btn deco-btn-sm">Back to overview</Link>}
+        />
 
         {/* Summary */}
         <section className="grid gap-4 md:grid-cols-3">

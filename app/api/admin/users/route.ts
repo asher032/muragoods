@@ -2,13 +2,16 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
 import User from '@/app/lib/models/User';
 import Order from '@/app/lib/models/Order';
-import { requireAdmin } from '@/app/lib/session';
+import { requireStaff } from '@/app/lib/access-control';
 
-// GET — List all users with stats (admin session required)
+// GET — List all users with stats.
+//
+// Scope: `support` — reading the account table to answer a member is routine
+// support work. Editing or deleting an account is not; see /api/admin/delete-user.
 export async function GET(req: Request) {
   try {
-    const auth = await requireAdmin(req);
-    if (auth.response) return auth.response;
+    const guard = await requireStaff(req, ['support']);
+    if (!guard.ok) return guard.response;
 
     await dbConnect();
     const url = new URL(req.url);

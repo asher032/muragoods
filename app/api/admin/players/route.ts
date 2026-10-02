@@ -5,7 +5,7 @@ import GameProgress from '@/app/lib/models/GameProgress';
 import UserPreference from '@/app/lib/models/UserPreference';
 import GameReward from '@/app/lib/models/GameReward';
 import UserLibrary from '@/app/lib/models/UserLibrary';
-import { requireAdminEither as requireAdmin } from '@/app/lib/admin-guard';
+import { requireStaff } from '@/app/lib/access-control';
 import { playerKey } from '@/app/lib/gameserver';
 
 export const dynamic = 'force-dynamic';
@@ -15,8 +15,8 @@ export const runtime = 'nodejs';
 // their linked ecosystem state. Admin-only; shows no tokens or secrets,
 // only linked identities and game activity.
 export async function GET(req: Request) {
-  const gate = await requireAdmin(req);
-  if (gate.response) return gate.response;
+  const gate = await requireStaff(req, ['technical']);
+  if (!gate.ok) return gate.response;
   try {
     const q = (new URL(req.url).searchParams.get('search') || '').trim().slice(0, 80);
     if (q.length < 2) return NextResponse.json({ success: true, players: [] });
