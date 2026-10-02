@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { useState } from 'react';
 import { usePlayback } from '@/app/lib/murastream/playback/client';
 import { GlassButton } from '@/app/components/ui/GlassButton';
 
@@ -43,12 +43,34 @@ export default function PlayButton({
   episode?: number;
   variant?: Variant;
 }) {
+  // Every card on a catalog page resolving independently would fire one
+  // request per title — dozens of identical upstream lookups per page view.
+  // The button still only says "Watch Now" when the resolver confirms a
+  // playable authorized source; it just does not interrogate the network to
+  // decide what to say before the viewer has expressed interest.
+  const [activated, setActivated] = useState(false);
+
   const { phase, source } = usePlayback({
     mediaType,
     tmdbId,
     season: mediaType === 'tv' ? season : null,
     episode: mediaType === 'tv' ? episode : null,
+    // Resolve lazily. A catalog grid must not fan out into N resolver calls.
+    enabled: activated,
   });
+
+  if (!activated) {
+    return (
+      <GlassButton
+        variant="secondary"
+        aria-label="Check playback availability"
+        onClick={() => setActivated(true)}
+      >
+        {PLAY_ICON}
+        View &amp; play
+      </GlassButton>
+    );
+  }
 
   if (phase === 'loading') {
     return (
@@ -70,11 +92,13 @@ export default function PlayButton({
     );
   }
 
-  // No authorized source. The title is still browsable — the button just
-  // stops promising playback.
-  const detailsHref = `/murastream/${mediaType}/${tmdbId}`;
+  // No licensed source. The title is still browsable — the button just stops
+  // promising playback it cannot deliver.
   return (
-    <GlassButton variant="secondary" href={detailsHref}>
+    <GlassButton
+      variant="secondary"
+      href={`/murastream/${mediaType}/${tmdbId}`}
+    >
       View details
     </GlassButton>
   );

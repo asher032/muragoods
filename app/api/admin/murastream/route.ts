@@ -5,7 +5,8 @@ import {
   resolvePlayback,
   statusForDisplay,
 } from '@/app/lib/murastream/playback/resolver';
-import { FIRST_PARTY_MANIFEST } from '@/app/lib/murastream/playback/authorized-sources';
+import { FIRST_PARTY_MANIFEST, FIRST_PARTY_ATTRIBUTION } from '@/app/lib/murastream/playback/authorized-sources';
+import { isRetryable } from '@/app/lib/murastream/playback/types';
 import { NON_PLAYABLE, REASON_MESSAGE } from '@/app/lib/murastream/playback/types';
 import { PLAYBACK_FAILURE_COUNT, recentPlaybackFailures } from '@/app/lib/murastream/playback/log';
 
@@ -50,13 +51,20 @@ export async function GET(req: Request) {
       titles: inventory.titles,
       episodes: inventory.episodes,
       sources,
+      // Why each registered title is distributable. An operator auditing
+      // "is this actually licensed" should not have to take the manifest's
+      // word for it.
+      attribution: FIRST_PARTY_ATTRIBUTION,
       note: inventory.titles === 0
         ? 'No Muragoods-owned media is registered. Until an entry is added to the '
           + 'first-party manifest, every title reports METADATA_AVAILABLE / '
-          + '"Playback source unavailable" — which is the honest answer, not a fault.'
+          + 'SOURCE_NOT_FOUND — which is the honest answer, not a fault.'
         : null,
     },
     reasons: Object.fromEntries(Object.entries(REASON_MESSAGE)),
+    retryableReasons: Object.fromEntries(
+      Object.keys(REASON_MESSAGE).map((k) => [k, isRetryable(k as never)]),
+    ),
     nonPlayable: NON_PLAYABLE,
     recentFailures: recentPlaybackFailures(25),
     totalFailures: PLAYBACK_FAILURE_COUNT,
@@ -78,8 +86,14 @@ export async function GET(req: Request) {
       request: { mediaType, tmdbId: id, season: season ? Number(season) : null, episode: episode ? Number(episode) : null },
       status: result.status,
       reason: result.reason,
+      // Whether a retry could change the answer. An operator triaging
+      // "why is this title not playing" needs to know whether to wait.
+      retryable: isRetryable(result.reason),
       message: display.headline || null,
       canPlay: display.canPlay,
+      // Per-provider diagnostics: which step was tried and how it failed.
+      // Server-only detail, surfaced here because this route is staff-gated.
+      diagnostics: result.diagnostics ?? null,
       // Sources only on PLAYABLE — never a partially-resolved list.
       sources: result.status === 'PLAYABLE' ? result.sources : [],
       trailers: result.trailers.map((t) => ({ url: t.url, label: t.label, kind: t.kind })),

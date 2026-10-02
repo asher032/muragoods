@@ -28,25 +28,33 @@ export type PlaybackStatus =
 
 /** Machine-readable cause. Every non-PLAYABLE outcome has one. */
 export type PlaybackReason =
-  | 'SOURCE_404'
+  | 'SOURCE_NOT_FOUND'
   | 'SOURCE_INVALID'
   | 'PROVIDER_TIMEOUT'
-  | 'EPISODE_NOT_RESOLVED'
+  | 'PROVIDER_ERROR'
+  | 'EPISODE_NOT_FOUND'
   | 'SEASON_NOT_RESOLVED'
   | 'REGION_BLOCKED'
   | 'SOURCE_NOT_AUTHORIZED'
+  | 'PLAYER_INCOMPATIBLE'
   | 'PLAYBACK_SERVICE_UNAVAILABLE'
+  | 'MEDIA_ID_INVALID'
+  | 'MEDIA_TYPE_MISMATCH'
   | 'INVALID_REQUEST';
 
 export const PLAYBACK_REASONS: readonly PlaybackReason[] = [
-  'SOURCE_404',
+  'SOURCE_NOT_FOUND',
   'SOURCE_INVALID',
   'PROVIDER_TIMEOUT',
-  'EPISODE_NOT_RESOLVED',
+  'PROVIDER_ERROR',
+  'EPISODE_NOT_FOUND',
   'SEASON_NOT_RESOLVED',
   'REGION_BLOCKED',
   'SOURCE_NOT_AUTHORIZED',
+  'PLAYER_INCOMPATIBLE',
   'PLAYBACK_SERVICE_UNAVAILABLE',
+  'MEDIA_ID_INVALID',
+  'MEDIA_TYPE_MISMATCH',
   'INVALID_REQUEST',
 ];
 
@@ -126,17 +134,48 @@ export interface PlaybackDiagnostic {
  * it says the source could not be produced, never WHY in a way that could
  * describe internal infrastructure, and never reveals a provider or a URL.
  */
+/**
+ * User-facing text.
+ *
+ * Deliberately vague and identical in shape across causes: it says the
+ * source could not be produced, never WHY in a way that could describe
+ * internal infrastructure, and never reveals a provider or a URL.
+ *
+ * Every message here is written for a VIEWER. "No authorized source" — the
+ * old wording — is an internal term describing Muragoods' licensing posture,
+ * not something a viewer can act on or understand, so it does not appear in
+ * any user-visible string. Each message also implies what to do next.
+ */
 export const REASON_MESSAGE: Record<PlaybackReason, string> = {
-  SOURCE_404: 'Playback source unavailable.',
-  SOURCE_INVALID: 'Playback source unavailable.',
-  PROVIDER_TIMEOUT: 'The playback service took too long to respond.',
-  EPISODE_NOT_RESOLVED: 'This episode has no authorized source right now.',
-  SEASON_NOT_RESOLVED: 'This season is not available.',
-  REGION_BLOCKED: 'This title is not available in your region.',
-  SOURCE_NOT_AUTHORIZED: 'Playback source unavailable.',
-  PLAYBACK_SERVICE_UNAVAILABLE: 'Playback service temporarily unavailable.',
-  INVALID_REQUEST: 'That request could not be understood.',
+  SOURCE_NOT_FOUND: "This title isn't available for playback right now.",
+  SOURCE_INVALID: "This title isn't available for playback right now.",
+  PROVIDER_TIMEOUT: "Playback couldn't be started. Try again.",
+  PROVIDER_ERROR: "Playback couldn't be started. Try again.",
+  EPISODE_NOT_FOUND: "This episode isn't available for playback right now.",
+  SEASON_NOT_RESOLVED: "This season isn't available right now.",
+  REGION_BLOCKED: "This title isn't available in your region.",
+  SOURCE_NOT_AUTHORIZED: "This title isn't available for playback right now.",
+  PLAYER_INCOMPATIBLE: "Your browser can't play this video format.",
+  PLAYBACK_SERVICE_UNAVAILABLE: 'Playback service is temporarily unavailable.',
+  MEDIA_ID_INVALID: "This title isn't available for playback right now.",
+  MEDIA_TYPE_MISMATCH: "This title isn't available for playback right now.",
+  INVALID_REQUEST: "That request could not be understood.",
 };
+
+/**
+ * Whether a Try Again button is meaningful for a reason.
+ *
+ * Only faults that can actually recover get one. Offering "Try again" for a
+ * title with no licensed source would be an infinite loop of a request whose
+ * answer cannot change.
+ */
+export function isRetryable(reason: PlaybackReason | null): boolean {
+  if (!reason) return false;
+  return reason === 'PROVIDER_TIMEOUT'
+    || reason === 'PROVIDER_ERROR'
+    || reason === 'PLAYBACK_SERVICE_UNAVAILABLE'
+    || reason === 'SOURCE_INVALID';
+}
 
 /** Statuses from which the player must never be given a URL. */
 export const NON_PLAYABLE: ReadonlySet<PlaybackStatus> = new Set<PlaybackStatus>([

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { resolvePlayback } from '@/app/lib/murastream/playback/resolver';
 import { setValidationOrigin } from '@/app/lib/murastream/playback/validate';
-import { REASON_MESSAGE, type ResolveResult } from '@/app/lib/murastream/playback/types';
+import { validateResolveParams } from '@/app/lib/murastream/playback/request';
+import { REASON_MESSAGE, isRetryable, type ResolveResult } from '@/app/lib/murastream/playback/types';
 import { logPlaybackFailure, logPlaybackResolved, newRequestId } from '@/app/lib/murastream/playback/log';
 import { getSessionUser } from '@/app/lib/session';
 
@@ -14,8 +15,9 @@ export const runtime = 'nodejs';
 // PLAYABLE with validated authorized sources, or a real reason code.
 //
 // The response deliberately OMITS `diagnostics` and never echoes a provider
-// URL, status line or upstream error. Detail goes to the server log only.
-
+// URL, status line or upstream error. Detail goes to the server log only,
+// reachable by an operator through the admin panel via the requestId.
+//
 // No caching at the HTTP layer: the resolver owns cache state, and a cached
 // HTTP response would resurrect a failure the resolver has already recovered
 // from.
@@ -28,10 +30,18 @@ function publicView(result: ResolveResult) {
   const message = result.status === 'PLAYABLE' || !result.reason
     ? ''
     : REASON_MESSAGE[result.reason];
+  // A Try Again button is honest when the fault is a fault rather than a
+  // deliberate absence. TEMPORARILY_FAILED means the resolver itself judged
+  // this recoverable (a provider blip, or a registered asset that is missing
+  // from the current deploy), so it is always worth retrying. A permanent
+  // absence is not, and offering retry there would be an endless loop against
+  // an answer that cannot change.
+  const retryable = result.status === 'TEMPORARILY_FAILED' || isRetryable(result.reason);
   return {
     status: result.status,
     reason: result.reason,
     message,
+    retryable,
     mediaType: result.mediaType,
     tmdbId: result.tmdbId,
     season: result.season,
@@ -60,41 +70,50 @@ export async function GET(req: Request) {
   // a healthy asset as unavailable on every host but that one.
   setValidationOrigin(origin);
 
-  const mediaType: 'movie' | 'tv' = searchParams.get('mediaType') === 'tv' ? 'tv' : 'movie';
-  const tmdbId = Number(searchParams.get('tmdbId') || 0);
-  const seasonRaw = searchParams.get('season');
-  const episodeRaw = searchParams.get('episode');
-  const season = seasonRaw === null ? null : Number(seasonRaw);
-  const episode = episodeRaw === null ? null : Number(episodeRaw);
-
   // userId is for logging only; it is derived server-side from the session and
   // never influences which sources are returned.
   const viewer = await getSessionUser(req).catch(() => null);
 
-  if (!Number.isFinite(tmdbId) || tmdbId <= 0) {
+  // ── Strict validation ────────────────────────────────────────────────
+  // A malformed request is a 400 with its own reason, never a coerced
+  // resolve. `mediaType` is required (it used to silently default to movie),
+  // `tmdbId` must be a positive integer, and season/episode are refused for
+  // a movie rather than dropped.
+  const outcome = validateResolveParams({
+    mediaType: searchParams.get('mediaType'),
+    tmdbId: searchParams.get('tmdbId'),
+    season: searchParams.get('season'),
+    episode: searchParams.get('episode'),
+  });
+
+  if (!outcome.ok) {
     logPlaybackFailure({
       requestId,
       userId: viewer?.userId,
-      mediaType,
-      tmdbId,
-      season,
-      episode,
-      reason: 'INVALID_REQUEST',
-      status: 'UNAVAILABLE',
+      mediaType: outcome.received.mediaType || 'unknown',
+      tmdbId: Number(outcome.received.tmdbId) || 0,
+      season: outcome.received.season ? Number(outcome.received.season) : null,
+      episode: outcome.received.episode ? Number(outcome.received.episode) : null,
+      reason: outcome.reason,
+      status: 'INVALID',
       responseTimeMs: Date.now() - started,
     });
     return NextResponse.json(
-      { status: 'UNAVAILABLE', reason: 'INVALID_REQUEST', message: REASON_MESSAGE.INVALID_REQUEST, sources: [], trailers: [], canPlay: false },
+      {
+        status: 'UNAVAILABLE',
+        reason: outcome.reason,
+        message: REASON_MESSAGE[outcome.reason],
+        retryable: false,
+        sources: [],
+        trailers: [],
+        canPlay: false,
+        requestId,
+      },
       { status: 400, headers: noStore },
     );
   }
 
-  // Season/episode are only meaningful for TV, and are dropped for a movie so
-  // the movie path can never receive them.
-  const request = mediaType === 'tv'
-    ? { mediaType, tmdbId, season, episode }
-    : { mediaType, tmdbId };
-
+  const request = outcome.request;
   const result = await resolvePlayback(request);
 
   const elapsed = Date.now() - started;
@@ -102,8 +121,8 @@ export async function GET(req: Request) {
     logPlaybackResolved({
       requestId,
       userId: viewer?.userId,
-      mediaType,
-      tmdbId,
+      mediaType: request.mediaType,
+      tmdbId: request.tmdbId,
       season: result.season,
       episode: result.episode,
       source: result.sources[0]?.provider ?? null,
@@ -116,8 +135,8 @@ export async function GET(req: Request) {
     logPlaybackFailure({
       requestId,
       userId: viewer?.userId,
-      mediaType,
-      tmdbId,
+      mediaType: request.mediaType,
+      tmdbId: request.tmdbId,
       season: result.season,
       episode: result.episode,
       source: result.diagnostics?.[0]?.provider ?? null,

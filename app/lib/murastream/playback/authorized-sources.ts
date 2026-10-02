@@ -20,7 +20,10 @@ import type { PlaybackSource, AuthorizationClass, SourceKind } from './types';
 //     the episode itself.
 //
 // ── Adding first-party media ────────────────────────────────────────────
-// Drop the file in `public/media/<slug>/` and add one entry. No other file
+// Drop the file anywhere under `public/media/` and set `file` to its path
+// relative to that directory (it may contain subdirectories, e.g.
+// "betty-boop/s01e01.mp4"). The playback URL is built from `file` alone, so
+// the slug is a label for the catalog, not a path segment. No other file
 // needs to change, and no playback URL is hardcoded in a component.
 
 // First-party media is discovered from a manifest so adding a title is a
@@ -44,12 +47,97 @@ interface FirstPartyEntry {
 /**
  * Media Muragoods owns or is licensed to distribute.
  *
- * Empty by design: shipping an empty registry is the honest default. Until a
- * title is added here, the resolver returns METADATA_AVAILABLE and the UI
- * says playback is unavailable — which is the correct answer, and far better
- * than a source that injects advertising.
+ * Every entry below is a title whose licence permits redistribution to the
+ * public. Nothing here is scraped, no DRM is circumvented, and no paywall or
+ * geographic restriction is bypassed — these are works the public owns the
+ * right to share:
+ *
+ *   Betty Boop (1932-1935) — Fleischer Studios / Paramount. Un-renewed
+ *     copyright, in the public domain in the United States. Distributed by
+ *     Prelinger Archives via the Internet Archive `opensource_movies`
+ *     collection.
+ *
+ *   Big Buck Bunny (2008) — Blender Foundation / Blender Institute, released
+ *     under Creative Commons Attribution 3.0, which explicitly permits
+ *     redistribution with attribution.
+ *
+ * A title absent from this list is NOT unlicensed-and-hidden; it is simply a
+ * title Muragoods holds no distributable copy of, and the resolver reports
+ * SOURCE_NOT_FOUND for it honestly.
  */
-export const FIRST_PARTY_MANIFEST: FirstPartyEntry[] = [];
+export const FIRST_PARTY_MANIFEST: FirstPartyEntry[] = [
+  // ── Movies ──────────────────────────────────────────────────────────
+  {
+    slug: 'big-buck-bunny',
+    tmdbId: 10378,
+    title: 'Big Buck Bunny',
+    mediaType: 'movie',
+    file: 'big-buck-bunny.mp4',
+    container: 'mp4',
+    durationSec: 634,
+    posterPath: null,
+    backdropPath: null,
+  },
+
+  // ── TV: Betty Boop (1932), public domain ─────────────────────────────
+  // A real episodic series. Season 1 holds three distinct shorts, so episode
+  // switching resolves to a genuinely different file per episode rather than
+  // reusing the previous episode's source.
+  {
+    slug: 'betty-boop',
+    tmdbId: 323155,
+    title: 'Betty Boop',
+    mediaType: 'tv',
+    file: 'betty-boop/s01e01-silly-scandals.mp4',
+    container: 'mp4',
+    durationSec: 480,
+    season: 1,
+    episode: 1,
+    totalEpisodes: 3,
+  },
+  {
+    slug: 'betty-boop',
+    tmdbId: 323155,
+    title: 'Betty Boop',
+    mediaType: 'tv',
+    file: 'betty-boop/s01e02-minnie-the-moocher.mp4',
+    container: 'mp4',
+    durationSec: 420,
+    season: 1,
+    episode: 2,
+    totalEpisodes: 3,
+  },
+  {
+    slug: 'betty-boop',
+    tmdbId: 323155,
+    title: 'Betty Boop',
+    mediaType: 'tv',
+    file: 'betty-boop/s01e03-making-stars.mp4',
+    container: 'mp4',
+    durationSec: 400,
+    season: 1,
+    episode: 3,
+    totalEpisodes: 3,
+  },
+];
+
+/** Licensing/attribution for the registered media, surfaced in the admin panel. */
+export const FIRST_PARTY_ATTRIBUTION: Array<{
+  title: string;
+  rights: string;
+  source: string;
+}> = [
+  {
+    title: 'Big Buck Bunny (2008)',
+    rights: 'Creative Commons Attribution 3.0 (CC BY 3.0) — Blender Foundation / Blender Institute',
+    source: 'archive.org — BigBuckBunny_124',
+  },
+  {
+    title: 'Betty Boop — Season 1 (1932-1935 shorts)',
+    rights: 'Public domain in the United States (un-renewed copyright, Fleischer Studios / Paramount)',
+    source: 'archive.org — opensource_movies collection',
+  },
+];
 
 const MEDIA_BASE = '/media';
 
@@ -60,7 +148,11 @@ function firstPartySource(entry: FirstPartyEntry): PlaybackSource {
     authorization: 'first_party' as AuthorizationClass,
     kind: 'FULL_PLAYBACK' as SourceKind,
     mediaType: entry.mediaType,
-    url: `${MEDIA_BASE}/${entry.slug}/${entry.file}`,
+    // `file` is the path under public/media, so it may itself contain
+    // subdirectories. Prefixing the slug again would build a path that does
+    // not exist — which validated as a 404 and surfaced as an unplayable
+    // title even though the file was present and served correctly.
+    url: `${MEDIA_BASE}/${entry.file}`,
     container: entry.container ?? 'mp4',
     tmdbId: entry.tmdbId,
     season: isTv ? (entry.season ?? 1) : null,

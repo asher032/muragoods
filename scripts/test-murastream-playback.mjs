@@ -163,16 +163,17 @@ check('all five states are defined', () => {
 
 check('every non-PLAYABLE outcome carries a reason', () => {
   const src = readFileSync('app/lib/murastream/playback/types.ts', 'utf8');
-  for (const r of ['SOURCE_404', 'PROVIDER_TIMEOUT', 'EPISODE_NOT_RESOLVED', 'REGION_BLOCKED',
-    'SOURCE_NOT_AUTHORIZED', 'SOURCE_INVALID', 'PLAYBACK_SERVICE_UNAVAILABLE']) {
+  for (const r of ['SOURCE_NOT_FOUND', 'SOURCE_INVALID', 'PROVIDER_TIMEOUT', 'PROVIDER_ERROR',
+    'EPISODE_NOT_FOUND', 'REGION_BLOCKED', 'SOURCE_NOT_AUTHORIZED', 'PLAYER_INCOMPATIBLE',
+    'PLAYBACK_SERVICE_UNAVAILABLE', 'MEDIA_ID_INVALID', 'MEDIA_TYPE_MISMATCH']) {
     assert.ok(src.includes(r), `missing reason code ${r}`);
   }
 });
 
 check('every reason code has a safe user-facing message', () => {
   const src = readFileSync('app/lib/murastream/playback/types.ts', 'utf8');
-  const block = src.slice(src.indexOf('REASON_MESSAGE'), src.indexOf('/** Statuses from which'));
-  for (const r of ['SOURCE_404', 'PROVIDER_TIMEOUT', 'EPISODE_NOT_RESOLVED', 'REGION_BLOCKED',
+  const block = src.slice(src.indexOf('REASON_MESSAGE'), src.indexOf('/**\n * Whether a Try Again'));
+  for (const r of ['SOURCE_NOT_FOUND', 'PROVIDER_TIMEOUT', 'EPISODE_NOT_FOUND', 'REGION_BLOCKED',
     'SOURCE_NOT_AUTHORIZED', 'SOURCE_INVALID', 'PLAYBACK_SERVICE_UNAVAILABLE', 'INVALID_REQUEST']) {
     assert.ok(block.includes(`${r}:`), `no user-facing message for ${r}`);
   }
@@ -180,7 +181,7 @@ check('every reason code has a safe user-facing message', () => {
 
 check('a title with metadata but no source reports METADATA_AVAILABLE', () => {
   const src = readFileSync('app/lib/murastream/playback/resolver.ts', 'utf8');
-  assert.ok(src.includes("status: 'METADATA_AVAILABLE'"),
+  assert.ok(src.includes("emptyResult('METADATA_AVAILABLE'"),
     'missing source must be an honest metadata state, not a fake availability');
 });
 
@@ -205,11 +206,58 @@ check('no raw "Watch Now" remains on a landing page', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 section('TV resolution: real seasons and episodes');
 
+check('no viewer-facing string leaks internal licensing wording', () => {
+  // "No authorized source" is Muragoods' licensing posture, not something a
+  // viewer can act on. It must not appear in any user-visible surface.
+  const surfaces = [
+    'app/lib/murastream/playback/types.ts',
+    'app/lib/murastream/playback/client.ts',
+    'app/murastream/components/PlaybackStatePanel.tsx',
+    'app/murastream/watch/page.tsx',
+  ];
+  for (const f of surfaces) {
+    const src = readFileSync(f, 'utf8');
+    // A mention inside a comment explaining WHY the phrase is banned is fine;
+    // a quoted string that would render is not.
+    const rendered = src
+      .split('\n')
+      .filter((l) => !l.trim().startsWith('//') && !l.trim().startsWith('*') && !l.trim().startsWith('/*'))
+      .join('\n');
+    assert.ok(!rendered.includes('No authorized source'),
+      `${f} exposes "No authorized source" to a viewer`);
+  }
+});
+
+check('the player offers Try Again only when a retry can change the answer', () => {
+  const types = readFileSync('app/lib/murastream/playback/types.ts', 'utf8');
+  assert.ok(types.includes('isRetryable'), 'retryability must be decided centrally');
+  const fn = types.slice(types.indexOf('export function isRetryable'));
+  // A permanently unplayable title must never be retryable.
+  assert.ok(!fn.slice(0, fn.indexOf('}')).includes('SOURCE_NOT_FOUND'),
+    'a title with no licensed source must not invite an endless retry');
+  assert.ok(fn.includes('PROVIDER_TIMEOUT'), 'a timeout must be retryable');
+});
+
+check('every failure state offers a way forward', () => {
+  const panel = readFileSync('app/murastream/components/PlaybackStatePanel.tsx', 'utf8');
+  for (const state of ['failed', 'blocked', 'error']) {
+    assert.ok(panel.includes(`${state}:`), `missing copy for the ${state} state`);
+  }
+  assert.ok(panel.includes('Try again'), 'a retry affordance must exist');
+});
+
 check('the movie path cannot receive season or episode', () => {
-  const src = readFileSync('app/api/murastream/playback/route.ts', 'utf8');
-  assert.ok(src.includes("mediaType === 'tv'\n    ? { mediaType, tmdbId, season, episode }\n    : { mediaType, tmdbId }")
-    || /: \{ mediaType, tmdbId, season, episode \}/.test(src),
-    'season/episode must only be forwarded for tv');
+  // The API route now builds a strictly-validated request, and a movie that
+  // arrives with season/episode is refused as MEDIA_TYPE_MISMATCH rather than
+  // having the values quietly dropped.
+  const route = readFileSync('app/api/murastream/playback/route.ts', 'utf8');
+  assert.ok(route.includes('validateResolveParams'),
+    'the route must validate before resolving');
+  const req = readFileSync('app/lib/murastream/playback/request.ts', 'utf8');
+  assert.ok(req.includes("mediaType: 'movie', tmdbId }"),
+    'a movie request must be built without season or episode');
+  assert.ok(req.includes('MEDIA_TYPE_MISMATCH'),
+    'season/episode on a movie must be refused, not dropped');
   const clientSrc = readFileSync('app/lib/murastream/playback/client.ts', 'utf8');
   assert.ok(clientSrc.includes("if (mediaType === 'tv')"),
     'the client must not send season/episode for a movie');
@@ -238,7 +286,7 @@ check('episode switching drives the URL and forces a new resolution', () => {
 
 check('a missing episode is distinguished from a missing series', () => {
   const src = readFileSync('app/lib/murastream/playback/resolver.ts', 'utf8');
-  assert.ok(src.includes("known ? 'EPISODE_NOT_RESOLVED' : 'SOURCE_404'"),
+  assert.ok(src.includes("known ? 'EPISODE_NOT_FOUND' : 'SOURCE_NOT_FOUND'"),
     'the reason must name which step failed');
 });
 

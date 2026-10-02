@@ -30,12 +30,18 @@ interface Failure {
 interface Probe {
   request: { mediaType: string; tmdbId: number; season: number | null; episode: number | null };
   status: string; reason: string | null; message: string | null; canPlay: boolean;
+  retryable?: boolean;
+  diagnostics?: { provider: string; outcome: string; detail: string; httpStatus?: number | null; durationMs?: number | null }[] | null;
   sources: unknown[]; trailers: { url: string; label: string; kind: string }[];
 }
 
 interface Payload {
-  registry: { titles: number; episodes: number; sources: Source[]; note: string | null };
+  registry: {
+    titles: number; episodes: number; sources: Source[]; note: string | null;
+    attribution?: { title: string; rights: string; source: string }[];
+  };
   reasons: Record<string, string>;
+  retryableReasons?: Record<string, boolean>;
   recentFailures: Failure[];
   totalFailures: number;
   probe?: Probe;
@@ -114,6 +120,25 @@ export default function AdminMurastreamPage() {
             </div>
           ) : null}
 
+          {/* Why each registered title may lawfully be redistributed. An
+              operator auditing licensing should not have to take the
+              manifest's word for it. */}
+          {reg.attribution && reg.attribution.length > 0 ? (
+            <Panel
+              title="Licensing"
+              hint="The rights under which each registered title may be served. Muragoods never circumvents DRM, paywalls or geographic restrictions, and TMDB is used for metadata only — never as a streaming provider."
+            >
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, lineHeight: 1.7, color: 'var(--mg-text-muted)' }}>
+                {reg.attribution.map((a) => (
+                  <li key={a.title}>
+                    <strong style={{ color: 'var(--mg-text)' }}>{a.title}</strong> — {a.rights}
+                    {a.source ? <span style={{ opacity: 0.7 }}> ({a.source})</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          ) : null}
+
           {/* ── Authorized sources ─────────────────────────────────────── */}
           <Panel
             title="Authorized media sources"
@@ -122,8 +147,8 @@ export default function AdminMurastreamPage() {
             {reg.sources.length === 0 ? (
               <Empty>
                 No first-party media is registered. Until an entry exists, every title correctly
-                reports “playback source unavailable” — the catalog works, the content simply is
-                not licensed.
+                reports that it is not available for playback — the catalog works, the content
+                simply is not licensed.
               </Empty>
             ) : (
               <div style={{ overflowX: 'auto' }}>
@@ -202,6 +227,13 @@ export default function AdminMurastreamPage() {
                       {probe.reason} — {data.reasons[probe.reason] ?? ''}
                     </p>
                   ) : null}
+                  {/* Whether waiting could change the answer. An operator
+                      triaging "why is this not playing" needs to know. */}
+                  {probe.retryable !== undefined && (
+                    <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--mg-text-muted)' }}>
+                      Retry would help: <strong>{probe.retryable ? 'yes' : 'no'}</strong>
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p style={{ margin: 0, fontSize: 13, color: 'var(--mg-text-muted)', lineHeight: 1.55 }}>
@@ -211,6 +243,18 @@ export default function AdminMurastreamPage() {
                     Sources returned: <strong>{probe.sources.length}</strong>
                     {probe.sources.length === 0 ? ' — a partially-resolved list is never returned, so zero means zero.' : null}
                   </p>
+                  {/* Which upstream step was tried and how it answered. */}
+                  {probe.diagnostics && probe.diagnostics.length > 0 && (
+                    <ul style={{ margin: '10px 0 0', paddingLeft: 18, fontSize: 12.5, color: 'var(--mg-text-muted)' }}>
+                      {probe.diagnostics.map((d, i) => (
+                        <li key={i}>
+                          {d.provider} — {d.outcome} ({d.detail}
+                          {d.httpStatus ? `, HTTP ${d.httpStatus}` : ''}
+                          {d.durationMs != null ? `, ${d.durationMs}ms` : ''})
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
             ) : null}

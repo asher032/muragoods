@@ -11,6 +11,7 @@ import {
   writeCache,
 } from './validate';
 import { validateSource } from './validate';
+import { isPlausibleRequest } from './request';
 import type {
   PlaybackSource,
   PlaybackStatus,
@@ -34,6 +35,17 @@ import type {
 // only contribution is an optional, clearly-labelled trailer.
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
+
+function emptyResult(
+  status: PlaybackStatus,
+  reason: PlaybackReason | null,
+  mediaType: 'movie' | 'tv',
+  tmdbId: number,
+  season: number | null = null,
+  episode: number | null = null,
+): ResolveResult {
+  return { status, reason, mediaType, tmdbId, season, episode, sources: [], trailers: [] };
+}
 
 /**
  * TMDB's official trailers, offered as an extra when playback is blocked.
@@ -117,25 +129,12 @@ async function licensedTrailers(
  * tmdbId alone.
  */
 async function resolveMovie(req: ResolveRequest): Promise<ResolveResult> {
-  const base: ResolveResult = {
-    status: 'METADATA_AVAILABLE',
-    reason: null,
-    mediaType: 'movie',
-    tmdbId: req.tmdbId,
-    season: null,
-    episode: null,
-    sources: [],
-    trailers: [],
-  };
-
   const candidate = firstPartyMovie(req.tmdbId);
   if (!candidate) {
     const { trailers, diagnostic } = await licensedTrailers('movie', req.tmdbId, '');
     return {
-      ...base,
+      ...emptyResult('METADATA_AVAILABLE', 'SOURCE_NOT_FOUND', 'movie', req.tmdbId),
       // TMDB has the title; Muragoods has no authorized source for it.
-      status: 'METADATA_AVAILABLE',
-      reason: 'SOURCE_404',
       trailers,
       diagnostics: [diagnostic],
     };
@@ -144,12 +143,10 @@ async function resolveMovie(req: ResolveRequest): Promise<ResolveResult> {
   const check = await validateSource(candidate);
   if (!check.ok) {
     return {
-      ...base,
+      ...emptyResult('TEMPORARILY_FAILED', check.reason, 'movie', req.tmdbId),
       // A failure on our OWN asset is not transient in the provider sense, but
       // it is not a licence decision either — so it is reported honestly and
       // cached as temporary so a redeploy can heal it.
-      status: 'TEMPORARILY_FAILED',
-      reason: check.reason,
       diagnostics: [{
         provider: candidate.provider,
         kind: candidate.kind,
@@ -162,9 +159,7 @@ async function resolveMovie(req: ResolveRequest): Promise<ResolveResult> {
   }
 
   return {
-    ...base,
-    status: 'PLAYABLE',
-    reason: null,
+    ...emptyResult('PLAYABLE', null, 'movie', req.tmdbId),
     sources: [candidate],
     diagnostics: [{
       provider: candidate.provider,
@@ -183,21 +178,13 @@ async function resolveMovie(req: ResolveRequest): Promise<ResolveResult> {
  * to a generic "unavailable".
  */
 async function resolveEpisode(req: ResolveRequest): Promise<ResolveResult> {
-  const season = req.season ?? 1;
+  // Season 0 is TMDB's specials bucket and is a real season. It is addressed
+  // exactly like any other season — never remapped to season 1.
+  const season = req.season ?? 0;
   const episode = req.episode ?? 1;
-  const base: ResolveResult = {
-    status: 'METADATA_AVAILABLE',
-    reason: null,
-    mediaType: 'tv',
-    tmdbId: req.tmdbId,
-    season,
-    episode,
-    sources: [],
-    trailers: [],
-  };
 
-  if (season < 1 || episode < 1) {
-    return { ...base, status: 'UNAVAILABLE', reason: 'INVALID_REQUEST' };
+  if (season < 0 || episode < 1) {
+    return emptyResult('UNAVAILABLE', 'INVALID_REQUEST', 'tv', req.tmdbId, season, episode);
   }
 
   // Exact episode match. There is no nearest-episode fallback, because
@@ -209,9 +196,14 @@ async function resolveEpisode(req: ResolveRequest): Promise<ResolveResult> {
     // Distinguish "the series is unknown here" from "that episode is missing".
     const known = hasFirstPartyMedia(req.tmdbId);
     return {
-      ...base,
-      status: 'METADATA_AVAILABLE',
-      reason: known ? 'EPISODE_NOT_RESOLVED' : 'SOURCE_404',
+      ...emptyResult(
+        'METADATA_AVAILABLE',
+        known ? 'EPISODE_NOT_FOUND' : 'SOURCE_NOT_FOUND',
+        'tv',
+        req.tmdbId,
+        season,
+        episode,
+      ),
       trailers,
       diagnostics: [diagnostic],
     };
@@ -220,9 +212,7 @@ async function resolveEpisode(req: ResolveRequest): Promise<ResolveResult> {
   const check = await validateSource(candidate);
   if (!check.ok) {
     return {
-      ...base,
-      status: 'TEMPORARILY_FAILED',
-      reason: check.reason,
+      ...emptyResult('TEMPORARILY_FAILED', check.reason, 'tv', req.tmdbId, season, episode),
       diagnostics: [{
         provider: candidate.provider,
         kind: candidate.kind,
@@ -235,9 +225,7 @@ async function resolveEpisode(req: ResolveRequest): Promise<ResolveResult> {
   }
 
   return {
-    ...base,
-    status: 'PLAYABLE',
-    reason: null,
+    ...emptyResult('PLAYABLE', null, 'tv', req.tmdbId, season, episode),
     sources: [candidate],
     diagnostics: [{
       provider: candidate.provider,
@@ -251,17 +239,19 @@ async function resolveEpisode(req: ResolveRequest): Promise<ResolveResult> {
 }
 
 export async function resolvePlayback(req: ResolveRequest): Promise<ResolveResult> {
-  if (!Number.isFinite(req.tmdbId) || req.tmdbId <= 0) {
-    return {
-      status: 'UNAVAILABLE',
-      reason: 'INVALID_REQUEST',
-      mediaType: req.mediaType === 'tv' ? 'tv' : 'movie',
-      tmdbId: Number(req.tmdbId) || 0,
-      season: null,
-      episode: null,
-      sources: [],
-      trailers: [],
-    };
+  // Validate internally rather than trusting every caller. The API route
+  // already validates, but the admin probe and health endpoint call this
+  // directly, and a malformed request used to reach the full resolve path.
+  if (!isPlausibleRequest(req)) {
+    const tmdbId = Number(req?.tmdbId);
+    return emptyResult(
+      'UNAVAILABLE',
+      Number.isSafeInteger(tmdbId) && tmdbId > 0 ? 'INVALID_REQUEST' : 'MEDIA_ID_INVALID',
+      req?.mediaType === 'tv' ? 'tv' : 'movie',
+      Number.isSafeInteger(tmdbId) && tmdbId > 0 ? tmdbId : 0,
+      typeof req?.season === 'number' ? req.season : null,
+      typeof req?.episode === 'number' ? req.episode : null,
+    );
   }
 
   const key = playbackCacheKey(req.mediaType, req.tmdbId, req.season, req.episode);
@@ -272,7 +262,7 @@ export async function resolvePlayback(req: ResolveRequest): Promise<ResolveResul
       reason: null,
       mediaType: req.mediaType,
       tmdbId: req.tmdbId,
-      season: req.mediaType === 'tv' ? (req.season ?? 1) : null,
+      season: req.mediaType === 'tv' ? (req.season ?? 0) : null,
       episode: req.mediaType === 'tv' ? (req.episode ?? 1) : null,
       sources: cached.sources,
       trailers: [],
@@ -296,8 +286,8 @@ export async function resolvePlayback(req: ResolveRequest): Promise<ResolveResul
 /** Status shown to the user, derived from the real outcome. */
 export function statusForDisplay(result: ResolveResult): { headline: string; canPlay: boolean } {
   if (result.status === 'PLAYABLE') return { headline: '', canPlay: true };
-  if (result.status === 'TEMPORARILY_FAILED') return { headline: 'Playback service temporarily unavailable.', canPlay: false };
-  return { headline: 'Playback source unavailable.', canPlay: false };
+  if (result.status === 'TEMPORARILY_FAILED') return { headline: 'Playback service is temporarily unavailable.', canPlay: false };
+  return { headline: "This title isn't available for playback right now.", canPlay: false };
 }
 
 /** Registered first-party inventory, for the health endpoint. */
