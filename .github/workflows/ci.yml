@@ -282,6 +282,17 @@ jobs:
       - name: Database architecture (two clusters, one identity, no credentials)
         run: python discord-bot/scripts/test_db_architecture.py
 
+      # `add_xp` upserts on {guildId, userId}, so that pair must be UNIQUE.
+      # Without the index, two messages in one tick both miss the selector and
+      # both insert: XP splits across duplicate rows, `find_one` picks
+      # arbitrarily, and /level, the dashboard and the leaderboard disagree
+      # about the same member. This also proves the pre-index dedupe is
+      # lossless (XP is summed, highest level kept) so the index can be created
+      # on an existing database without resetting anyone's earned XP.
+      # Hermetic: mongomock-motor only, no cluster, no network.
+      - name: XP row uniqueness (lossless dedupe, guild isolation, defaults never reset)
+        run: python discord-bot/scripts/test_xp_uniqueness.py
+
       # `app.router.add_get("/x", handler)` takes the NAME `handler`. If the
       # `def` has not run yet it raises NameError — and because every handler is
       # nested inside `_health_server()`, the FIRST such failure aborts the
