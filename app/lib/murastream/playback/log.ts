@@ -118,6 +118,51 @@ export function recentPlaybackFailures(limit = 25): RecentFailure[] {
   }
 }
 
+export interface StageLogInput {
+  requestId: string;
+  event: string;
+  mediaType?: string;
+  tmdbId?: number | null;
+  season?: number | null;
+  episode?: number | null;
+  provider?: string | null;
+  source?: string | null;
+  httpStatus?: number | null;
+  detail?: string | null;
+  cacheState?: string | null;
+}
+
+/**
+ * One line per pipeline stage.
+ *
+ * This is what makes a viewer's reference id actionable: `95bd03309f2e`
+ * appears on the START line, the RESOLVER_SELECTED line, the
+ * SOURCE_VALIDATED line and the terminal READY/FAILED line, so grepping the
+ * id in production logs reconstructs the exact path the request took and the
+ * exact step it stopped at. Without this, an id only ever appeared next to a
+ * generic "unavailable".
+ */
+export function logPlaybackStage(input: StageLogInput): void {
+  try {
+    // stderr, not stdout: the playback test harnesses parse a module's stdout
+    // as its JSON result, so a stage line on stdout corrupts them. Platform
+    // log collectors capture stderr identically, so observability is unchanged.
+    process.stderr.write([
+      safe(input.event),
+      `requestId=${safe(input.requestId)}`,
+      `mediaType=${safe(input.mediaType)}`,
+      `tmdbId=${safe(input.tmdbId)}`,
+      `season=${safe(input.season)}`,
+      `episode=${safe(input.episode)}`,
+      `provider=${safe(input.provider)}`,
+      `httpStatus=${safe(input.httpStatus)}`,
+      `cacheState=${safe(input.cacheState)}`,
+      `detail=${safe(input.detail)}`,
+      `ts=${new Date().toISOString()}`,
+    ].join(' ') + '\n');
+  } catch { /* logging must never break playback */ }
+}
+
 /** Successful resolutions are logged at debug level, not warn. */
 export function logPlaybackResolved(input: Omit<FailureLogInput, 'reason'> & { reason: null }): void {
   try {

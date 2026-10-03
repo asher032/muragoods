@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { resolvePlayback } from '@/app/lib/murastream/playback/resolver';
-import { setValidationOrigin } from '@/app/lib/murastream/playback/validate';
 import { validateResolveParams } from '@/app/lib/murastream/playback/request';
 import { REASON_MESSAGE, isRetryable, type ResolveResult } from '@/app/lib/murastream/playback/types';
 import { logPlaybackFailure, logPlaybackResolved, newRequestId } from '@/app/lib/murastream/playback/log';
@@ -65,10 +64,10 @@ export async function GET(req: Request) {
   const started = Date.now();
   const { searchParams, origin } = new URL(req.url);
 
-  // Validate first-party assets against the origin that will actually serve
-  // them. Without this the validator probes a hardcoded localhost and reports
-  // a healthy asset as unavailable on every host but that one.
-  setValidationOrigin(origin);
+  // The origin that will actually serve first-party assets is threaded through
+  // to the validator per request. It was previously module-level state set by
+  // whichever request ran last, so two concurrent requests could validate
+  // against each other's origin.
 
   // userId is for logging only; it is derived server-side from the session and
   // never influences which sources are returned.
@@ -114,7 +113,7 @@ export async function GET(req: Request) {
   }
 
   const request = outcome.request;
-  const result = await resolvePlayback(request);
+  const result = await resolvePlayback(request, origin, requestId);
 
   const elapsed = Date.now() - started;
   if (result.status === 'PLAYABLE') {

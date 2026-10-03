@@ -113,9 +113,11 @@ check('the CSP allowlists no origin beyond our own and licensed trailers', () =>
   //   cdn.discordapp.com     Discord avatars
   //   i.ytimg.com            trailer thumbnails
   //   www.youtube-nocookie.com  licensed trailer embed only
+  //   stream.mux.com            video host for assets in our authorized registry
   const allowed = [
     'api.themoviedb.org', 'image.tmdb.org', 'api.tvmaze.com',
     'cdn.discordapp.com', 'i.ytimg.com', 'www.youtube-nocookie.com',
+    'stream.mux.com',
   ];
   const src = readFileSync('next.config.ts', 'utf8');
   const found = [...code('next.config.ts').matchAll(/https:\/\/([a-z0-9.-]+)/gi)].map((m) => m[1].toLowerCase());
@@ -123,10 +125,17 @@ check('the CSP allowlists no origin beyond our own and licensed trailers', () =>
   assert.deepEqual(unexpected, [], `unexpected origin(s) in the CSP: ${unexpected.join(', ')}`);
 });
 
-check('the CSP does not permit any third-party media origin', () => {
+check('media-src permits exactly one named external host, never a wildcard', () => {
   // The policy is assembled by array literal and join()'d at runtime, so the
   // directives must be parsed as individual quoted elements — a regex over the
   // source would find no ';' and swallow every following directive.
+  //
+  // This used to assert media-src allows NO external origin at all. That is no
+  // longer true: Muragoods now streams authorized assets from its own Mux
+  // account, and a CSP that blocked it would break real playback in the
+  // browser. The replacement is STRICTER than "no third-party": it pins the
+  // exact external set, so adding a second host — an ad host above all —
+  // fails this check even though it is technically not "us" either.
   const src = readFileSync('next.config.ts', 'utf8');
   const directives = [...src.matchAll(/^\s*"([a-z-]+-src|default-src)\s([^"]*)"/gm)]
     .map((m) => ({ name: m[1], value: m[2].trim() }));
@@ -135,9 +144,11 @@ check('the CSP does not permit any third-party media origin', () => {
   const media = directives.find((d) => d.name === 'media-src');
   assert.ok(media, 'media-src must be declared');
   const external = media.value.split(/\s+/).filter((d) => d.startsWith('http'));
-  assert.deepEqual(external, [],
-    `media-src must not allow third-party origins: ${external.join(', ')}`);
+  assert.deepEqual(external, ['https://stream.mux.com'],
+    `media-src external origins must be exactly the Mux video host, got: ${external.join(', ')}`);
+  assert.ok(!media.value.includes('*'), 'media-src must never wildcard a scheme or host');
   assert.ok(media.value.includes("'self'"), "media-src must keep 'self' so our own files can play");
+  assert.ok(media.value.includes('blob:'), 'media-src must keep blob: for MediaSource');
 
   // script-src is the one an ad host would abuse to run code on our origin.
   const script = directives.find((d) => d.name === 'script-src');
@@ -204,10 +215,24 @@ check('a first-party source must be same-origin', () => {
     'first_party URLs must be same-origin, which is what removes third-party injection entirely');
 });
 
-check('a licensed source may never be FULL_PLAYBACK', () => {
+check('licensed full playback is confined to HTTPS on an explicit host allowlist', () => {
+  // This replaced 'a licensed source may never be FULL_PLAYBACK'. That rule was
+  // correct while every licensed source was a third-party trailer, but it also
+  // made it impossible to stream a film Muragoods genuinely holds rights to
+  // from our own video host — the case this build exists to support.
+  //
+  // It is replaced by a NARROWER rule, not a blanket permission: full licensed
+  // playback must be HTTPS, on a host named in a literal allowlist, with no
+  // wildcard. Trailer/preview sources are unchanged.
   const src = readFileSync('app/lib/murastream/playback/authorized-sources.ts', 'utf8');
   assert.ok(src.includes("source.kind === 'TRAILER' || source.kind === 'PREVIEW'"),
-    'licensed sources are limited to trailers/previews');
+    'trailers/previews must remain unconditionally permitted for licensed sources');
+  assert.match(src, /LICENSED_FULL_PLAYBACK_HOSTS\s*=\s*\[[^\]]*stream\.mux\.com[^\]]*\]/,
+    'the licensed full-playback host must be a literal allowlist containing the Mux host');
+  assert.match(src, /url\.protocol === 'https:'/,
+    'licensed full playback must require HTTPS');
+  assert.ok(!/LICENSED_FULL_PLAYBACK_HOSTS\s*=\s*\[[^\]]*['"]\*['"]/.test(src),
+    'the licensed host allowlist must never contain a wildcard');
 });
 
 check('only the two authorization classes exist', () => {
@@ -350,8 +375,13 @@ check('episode switching drives the URL and forces a new resolution', () => {
 
 check('a missing episode is distinguished from a missing series', () => {
   const src = readFileSync('app/lib/murastream/playback/resolver.ts', 'utf8');
-  assert.ok(src.includes("known ? 'EPISODE_NOT_FOUND' : 'SOURCE_NOT_FOUND'"),
-    'the reason must name which step failed');
+  // The resolver must branch on whether the SERIES is known, not collapse
+  // "unknown series" and "unknown episode" into one reason.
+  assert.ok(src.includes("seriesKnown"), 'the resolver must distinguish a known series from an unknown one');
+  assert.ok(src.includes("'EPISODE_NOT_FOUND'"),
+    'a known series with a missing episode must name the episode as the failed step');
+  assert.ok(src.includes("'SOURCE_NOT_REGISTERED'"),
+    'an unknown series must say the source is not registered');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

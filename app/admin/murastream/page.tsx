@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { AdminHeader } from '../components/AdminShell';
+import PlaybackSourcesPanel from './PlaybackSourcesPanel';
 import {
   Banner, Empty, Field, Loading, Panel, RefreshButton, StateBadge, Stat, useAdminResource,
 } from '../components/kit';
@@ -291,6 +292,8 @@ export default function AdminMurastreamPage() {
           </Panel>
         </>
       ) : null}
+
+      <PlaybackSourcesPanel />
     </>
   );
 }

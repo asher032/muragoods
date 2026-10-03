@@ -47,11 +47,27 @@ import { FIRST_PARTY_MANIFEST } from '../app/lib/murastream/playback/authorized-
 };
 
 const out: Record<string, unknown> = {};
-const ALICE = { slug: 'authorized-film', tmdbId: 101, mediaType: 'movie', title: 'Authorized Film', file: 'a.mp4' };
-const SERIES = { slug: 'authorized-series', tmdbId: 202, mediaType: 'tv', title: 'Authorized Series', file: 's1e1.mp4', season: 1, episode: 1 };
-const SERIES_E2 = { slug: 'authorized-series', tmdbId: 202, mediaType: 'tv', title: 'Authorized Series', file: 's1e2.mp4', season: 1, episode: 2 };
-const SERIES_S2 = { slug: 'authorized-series', tmdbId: 202, mediaType: 'tv', title: 'Authorized Series', file: 's2e1.mp4', season: 2, episode: 1 };
-const SPECIALS_S1E1 = { slug: 'authorized-specials', tmdbId: 303, mediaType: 'tv', title: 'Authorized Specials', file: 'specials-s1e1.mp4', season: 0, episode: 1 };
+
+// These are SYNTHETIC fixtures, not claims about real titles. The rights gate
+// refuses anything that does not declare its own licence, so a fixture that is
+// meant to be playable has to declare one. MURAGOODS_OWNED is the honest label
+// for a file this repo commits and serves itself.
+const OWNED = {
+  rightsStatus: 'MURAGOODS_OWNED',
+  licenseType: 'Muragoods-owned test fixture',
+  licenseUrl: null,
+  rightsSourceUrl: 'https://example.invalid/test-fixture-rights',
+  attributionRequired: false,
+  attributionText: null,
+  verifiedAt: new Date('2026-01-01T00:00:00.000Z'),
+  verifiedBy: 'test fixture',
+};
+
+const ALICE = { slug: 'authorized-film', tmdbId: 101, mediaType: 'movie', title: 'Authorized Film', file: 'a.mp4', ...OWNED };
+const SERIES = { slug: 'authorized-series', tmdbId: 202, mediaType: 'tv', title: 'Authorized Series', file: 's1e1.mp4', season: 1, episode: 1, ...OWNED };
+const SERIES_E2 = { slug: 'authorized-series', tmdbId: 202, mediaType: 'tv', title: 'Authorized Series', file: 's1e2.mp4', season: 1, episode: 2, ...OWNED };
+const SERIES_S2 = { slug: 'authorized-series', tmdbId: 202, mediaType: 'tv', title: 'Authorized Series', file: 's2e1.mp4', season: 2, episode: 1, ...OWNED };
+const SPECIALS_S1E1 = { slug: 'authorized-specials', tmdbId: 303, mediaType: 'tv', title: 'Authorized Specials', file: 'specials-s1e1.mp4', season: 0, episode: 1, ...OWNED };
 (FIRST_PARTY_MANIFEST as any[]).push(ALICE, SERIES, SERIES_E2, SERIES_S2, SPECIALS_S1E1);
 
 async function run() {
@@ -98,6 +114,11 @@ function drive() {
       skipLibCheck: true,
       esModuleInterop: true,
       strict: false,
+      types: ['node'],
+      // The harness compiles the REAL app modules, so it needs the app's
+      // own '@/' alias (which maps to the repo root in this project).
+      baseUrl: repoRoot,
+      paths: { '@/*': ['./*'] },
     },
     files: ['harness.ts'],
   }));
@@ -144,8 +165,10 @@ check('a movie result never carries season or episode', () => {
   assert.equal(r.movie.episode, null);
 });
 
-check('a movie with no authorized source is METADATA_AVAILABLE, not fake-available', () => {
-  assert.equal(r.movieUnknown.status, 'METADATA_AVAILABLE');
+check('a movie with no authorized source is UNAVAILABLE, not fake-available', () => {
+  // Spec section 12: an address with no registered source is UNAVAILABLE
+  // with an exact reason — never a resolver fault, never a fabricated URL.
+  assert.equal(r.movieUnknown.status, 'UNAVAILABLE');
   assert.equal(r.movieUnknown.sources.length, 0);
   assert.ok(r.movieUnknown.reason, 'an honest reason is required');
 });
@@ -182,7 +205,9 @@ check('a missing episode is refused, never served from a neighbour', () => {
 });
 
 check('an unknown series is distinguished from a missing episode', () => {
-  assert.equal(r.seriesUnknown.status, 'METADATA_AVAILABLE');
+  // Spec section 12: an address with no registered source is UNAVAILABLE
+  // with an exact reason — never a resolver fault, never a fabricated URL.
+  assert.equal(r.seriesUnknown.status, 'UNAVAILABLE');
   assert.notEqual(r.seriesUnknown.reason, 'EPISODE_NOT_FOUND');
 });
 

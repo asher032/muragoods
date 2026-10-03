@@ -30,19 +30,13 @@ export interface ValidationOutcome {
 /**
  * Where to resolve a relative first-party URL.
  *
- * Validation must reach the SAME server that will serve the file. Falling back
- * to a hardcoded localhost would probe the wrong origin whenever the app runs
- * on any other port or host — which is why the origin is passed in from the
- * request instead of guessed.
+ * Validation must reach the SAME server that will serve the file. It used to
+ * be module-level mutable state set by whichever request ran last, which meant
+ * two concurrent requests could validate against each other's origin. It is
+ * now passed per call, so the origin belongs to the request that owns it.
  */
-let originOverride: string | null = null;
-
-export function setValidationOrigin(origin: string): void {
-  originOverride = origin;
-}
-
-function validationBase(): string {
-  if (originOverride) return originOverride;
+function validationBase(explicitOrigin?: string | null): string {
+  if (explicitOrigin) return explicitOrigin;
   const configured = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL;
   if (configured) return configured;
   return 'http://localhost:3000';
@@ -60,7 +54,7 @@ function reasonForStatus(status: number): PlaybackReason {
   return 'SOURCE_INVALID';
 }
 
-export async function validateSource(source: PlaybackSource): Promise<ValidationOutcome> {
+export async function validateSource(source: PlaybackSource, origin?: string | null): Promise<ValidationOutcome> {
   const started = Date.now();
 
   // Authorization is re-checked here, at the last gate before the player.
@@ -78,7 +72,7 @@ export async function validateSource(source: PlaybackSource): Promise<Validation
   // first_party: prove the bytes exist and are actually video.
   const absolute = source.url.startsWith('http')
     ? source.url
-    : new URL(source.url, validationBase()).toString();
+    : new URL(source.url, validationBase(origin)).toString();
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), VALIDATE_TIMEOUT_MS);
@@ -114,7 +108,7 @@ export async function validateSource(source: PlaybackSource): Promise<Validation
     // or a credential.
     const cause = (err as { cause?: { code?: string } } | null)?.cause;
     console.warn(
-      `[playback] first-party validation failed origin=${validationBase()} class=${err instanceof Error ? err.name : typeof err} cause=${cause?.code ?? '-'}`,
+      `[playback] first-party validation failed origin=${validationBase(origin)} class=${err instanceof Error ? err.name : typeof err} cause=${cause?.code ?? '-'}`,
     );
     return {
       ok: false,

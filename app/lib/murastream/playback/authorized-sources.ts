@@ -42,6 +42,34 @@ interface FirstPartyEntry {
   season?: number | null;
   episode?: number | null;
   totalEpisodes?: number | null;
+  /**
+   * Rights evidence for THIS item.
+   *
+   * A manifest entry may declare its own licence. When it does not, the
+   * registry falls back to the curator's RIGHTS_EVIDENCE table and then to
+   * UNVERIFIED — never to an optimistic default.
+   */
+  rightsStatus?: 'PUBLIC_DOMAIN' | 'CC_BY' | 'CC_BY_SA' | 'MURAGOODS_OWNED' | 'LICENSED' | 'UNVERIFIED';
+  licenseType?: string | null;
+  licenseUrl?: string | null;
+  rightsSourceUrl?: string | null;
+  attributionRequired?: boolean;
+  attributionText?: string | null;
+  verifiedAt?: Date | null;
+  verifiedBy?: string | null;
+  /**
+   * Which provider hosts the FILE.
+   *
+   * Defaults to 'first_party' — a file committed to this repo and served
+   * same-origin from /media, which is the overwhelmingly common case and the
+   * strongest ad-free guarantee. A hosted provider is opt-in per entry.
+   *
+   * Naming a provider says nothing about rights. `file` is then interpreted as
+   * that provider's asset reference (a Mux playback id), and the rights gate
+   * still runs: an entry without verified rights does not play.
+   */
+  sourceType?: 'first_party' | 'mux' | 'cloudflare_stream' | 'apivideo';
+  provider?: string;
 }
 
 /**
@@ -67,16 +95,39 @@ interface FirstPartyEntry {
  */
 export const FIRST_PARTY_MANIFEST: FirstPartyEntry[] = [
   // ── Movies ──────────────────────────────────────────────────────────
+  //
+  // Big Buck Bunny is the primary playback test and is now served from Mux.
+  // The file was uploaded to our own Mux account through
+  // POST /api/murastream/playback/sources/upload; Mux reports the asset ready
+  // at 596.5s. `file` is the Mux playback id, not a path.
+  //
+  // This REPLACES a previous same-origin registration of the same film rather
+  // than sitting beside it. Two entries at one address would leave the
+  // resolver picking between them on array order, which is exactly the kind of
+  // accidental behaviour that makes a pipeline untrustworthy.
+  //
+  // Rights are unchanged and still verified per-item: the SAME archive.org
+  // item page cleared this film before, and it clears it now, because rights
+  // attach to the FILM rather than to whichever server streams it. Uploading a
+  // file to Mux granted us nothing about Betty Boop or any other title.
   {
     slug: 'big-buck-bunny',
     tmdbId: 10378,
     title: 'Big Buck Bunny',
     mediaType: 'movie',
-    file: 'big-buck-bunny.mp4',
-    container: 'mp4',
-    durationSec: 634,
-    posterPath: null,
-    backdropPath: null,
+    file: 'yXczofuPDVnIMhXS79hKsGRONeH6EJsEamu02HMRF02hk',
+    container: 'hls',
+    durationSec: 596,
+    sourceType: 'mux',
+    provider: 'mux',
+    rightsStatus: 'CC_BY',
+    licenseType: 'Creative Commons Attribution 3.0 (CC BY 3.0)',
+    licenseUrl: 'https://creativecommons.org/licenses/by/3.0/',
+    rightsSourceUrl: 'https://archive.org/details/BigBuckBunny_124',
+    attributionRequired: true,
+    attributionText: '"Big Buck Bunny" (c) 2008 Blender Foundation - www.bigbuckbunny.org. Licensed under CC BY 3.0.',
+    verifiedAt: new Date('2026-10-03T00:00:00.000Z'),
+    verifiedBy: 'curator: archive.org item page + per-file Licence.txt',
   },
 
   // ── TV: Betty Boop (1932), public domain ─────────────────────────────
@@ -249,6 +300,16 @@ export function licensedTrailer(input: {
  * hand-roll an object and bypass the registry. Authorization is checked
  * structurally: only the two classes in `AuthorizationClass` are accepted.
  */
+/**
+ * Hosts a LICENSED source may stream full playback from.
+ *
+ * Deliberately a fixed list, not a wildcard. Muragoods owns an account with
+ * these providers and registers assets there; anything else is a host we did
+ * not choose, and a licensed record pointed at one would hand our player to an
+ * arbitrary third party — the same injection surface first_party refuses.
+ */
+const LICENSED_FULL_PLAYBACK_HOSTS = ['stream.mux.com'];
+
 export function assertAuthorized(source: PlaybackSource): boolean {
   if (source.authorization !== 'first_party' && source.authorization !== 'licensed') return false;
   if (source.authorization === 'first_party') {
@@ -256,6 +317,27 @@ export function assertAuthorized(source: PlaybackSource): boolean {
     // would reintroduce exactly the injection surface this design removes.
     return source.url.startsWith('/') && !source.url.startsWith('//');
   }
-  // Licensed sources may only ever be trailers/previews.
-  return source.kind === 'TRAILER' || source.kind === 'PREVIEW';
+
+  // Licensed trailers/previews are unchanged: a short labelled preview is not
+  // the thing the rights gate exists to protect against.
+  if (source.kind === 'TRAILER' || source.kind === 'PREVIEW') return true;
+
+  // Full licensed playback used to be refused outright ("licensed sources may
+  // only ever be trailers/previews"). That rule predated the rights gate and
+  // was a blunt stand-in for "we may not hold full rights to this film". It is
+  // now BOTH replaced and tightened:
+  //
+  //   - The rights gate is the real authority, and it is strictly stronger. A
+  //     record only reaches a provider adapter after findInRecords accepted it,
+  //     which requires rightsStatus to be PUBLIC_DOMAIN, CC_BY, CC_BY_SA,
+  //     MURAGOODS_OWNED or LICENSED. An unverified title never gets this far.
+  //   - Off-origin is no longer blanket-allowed. It must be HTTPS AND on a host
+  //     we deliberately registered with, so this cannot become a way to point
+  //     the player at an arbitrary site.
+  try {
+    const url = new URL(source.url);
+    return url.protocol === 'https:' && LICENSED_FULL_PLAYBACK_HOSTS.includes(url.hostname);
+  } catch {
+    return false;
+  }
 }

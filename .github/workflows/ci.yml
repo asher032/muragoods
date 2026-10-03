@@ -169,6 +169,12 @@ jobs:
       - name: Playback matrix (movies, TV, anime, K-drama, player states, no ads)
         run: node scripts/test-playback-matrix.mjs
 
+      - name: Playback routing (real production title ids)
+        run: node scripts/test-playback-routing.mjs
+
+      - name: Playback source registry (providers, registration, states)
+        run: node scripts/test-playback-registry.mjs
+
       # Muragoods shipped as several sites wearing one name: the shop was
       # yellow, Murastream was streaming-site red in the OS UI font, and the
       # dashboard was indigo on a canvas of its own. Nothing failed — each
