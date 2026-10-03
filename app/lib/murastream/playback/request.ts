@@ -1,4 +1,5 @@
 import type { PlaybackReason, ResolveRequest } from './types';
+import { normalizeMediaForPlayback, type CanonicalMediaType } from './normalize';
 
 // ── Server-side request validation ──────────────────────────────────────
 //
@@ -93,20 +94,21 @@ export function validateResolveParams(params: {
     episode: params.episode,
   };
 
-  // ── mediaType: explicit, never defaulted ──────────────────────────────
+  // ── mediaType: one canonical normalizer, never a guess ───────────────
   // Defaulting an unknown type to 'movie' is how a TV request became a movie
-  // lookup. An absent or unrecognised type is a hard error.
-  const rawType = (params.mediaType ?? '').trim().toLowerCase();
-  if (rawType !== 'movie' && rawType !== 'tv') {
-    return fail(
-      rawType === '' ? 'INVALID_REQUEST' : 'MEDIA_TYPE_MISMATCH',
-      rawType === ''
-        ? 'mediaType is required and must be "movie" or "tv"'
-        : `mediaType must be "movie" or "tv", received "${params.mediaType}"`,
-      received,
-    );
+  // lookup. Equally, refusing to understand `kdrama` or `series` is how a
+  // K-drama reached a hard error and the UI reported "everything is
+  // unavailable". So: aliases are resolved through the ONE normalizer, and an
+  // absent or unrecognized type is still a hard, NAMED error.
+  const normalized = normalizeMediaForPlayback(params.mediaType);
+  // Narrowed with `in` rather than `!normalized.ok`: boolean-literal
+  // discrimination depends on strictNullChecks, and this module is also
+  // compiled without it by the playback test harness. `in` narrows under
+  // both, so the CI harness cannot drift from the app build.
+  if ('reason' in normalized) {
+    return fail(normalized.reason, normalized.detail, received);
   }
-  const mediaType = rawType;
+  const mediaType: CanonicalMediaType = normalized.mediaType;
 
   // ── tmdbId ────────────────────────────────────────────────────────────
   const tmdbId = parseTmdbId(params.tmdbId);

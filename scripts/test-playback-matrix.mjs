@@ -43,12 +43,28 @@ import { validateResolveParams } from '../app/lib/murastream/playback/request';
 import { FIRST_PARTY_MANIFEST } from '../app/lib/murastream/playback/authorized-sources';
 import { isRetryable, REASON_MESSAGE } from '../app/lib/murastream/playback/types';
 
-const MOVIE = { slug: 'film', tmdbId: 501, mediaType: 'movie', title: 'Licensed Film', file: 'film.mp4' };
-const BROKEN = { slug: 'broken', tmdbId: 502, mediaType: 'movie', title: 'Broken Film', file: 'broken.mp4' };
-const S = { slug: 'series', tmdbId: 601, mediaType: 'tv', title: 'Licensed Series' };
+// SYNTHETIC fixtures, not claims about real titles. The rights gate refuses
+// anything that does not declare its own licence, so a fixture meant to be
+// playable must declare one. The BROKEN entry is deliberately given the SAME
+// declared rights as the good one: the test is that a 404 asset does not read
+// as playable, not that a rights gap saved it.
+const OWNED = {
+  rightsStatus: 'MURAGOODS_OWNED',
+  licenseType: 'Muragoods-owned test fixture',
+  licenseUrl: null,
+  rightsSourceUrl: 'https://example.invalid/test-fixture-rights',
+  attributionRequired: false,
+  attributionText: null,
+  verifiedAt: new Date('2026-01-01T00:00:00.000Z'),
+  verifiedBy: 'test fixture',
+};
+
+const MOVIE = { slug: 'film', tmdbId: 501, mediaType: 'movie', title: 'Licensed Film', file: 'film.mp4', ...OWNED };
+const BROKEN = { slug: 'broken', tmdbId: 502, mediaType: 'movie', title: 'Broken Film', file: 'broken.mp4', ...OWNED };
+const S = { slug: 'series', tmdbId: 601, mediaType: 'tv', title: 'Licensed Series', ...OWNED };
 const EP = (s: number, e: number, file: string) => ({ ...S, file, season: s, episode: e });
-const ANIME = { slug: 'anime', tmdbId: 701, mediaType: 'tv', title: 'Licensed Anime' };
-const KDRAMA = { slug: 'kdrama', tmdbId: 801, mediaType: 'tv', title: 'Licensed K-Drama' };
+const ANIME = { slug: 'anime', tmdbId: 701, mediaType: 'tv', title: 'Licensed Anime', ...OWNED };
+const KDRAMA = { slug: 'kdrama', tmdbId: 801, mediaType: 'tv', title: 'Licensed K-Drama', ...OWNED };
 
 (FIRST_PARTY_MANIFEST as any[]).push(
   MOVIE, BROKEN,
@@ -94,7 +110,19 @@ async function run() {
   out.kdramaE2 = await resolvePlayback({ mediaType: 'tv', tmdbId: 801, season: 1, episode: 2 });
   out.kdramaFail = await resolvePlayback({ mediaType: 'tv', tmdbId: 801, season: 3, episode: 2 });
 
-  out.coerceBadType = validateResolveParams({ mediaType: 'film', tmdbId: '501', season: null, episode: null });
+  out.coerceBadType = validateResolveParams({ mediaType: 'bogus-type', tmdbId: '501', season: null, episode: null });
+  out.coerceMissingType = validateResolveParams({ mediaType: null, tmdbId: '501', season: null, episode: null });
+  out.aliases = {
+    film: validateResolveParams({ mediaType: 'film', tmdbId: '501', season: null, episode: null }),
+    movie: validateResolveParams({ mediaType: 'MOVIE', tmdbId: '501', season: null, episode: null }),
+    series: validateResolveParams({ mediaType: 'series', tmdbId: '601', season: '1', episode: '2' }),
+    tv_series: validateResolveParams({ mediaType: 'tv_series', tmdbId: '601', season: '1', episode: '2' }),
+    kdrama: validateResolveParams({ mediaType: 'kdrama', tmdbId: '801', season: '1', episode: '1' }),
+    KDrama: validateResolveParams({ mediaType: 'K-Drama', tmdbId: '801', season: '1', episode: '1' }),
+    anime: validateResolveParams({ mediaType: 'anime', tmdbId: '701', season: '1', episode: '1' }),
+    anime_movie: validateResolveParams({ mediaType: 'anime_movie', tmdbId: '501', season: null, episode: null }),
+    drama: validateResolveParams({ mediaType: 'drama', tmdbId: '801', season: '1', episode: '1' }),
+  };
   out.coerceNaNSeason = validateResolveParams({ mediaType: 'tv', tmdbId: '601', season: 'abc', episode: '1' });
   out.coerceMovieWithEpisode = validateResolveParams({ mediaType: 'movie', tmdbId: '501', season: null, episode: '2' });
   out.coerceBadId = validateResolveParams({ mediaType: 'movie', tmdbId: 'abc', season: null, episode: null });
@@ -126,6 +154,11 @@ function drive() {
     compilerOptions: {
       target: 'ES2022', module: 'CommonJS', moduleResolution: 'node',
       outDir: 'out', skipLibCheck: true, esModuleInterop: true, strict: false,
+      types: ['node'],
+      // The harness compiles the REAL app modules, so it needs the app's
+      // own '@/' alias (which maps to the repo root in this project).
+      baseUrl: repoRoot,
+      paths: { '@/*': ['./*'] },
     },
     files: ['harness.ts'],
   }));
@@ -149,8 +182,11 @@ try {
 // ═══════════════════════════════════════════════════════════════════════════
 section('MOVIES');
 
-check('movie metadata is available', () => {
-  assert.ok(r.movieUnknown.status === 'METADATA_AVAILABLE');
+check('a movie with no registered source is reported honestly', () => {
+  // Spec section 12: an address with no registered source is UNAVAILABLE
+  // with an exact reason — never a resolver fault, never a fabricated URL.
+  assert.equal(r.movieUnknown.status, 'UNAVAILABLE');
+  assert.equal(r.movieUnknown.reason, 'SOURCE_NOT_REGISTERED');
 });
 
 check('a licensed movie is PLAYABLE with a validated same-origin source', () => {
@@ -174,9 +210,12 @@ check('the playback URL is built from the file path, not slug + file', () => {
 });
 
 check('a movie with no licensed source is UNAVAILABLE, not a fabricated source', () => {
-  assert.notEqual(r.movieUnknown.status, 'PLAYABLE');
+  // Spec section 12: an address with no registered source is UNAVAILABLE
+  // with the exact reason SOURCE_NOT_REGISTERED — not a generic "unavailable"
+  // and never a fabricated URL.
+  assert.equal(r.movieUnknown.status, 'UNAVAILABLE');
   assert.equal(r.movieUnknown.sources.length, 0);
-  assert.equal(r.movieUnknown.reason, 'SOURCE_NOT_FOUND');
+  assert.equal(r.movieUnknown.reason, 'SOURCE_NOT_REGISTERED');
 });
 
 check('a movie whose asset is missing from the deploy is not silently playable', () => {
@@ -284,6 +323,51 @@ section('Media ID / type confusion');
 check('an unknown mediaType is refused instead of defaulting to movie', () => {
   assert.equal(r.coerceBadType.ok, false);
   assert.equal(r.coerceBadType.reason, 'MEDIA_TYPE_MISMATCH');
+});
+
+check('an absent mediaType is a named error, not a silent movie', () => {
+  assert.equal(r.coerceMissingType.ok, false);
+  assert.equal(r.coerceMissingType.reason, 'INVALID_REQUEST');
+});
+
+// ── Media normalization ────────────────────────────────────────────────
+// The spec's whole point: a K-drama is episodic content and must reach the TV
+// resolver; `series` must not become a movie; nothing may be guessed.
+check('movie aliases normalize to movie', () => {
+  for (const key of ['film', 'movie']) {
+    assert.equal(r.aliases[key].ok, true, `${key} must be accepted`);
+    assert.equal(r.aliases[key].request.mediaType, 'movie');
+  }
+});
+
+check('series aliases normalize to tv, never to movie', () => {
+  for (const key of ['series', 'tv_series']) {
+    assert.equal(r.aliases[key].ok, true, `${key} must be accepted`);
+    assert.equal(r.aliases[key].request.mediaType, 'tv', `${key} must not become a movie`);
+    assert.equal(r.aliases[key].request.season, 1);
+    assert.equal(r.aliases[key].request.episode, 2);
+  }
+});
+
+check('a K-drama reaches the TV episode resolver with season/episode intact', () => {
+  for (const key of ['kdrama', 'KDrama', 'drama']) {
+    assert.equal(r.aliases[key].ok, true, `${key} must be accepted`);
+    assert.equal(r.aliases[key].request.mediaType, 'tv', 'a K-drama is episodic');
+    assert.equal(r.aliases[key].request.season, 1);
+    assert.equal(r.aliases[key].request.episode, 1);
+  }
+});
+
+check('a TV anime is episodic, an anime movie is not', () => {
+  assert.equal(r.aliases.anime.request.mediaType, 'tv');
+  assert.equal(r.aliases.anime_movie.request.mediaType, 'movie');
+});
+
+check('an alias carries no season/episode into the movie path', () => {
+  // The movie request is built without season/episode at all, so an alias
+  // cannot smuggle an episode number onto a film.
+  assert.ok(r.aliases.film.request.season == null);
+  assert.ok(r.aliases.film.request.episode == null);
 });
 
 check('a non-numeric season is refused instead of becoming NaN', () => {

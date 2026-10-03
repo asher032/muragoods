@@ -64,11 +64,16 @@ const csp = [
   //   i.ytimg.com         trailer thumbnails
   "img-src 'self' data: blob: https://image.tmdb.org https://cdn.discordapp.com https://i.ytimg.com",
   // Same-origin media plus blob: for MediaSource. Our own /media files are
-  // 'self'; no third-party host may supply a playable stream.
-  "media-src 'self' blob:",
+  // 'self'. stream.mux.com is the ONE external host permitted to supply a
+  // playable stream: it is the video host for assets in our own authorized
+  // registry, named explicitly rather than wildcarded, so no other host — and
+  // in particular no ad host — can ever be a media source.
+  "media-src 'self' blob: https://stream.mux.com",
   // Narrower than before: artwork only. Previously `https:` allowed ANY
   // host's image, which is a tracking and ad-pixel surface.
-  "connect-src 'self' https://api.themoviedb.org https://api.tvmaze.com",
+  // stream.mux.com is added for HLS: the manifest and its segments are fetched
+  // over XHR/fetch, so connect-src governs them just as media-src does.
+  "connect-src 'self' https://api.themoviedb.org https://api.tvmaze.com https://stream.mux.com",
   // 'self' is required or our own iframes break. youtube-nocookie is the ONLY
   // external frame, used exclusively for licensed TMDB trailers, which are
   // clearly labelled and never presented as an episode.

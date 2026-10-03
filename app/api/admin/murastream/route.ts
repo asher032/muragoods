@@ -7,6 +7,7 @@ import {
 } from '@/app/lib/murastream/playback/resolver';
 import { FIRST_PARTY_MANIFEST, FIRST_PARTY_ATTRIBUTION } from '@/app/lib/murastream/playback/authorized-sources';
 import { isRetryable } from '@/app/lib/murastream/playback/types';
+import { normalizeMediaForPlayback } from '@/app/lib/murastream/playback/normalize';
 import { NON_PLAYABLE, REASON_MESSAGE } from '@/app/lib/murastream/playback/types';
 import { PLAYBACK_FAILURE_COUNT, recentPlaybackFailures } from '@/app/lib/murastream/playback/log';
 
@@ -27,7 +28,8 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const tmdbId = url.searchParams.get('tmdbId');
-  const mediaType = url.searchParams.get('mediaType') === 'movie' ? 'movie' : 'tv';
+  const normalizedType = normalizeMediaForPlayback(url.searchParams.get('mediaType'));
+  const mediaType: 'movie' | 'tv' = !('reason' in normalizedType) && normalizedType.mediaType === 'movie' ? 'movie' : 'tv';
   const season = url.searchParams.get('season');
   const episode = url.searchParams.get('episode');
 
@@ -40,7 +42,12 @@ export async function GET(req: Request) {
     file: e.file,
     season: e.season ?? null,
     episode: e.episode ?? null,
-    url: `/media/${e.slug}/${e.file}`,
+    // `file` is already the path under public/media and may contain its own
+    // subdirectory. Prefixing the slug again built `/media/betty-boop/
+    // betty-boop/s01e01-….mp4`, a path that does not exist — so the admin
+    // panel reported a 404 for every registered title it was meant to prove
+    // healthy.
+    url: `/media/${e.file}`,
   }));
 
   const payload: Record<string, unknown> = {

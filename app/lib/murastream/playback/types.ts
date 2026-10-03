@@ -28,6 +28,16 @@ export type PlaybackStatus =
 
 /** Machine-readable cause. Every non-PLAYABLE outcome has one. */
 export type PlaybackReason =
+  // ── Registry states: the title resolved to an ADDRESS but no usable
+  //    authorized source is registered there. These are the states an
+  //    operator can act on by registering a source, which is why they are
+  //    distinct from a resolver fault.
+  | 'SOURCE_NOT_REGISTERED'
+  | 'SOURCE_DISABLED'
+  | 'SOURCE_EXPIRED'
+  | 'PROVIDER_NOT_CONFIGURED'
+  | 'PROVIDER_UNAVAILABLE'
+  | 'PROVIDER_INVALID_RESPONSE'
   | 'SOURCE_NOT_FOUND'
   | 'SOURCE_INVALID'
   | 'PROVIDER_TIMEOUT'
@@ -36,6 +46,7 @@ export type PlaybackReason =
   | 'SEASON_NOT_RESOLVED'
   | 'REGION_BLOCKED'
   | 'SOURCE_NOT_AUTHORIZED'
+  | 'RIGHTS_UNVERIFIED'
   | 'PLAYER_INCOMPATIBLE'
   | 'PLAYBACK_SERVICE_UNAVAILABLE'
   | 'MEDIA_ID_INVALID'
@@ -43,6 +54,12 @@ export type PlaybackReason =
   | 'INVALID_REQUEST';
 
 export const PLAYBACK_REASONS: readonly PlaybackReason[] = [
+  'SOURCE_NOT_REGISTERED',
+  'SOURCE_DISABLED',
+  'SOURCE_EXPIRED',
+  'PROVIDER_NOT_CONFIGURED',
+  'PROVIDER_UNAVAILABLE',
+  'PROVIDER_INVALID_RESPONSE',
   'SOURCE_NOT_FOUND',
   'SOURCE_INVALID',
   'PROVIDER_TIMEOUT',
@@ -51,6 +68,7 @@ export const PLAYBACK_REASONS: readonly PlaybackReason[] = [
   'SEASON_NOT_RESOLVED',
   'REGION_BLOCKED',
   'SOURCE_NOT_AUTHORIZED',
+  'RIGHTS_UNVERIFIED',
   'PLAYER_INCOMPATIBLE',
   'PLAYBACK_SERVICE_UNAVAILABLE',
   'MEDIA_ID_INVALID',
@@ -147,6 +165,12 @@ export interface PlaybackDiagnostic {
  * any user-visible string. Each message also implies what to do next.
  */
 export const REASON_MESSAGE: Record<PlaybackReason, string> = {
+  SOURCE_NOT_REGISTERED: "Playback for this title hasn't been added to the library yet.",
+  SOURCE_DISABLED: "Playback for this title is switched off right now.",
+  SOURCE_EXPIRED: "The playback licence for this title has expired.",
+  PROVIDER_NOT_CONFIGURED: "Playback isn't set up for this title yet.",
+  PROVIDER_UNAVAILABLE: "The playback provider is temporarily unreachable.",
+  PROVIDER_INVALID_RESPONSE: "The playback provider returned an unexpected response.",
   SOURCE_NOT_FOUND: "This title isn't available for playback right now.",
   SOURCE_INVALID: "This title isn't available for playback right now.",
   PROVIDER_TIMEOUT: "Playback couldn't be started. Try again.",
@@ -155,6 +179,7 @@ export const REASON_MESSAGE: Record<PlaybackReason, string> = {
   SEASON_NOT_RESOLVED: "This season isn't available right now.",
   REGION_BLOCKED: "This title isn't available in your region.",
   SOURCE_NOT_AUTHORIZED: "This title isn't available for playback right now.",
+  RIGHTS_UNVERIFIED: "Playback for this title is not cleared yet. We have to verify our rights to it first.",
   PLAYER_INCOMPATIBLE: "Your browser can't play this video format.",
   PLAYBACK_SERVICE_UNAVAILABLE: 'Playback service is temporarily unavailable.',
   MEDIA_ID_INVALID: "This title isn't available for playback right now.",
@@ -174,7 +199,25 @@ export function isRetryable(reason: PlaybackReason | null): boolean {
   return reason === 'PROVIDER_TIMEOUT'
     || reason === 'PROVIDER_ERROR'
     || reason === 'PLAYBACK_SERVICE_UNAVAILABLE'
-    || reason === 'SOURCE_INVALID';
+    || reason === 'SOURCE_INVALID'
+    || reason === 'PROVIDER_UNAVAILABLE'
+    || reason === 'PROVIDER_INVALID_RESPONSE';
+}
+
+/**
+ * Whether "Try Again" is honest for this reason.
+ *
+ * A title with no registered source will not change by being retried, so it
+ * deliberately does NOT qualify — offering the button there taught viewers
+ * that retrying is a real remedy when it never was.
+ */
+export function isPermanent(reason: PlaybackReason | null): boolean {
+  if (!reason) return false;
+  return reason === 'SOURCE_NOT_REGISTERED'
+    || reason === 'SOURCE_DISABLED'
+    || reason === 'SOURCE_EXPIRED'
+    || reason === 'PROVIDER_NOT_CONFIGURED'
+    || reason === 'MEDIA_ID_INVALID';
 }
 
 /** Statuses from which the player must never be given a URL. */
