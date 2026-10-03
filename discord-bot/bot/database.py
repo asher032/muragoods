@@ -263,6 +263,11 @@ INDEX_WARNINGS: list[str] = []
 
 
 async def _ensure_indexes() -> list[str]:
+    # Fold any pre-existing duplicate xp rows FIRST. The unique
+    # (guildId, userId) index below cannot be created while duplicates exist,
+    # and silently skipping it would leave the original race in place. Earned
+    # XP is summed, never dropped.
+    await _dedupe_xp_rows()
     """Create the indexes, tolerating failure on any single one.
 
     Index creation used to run unguarded inside the connect path, so ONE
@@ -323,10 +328,18 @@ async def _ensure_indexes() -> list[str]:
         ("economy_heist.guildId_status", ""),
         ("economy_lottery_auto.guildId_userId", ""),
         ("xp.guildId_xp", ""),
+        # One XP row per (guild, user) — the uniqueness the leveling service
+        # assumes. `add_xp` upserts on exactly this pair, so without this index
+        # two messages in the same tick can both miss and both insert: XP then
+        # splits across duplicate rows, `find_one` picks arbitrarily, and the
+        # dashboard and /level disagree. `_dedupe_xp_rows` merges any existing
+        # duplicates first so this can be created without losing earned XP.
+        ("xp.guildId_userId", "unique"),
         ("level_events.guildId_at", ""),
     ]
     keys: dict[str, list] = {
         "guild_config.guildId": [("guildId", ASCENDING)],
+        "xp.guildId_userId": [("guildId", DESCENDING), ("userId", DESCENDING)],
         "warnings.guildId_userId": [("guildId", DESCENDING), ("userId", DESCENDING)],
         "moderation_actions.guildId_createdAt": [("guildId", DESCENDING), ("createdAt", DESCENDING)],
         "media_requests.guildId_title_lc": [("guildId", DESCENDING), ("title_lc", DESCENDING)],
@@ -377,6 +390,7 @@ async def _ensure_indexes() -> list[str]:
         "economy_heist.guildId_status": [("guildId", DESCENDING), ("status", ASCENDING)],
         "economy_lottery_auto.guildId_userId": [("guildId", DESCENDING), ("userId", DESCENDING)],
         "xp.guildId_xp": [("guildId", DESCENDING), ("xp", DESCENDING)],
+        "xp.guildId_userId": [("guildId", DESCENDING), ("userId", DESCENDING)],
         "level_events.guildId_at": [("guildId", DESCENDING), ("at", DESCENDING)],
     }
     failures: list[str] = []
@@ -398,6 +412,59 @@ async def _ensure_indexes() -> list[str]:
             log.warning("Index %s could not be created (%s): %s",
                         label, type(exc).__name__, str(exc)[:160])
     return failures
+
+
+async def _dedupe_xp_rows(db=None) -> int:
+    """Merge duplicate `xp` rows per (guildId, userId) before the unique index
+    is created.
+
+    Migration safety: XP is NEVER reset or deleted. Duplicate rows are folded
+    into the earliest row with their XP SUMMED and the highest level kept, so a
+    member keeps everything they earned. Only the redundant copies are removed.
+    Runs before the index and is a no-op on a healthy database. `db` is optional
+    and defaults to the connected handle; the parameter exists so the behaviour
+    can be exercised against an in-process database in tests.
+    """
+    handle = db if db is not None else _db
+    if handle is None:
+        return 0
+    merged = 0
+    try:
+        cursor = handle["xp"].aggregate([
+            {"$group": {
+                "_id": {"guildId": "$guildId", "userId": "$userId"},
+                "ids": {"$push": "$_id"},
+                "xp": {"$sum": {"$ifNull": ["$xp", 0]}},
+                "level": {"$max": {"$ifNull": ["$level", 0]}},
+                "messages": {"$sum": {"$ifNull": ["$messages", 0]}},
+                "lastXp": {"$min": ["$lastXp", None]},
+            }},
+        ], allowDiskUse=True)
+        async for group in cursor:
+            ids = group.get("ids") or []
+            if len(ids) <= 1:
+                continue  # healthy row — nothing to merge
+            keep = ids[0]
+            await handle["xp"].update_one(
+                {"_id": keep},
+                {"$set": {
+                    "xp": int(group.get("xp") or 0),
+                    "level": int(group.get("level") or 0),
+                    "messages": int(group.get("messages") or 0),
+                    "lastXp": group.get("lastXp"),
+                }},
+            )
+            stale = {"_id": {"$in": ids[1:]}}
+            res = await handle["xp"].delete_many(stale)
+            merged += res.deleted_count
+            log.info("Merged %s duplicate xp row(s) for guild=%s user=%s",
+                     res.deleted_count,
+                     group["_id"].get("guildId"), group["_id"].get("userId"))
+    except Exception as exc:
+        # A failed dedupe must never stop startup; the unique index simply may
+        # not be creatable until it is resolved, and that is logged below.
+        log.warning("xp dedupe skipped (%s): %s", type(exc).__name__, str(exc)[:160])
+    return merged
 
 
 async def _connect_inner() -> None:
