@@ -22,7 +22,7 @@ interface Game {
   category?: string;
   enabled: boolean;
   featured?: boolean;
-  isNew?: boolean;
+  isNewItem?: boolean;
   maxPlaysPerDay?: number;
   cooldownSec?: number;
   xpPerPlay?: number;

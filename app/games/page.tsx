@@ -9,7 +9,7 @@ import { GameBackgroundSettings } from '@/app/components/GameBackgroundSettings'
 
 interface GameDef {
   gameId: string; title: string; description: string; category: string;
-  route: string; featured: boolean; isNew: boolean; maxPlaysPerDay: number;
+  route: string; featured: boolean; isNewItem: boolean; maxPlaysPerDay: number;
 }
 
 interface Summary {
@@ -250,7 +250,7 @@ export default function GameCenterPage() {
       <Link href={`/games/${g.gameId}`} style={{ ...card, textDecoration: 'none' }}>
         <p style={{ fontSize: 34, margin: '0 0 6px' }}>{ART[g.gameId] || '🎮'}</p>
         <p style={{ color: '#fff', fontWeight: 700, margin: '0 0 4px' }}>
-          {g.title} {g.isNew && <span style={pill}>NEW</span>}
+          {g.title} {g.isNewItem && <span style={pill}>NEW</span>}
         </p>
         <p style={{ color: '#888', fontSize: 12, margin: 0 }}>{CATEGORY_LABELS[g.category] || g.category}</p>
       </Link>

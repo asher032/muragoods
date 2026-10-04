@@ -15,7 +15,11 @@ const GameDefinitionSchema = new mongoose.Schema({
   route: { type: String, required: true }, // e.g. /play/spin
   enabled: { type: Boolean, default: true },
   featured: { type: Boolean, default: false },
-  isNew: { type: Boolean, default: false },
+  // `isNew` is a reserved Mongoose pathname (it collides with Document#isNew),
+  // so the flag lives under a non-reserved name. Documents written before the
+  // rename are still read correctly — see the legacy fallback below and
+  // scripts/migrate-gamedef-isnew.mjs.
+  isNewItem: { type: Boolean, default: false },
   sortOrder: { type: Number, default: 0 },
   // Server-side reward tuning (never trusted from the client).
   maxPlaysPerDay: { type: Number, default: 10 },
@@ -25,6 +29,16 @@ const GameDefinitionSchema = new mongoose.Schema({
   config: { type: mongoose.Schema.Types.Mixed, default: {} },
   updatedAt: { type: Date, default: Date.now },
 });
+
+// Backward-compatible read helper for rows persisted with the old reserved
+// name. Every read of this collection is `.lean()`, so endpoints normalize the
+// flag through here instead of relying on document middleware. Run
+// scripts/migrate-gamedef-isnew.mjs to move the stored rows permanently.
+export function isNewFlag(row: Record<string, unknown> | null | undefined): boolean {
+  if (!row) return false;
+  if (typeof row.isNewItem === 'boolean') return row.isNewItem;
+  return Boolean(row.isNew);
+}
 
 export default mongoose.models.GameDefinition ||
   mongoose.model('GameDefinition', GameDefinitionSchema, 'game_definitions');

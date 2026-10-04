@@ -1,7 +1,8 @@
 import { ImageResponse } from 'next/og';
 
-export const runtime = 'edge';
-
+// Runs on the default Node.js runtime: `next/og` ImageResponse is supported
+// there, this route touches no Node-only API (no Mongoose/fs/crypto), and the
+// Edge runtime is deprecated. No `runtime` export — Node.js is the default.
 export async function GET() {
   return new ImageResponse(
     (
@@ -36,11 +37,13 @@ export async function GET() {
         <div style={{ position: 'absolute', top: '300px', left: '1000px', fontSize: '36px', opacity: 0.5, transform: 'rotate(5deg)' }}>🎮</div>
         <div style={{ position: 'absolute', bottom: '250px', left: '50px', fontSize: '24px', opacity: 0.3, transform: 'rotate(-5deg)' }}>🎵</div>
 
-        {/* Stars */}
-        <div style={{ position: 'absolute', top: '40px', left: '300px', fontSize: '14px', color: '#ffd60a', opacity: 0.6 }}>✦</div>
-        <div style={{ position: 'absolute', top: '120px', right: '300px', fontSize: '10px', color: '#4895ef', opacity: 0.5 }}>✧</div>
-        <div style={{ position: 'absolute', bottom: '60px', left: '600px', fontSize: '12px', color: '#ffd60a', opacity: 0.4 }}>✦</div>
-        <div style={{ position: 'absolute', top: '200px', right: '500px', fontSize: '8px', color: '#06d6a0', opacity: 0.5 }}>✧</div>
+        {/* Stars — `·`/`•` only. The decorative `✦`/`✧` glyphs are absent from
+            the bundled font, so Satori tried to fetch a fallback face over the
+            network for them and logged a 400 on every render. */}
+        <div style={{ position: 'absolute', top: '40px', left: '300px', fontSize: '14px', color: '#ffd60a', opacity: 0.6 }}>•</div>
+        <div style={{ position: 'absolute', top: '120px', right: '300px', fontSize: '10px', color: '#4895ef', opacity: 0.5 }}>·</div>
+        <div style={{ position: 'absolute', bottom: '60px', left: '600px', fontSize: '12px', color: '#ffd60a', opacity: 0.4 }}>•</div>
+        <div style={{ position: 'absolute', top: '200px', right: '500px', fontSize: '8px', color: '#06d6a0', opacity: 0.5 }}>·</div>
 
         {/* Decorative lines */}
         <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: '1px', background: 'linear-gradient(90deg, transparent, rgba(255,214,10,0.1), transparent)' }} />
@@ -55,7 +58,10 @@ export async function GET() {
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 10,
+            // No `zIndex`: Satori does not implement it (it logged
+            // "`z-index` is currently not supported"). This block is the last
+            // positioned sibling before the URL bar, so DOM order already
+            // paints it above the background gradients and stars.
           }}
         >
           {/* Mushroom icon */}

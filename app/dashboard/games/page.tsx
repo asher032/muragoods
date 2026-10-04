@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useGuild } from '@/app/lib/guild-context';
 import { apiFetch } from '../lib/api';
 import { statusMessage } from '../components/selectors';
 
 interface GameDef {
   gameId: string; title: string; description: string; category: string;
-  route: string; enabled: boolean; featured: boolean; isNew: boolean;
+  route: string; enabled: boolean; featured: boolean; isNewItem: boolean;
   maxPlaysPerDay: number; cooldownSec: number; xpPerPlay: number;
 }
 
@@ -77,7 +78,7 @@ export default function GamesAdminPage() {
       <p style={{ margin: 0, color: 'var(--cc-accent)', fontWeight: 700, letterSpacing: 2, fontSize: 11 }}>MURAGOODS</p>
       <h1 style={{ margin: '4px 0 4px', fontSize: 26, fontWeight: 800, color: '#fff' }}>🎮 Games {selected ? `— ${selected.name}` : ''}</h1>
       <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--cc-text-dim)' }}>
-        Tune games without deploys. The site Game Center is at <a href="/games" style={{ color: 'var(--cc-accent)' }}>/games</a> — rewards, cooldowns and visibility here apply everywhere instantly.
+        Tune games without deploys. The site Game Center is at <Link href="/games" style={{ color: 'var(--cc-accent)' }}>/games</Link> — rewards, cooldowns and visibility here apply everywhere instantly.
       </p>
       {error && <div className="cc-alert cc-alert-error" role="alert" style={{ marginBottom: 12 }}>{statusMessage('', error)?.hint || error}</div>}
       {loading && <p style={{ color: 'var(--cc-text-faint)', fontSize: 13 }}>Loading…</p>}

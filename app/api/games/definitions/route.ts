@@ -3,8 +3,10 @@ import { ensureCatalog, GAME_CATALOG } from '@/app/lib/gameserver';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-import GameDefinition from '@/app/lib/models/GameDefinition';
+import GameDefinition, { isNewFlag } from '@/app/lib/models/GameDefinition';
 import dbConnect from '@/app/lib/mongodb';
+import { DatabaseConfigError } from '@/app/lib/db/clusters';
+import { scrubSecrets } from '@/app/lib/db-health';
 
 // GET /api/games/definitions — public catalog of enabled games for the hub.
 export async function GET() {
@@ -20,12 +22,33 @@ export async function GET() {
         gameId: g.gameId, title: String(d.title ?? g.title),
         description: String(d.description ?? g.description),
         category: String(d.category ?? g.category), route: g.route,
-        featured: Boolean(d.featured), isNew: Boolean(d.isNew),
+        featured: Boolean(d.featured), isNewItem: isNewFlag(d),
         maxPlaysPerDay: Number(d.maxPlaysPerDay ?? g.maxPlaysPerDay),
       };
     });
     return NextResponse.json({ success: true, games });
-  } catch {
+  } catch (error) {
+    // An unconfigured cluster is a deployment problem, not a server fault:
+    // report it as 503 with the variable NAME that has to be set, so whoever
+    // deploys this can fix it. The URI itself never appears here.
+    if (error instanceof DatabaseConfigError) {
+      console.error(
+        `[games/definitions] ${error.state}: ${error.variable ?? 'cluster URI'} is not configured`,
+      );
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Game catalog is unavailable: the database is not configured',
+          state: error.state,
+          missingVariable: error.variable,
+        },
+        { status: 503 },
+      );
+    }
+    // Anything else is a genuine failure. Log the scrubbed message so the
+    // cause is diagnosable instead of vanishing into an empty catch.
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[games/definitions] failed:', scrubSecrets(message));
     return NextResponse.json({ success: false, error: 'Could not load games' }, { status: 500 });
   }
 }
