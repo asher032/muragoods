@@ -293,6 +293,21 @@ jobs:
       - name: XP row uniqueness (lossless dedupe, guild isolation, defaults never reset)
         run: python discord-bot/scripts/test_xp_uniqueness.py
 
+      # Music must play the ORIGINAL recording.
+      #
+      # yt-dlp orders results by engagement, so `entries[0]` is routinely a
+      # sped-up, slowed+reverb, karaoke or AI cover with more views than the
+      # artist's own channel. Three specific failures are pinned here:
+      # `ytsearch1` returning exactly one result (so ranking had nothing to
+      # choose between and returned a cover with a healthy score), an
+      # all-covers result set being played as "the best available", and
+      # autoplay fetching YouTube's RD radio list — the densest cover source
+      # on the platform — as a URL, which deliberately skips ranking.
+      #
+      # Hermetic: no yt-dlp, no network, no Discord.
+      - name: Music original-recording selection (covers, variants, autoplay, queue)
+        run: python discord-bot/scripts/test_music_original_selection.py
+
       # `app.router.add_get("/x", handler)` takes the NAME `handler`. If the
       # `def` has not run yet it raises NameError — and because every handler is
       # nested inside `_health_server()`, the FIRST such failure aborts the
