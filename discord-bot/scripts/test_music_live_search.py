@@ -57,6 +57,25 @@ CASES = [
         "query": "Believer Imagine Dragons",
         "expect": "original",
     },
+    # Songs with a large sped-up / slowed / nightcore upload ecosystem. The
+    # earlier cases (Sunflower, Believer) never actually surfaced those rows,
+    # so "sped/slowed/reverb is rejected by default" was asserted without
+    # evidence. These queries do surface them.
+    {
+        "name": "sped/slowed ecosystem 1",
+        "query": "Industry Baby Lil Nas X",
+        "expect": "original",
+    },
+    {
+        "name": "sped/slowed ecosystem 2",
+        "query": "Heat Waves Glass Animals",
+        "expect": "original",
+    },
+    {
+        "name": "sped/slowed ecosystem 3",
+        "query": "Arcade Duncan Laurence",
+        "expect": "original",
+    },
     {
         "name": "explicit remix request",
         "query": "Shape of You Ed Sheeran remix",
@@ -75,6 +94,10 @@ CASES = [
 ]
 
 LIMIT = 10
+
+
+def section(name: str) -> None:
+    print("\n" + "─" * 4 + f" {name} " + "─" * max(0, 52 - len(name)))
 
 
 def brief(row: dict) -> str:
@@ -131,6 +154,22 @@ async def run_case(engine, case: dict) -> bool:
     top = rows[0]
     top_kind = str(top.get("versionType") or "")
     requested = mr.requested_kinds(case["query"])
+    # Record whether the result set ACTUALLY contained the variants this
+    # case claims to test. A case that finds no sped/slowed rows proves
+    # nothing about them, and saying so is the honest result.
+    seen: dict[str, list[str]] = {}
+    for r in rows:
+        _s, _k, hits = mr.score_candidate(case["query"], r)
+        for h in hits:
+            seen.setdefault(h.split(":", 1)[-1], []).append(
+                str(r.get("title") or "")[:44])
+    variant_rows = {k: v for k, v in seen.items()
+                    if k in ("sped-up", "slowed", "reverb", "nightcore", "cover",
+                             "karaoke", "instrumental", "remix", "8d")}
+    if variant_rows:
+        print("  competing variants actually present in results:")
+        for kind, titles in sorted(variant_rows.items()):
+            print(f"    {kind}: {len(titles)} — e.g. {titles[0]!r}")
 
     print("  DIAGNOSTIC " + json.dumps({
         "requestedTitle": case["query"],
@@ -183,8 +222,64 @@ async def run_case(engine, case: dict) -> bool:
     return ok
 
 
+async def collect_real_variants(engine) -> list[tuple[str, dict, str]]:
+    """Fetch REAL variant uploads (sped up / slowed / nightcore / karaoke).
+
+    YouTube's own results for an unqualified query rarely surface these any
+    more, so ranking tests alone cannot prove the variants are rejected —
+    the competing rows simply are not there. This pulls the variants
+    themselves from the provider and hands their genuine titles and channels
+    to the resolver, which is the claim that actually needs evidence.
+    """
+    out: list[tuple[str, dict, str]] = []
+    probes = [
+        ("Believer Imagine Dragons", "sped up"),
+        ("Believer Imagine Dragons", "slowed"),
+        ("Believer Imagine Dragons", "slowed reverb"),
+        ("Believer Imagine Dragons", "nightcore"),
+        ("Believer Imagine Dragons", "karaoke"),
+        ("Believer Imagine Dragons", "8d audio"),
+    ]
+    for base, tag in probes:
+        rows = await engine._search_fetch(f"{base} {tag}", 5, 45.0)
+        if not rows:
+            print(f"  (no rows for probe {base!r} + {tag!r})")
+            continue
+        out.append((tag, rows[0], base))
+    return out
+
+
+async def check_real_variants(engine) -> bool:
+    section("real provider variant uploads are refused for a plain request")
+    variants = await collect_real_variants(engine)
+    if not variants:
+        print("  SKIPPED — provider returned nothing for any probe")
+        return True
+    ok = True
+    for tag, row, base in variants:
+        print(f"\n  variant {tag!r}: {brief(row)}")
+        sel = mr.select_original(base, [row])
+        if sel.ok:
+            print(f"    FAIL  accepted a {tag!r} upload for an unqualified request")
+            ok = False
+        else:
+            print(f"    OK  refused ({sel.code}) — "
+                  f"kinds={mr.score_candidate(base, row)[2]}")
+        # ...and the same row IS selectable when the user asks for it.
+        sel2 = mr.select_original(f"{base} {tag}", [row])
+        if sel2.ok:
+            print(f"    OK  selectable when explicitly requested ({sel2.reason})")
+        else:
+            print(f"    note  not selectable as {tag!r} either ({sel2.reason})")
+    return ok
+
+
 async def main() -> int:
     engine = music.MusicEngine()
+    if "--variants-only" in sys.argv:
+        ok = await check_real_variants(engine)
+        print(f"\n{'PASS' if ok else 'FAIL'}  real variant corpus")
+        return 0 if ok else 1
     results = []
     for case in CASES:
         try:
@@ -194,6 +289,16 @@ async def main() -> int:
             ok = True
         results.append((case["name"], ok))
         await asyncio.sleep(2)  # be a polite client
+
+    try:
+        variants_ok = await check_real_variants(engine)
+    except (asyncio.TimeoutError, OSError) as exc:
+        # A genuine provider/network failure is a skip, and says so. A bug in
+        # this harness is NOT — it must fail loudly rather than be counted as
+        # a pass, which is what an earlier `except Exception` here did.
+        print(f"  variant corpus SKIPPED — provider error {type(exc).__name__}")
+        variants_ok = True
+    results.append(("real variant uploads refused by default", variants_ok))
 
     print("\n" + "=" * 78)
     for name, ok in results:

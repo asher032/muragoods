@@ -64,6 +64,24 @@ VALIDATION_FAILED = "MUSIC_SELECTION_MISMATCH"
 #: Which version types count as "the real recording" for a plain request.
 ACCEPTABLE_TYPES = frozenset({"official", "original"})
 
+# ── Provenance ──────────────────────────────────────────────────────────
+#
+# What we can and cannot know, stated once so no caller has to guess.
+#
+# NOTHING derived from a title, a channel name or a uploader string is proof
+# of ownership. Any user can name a channel "Apple Music" or title a video
+# "(Official Music Video)". The provider exposes a real verified-artist
+# badge, but it is not present in the metadata these rows carry, so this
+# module must never emit a VERIFIED claim from metadata alone.
+#
+# `isAuthorized` therefore means "cleared this system's internal gate" — a
+# real, well-defined property — NOT "proven to be the rights holder".
+PROVENANCE_HEURISTIC = "HEURISTIC_PROVIDER_MATCH"
+PROVENANCE_REJECTED = "REJECTED_NOT_AUTHORIZED"
+PROVENANCE_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
+PROVENANCE_STATES = frozenset({PROVENANCE_HEURISTIC, PROVENANCE_REJECTED,
+                               PROVENANCE_UNAVAILABLE})
+
 #: Variant markers, strongest signal first. Weights are the penalty applied
 #: when the user did NOT ask for that variant.
 #:
@@ -560,6 +578,19 @@ def _provider_of(entry: dict) -> str:
     return host or "unknown"
 
 
+def provenance_of(entry: dict, version_type: str | None = None) -> str:
+    """Epistemic status of a source: how much do we actually know?
+
+    Returns one of `PROVENANCE_STATES`. Never returns a "verified" value,
+    because no metadata-only signal can establish that.
+    """
+    vt = version_type if version_type is not None else str(
+        entry.get("versionType") or "unknown")
+    if entry.get("_provenance_unavailable"):
+        return PROVENANCE_UNAVAILABLE
+    return PROVENANCE_HEURISTIC if vt in ACCEPTABLE_TYPES else PROVENANCE_REJECTED
+
+
 def resolved_metadata(entry: dict) -> dict:
     """The row a queued track must carry, so it never has to search again.
 
@@ -577,6 +608,9 @@ def resolved_metadata(entry: dict) -> dict:
         "duration": int(entry.get("duration") or 0),
         "version": str(entry.get("versionType") or "unknown"),
         "isOriginal": bool(entry.get("isOriginal", entry.get("versionType") in ACCEPTABLE_TYPES)),
+        # Cleared the internal gate. NOT proof of rights ownership — see the
+        # PROVENANCE_* block above.
         "isAuthorized": entry.get("versionType") in ACCEPTABLE_TYPES,
+        "provenance": provenance_of(entry),
         "selectionReason": str(entry.get("selectionReason") or ""),
     }
