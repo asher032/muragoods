@@ -207,6 +207,9 @@ export default function MusicPage() {
   const [searchResults, setSearchResults] = useState<Array<{
     title: string; uploader: string; duration: number; thumbnail: string; url: string;
     versionType?: string;
+    // The row's own verdict. Forwarded with the enqueue so the bot can
+    // verify it against the provider — the browser never gets the last word.
+    isOriginal?: boolean;
   }>>([]);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   // Monotonic search generation for the stale-response guard below.
@@ -375,7 +378,7 @@ export default function MusicPage() {
     setSearching(true);
     setSearchError('');
     setSearchResults([]);
-    const resp = await apiFetch<{ success: boolean; results: Array<{ title: string; uploader: string; duration: number; thumbnail: string; url: string }>; error?: string }>(
+    const resp = await apiFetch<{ success: boolean; results: Array<{ title: string; uploader: string; duration: number; thumbnail: string; url: string; versionType?: string; isOriginal?: boolean }>; error?: string }>(
       '/api/dashboard/music/search',
       { method: 'POST', token, body: { guildId: selected.id, query: searchQuery.trim() } },
     );
@@ -396,12 +399,12 @@ export default function MusicPage() {
     }
   }, [token, selected, searchQuery]);
 
-  const queueUrl = useCallback(async (url: string, front: boolean) => {
+  const queueUrl = useCallback(async (url: string, front: boolean, isOriginal?: boolean) => {
     if (!token || !selected) return;
     setActing(front ? 'playnext' : 'queueadd');
     const resp = await apiFetch<{ success: boolean; result?: { title?: string; note?: string }; error?: string }>(
       '/api/dashboard/music/queue',
-      { method: 'POST', token, body: { guildId: selected.id, url, front } },
+      { method: 'POST', token, body: { guildId: selected.id, url, front, isOriginal } },
     );
     if (resp.ok && resp.data.success) {
       setError('');
@@ -727,9 +730,9 @@ export default function MusicPage() {
                   <div style={{ color: 'var(--cc-text-faint)', fontSize: 11.5 }}>{r.uploader}{r.duration ? ` · ${fmt(r.duration)}` : ''}</div>
                 </div>
                 <button className="cc-btn" style={{ fontSize: 11.5 }} disabled={acting !== null}
-                        onClick={() => queueUrl(r.url, false)}>➕ Queue</button>
+                        onClick={() => queueUrl(r.url, false, r.isOriginal)}>➕ Queue</button>
                 <button className="cc-btn" style={{ fontSize: 11.5 }} disabled={acting !== null}
-                        onClick={() => queueUrl(r.url, true)}>⏭ Next</button>
+                        onClick={() => queueUrl(r.url, true, r.isOriginal)}>⏭ Next</button>
               </div>
             ))}
           </div>

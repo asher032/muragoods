@@ -332,7 +332,19 @@ class MusicCog(commands.Cog):
         track = await music.engine.resolve(query)
         if not track:
             err_detail = music.engine.get_resolve_error()
-            if err_detail:
+            err_kind = music.engine.get_error_kind()
+            if err_kind == music.NO_ORIGINAL_FOUND:
+                # The resolver found candidates but refused them all. Say
+                # that plainly instead of leaking the raw provider reason —
+                # and never fall back to playing one of them.
+                await interaction.edit_original_response(embed=embeds.embed(
+                    "🔎 No Authorized Recording",
+                    f"I couldn't find a suitable authorized original recording for "
+                    f"**{query[:80]}**.\nOnly covers or re-recorded versions were "
+                    f"available, so I didn't play one. Try a different title, or "
+                    f"request a specific version (for example “live” or “remix”).",
+                    embeds.WARN))
+            elif err_detail:
                 await interaction.edit_original_response(embed=embeds.embed(
                     "🔎 Track Not Found",
                     f"yt-dlp: {err_detail}\nTry a different search or a direct URL.",
