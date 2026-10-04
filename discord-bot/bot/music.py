@@ -556,11 +556,17 @@ def is_bot_challenge(text: str | None) -> bool:
 from music_resolver import (  # noqa: E402,F401
     ACCEPTABLE_TYPES,
     NO_ORIGINAL_FOUND,
+    PROVENANCE_HEURISTIC,
+    PROVENANCE_REJECTED,
+    PROVENANCE_STATES,
+    PROVENANCE_UNAVAILABLE,
     VALIDATION_FAILED,
     Selection,
     _search_tokens,
+    classify_source,
     looks_relevant,
     normalize_query,
+    provenance_of,
     rank_candidates,
     requested_kinds,
     resolved_metadata,
@@ -1330,6 +1336,20 @@ def _source_key(row: dict) -> str:
     return str(row.get("url") or row.get("webpage_url") or row.get("id") or "")
 
 
+def _unavailable_meta(url: str) -> dict:
+    """Metadata for a source the provider never let us inspect.
+
+    `isOriginal`/`isAuthorized` are False rather than True: an unrun check
+    must never read as a pass, and `provenance` says exactly why.
+    """
+    return {
+        "title": "", "uploader": "", "sourceId": str(url or ""),
+        "version": "unknown", "isOriginal": False, "isAuthorized": False,
+        "provenance": PROVENANCE_UNAVAILABLE, "variantKinds": [],
+        "provider": "unknown",
+    }
+
+
 async def verify_pinned_source(url: str, *, claim_original: bool | None = None,
                                timeout: float = 30.0) -> tuple[bool, str, dict]:
     """Independently check a source the dashboard says it selected.
@@ -1360,14 +1380,14 @@ async def verify_pinned_source(url: str, *, claim_original: bool | None = None,
 
         info = await asyncio.wait_for(loop.run_in_executor(None, _run), timeout=timeout)
     except asyncio.TimeoutError:
-        return True, "provider_check_unavailable (timeout)", meta
+        return True, "provider_check_unavailable (timeout)", _unavailable_meta(url)
     except Exception as exc:
         # Never fail an enqueue because the VERIFIER could not run — the
         # pinned url is still the user's explicit choice. Say so honestly.
-        return True, f"provider_check_unavailable ({type(exc).__name__})", meta
+        return True, f"provider_check_unavailable ({type(exc).__name__})", _unavailable_meta(url)
 
     if not isinstance(info, dict):
-        return True, "provider_check_unavailable (no metadata)", meta
+        return True, "provider_check_unavailable (no metadata)", _unavailable_meta(url)
 
     row = {k: info.get(k) for k in
            ("title", "uploader", "channel", "duration", "id", "webpage_url", "url")}
@@ -1381,6 +1401,9 @@ async def verify_pinned_source(url: str, *, claim_original: bool | None = None,
         "version": version_type,
         "isOriginal": version_type in ACCEPTABLE_TYPES,
         "isAuthorized": version_type in ACCEPTABLE_TYPES,
+        # NEVER "verified": every signal here is a title/channel heuristic.
+        "provenance": PROVENANCE_HEURISTIC if version_type in ACCEPTABLE_TYPES
+        else PROVENANCE_REJECTED,
         "variantKinds": kinds,
         "provider": "youtube",
     }

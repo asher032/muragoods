@@ -423,6 +423,31 @@ def test_backend_validates_pinned_source() -> None:
           mr.classify_source({"title": "Post Malone - Sunflower",
                               "uploader": "Post Malone"})[0] == "original")
 
+    # §5/§6: never represent a metadata-only judgement as ownership proof,
+    # and never let an unrun check read as a pass.
+    off = mr.resolved_metadata({**mr.rank_candidates(
+        "Believer Imagine Dragons",
+        [cand("Imagine Dragons - Believer (Official Music Video)", "ImagineDragons", id="o")]
+    )[0], "versionType": "official"})
+    check("an accepted source is labelled HEURISTIC, never 'verified'",
+          off["provenance"] == mr.PROVENANCE_HEURISTIC, off.get("provenance"))
+    check("no VERIFIED provenance state is reachable from metadata",
+          "VERIFIED" not in mr.PROVENANCE_STATES, sorted(mr.PROVENANCE_STATES))
+    cov = mr.resolved_metadata({**mr.rank_candidates(
+        "Believer Imagine Dragons",
+        [cand("Believer (Karaoke)", "Sing King", id="k")]
+    )[0], "versionType": "alternate"})
+    check("a rejected source is labelled REJECTED_NOT_AUTHORIZED",
+          cov["provenance"] == mr.PROVENANCE_REJECTED, cov.get("provenance"))
+    una = mr.resolved_metadata({"versionType": "unknown",
+                                "_provenance_unavailable": True})
+    check("an unrun check is PROVIDER_UNAVAILABLE, not a pass",
+          una["provenance"] == mr.PROVENANCE_UNAVAILABLE
+          and una["isAuthorized"] is False, una)
+    check("a label-shaped channel is still only a heuristic match",
+          mr.provenance_of({"versionType": "original", "uploader": "SonyRecords"})
+          == mr.PROVENANCE_HEURISTIC)
+
     check("verify_pinned_source exists and is a coroutine function",
           callable(getattr(music, "verify_pinned_source", None))
           and __import__("asyncio").iscoroutinefunction(music.verify_pinned_source))
