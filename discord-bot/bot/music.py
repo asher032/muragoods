@@ -1330,6 +1330,67 @@ def _source_key(row: dict) -> str:
     return str(row.get("url") or row.get("webpage_url") or row.get("id") or "")
 
 
+async def verify_pinned_source(url: str, *, claim_original: bool | None = None,
+                               timeout: float = 30.0) -> tuple[bool, str, dict]:
+    """Independently check a source the dashboard says it selected.
+
+    The queue already plays the PINNED url rather than searching again, so
+    the remaining trust boundary is the claim itself: the browser can post
+    any url, and a row labelled `isOriginal` proves nothing until the backend
+    looks at the actual video. So this re-reads the source from the provider
+    and runs it through the same resolver the play path uses.
+
+    Returns `(ok, reason, meta)`. A client that never made a claim is not
+    second-guessed — picking a remix from the results list is legitimate —
+    but its real verdict is still returned so the queue and the logs record
+    what was actually played.
+    """
+    import yt_dlp
+    from music_resolver import classify_source
+    meta: dict = {}
+    try:
+        opts = get_ydl_opts(use_proxy=False)
+        opts.update({"quiet": True, "no_warnings": True, "skip_download": True,
+                     "socket-timeout": 15, "retries": 1, "extractor_retries": 2})
+        loop = asyncio.get_running_loop()
+
+        def _run():
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                return ydl.extract_info(url, download=False)
+
+        info = await asyncio.wait_for(loop.run_in_executor(None, _run), timeout=timeout)
+    except asyncio.TimeoutError:
+        return True, "provider_check_unavailable (timeout)", meta
+    except Exception as exc:
+        # Never fail an enqueue because the VERIFIER could not run — the
+        # pinned url is still the user's explicit choice. Say so honestly.
+        return True, f"provider_check_unavailable ({type(exc).__name__})", meta
+
+    if not isinstance(info, dict):
+        return True, "provider_check_unavailable (no metadata)", meta
+
+    row = {k: info.get(k) for k in
+           ("title", "uploader", "channel", "duration", "id", "webpage_url", "url")}
+    row["url"] = row.get("webpage_url") or row.get("url") or url
+    title = str(row.get("title") or "")
+    version_type, kinds = classify_source(row)
+    meta = {
+        "title": title,
+        "uploader": str(row.get("uploader") or row.get("channel") or ""),
+        "sourceId": str(row.get("id") or ""),
+        "version": version_type,
+        "isOriginal": version_type in ACCEPTABLE_TYPES,
+        "isAuthorized": version_type in ACCEPTABLE_TYPES,
+        "variantKinds": kinds,
+        "provider": "youtube",
+    }
+
+    if claim_original is True and not meta["isOriginal"]:
+        return False, (f"{VALIDATION_FAILED}: provider reports version="
+                       f"{version_type!r} kinds={kinds}"), meta
+    return True, f"verified {version_type}", meta
+
+
 def _order_search_results(query: str, rows: list[dict]) -> list[dict]:
     """Order raw search rows for display, using the ONE resolver the play
     path uses, so the dashboard and Discord never disagree about which

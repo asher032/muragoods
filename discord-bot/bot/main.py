@@ -1535,6 +1535,12 @@ async def _health_server() -> None:
             return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
         url = str(body.get("url") or "").strip()[:300]
         front = bool(body.get("front", False))
+        # Optional claim from the dashboard row. It is a CLAIM, never a
+        # fact: it is verified against the provider below, because the queue
+        # plays this exact url and a browser must not be able to assert that
+        # a cover is an authorized original.
+        claim_raw = body.get("isOriginal")
+        claim_original = claim_raw if isinstance(claim_raw, bool) else None
         if not url.startswith("http"):
             return web.json_response({"ok": False, "error": "A result URL is required"}, status=400)
         guild = bot.get_guild(guild_id)
@@ -1542,6 +1548,21 @@ async def _health_server() -> None:
             return web.json_response({"ok": False, "error": "Bot not in that guild"}, status=404)
         import music as music_mod
         music_cfg = await music_mod.get_music_config(guild_id)
+        # Verify the pinned source against the provider BEFORE it can enter
+        # the queue. Never trusted from the browser, never silently swapped:
+        # a claim the provider contradicts is a hard stop, not a substitution.
+        try:
+            verified_ok, verify_reason, verify_meta = await asyncio.wait_for(
+                music_mod.verify_pinned_source(url, claim_original=claim_original),
+                timeout=40)
+        except Exception as exc:
+            verified_ok, verify_reason, verify_meta = True, f"verify_skipped ({type(exc).__name__})", {}
+        if not verified_ok:
+            log.warning("music source rejected: url=%s reason=%s",
+                        music_mod.sanitize_for_log(url, limit=120), verify_reason)
+            return web.json_response(
+                {"ok": False, "error": verify_reason, "code": "MUSIC_SELECTION_MISMATCH"},
+                status=422)
         try:
             track = await asyncio.wait_for(
                 music_mod.engine.resolve(url), timeout=90)
