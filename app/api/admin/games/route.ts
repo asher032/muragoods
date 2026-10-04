@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/app/lib/mongodb';
-import GameDefinition from '@/app/lib/models/GameDefinition';
+import GameDefinition, { isNewFlag } from '@/app/lib/models/GameDefinition';
 import { requireStaff } from '@/app/lib/access-control';
 import { ensureCatalog } from '@/app/lib/gameserver';
 
@@ -15,14 +15,22 @@ export async function GET(req: Request) {
   try {
     await ensureCatalog();
     await dbConnect();
-    const games = await GameDefinition.find({}).sort({ sortOrder: 1 }).lean();
+    const rows = await GameDefinition.find({}).sort({ sortOrder: 1 }).lean();
+    // Legacy `isNew` rows are surfaced as `isNewItem` (see isNewFlag) so the
+    // admin UI has one shape whether or not the migration has run yet.
+    const games = rows.map((row) => {
+      const flag = isNewFlag(row as Record<string, unknown>);
+      const rest = { ...(row as Record<string, unknown>) };
+      delete rest.isNew; // legacy reserved key, superseded by isNewItem
+      return { ...rest, isNewItem: flag };
+    });
     return NextResponse.json({ success: true, games });
   } catch {
     return NextResponse.json({ success: false, error: 'Could not load games' }, { status: 500 });
   }
 }
 
-// PATCH /api/admin/games { gameId, patch: {enabled?, featured?, isNew?, maxPlaysPerDay?, cooldownSec?, xpPerPlay?, title?, description?, category?} }
+// PATCH /api/admin/games { gameId, patch: {enabled?, featured?, isNewItem?, maxPlaysPerDay?, cooldownSec?, xpPerPlay?, title?, description?, category?} }
 export async function PATCH(req: Request) {
   const gate = await requireStaff(req, ['content']);
   if (!gate.ok) return gate.response;
@@ -34,7 +42,7 @@ export async function PATCH(req: Request) {
     const allowed: Record<string, (v: unknown) => unknown> = {
       enabled: (v) => Boolean(v),
       featured: (v) => Boolean(v),
-      isNew: (v) => Boolean(v),
+      isNewItem: (v) => Boolean(v),
       maxPlaysPerDay: (v) => Math.max(1, Math.min(999, Math.floor(Number(v) || 1))),
       cooldownSec: (v) => Math.max(0, Math.min(86400, Math.floor(Number(v) || 0))),
       xpPerPlay: (v) => Math.max(0, Math.min(100, Math.floor(Number(v) || 0))),
@@ -43,9 +51,15 @@ export async function PATCH(req: Request) {
       category: (v) => ['chance', 'activities', 'simulation', 'progression', 'social', 'arcade', 'daily'].includes(String(v)) ? String(v) : undefined,
     };
     const update: Record<string, unknown> = { updatedAt: new Date() };
+    // An older admin bundle still posts the pre-rename `isNew` key; accept it
+    // as an alias so a cached client doesn't silently drop the change.
+    const requested: Record<string, unknown> = { ...patch };
+    if (requested.isNewItem === undefined && requested.isNew !== undefined) {
+      requested.isNewItem = requested.isNew;
+    }
     for (const [k, fn] of Object.entries(allowed)) {
-      if (patch[k] !== undefined) {
-        const v = fn(patch[k]);
+      if (requested[k] !== undefined) {
+        const v = fn(requested[k]);
         if (v !== undefined) update[k] = v;
       }
     }
