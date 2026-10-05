@@ -320,6 +320,18 @@ jobs:
       - name: Music resolve cache and stampede guard (one resolve per track)
         run: python discord-bot/scripts/test_resolve_cache.py
 
+      # Every failure used to reach Discord as the provider's own text
+      # (`yt-dlp: <possibly-credential-shaped string>` / "Try a different
+      # search or a direct URL."), which both leaked the shape of our egress
+      # configuration and told users their track did not exist when YouTube
+      # had actually refused this host. These pin the classification (a bot
+      # check is an ACCESS problem, not "not found"), the safe copy for every
+      # category, that an unsupported link never reaches the extractor, that a
+      # refusal is never cached, and — by parsing the bot's own source — that
+      # no module interpolates a raw resolve error into a user-facing string.
+      - name: Music provider error classification (no raw yt-dlp output, honest categories)
+        run: python discord-bot/scripts/test_music_errors.py
+
       # `app.router.add_get("/x", handler)` takes the NAME `handler`. If the
       # `def` has not run yet it raises NameError — and because every handler is
       # nested inside `_health_server()`, the FIRST such failure aborts the

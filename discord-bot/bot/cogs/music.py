@@ -345,10 +345,15 @@ class MusicCog(commands.Cog):
                     f"request a specific version (for example “live” or “remix”).",
                     embeds.WARN))
             elif err_detail:
+                # Never render the provider's own message: it names our egress
+                # setup and is not the user's business. The classified copy
+                # says whether this is an access problem, a timeout or simply
+                # nothing found, which is what they can actually act on.
+                err = music.engine.provider_error()
+                log.warning("resolve failed: category=%s detail=%s",
+                            err.category, err.internal_detail)
                 await interaction.edit_original_response(embed=embeds.embed(
-                    "🔎 Track Not Found",
-                    f"yt-dlp: {err_detail}\nTry a different search or a direct URL.",
-                    embeds.WARN))
+                    "🔎 Track Not Found", err.user_message, embeds.WARN))
             else:
                 await interaction.edit_original_response(embed=embeds.embed(
                     "🔎 Track Not Found", "Try another search.", embeds.WARN))

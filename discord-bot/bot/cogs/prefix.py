@@ -210,9 +210,13 @@ class PrefixCog(commands.Cog, name="Prefix"):
             if not track:
                 err_detail = music.engine.get_resolve_error()
                 if err_detail:
+                    # Same rule as the slash command: the provider's raw
+                    # message stays in the log, never in the channel.
+                    err = music.engine.provider_error()
+                    log.warning("resolve failed: category=%s detail=%s",
+                                err.category, err.internal_detail)
                     await ctx.send(embed=embeds.embed(
-                        "🔎 Track Not Found",
-                        f"yt-dlp: {err_detail}\nTry a different search or a direct URL.", embeds.WARN))
+                        "🔎 Track Not Found", err.user_message, embeds.WARN))
                 else:
                     await ctx.send(embed=embeds.embed(
                         "🔎 Track Not Found", "Try another search.", embeds.WARN))

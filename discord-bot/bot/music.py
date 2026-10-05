@@ -12,6 +12,8 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Optional
 
+from music_errors import ProviderError as _ProviderError
+
 import discord
 import yt_dlp
 
@@ -1801,7 +1803,17 @@ class MusicEngine:
         # A URL must resolve to that URL. The search fallbacks would otherwise
         # treat the URL itself as a search string and hand back some other
         # provider's best guess at it.
-        is_url = bool(re.match(r"^https?://", query.strip(), re.I))
+        from music_errors import is_url_query, is_supported_url
+        is_url = is_url_query(query)
+        if is_url and not is_supported_url(query):
+            # Reject an unsupported link BEFORE the extractor sees it. Without
+            # this, an arbitrary pasted string reaches yt-dlp as if it were a
+            # media URL, and the user gets a provider error instead of the
+            # honest "that isn't a supported music link".
+            self._last_error_kind = "YT_INVALID_URL"
+            self._last_resolve_error = "unsupported URL host"
+            log.info("rejected unsupported URL (host not in the supported list)")
+            return None
         # Tagged egress plan: try the configured proxy first (unless it is
         # benched for a previous challenge), then this host's own egress at most
         # once. Each entry is (strategy name, yt-dlp opts, uses proxy).
@@ -1982,6 +1994,46 @@ class MusicEngine:
         """Machine-readable reason for the last failed resolve, or None."""
         return self._last_error_kind
 
+    def provider_error(self, *, is_url: bool = False) -> "_ProviderError":
+        """The last failure, classified.
+
+        This is the ONLY supported way for a UI to describe a resolve failure.
+        It returns a category, safe user copy and a log-only detail, so no
+        caller can reach the raw provider text by accident — which is exactly
+        how `yt-dlp: ...` ended up in a Discord embed.
+        """
+        from music_errors import USER_MESSAGES, classify, for_busy, redact_credentials
+        kind = self._last_error_kind or ""
+        if kind == "RESOLVER_BUSY":
+            return for_busy(kind)
+        # A code we assigned ourselves is authoritative. Re-deriving it from
+        # the message would undo the decision (an unsupported link classified
+        # by its text becomes a generic "no results").
+        if kind in USER_MESSAGES:
+            from music_errors import ProviderError
+            return ProviderError(
+                category=kind,
+                user_message=USER_MESSAGES[kind],
+                internal_detail=redact_credentials(self._last_resolve_error or kind)[:300],
+                operation="extract" if kind.startswith("YT_URL") or kind == "YT_INVALID_URL"
+                else "search",
+                transient=False,
+            )
+        # The resolver's own codes carry more meaning than the raw text, so
+        # they are mapped first rather than re-derived from the message.
+        if kind == NO_ORIGINAL_FOUND:
+            from music_errors import ProviderError
+            return ProviderError(
+                category=NO_ORIGINAL_FOUND,
+                user_message=("I couldn't find a suitable authorized original recording "
+                              "for that. Only covers or re-recorded versions were "
+                              "available, so I didn't play one."),
+                internal_detail=redact_credentials(
+                    self._last_resolve_error or "no authorized original")[:300],
+                operation="search",
+            )
+        return classify(self._last_resolve_error, is_url=is_url)
+
     def youtube_challenged(self) -> bool:
         """Whether YouTube refused this host during the last resolve.
 
@@ -2063,7 +2115,18 @@ class MusicEngine:
                             else "provider resolve path operational")),
                 "youtube_challenged": self._youtube_challenged,
                 "last_error_kind": self._last_error_kind,
-                "last_resolve_error": sanitize_for_log(self._last_resolve_error, limit=300),
+                # The dashboard renders this payload, so it carries the
+                # CLASSIFIED copy and its category — never the provider's own
+                # words. `sanitize_for_log` turned the raw text into
+                # "[redacted: possible credential]", which told the operator
+                # nothing and still put provider output in front of users.
+                # The full detail goes to the server log instead.
+                "last_error_category": (self.provider_error().category
+                                        if (self._last_error_kind or self._last_resolve_error)
+                                        else None),
+                "last_resolve_error": (self.provider_error().user_message
+                                       if (self._last_error_kind or self._last_resolve_error)
+                                       else None),
                 "ydlp_version": self._ydlp_version,
                 "cookies_configured": bool(cookies_path()),
                 "js_runtimes": js_runtimes(),
