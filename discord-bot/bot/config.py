@@ -106,6 +106,14 @@ YT_FORMAT = _get("YT_FORMAT")
 # exhausted the container and killed the process. Serialising the expensive
 # work bounds the peak regardless of how many callers arrive.
 #
+# Default is 1, chosen from measurement rather than taste. Each extraction
+# spawns a JavaScript runtime (~114 MB RSS, measured via RUSAGE_CHILDREN) to
+# solve YouTube's signature challenge. Two of those plus the ~210 MB resident
+# interpreter is ~437 MB against a 512 MB plan — survivable but with almost no
+# headroom, and a third caller tips it over. One at a time costs ~230 MB and
+# is comfortably safe; the queue absorbs the burst and callers wait rather
+# than crash the process. Raise it only if the host has real headroom.
+#
 # This limits CONCURRENCY only. It never changes which track is chosen:
 # ordering, ranking, provenance and the no-cover refusal are untouched.
 #
@@ -120,7 +128,7 @@ def _positive_int(name: str, default: int) -> int:
     return value if value >= 1 else 1
 
 
-MUSIC_RESOLVE_CONCURRENCY = _positive_int("MUSIC_RESOLVE_CONCURRENCY", 2)
+MUSIC_RESOLVE_CONCURRENCY = _positive_int("MUSIC_RESOLVE_CONCURRENCY", 1)
 # How long a caller waits for its turn before giving up. Bounded so a queue
 # cannot pile up unboundedly: past this the caller is told the service is
 # busy, which is honest, rather than being silently starved.
