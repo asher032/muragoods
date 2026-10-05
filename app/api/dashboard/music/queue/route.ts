@@ -27,9 +27,14 @@ async function guard(token: string, guildId: string) {
 export async function POST(req: NextRequest) {
   const token = await sessionToken();
   if (!token) return NextResponse.json({ success: false, code: 'AUTH_REQUIRED', error: 'Discord token required' }, { status: 401 });
-  const body = await req.json().catch(() => null) as { guildId?: string; url?: string; front?: boolean } | null;
+  const body = await req.json().catch(() => null) as { guildId?: string; url?: string; front?: boolean; isOriginal?: boolean } | null;
   const guildId = String(body?.guildId || '');
   const url = String(body?.url || '').slice(0, 300);
+  // The row's `isOriginal` is forwarded as a CLAIM. The bot re-reads the
+  // source from the provider and rejects the enqueue if the claim and the
+  // provider disagree — the queue plays this exact url, so an unchecked
+  // browser claim would be a way to queue a cover as an original.
+  const isOriginal = typeof body?.isOriginal === 'boolean' ? body.isOriginal : undefined;
   if (!/^\d{5,25}$/.test(guildId)) return NextResponse.json({ success: false, error: 'Valid guildId required' }, { status: 400 });
   if (!url.startsWith('http')) return NextResponse.json({ success: false, error: 'A result URL is required' }, { status: 400 });
   const denied = await guard(token, guildId);
@@ -44,7 +49,7 @@ export async function POST(req: NextRequest) {
     const resp = await fetch(`${BOT_BASE}/music/queue/${guildId}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, front: Boolean(body?.front) }),
+      body: JSON.stringify({ url, front: Boolean(body?.front), isOriginal }),
       cache: 'no-store',
       signal: controller.signal,
     });

@@ -64,6 +64,24 @@ VALIDATION_FAILED = "MUSIC_SELECTION_MISMATCH"
 #: Which version types count as "the real recording" for a plain request.
 ACCEPTABLE_TYPES = frozenset({"official", "original"})
 
+# ── Provenance ──────────────────────────────────────────────────────────
+#
+# What we can and cannot know, stated once so no caller has to guess.
+#
+# NOTHING derived from a title, a channel name or a uploader string is proof
+# of ownership. Any user can name a channel "Apple Music" or title a video
+# "(Official Music Video)". The provider exposes a real verified-artist
+# badge, but it is not present in the metadata these rows carry, so this
+# module must never emit a VERIFIED claim from metadata alone.
+#
+# `isAuthorized` therefore means "cleared this system's internal gate" — a
+# real, well-defined property — NOT "proven to be the rights holder".
+PROVENANCE_HEURISTIC = "HEURISTIC_PROVIDER_MATCH"
+PROVENANCE_REJECTED = "REJECTED_NOT_AUTHORIZED"
+PROVENANCE_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
+PROVENANCE_STATES = frozenset({PROVENANCE_HEURISTIC, PROVENANCE_REJECTED,
+                               PROVENANCE_UNAVAILABLE})
+
 #: Variant markers, strongest signal first. Weights are the penalty applied
 #: when the user did NOT ask for that variant.
 #:
@@ -139,7 +157,16 @@ _OFFICIAL_CHANNEL_RES = (
     re.compile(r"-\s*topic$", re.IGNORECASE),
 )
 _LABEL_CHANNEL_RES = (
-    re.compile(r"\brecords\b", re.IGNORECASE),
+    # No LEADING word boundary, for the same reason as the VEVO patterns
+    # above: label channels concatenate the name ("SonyRecords"), and
+    # `\brecords\b` cannot match that — it requires a non-word character
+    # before the "R".
+    re.compile(r"records\b", re.IGNORECASE),
+    # "music" stays STANDALONE on purpose. Live search showed the
+    # concatenated shape ("SickickMusic", "MPMusic") belonging only to fan
+    # re-upload channels, while the real label channels observed were
+    # standalone ("Apple Music", "BBC Radio 1"). Treating "...Music" as a
+    # label let a fan remix through as an authorized original.
     re.compile(r"\bmusic\b", re.IGNORECASE),
 )
 _OFFICIAL_TITLE_RES = (
@@ -209,6 +236,92 @@ def requested_kinds(query: str) -> set[str]:
     return {kind for kind, rx, _ in _COMPILED_VARIANTS if rx.search(text)}
 
 
+# Channels that announce themselves as re-recording outfits. Live search
+# results are full of these; a bare title on one of them is not the original.
+_UNAUTHORIZED_CHANNEL_RES = (
+    re.compile(r"\bcover(?:s|ing)?\b", re.IGNORECASE),
+    re.compile(r"\btribute\b", re.IGNORECASE),
+    re.compile(r"\bkaraoke\b", re.IGNORECASE),
+    re.compile(r"\bparody\b", re.IGNORECASE),
+)
+
+
+def _channel_is_artist(uploader: str, q_tokens: set[str]) -> bool:
+    """Is this upload published by the artist the user asked for?
+
+    Substring, not equality: VEVO and topic channels concatenate the name
+    ("ImagineDragons"), so exact token matching misses every official artist
+    channel that does not also carry a marker. The 4-character floor keeps
+    short words ("a", "the") from matching half the channel names on the
+    platform.
+    """
+    uploader = (uploader or "").lower()
+    return any(len(tok) >= 4 and tok in uploader for tok in q_tokens)
+
+
+def classify_source(entry: dict) -> tuple[str, list[str]]:
+    """Query-INDEPENDENT provenance verdict for one source.
+
+    `(version_type, variant_kinds)` where version_type is `official |
+    original | alternate | unknown`.
+
+    This exists because `score_candidate` needs a REQUEST, and the two places
+    that must not have one feed it the row's own title: `score_candidate`
+    would then treat any word shared between a title and its channel as
+    artist corroboration. Live search hit exactly that — "SICKICK VERSION!!!"
+    on the channel "SickickMusic" matched on the word "sickick" and the remix
+    was accepted as an authorized original.
+
+    With no request there is no title relevance to weigh, so this answers
+    only the question that actually matters here: where did this recording
+    come from, and is it a re-recording?
+    """
+    title = str(entry.get("title") or "")
+    uploader = str(entry.get("uploader") or entry.get("channel") or "")
+    kinds: list[str] = []
+
+    for kind, rx, _weight in _COMPILED_VARIANTS:
+        if rx.search(title):
+            kinds.append(kind)
+    for rx in _UNAUTHORIZED_CHANNEL_RES:
+        if rx.search(uploader):
+            kinds.append("unauthorized-channel")
+            break
+
+    # Artist-channel corroboration WITHOUT a request: compare the channel
+    # against the record's OWN artist field. That is not a guess — the
+    # artist field and the channel are independent facts about the same
+    # upload, so agreement between them is real evidence.
+    #
+    # Comparing the channel against the TITLE's tokens instead is the bug
+    # described above ("SICKICK VERSION!!!" on "SickickMusic"), and
+    # dropping the check altogether is no better: it refused the artist's
+    # own "Imagine Dragons - Believer (Audio)" on "ImagineDragons".
+    artist_field = str(entry.get("artist") or entry.get("creator") or "")
+    if not artist_field:
+        # yt-dlp's flat search rows have no artist field. The leading
+        # segment of "Artist - Song (Version)" is the artist, and the
+        # separator is required so a single-segment title yields nothing
+        # rather than a guess.
+        head = re.split(r"\s+[-\u2013\u2014]\s+", title, maxsplit=1)
+        if len(head) == 2:
+            artist_field = head[0]
+    a_tokens = {t for t in re.findall(r"[a-z0-9]+", artist_field.lower()) if len(t) >= 4}
+    artist_channel = bool(a_tokens) and _channel_is_artist(uploader, a_tokens)
+
+    if kinds:
+        return "alternate", kinds
+    for rx in _OFFICIAL_CHANNEL_RES:
+        if rx.search(uploader):
+            return "official", kinds
+    for rx in _OFFICIAL_TITLE_RES:
+        if rx.search(title):
+            return "official", kinds
+    if any(rx.search(uploader) for rx in _LABEL_CHANNEL_RES) or artist_channel:
+        return "original", kinds
+    return "unknown", kinds
+
+
 def score_candidate(query: str, entry: dict) -> tuple[float, str, list[str]]:
     """Score one candidate. Returns `(score, version_type, kinds)`.
 
@@ -241,11 +354,23 @@ def score_candidate(query: str, entry: dict) -> tuple[float, str, list[str]]:
             score += 25.0
             official = True
             break
+    label_channel = False
     if not official:
         for rx in _LABEL_CHANNEL_RES:
             if rx.search(uploader):
                 score += 10.0
+                label_channel = True
                 break
+    artist_channel = _channel_is_artist(uploader, q_tokens)
+    if artist_channel:
+        # The artist's own channel is the strongest provenance signal the
+        # provider gives us short of an explicit marker.
+        score += 20.0
+    for rx in _UNAUTHORIZED_CHANNEL_RES:
+        if rx.search(uploader):
+            kinds.append("unauthorized-channel")
+            score -= 60.0
+            break
     for rx in _OFFICIAL_TITLE_RES:
         if rx.search(title):
             score += 15.0
@@ -274,7 +399,15 @@ def score_candidate(query: str, entry: dict) -> tuple[float, str, list[str]]:
         version_type = "alternate"
     elif official:
         version_type = "official"
-    elif q_tokens and overlap >= 0.6:
+    elif q_tokens and overlap >= 0.6 and (artist_channel or label_channel):
+        # A matching title on an ARBITRARY channel is not evidence of
+        # anything. Live search is full of them — "Imagine Dragons -
+        # Believer" on LatinHype, "Shape Of You (Audio)" on Phantom Lyrics,
+        # "Believer" on Minimal Sounds — and awarding them "original" is how
+        # a fan upload becomes the answer the moment the artist's own upload
+        # is missing from the results. Without a marker, a label or the
+        # artist's own channel, the candidate stays `unknown` and is
+        # structurally refused rather than passed off as the original.
         version_type = "original"
     else:
         version_type = "unknown"
@@ -445,6 +578,19 @@ def _provider_of(entry: dict) -> str:
     return host or "unknown"
 
 
+def provenance_of(entry: dict, version_type: str | None = None) -> str:
+    """Epistemic status of a source: how much do we actually know?
+
+    Returns one of `PROVENANCE_STATES`. Never returns a "verified" value,
+    because no metadata-only signal can establish that.
+    """
+    vt = version_type if version_type is not None else str(
+        entry.get("versionType") or "unknown")
+    if entry.get("_provenance_unavailable"):
+        return PROVENANCE_UNAVAILABLE
+    return PROVENANCE_HEURISTIC if vt in ACCEPTABLE_TYPES else PROVENANCE_REJECTED
+
+
 def resolved_metadata(entry: dict) -> dict:
     """The row a queued track must carry, so it never has to search again.
 
@@ -462,6 +608,9 @@ def resolved_metadata(entry: dict) -> dict:
         "duration": int(entry.get("duration") or 0),
         "version": str(entry.get("versionType") or "unknown"),
         "isOriginal": bool(entry.get("isOriginal", entry.get("versionType") in ACCEPTABLE_TYPES)),
-        "isAuthorized": entry.get("versionType") == "official",
+        # Cleared the internal gate. NOT proof of rights ownership — see the
+        # PROVENANCE_* block above.
+        "isAuthorized": entry.get("versionType") in ACCEPTABLE_TYPES,
+        "provenance": provenance_of(entry),
         "selectionReason": str(entry.get("selectionReason") or ""),
     }
