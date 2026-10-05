@@ -47,6 +47,17 @@ services:
         value: "MuraStream • /help"
       - key: BOT_STATUS
         value: "online"
+      # Boot-fatal: bot/config.py validate() does sys.exit(1) when this is
+      # missing, so the deploy dies before /health can ever answer. REPLACE
+      # the placeholder with your Discord user ID — digits only (config.py
+      # parses it with str.isdigit(), so a username or a #tag silently becomes
+      # None and the bot still exits). Get it: Developer Mode enabled →
+      # right-click your profile → Copy User ID. Do NOT use the application id
+      # from /health (1549395794853888020) — that is the bot, not you.
+      # app/lib/murabot-owner.ts reads this same variable, so set the identical
+      # value on Vercel or the dashboard owner checks will disagree with the bot.
+      - key: MURABOT_OWNER_DISCORD_ID
+        value: "YOUR_DISCORD_USER_ID_HERE"
       - key: BOT_ADMIN_IDS
         sync: false
       - key: BOT_PREFIX
