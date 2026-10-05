@@ -308,6 +308,12 @@ jobs:
       - name: Music original-recording selection (covers, variants, autoplay, queue)
         run: python discord-bot/scripts/test_music_original_selection.py
 
+      # Guards the pf11 capacity failure: unbounded concurrent yt-dlp resolves
+      # exhausted the container and killed the process. Hermetic (stubbed
+      # resolver body), so it asserts the GATE, not the network.
+      - name: Music resolve concurrency limit (no unbounded extractions)
+        run: python discord-bot/scripts/test_resolve_concurrency.py
+
       # `app.router.add_get("/x", handler)` takes the NAME `handler`. If the
       # `def` has not run yet it raises NameError — and because every handler is
       # nested inside `_health_server()`, the FIRST such failure aborts the

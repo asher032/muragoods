@@ -95,6 +95,36 @@ YT_COOKIES = _get("YT_COOKIES")
 # select a working format and rotate clients (including PO-token handling), and
 # pinning either was the cause of "Requested format is not available".
 YT_FORMAT = _get("YT_FORMAT")
+
+# ── Resolver concurrency ─────────────────────────────────────────────────
+# How many yt-dlp resolves may run at the same time, process-wide.
+#
+# Every resolve fans out across several strategies, each doing blocking
+# extraction in a worker thread. A small burst of concurrent resolves (the
+# dashboard searching while the bot resolves, or several guilds searching at
+# once) therefore multiplies simultaneous extractions, and that is what
+# exhausted the container and killed the process. Serialising the expensive
+# work bounds the peak regardless of how many callers arrive.
+#
+# This limits CONCURRENCY only. It never changes which track is chosen:
+# ordering, ranking, provenance and the no-cover refusal are untouched.
+#
+# Values are clamped to >= 1 so a typo ("0", "-5", "abc") degrades to
+# fully-serialised resolution rather than disabling the guard entirely.
+def _positive_int(name: str, default: int) -> int:
+    raw = _get(name, str(default))
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return default
+    return value if value >= 1 else 1
+
+
+MUSIC_RESOLVE_CONCURRENCY = _positive_int("MUSIC_RESOLVE_CONCURRENCY", 2)
+# How long a caller waits for its turn before giving up. Bounded so a queue
+# cannot pile up unboundedly: past this the caller is told the service is
+# busy, which is honest, rather than being silently starved.
+MUSIC_RESOLVE_QUEUE_TIMEOUT = _positive_int("MUSIC_RESOLVE_QUEUE_TIMEOUT", 120)
 YT_PLAYER_CLIENT = _get("YT_PLAYER_CLIENT")
 
 # ── Behaviour tuning ─────────────────────────────────────────────────────

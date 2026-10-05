@@ -891,6 +891,14 @@ _RESOLVE_REMEDIES = {
         "A fallback provider returned a result that does not match the query; it was "
         "rejected instead of played. Fix the primary provider."
     ),
+    # Admission control, not a provider fault: every resolve slot was busy for
+    # longer than a caller is willing to wait. Distinct from "no provider
+    # matched" so the operator does not go re-checking cookies.
+    "RESOLVER_BUSY": (
+        "Every resolve slot was busy (see resolve_concurrency_limit). This is "
+        "capacity, not a provider problem: raise MUSIC_RESOLVE_CONCURRENCY if the "
+        "host has headroom, or lower MUSIC_RESOLVE_QUEUE_TIMEOUT to fail faster."
+    ),
 }
 _RESOLVE_REMEDY_DEFAULT = (
     "No provider returned a playable match. If cookies and a proxy are already set, "
