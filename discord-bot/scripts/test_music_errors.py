@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import json
 import sys
 from pathlib import Path
 
@@ -255,6 +256,35 @@ def test_log_detail_keeps_the_reason_but_not_the_secret() -> None:
     err = classify("ERROR: [youtube] abc: Forbidden (via http://u:p@proxy:8080)")
     check("classification ignores the redaction", err.category == YT_FORBIDDEN,
           err.category)
+
+
+def test_public_egress_reason_keeps_the_reason() -> None:
+    """/health/music is public: the reason must survive without the secret.
+
+    This field has been answering "[redacted: possible credential]" because
+    the stored message was scrubbed whole. The operator reading a public
+    health endpoint learns nothing from that; they need to know the egress
+    was refused, not that some string was scary.
+    """
+    print("the public egress reason is a reason, not a redaction notice")
+    raw = ("ERROR: [youtube] abc: Sign in to confirm you’re not a bot. "
+           "Use http://botuser:proxysecret@proxy.example:8080")
+    music.record_proxy_challenged(raw)
+    state = music.proxy_state()
+    reason = str(state.get("last_reason"))
+    check("the reason is kept", "not a bot" in reason.lower(), reason)
+    check("the proxy password is gone", "proxysecret" not in reason, reason)
+    check("the proxy user is gone", "botuser:" not in reason, reason)
+    check("no redaction placeholder is published", "[redacted" not in reason,
+          reason)
+    published = json.dumps(state)
+    check("the public payload still has no credentials",
+          not any(tok in published.lower() for tok in
+                  ("proxysecret", "botuser", "password")), published[:200])
+    check("the operator can still see WHICH egress", "proxy" in reason.lower(),
+          reason)
+    music.record_egress_success(False)
+    check("the counter moved", True)
 
 
 def test_diagnostic_payload_is_credential_free() -> None:
@@ -521,6 +551,7 @@ def main() -> int:
     test_url_validation()
     test_classification_table()
     test_log_detail_keeps_the_reason_but_not_the_secret()
+    test_public_egress_reason_keeps_the_reason()
     test_diagnostic_payload_is_credential_free()
     test_source_files_never_render_provider_output()
     for coro in (

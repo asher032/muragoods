@@ -12,7 +12,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Optional
 
-from music_errors import ProviderError as _ProviderError
+from music_errors import ProviderError as _ProviderError, redact_credentials
 
 import discord
 import yt_dlp
@@ -704,12 +704,18 @@ def record_proxy_challenged(reason: str | None = None) -> None:
 
     The reason is scrubbed on the way in: it reaches a public health endpoint,
     and a driver error can quote the proxy URL with its credentials in it.
+
+    Scrutbing used to mean replacing the WHOLE string whenever it looked
+    credential-shaped, which is why this public field has been answering
+    "[redacted: possible credential]" — which says nothing about why the
+    egress was refused. `redact_credentials` blanks just the secret (the
+    proxy's userinfo) and keeps the reason.
     """
     _egress_state["status"] = PROXY_EGRESS_CHALLENGED
     _egress_state["bench_until"] = time.time() + PROXY_CHALLENGE_COOLDOWN
     _egress_state["challenge_count"] = int(_egress_state["challenge_count"]) + 1
     _egress_state["last_path"] = "proxy"
-    _egress_state["last_reason"] = sanitize_for_log(reason, limit=160)
+    _egress_state["last_reason"] = redact_credentials(reason)[:160]
 
 
 def record_egress_success(used_proxy: bool) -> None:
