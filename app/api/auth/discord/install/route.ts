@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   OAUTH_STATE_COOKIE,
   cookieOptions,
+  discordClientId,
   generateState,
   getSession,
   sessionManagesGuild,
 } from '@/app/lib/discord-session';
+// The callback URL must be identical to the one the login flow authorizes
+// with. Importing the single definition is what guarantees that; a second
+// copy here could drift and Discord would reject the exchange.
+import { getRedirectUri } from '../route';
 
 // ── MuraGoods bot installation ───────────────────────────────────────────
 // The website's "+ ADD MURAGOODS BOT" CTA links straight here. Two modes:
@@ -32,13 +37,8 @@ export const runtime = 'nodejs';
 const PERMISSIONS = '271698944';
 
 function getClientId(): string | null {
-  const id = process.env.DISCORD_CLIENT_ID?.trim();
+  const id = discordClientId();
   return id ? id : null;
-}
-
-function getRedirectUri(req: NextRequest): string {
-  return process.env.DISCORD_REDIRECT_URI?.trim()
-    || new URL('/api/auth/discord/callback', req.nextUrl.origin).toString();
 }
 
 /** The real Discord authorize URL for this application. */
