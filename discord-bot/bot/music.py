@@ -1508,8 +1508,11 @@ class MusicEngine:
         """Non-secret concurrency counters for the diagnostics payload."""
         return {
             "resolve_concurrency_limit": config.MUSIC_RESOLVE_CONCURRENCY,
-            "resolve_inflight": cls._resolve_inflight,
-            "resolve_peak_inflight": cls._resolve_peak,
+            # Callers currently inside resolve() — INCLUDING those still
+            # waiting for a slot. Distinct from the number of extractions
+            # actually running, which is capped by resolve_concurrency_limit.
+            "resolve_callers_active": cls._resolve_inflight,
+            "resolve_callers_peak": cls._resolve_peak,
         }
 
     def __init__(self):

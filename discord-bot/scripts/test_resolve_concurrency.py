@@ -87,7 +87,7 @@ async def test_respects_limit() -> None:
     check("all 8 actually ran", eng.started == 8, f"started={eng.started}")
     stats = MusicEngine.resolve_stats()
     check("counters report the limit", stats["resolve_concurrency_limit"] == 2, str(stats))
-    check("counters unwind to 0", stats["resolve_inflight"] == 0, str(stats))
+    check("counters unwind to 0", stats["resolve_callers_active"] == 0, str(stats))
 
 
 async def test_serialises_at_one() -> None:
@@ -99,6 +99,28 @@ async def test_serialises_at_one() -> None:
     elapsed = time.monotonic() - t0
     check("peak concurrency == 1", eng.peak == 1, f"peak={eng.peak}")
     check("4x0.1s serial took >= 0.4s", elapsed >= 0.40, f"elapsed={elapsed:.2f}s")
+
+
+async def test_distinct_queries_still_bounded() -> None:
+    """Several DIFFERENT songs must not bypass the gate either.
+
+    The cache shares identical queries, so this guards the case that actually
+    loads a host: four unrelated tracks arriving at once. It also pins the
+    meaning of the reported counters — callers may exceed the limit while
+    queued, but simultaneous extractions must not.
+    """
+    print("distinct queries are still bounded by the gate")
+    reset_gate(2, 120)
+    eng = StubEngine(duration=0.10)
+    await asyncio.gather(*(eng.resolve(f"different song {i}") for i in range(4)))
+    check("extractions running at once <= limit", eng.peak <= 2, f"peak={eng.peak}")
+    check("all four were really attempted", eng.started == 4, f"started={eng.started}")
+    stats = MusicEngine.resolve_stats()
+    check("counter names callers, not extractions",
+          "resolve_callers_active" in stats and "resolve_inflight" not in stats,
+          str(sorted(stats)))
+    check("callers unwind to 0 after completion",
+          stats["resolve_callers_active"] == 0, str(stats))
 
 
 async def test_queue_timeout_refuses() -> None:
@@ -114,7 +136,7 @@ async def test_queue_timeout_refuses() -> None:
           bool(eng._last_resolve_error) and "busy" in (eng._last_resolve_error or ""),
           f"err={eng._last_resolve_error}")
     check("waiter did NOT start work", eng.started == 1, f"started={eng.started}")
-    check("slot released after refusal", MusicEngine.resolve_stats()["resolve_inflight"] == 0)
+    check("slot released after refusal", MusicEngine.resolve_stats()["resolve_callers_active"] == 0)
 
 
 async def test_gate_survives_failures() -> None:
@@ -137,7 +159,7 @@ async def test_gate_survives_failures() -> None:
         raised = True
     check("exception propagates (not swallowed)", raised)
     check("slot released after exception",
-          MusicEngine.resolve_stats()["resolve_inflight"] == 0)
+          MusicEngine.resolve_stats()["resolve_callers_active"] == 0)
     # The gate must still be usable afterwards: a raised resolve must not
     # permanently consume the slot.
     eng.fail = False
@@ -160,6 +182,7 @@ def main() -> int:
     for coro in (
         test_respects_limit(),
         test_serialises_at_one(),
+        test_distinct_queries_still_bounded(),
         test_queue_timeout_refuses(),
         test_gate_survives_failures(),
         test_single_request_unaffected(),
