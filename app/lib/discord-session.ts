@@ -87,15 +87,102 @@ export function guildIconUrl(guildId: string, icon: string | null): string | nul
   return icon ? `https://cdn.discordapp.com/icons/${guildId}/${icon}.png` : null;
 }
 
+// ── OAuth client configuration ──────────────────────────────────────────
+//
+// The single place Discord OAuth credentials are read. Every caller goes
+// through here, so there is no longer one route that trims and another that
+// does not.
+//
+// `.trim()` is not cosmetic. These values are copied out of the Discord
+// Developer Portal and pasted into Vercel/Render, and a stray newline or
+// space survives the paste. Discord then rejects the token exchange with
+// HTTP 401 `invalid_client`, which looks exactly like "the client id and
+// secret are from different applications" — so the operator goes hunting in
+// the portal when the value was dirty all along.
+
+export function discordClientId(): string {
+  return process.env.DISCORD_CLIENT_ID?.trim() ?? '';
+}
+
+export function discordClientSecret(): string {
+  return process.env.DISCORD_CLIENT_SECRET?.trim() ?? '';
+}
+
+/**
+ * Structured internal code for a rejected client id / client secret pair.
+ *
+ * Carried on the error object and in the redirect query so the failure is
+ * machine-readable in logs and in the URL, instead of only being prose that
+ * has to be string-matched. See `DISCORD_OAUTH_CONFIG_ERROR` for the copy.
+ */
+export const DISCORD_OAUTH_INVALID_CLIENT = 'DISCORD_OAUTH_INVALID_CLIENT';
+
+/**
+ * Operator-facing detail, logged server-side.
+ *
+ * Deliberately names the cause instead of forwarding Discord's terse body,
+ * because `invalid_client` otherwise reads like a login failure and sends
+ * people to re-authorize a session that was never the problem. The id and
+ * secret must belong to the SAME Discord application.
+ */
+export const DISCORD_OAUTH_CONFIG_ERROR =
+  'Discord OAuth client credentials are invalid. Verify DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET '
+  + 'belong to the same Discord application, then redeploy.';
+
+/**
+ * What the visitor is shown.
+ *
+ * `invalid_client` is a server-side deployment fault — a stale/rotated secret,
+ * or an id and secret from two different Discord applications. Nothing about
+ * the person's Discord account is implicated, so this copy must never imply
+ * that their account or login was rejected.
+ */
+export const DISCORD_OAUTH_INVALID_CLIENT_MESSAGE =
+  'Discord connection is temporarily unavailable. Please try again later.';
+
+/**
+ * Diagnostic line for a failed token exchange.
+ *
+ * Emits only the allowed fields: provider, whether each credential is
+ * present, whether the redirect URI is configured and matches, the exchange
+ * status, and Discord's error code. The secret, the authorization code and
+ * the access token are never included — only the boolean presence flags.
+ *
+ * Discord exposes no endpoint for reading an app's registered redirect URIs,
+ * so `redirect_uri_match` can only be INFERRED: Discord rejects a mismatch as
+ * `invalid_grant`, never `invalid_client`. Anything we did not reach Discord
+ * for is reported as 'unknown' rather than guessed.
+ */
+function logTokenExchangeDiagnostics(detail: {
+  client_id_present: boolean;
+  client_secret_present: boolean;
+  redirect_uri_configured: boolean;
+  redirect_uri_match: boolean | 'unknown';
+  token_exchange_status: number | 'network_error';
+  discord_error: string | null;
+}) {
+  const fields = {
+    oauth_provider: 'discord',
+    client_id_present: detail.client_id_present,
+    client_secret_present: detail.client_secret_present,
+    redirect_uri_configured: detail.redirect_uri_configured,
+    redirect_uri_match: detail.redirect_uri_match,
+    token_exchange_status: detail.token_exchange_status,
+    discord_error: detail.discord_error,
+  };
+  console.error('[discord-oauth] token exchange failed', JSON.stringify(fields));
+}
+
 /** Discord OAuth: exchange an authorization code for tokens. Server-only. */
 export async function exchangeCode(code: string, redirectUri: string): Promise<{
   ok: true;
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
-} | { ok: false; error: string; status: number }> {
-  const clientId = process.env.DISCORD_CLIENT_ID;
-  const clientSecret = process.env.DISCORD_CLIENT_SECRET;
+} | { ok: false; error: string; status: number; code?: string }> {
+  const clientId = discordClientId();
+  const clientSecret = discordClientSecret();
+  const redirectUriConfigured = Boolean(process.env.DISCORD_REDIRECT_URI?.trim());
   if (!clientId || !clientSecret) {
     return { ok: false, error: 'OAuth is not configured (missing DISCORD_CLIENT_ID / DISCORD_CLIENT_SECRET)', status: 500 };
   }
@@ -115,12 +202,62 @@ export async function exchangeCode(code: string, redirectUri: string): Promise<{
     });
     if (!resp.ok) {
       const text = await resp.text();
+      // Discord answers an unknown id/secret pair with a body containing no
+      // useful detail; extract just the error code for logging.
+      const discordError = (() => {
+        try {
+          const parsed = JSON.parse(text) as { error?: unknown };
+          return typeof parsed.error === 'string' ? parsed.error : null;
+        } catch {
+          return /invalid_client/.test(text) ? 'invalid_client' : null;
+        }
+      })();
+
+      // `invalid_client` is a deployment misconfiguration, not a bad user
+      // session: Discord is rejecting our client_id/client_secret pair.
+      // Reporting that as a raw token-exchange failure is what made this read
+      // as "login is broken" and sent the operator looking at the wrong layer.
+      if (resp.status === 401 || discordError === 'invalid_client') {
+        logTokenExchangeDiagnostics({
+          client_id_present: true,
+          client_secret_present: true,
+          redirect_uri_configured: redirectUriConfigured,
+          // Discord rejects a redirect mismatch with invalid_grant, not
+          // invalid_client, so reaching here means the URI was accepted.
+          redirect_uri_match: discordError !== 'invalid_grant',
+          token_exchange_status: resp.status,
+          discord_error: discordError ?? 'invalid_client',
+        });
+        return {
+          ok: false,
+          error: DISCORD_OAUTH_CONFIG_ERROR,
+          status: 500,
+          code: DISCORD_OAUTH_INVALID_CLIENT,
+        };
+      }
+      logTokenExchangeDiagnostics({
+        client_id_present: true,
+        client_secret_present: true,
+        redirect_uri_configured: redirectUriConfigured,
+        redirect_uri_match: discordError !== 'invalid_grant',
+        token_exchange_status: resp.status,
+        discord_error: discordError,
+      });
       // 400 invalid_grant covers expired/used/revoked codes.
       return { ok: false, error: `Discord token exchange failed (HTTP ${resp.status}): ${text.slice(0, 200)}`, status: resp.status };
     }
     const data = (await resp.json()) as { access_token: string; refresh_token: string; expires_in: number };
     return { ok: true, accessToken: data.access_token, refreshToken: data.refresh_token, expiresIn: data.expires_in };
   } catch (err) {
+    logTokenExchangeDiagnostics({
+      client_id_present: true,
+      client_secret_present: true,
+      redirect_uri_configured: redirectUriConfigured,
+      // Discord was never reached, so the redirect URI was never checked.
+      redirect_uri_match: 'unknown',
+      token_exchange_status: 'network_error',
+      discord_error: null,
+    });
     return { ok: false, error: err instanceof Error ? err.message : 'Token exchange network error', status: 502 };
   }
 }
@@ -139,8 +276,8 @@ export interface DashUser {
 
 /** Refresh the Discord access token using the stored refresh token. */
 async function refreshSessionToken(session: SessionDoc): Promise<boolean> {
-  const clientId = process.env.DISCORD_CLIENT_ID;
-  const clientSecret = process.env.DISCORD_CLIENT_SECRET;
+  const clientId = discordClientId();
+  const clientSecret = discordClientSecret();
   if (!clientId || !clientSecret) return false;
   try {
     const resp = await fetch('https://discord.com/api/v10/oauth2/token', {

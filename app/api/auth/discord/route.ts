@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { OAUTH_STATE_COOKIE, cookieOptions, generateState } from '@/app/lib/discord-session';
+import { OAUTH_STATE_COOKIE, cookieOptions, generateState, discordClientId } from '@/app/lib/discord-session';
 
 // ── OAuth step 1: redirect the user to Discord's authorize URL ───────────
 // Authorization-code flow (NOT response_type=token). State is random, stored
@@ -10,6 +10,18 @@ export const runtime = 'nodejs';
 
 export const DISCORD_SCOPES = 'identify guilds';
 
+/**
+ * The ONE definition of the OAuth callback URL.
+ *
+ * Discord requires the redirect_uri sent during authorization and the one
+ * sent during the token exchange to match EXACTLY — a trailing slash, a
+ * missing scheme or a preview host is enough to produce a failure that looks
+ * like a credential problem. So both the authorize step and the exchange step
+ * call this, and the bot-install flow imports it rather than repeating it.
+ *
+ * Production pins it with DISCORD_REDIRECT_URI. The request origin is only a
+ * fallback for local dev and preview deployments.
+ */
 export function getRedirectUri(req: NextRequest): string {
   const configured = process.env.DISCORD_REDIRECT_URI?.trim();
   if (configured) return configured;
@@ -31,7 +43,7 @@ export function botInviteUrl(clientId: string, guildId?: string | null): string 
 }
 
 export async function GET(req: NextRequest) {
-  const clientId = process.env.DISCORD_CLIENT_ID;
+  const clientId = discordClientId();
   if (!clientId) {
     return NextResponse.json(
       { success: false, error: 'OAuth not configured: DISCORD_CLIENT_ID missing' },

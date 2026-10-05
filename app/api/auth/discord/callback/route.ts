@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  DISCORD_OAUTH_INVALID_CLIENT,
+  DISCORD_OAUTH_INVALID_CLIENT_MESSAGE,
   OAUTH_STATE_COOKIE,
   createSession,
   exchangeCode,
@@ -21,9 +23,17 @@ export const runtime = 'nodejs';
 const MANAGE_GUILD = BigInt(0x20);
 const ADMINISTRATOR = BigInt(0x8);
 
-function fail(req: NextRequest, message: string) {
+/**
+ * Redirect with a readable ?auth_error=.
+ *
+ * `code` is the internal structured error (e.g. DISCORD_OAUTH_INVALID_CLIENT);
+ * when present it drives the dashboard's wording so a server-side deployment
+ * fault never renders as a message about the visitor's own account.
+ */
+function fail(req: NextRequest, message: string, code?: string) {
   const url = new URL('/dashboard', req.nextUrl.origin);
   url.searchParams.set('auth_error', message);
+  if (code) url.searchParams.set('auth_error_code', code);
   return NextResponse.redirect(url);
 }
 
@@ -55,6 +65,12 @@ export async function GET(req: NextRequest) {
   // Exchange the authorization code for tokens (server-side only).
   const token = await exchangeCode(code, getRedirectUri(req));
   if (!token.ok) {
+    // Our own credentials were rejected. Show the neutral "try again later"
+    // copy rather than the operator-facing text, and pass the structured code
+    // so the dashboard can map it the same way on a page refresh.
+    if (token.code === DISCORD_OAUTH_INVALID_CLIENT) {
+      return fail(req, DISCORD_OAUTH_INVALID_CLIENT_MESSAGE, DISCORD_OAUTH_INVALID_CLIENT);
+    }
     return fail(req, token.error);
   }
 

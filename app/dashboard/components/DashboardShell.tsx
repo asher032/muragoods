@@ -74,7 +74,16 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   // Not authenticated — the only place the login button appears.
   if (!authenticated) {
     const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-    const authError = params?.get('auth_error');
+    const authErrorCode = params?.get('auth_error_code');
+    // A rejected client id/secret is a server-side deployment fault, not
+    // anything about the visitor's Discord account. Map the structured code to
+    // neutral copy so this never reads as "your account is invalid".
+    // The code is repeated as a literal rather than imported: the module that
+    // exports DISCORD_OAUTH_INVALID_CLIENT is server-only (it reaches Mongo via
+    // mongoose), so importing it here would pull that into the client bundle.
+    const authError = authErrorCode === 'DISCORD_OAUTH_INVALID_CLIENT'
+      ? 'Discord connection is temporarily unavailable. Please try again later.'
+      : params?.get('auth_error');
     return (
       <div style={{
         minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24,
