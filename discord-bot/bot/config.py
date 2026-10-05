@@ -142,6 +142,13 @@ def _positive_float(name: str, default: float) -> float:
 # needs to outlast a burst of people asking for the same track.
 MUSIC_RESOLVE_CACHE_TTL = _positive_float("MUSIC_RESOLVE_CACHE_TTL", 300.0)
 MUSIC_RESOLVE_CACHE_MAX = _positive_int("MUSIC_RESOLVE_CACHE_MAX", 200)
+
+# Wall-clock budget for ONE resolve request, covering queue wait + the resolve
+# itself. It must exceed a full queue round: at MUSIC_RESOLVE_CONCURRENCY=2 a
+# burst of N callers needs ceil(N/2) rounds of ~35s each, so a 90s budget
+# turned a healthy queued request into a 503. Exceeding it is not free
+# either — the caller waits — so it is configurable rather than hardcoded.
+MUSIC_RESOLVE_REQUEST_TIMEOUT = _positive_int("MUSIC_RESOLVE_REQUEST_TIMEOUT", 180)
 YT_PLAYER_CLIENT = _get("YT_PLAYER_CLIENT")
 
 # ── Behaviour tuning ─────────────────────────────────────────────────────

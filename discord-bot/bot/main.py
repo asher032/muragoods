@@ -2266,7 +2266,9 @@ async def _health_server() -> None:
 
         t0 = time.monotonic()
         try:
-            track = await asyncio.wait_for(music_mod.engine.resolve(query), timeout=90)
+            track = await asyncio.wait_for(
+                music_mod.engine.resolve(query),
+                timeout=config.MUSIC_RESOLVE_REQUEST_TIMEOUT)
         except asyncio.TimeoutError:
             out["elapsed"] = round(time.monotonic() - t0, 2)
             out["error"] = (
