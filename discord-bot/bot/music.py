@@ -1454,6 +1454,47 @@ def _order_search_results(query: str, rows: list[dict]) -> list[dict]:
 
 
 class MusicEngine:
+    # Bounds how many yt-dlp extractions run at once, process-wide.
+    #
+    # Created lazily and deliberately NOT per-engine or per-call: the limit
+    # exists to cap peak resource use, and a per-call lock would cap nothing.
+    # It is shared by every caller (dashboard search, queue, autoplay, the
+    # /music/diagnose endpoint) because they all contend for the same
+    # container.
+    _resolve_semaphore: Optional[asyncio.Semaphore] = None
+    # The loop _resolve_semaphore was created on; they must be replaced together.
+    _resolve_loop: Optional[asyncio.AbstractEventLoop] = None
+    # Monotonic count of resolve calls waiting or running, for diagnostics.
+    _resolve_inflight: int = 0
+    _resolve_peak: int = 0
+
+    @classmethod
+    def _get_resolve_semaphore(cls) -> asyncio.Semaphore:
+        """The shared gate, bound to whichever loop is running.
+
+        asyncio primitives are loop-affine: a Semaphore built on one loop
+        cannot be awaited on another. There is no public `loop` attribute on
+        Semaphore, so the loop is tracked here alongside it and the pair is
+        rebuilt together whenever the running loop changes.
+        """
+        loop = asyncio.get_running_loop()
+        if cls._resolve_semaphore is None or cls._resolve_loop is not loop:
+            cls._resolve_semaphore = asyncio.Semaphore(config.MUSIC_RESOLVE_CONCURRENCY)
+            cls._resolve_loop = loop
+            log.info(
+                "resolve concurrency limited to %d (MUSIC_RESOLVE_CONCURRENCY)",
+                config.MUSIC_RESOLVE_CONCURRENCY)
+        return cls._resolve_semaphore
+
+    @classmethod
+    def resolve_stats(cls) -> dict[str, int]:
+        """Non-secret concurrency counters for the diagnostics payload."""
+        return {
+            "resolve_concurrency_limit": config.MUSIC_RESOLVE_CONCURRENCY,
+            "resolve_inflight": cls._resolve_inflight,
+            "resolve_peak_inflight": cls._resolve_peak,
+        }
+
     def __init__(self):
         from collections import deque as _dq
         self._players: dict[int, GuildPlayer] = {}
@@ -1497,8 +1538,48 @@ class MusicEngine:
         self._players.pop(guild_id, None)
 
     async def resolve(self, query: str) -> Optional[Track]:
-        """Resolve a search query or URL to a Track via yt-dlp.
-        Tries multiple strategies before giving up."""
+        """Resolve a query to a Track, bounded by the shared concurrency gate.
+
+        This wrapper owns ONLY admission control. The selection logic below is
+        unchanged: same strategy order, same ranking, same provenance, same
+        refusal to substitute a cover. Callers queue for a slot instead of
+        running unbounded extractions that can exhaust the container.
+        """
+        sem = self._get_resolve_semaphore()
+        cls = type(self)
+        cls._resolve_inflight += 1
+        cls._resolve_peak = max(cls._resolve_peak, cls._resolve_inflight)
+        acquired = False
+        try:
+            try:
+                await asyncio.wait_for(
+                    sem.acquire(), timeout=config.MUSIC_RESOLVE_QUEUE_TIMEOUT)
+                acquired = True
+            except asyncio.TimeoutError:
+                # Waiting this long means every slot is wedged on a slow
+                # provider. Saying so is honest; silently returning a wrong
+                # track is not.
+                self._last_resolve_error = (
+                    "resolver busy: waited %ds for a resolve slot"
+                    % config.MUSIC_RESOLVE_QUEUE_TIMEOUT)
+                self._last_error_kind = "RESOLVER_BUSY"
+                log.warning(
+                    "resolve gave up queueing after %ds (limit=%d inflight=%d)",
+                    config.MUSIC_RESOLVE_QUEUE_TIMEOUT,
+                    config.MUSIC_RESOLVE_CONCURRENCY, cls._resolve_inflight)
+                return None
+            return await self._resolve_unbounded(query)
+        finally:
+            if acquired:
+                sem.release()
+            cls._resolve_inflight -= 1
+
+    async def _resolve_unbounded(self, query: str) -> Optional[Track]:
+        """The real resolve: strategies, ranking, provenance. No gating.
+
+        Split out from resolve() so the concurrency guard wraps the whole
+        operation without touching a single line of selection behaviour.
+        """
         self._last_resolve_error = None
         if self._ydlp_version == "unknown":
             try:
@@ -1768,6 +1849,10 @@ class MusicEngine:
                 "ydlp_version": self._ydlp_version,
                 "cookies_configured": bool(cookies_path()),
                 "js_runtimes": js_runtimes(),
+                # Admission control is observable, not invisible: a resolve
+                # that queued or was refused must be visible here rather than
+                # looking like a provider failure.
+                "resolve_concurrency": self.resolve_stats(),
             },
             "ffmpeg": {
                 "status": ff["status"],
