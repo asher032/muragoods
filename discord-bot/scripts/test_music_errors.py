@@ -39,18 +39,23 @@ from music_errors import (  # noqa: E402
     TRANSIENT_CATEGORIES,
     USER_MESSAGES,
     YT_BOT_CHECK,
+    YT_FALLBACK_MISMATCH,
     YT_FORBIDDEN,
     YT_INVALID_URL,
     YT_LOGIN_REQUIRED,
+    YT_NO_AUTHORIZED_ORIGINAL,
     YT_NO_RESULTS,
+    YT_PREVIEW_ONLY,
     YT_PROVIDER_UNAVAILABLE,
     YT_RATE_LIMITED,
     YT_RESOLVER_BUSY,
     YT_SEARCH_FAILED,
     YT_TIMEOUT,
     YT_URL_EXTRACTION_FAILED,
+    YT_VALIDATION_FAILED,
     classify,
     for_busy,
+    for_kind,
     redact_credentials,
     is_supported_url,
     is_url_query,
@@ -95,7 +100,9 @@ def test_every_category_has_safe_copy() -> None:
           {YT_SEARCH_FAILED, YT_URL_EXTRACTION_FAILED, YT_LOGIN_REQUIRED,
            YT_BOT_CHECK, YT_RATE_LIMITED, YT_FORBIDDEN,
            YT_PROVIDER_UNAVAILABLE, YT_NO_RESULTS, YT_INVALID_URL,
-           YT_TIMEOUT, YT_RESOLVER_BUSY} <= set(USER_MESSAGES),
+           YT_TIMEOUT, YT_RESOLVER_BUSY, YT_PREVIEW_ONLY,
+           YT_FALLBACK_MISMATCH, YT_VALIDATION_FAILED,
+           YT_NO_AUTHORIZED_ORIGINAL} <= set(USER_MESSAGES),
           str(sorted(set(USER_MESSAGES))))
     for code, msg in sorted(USER_MESSAGES.items()):
         check(f"{code}: no provider/URL/path/credential fragment",
@@ -195,6 +202,24 @@ def test_classification_table() -> None:
     busy = for_busy("queue")
     check("busy refusal has its own category", busy.category == YT_RESOLVER_BUSY)
     check("busy copy is safe", "yt-dlp" not in busy.user_message.lower())
+
+    # for_kind: the resolver's own kind always beats the message.
+    check("no kind -> classify the message",
+          for_kind(None, detail="ERROR: HTTP Error 403").category == YT_FORBIDDEN)
+    check("a self-assigned YT_ code is kept",
+          for_kind("YT_INVALID_URL", detail="unsupported URL host").category
+          == YT_INVALID_URL)
+    check("a challenge is an access problem, whatever the scrubbed text says",
+          for_kind("youtube_bot_challenge",
+                   detail="[redacted: possible credential]").category == YT_BOT_CHECK)
+    check("the challenge copy says YouTube could not be reached",
+          for_kind("youtube_bot_challenge").user_message
+          == "YouTube couldn't be reached right now. Please try again later.")
+    check("an unknown kind falls back to the message",
+          for_kind("something_new", detail="ERROR: HTTP Error 429").category
+          == YT_RATE_LIMITED)
+    check("no kind and no message is not a crash",
+          for_kind(None, detail=None).category in USER_MESSAGES)
 
 
 def test_log_detail_keeps_the_reason_but_not_the_secret() -> None:
@@ -340,7 +365,16 @@ async def test_engine_surfaces() -> None:
         ("unsupported URL host", "YT_INVALID_URL", YT_INVALID_URL),
         # The resolver's own refusal must NOT be re-derived as "no results".
         ("no authorized original recording found", NO_ORIGINAL_FOUND,
-         NO_ORIGINAL_FOUND),
+         YT_NO_AUTHORIZED_ORIGINAL),
+        # A live YouTube challenge: the stored message is ALREADY scrubbed, so
+        # classifying it from the text used to report "search failed" — the
+        # "your track does not exist" mistake. The resolver's own kind wins.
+        ("[redacted: possible credential]", "youtube_bot_challenge", YT_BOT_CHECK),
+        ("preview clip only", "preview_only", YT_PREVIEW_ONLY),
+        ("fallback provider returned a different track", "fallback_mismatch",
+         YT_FALLBACK_MISMATCH),
+        ("no authorized original recording found", "VALIDATION_FAILED",
+         YT_VALIDATION_FAILED),
     ]
     for message, kind, expected in cases:
         reset_gate()
@@ -362,6 +396,21 @@ async def test_engine_surfaces() -> None:
     copy = eng.provider_error().user_message.lower()
     check("a cover refusal says so and offers no substitute",
           "authorized original" in copy and "didn't play one" in copy, copy)
+
+    # A live challenge must not be reported as "no playable match".
+    reset_gate()
+    eng = StubEngine("[redacted: possible credential]", "youtube_bot_challenge")
+    await eng.resolve("earth wind and fire september")
+    err = eng.provider_error()
+    check("a live challenge reports an access problem",
+          err.category == YT_BOT_CHECK, err.category)
+    check("the access copy is the YouTube one",
+          err.user_message
+          == "YouTube couldn't be reached right now. Please try again later.",
+          err.user_message)
+    check("nothing about a missing track is claimed",
+          "not found" not in err.user_message.lower()
+          and "no matching" not in err.user_message.lower(), err.user_message)
 
 
 async def test_unsupported_url_never_reaches_yt_dlp() -> None:
