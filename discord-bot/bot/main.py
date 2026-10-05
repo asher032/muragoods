@@ -55,6 +55,34 @@ _last_api_check: dict | None = None
 GATEWAY_STALE_AFTER = 150.0
 
 
+def _resource_snapshot() -> dict:
+    """Process resources plus the live music/voice gauges.
+
+    Assembled in ONE place so /health and /music/diagnostics can never
+    disagree about what the process is doing, and so there is a single
+    definition of "how loaded is this bot" to reason about.
+    """
+    import resources as res
+    import music as music_mod
+    extra: dict[str, object] = {"peak_rss_mb": res.peak_rss_mb()}
+    try:
+        extra.update(music_mod.engine.resolve_stats())
+        stats = music_mod.engine.cache_stats()
+        players = music_mod.engine.player_stats()
+    except Exception:  # diagnostics must never break /health
+        extra["resolver"] = "unavailable"
+    else:
+        extra.update(stats)
+        extra.update(players)
+    try:
+        # Live voice connections actually held, counted from the gateway
+        # rather than from a config flag.
+        extra["voice_connections"] = len(bot.voice_clients)
+    except Exception:
+        extra["voice_connections"] = None
+    return res.sample(extra)
+
+
 #: When THIS build's source was written, as an ISO timestamp.
 #:
 #: The dashboard and this repository were out of step for a long time: the
@@ -203,6 +231,8 @@ class MuraBot(commands.Bot):
             "cogs.games",
             "cogs.inventory",
             "cogs.digging",
+            "cogs.adventure",
+            "cogs.garden",
             "cogs.marketplace",
             "cogs.profile",
             "cogs.work",
@@ -1140,6 +1170,11 @@ async def _health_server() -> None:
             # When this build was written. Lets the dashboard tell "the bot is
             # an older build" apart from "the bot is misconfigured".
             "build_fingerprint": BUILD_FINGERPRINT,
+            # Measured process resources, read from the OS. This is what turns
+            # "is it CPU or RAM?" from a guess into a measurement: the bot
+            # previously reported no resource figures at all. Numeric only —
+            # never a token, secret or connection string.
+            "resources": _resource_snapshot(),
             # Public identity (username, avatar CDN URL, application ID).
             # Never secrets: no token, client secret, or credentials here.
             "user": _bot_user(),

@@ -314,6 +314,12 @@ jobs:
       - name: Music resolve concurrency limit (no unbounded extractions)
         run: python discord-bot/scripts/test_resolve_concurrency.py
 
+      # Same burst cost from the other direction: five users asking for one
+      # track must cost ONE resolve. Also pins that a refusal is never cached,
+      # so caching cannot reintroduce a cover.
+      - name: Music resolve cache and stampede guard (one resolve per track)
+        run: python discord-bot/scripts/test_resolve_cache.py
+
       # `app.router.add_get("/x", handler)` takes the NAME `handler`. If the
       # `def` has not run yet it raises NameError — and because every handler is
       # nested inside `_health_server()`, the FIRST such failure aborts the

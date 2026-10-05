@@ -75,7 +75,20 @@ class MediaCommands(commands.Cog):
             proc = await _aio.create_subprocess_exec(
                 music_mod2.FFMPEG_EXE, "-version",
                 stdout=_aio.DEVNULL, stderr=_aio.DEVNULL)
-            await asyncio.wait_for(proc.wait(), timeout=5)
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=5)
+            except _aio.TimeoutError:
+                # A status command must never leave an ffmpeg child running
+                # (or unreaped) behind it. Kill and collect it.
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                try:
+                    await asyncio.wait_for(proc.wait(), timeout=5)
+                except Exception:
+                    pass
+                raise
             ffmpeg_ok = proc.returncode == 0
         except Exception:
             ffmpeg_ok = False
