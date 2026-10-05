@@ -1804,7 +1804,20 @@ class MusicEngine:
         # treat the URL itself as a search string and hand back some other
         # provider's best guess at it.
         from music_errors import is_url_query, is_supported_url
+        query = (query or "").strip()
         is_url = is_url_query(query)
+        if not is_url and not re.search(r"[a-z0-9]", query, re.I):
+            # A query with nothing searchable in it cannot be ranked, so the
+            # ranking had nothing to score and returned whatever the provider
+            # ranked first — measured in production, an empty search played
+            # "tesla (slowed electro mix)". That is the invented-source failure
+            # this whole path exists to prevent, and it also defeated the
+            # original-recording filter, since the top result for no query is
+            # usually a remix. Refused here, before any extraction.
+            self._last_error_kind = "YT_NO_RESULTS"
+            self._last_resolve_error = "empty or unsearchable query"
+            log.info("refused unsearchable query (no searchable characters)")
+            return None
         if is_url and not is_supported_url(query):
             # Reject an unsupported link BEFORE the extractor sees it. Without
             # this, an arbitrary pasted string reaches yt-dlp as if it were a

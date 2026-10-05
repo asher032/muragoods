@@ -399,6 +399,57 @@ async def test_unsupported_url_never_reaches_yt_dlp() -> None:
           eng.cache_stats()["resolver_cache_entries"] == 0, str(eng.cache_stats()))
 
 
+async def test_unsearchable_query_never_invents_a_source() -> None:
+    """Blank / punctuation-only input must not reach the provider at all.
+
+    Found in production: `/music/diagnose?q="   "` returned a real stream —
+    "tesla (slowed electro mix)". An empty query ranks nothing, so the
+    ranking had nothing to score and returned whatever the provider listed
+    first, which is how an empty search became a slowed remix. This drives
+    the real `_resolve_unbounded` with the strategy builder replaced by a
+    recorder, so a regression cannot hide behind a stub.
+    """
+    print("an unsearchable query is refused before extraction")
+    attempts: list[str] = []
+    original = music.build_strategies
+
+    def recorder(query, is_url, use_proxy, scope="all", **kwargs):
+        attempts.append(query)
+        return []
+
+    music.build_strategies = recorder
+    try:
+        eng = music.MusicEngine()
+        for bad in ("", "   ", "\t\n", "***", "...", "-_-", "?!?"):
+            attempts.clear()
+            track = await eng._resolve_unbounded(bad)
+            err = eng.provider_error()
+            label = repr(bad)
+            check(f"{label}: refused", track is None)
+            check(f"{label}: no extraction attempted", attempts == [], str(attempts))
+            check(f"{label}: category is no-results", err.category == YT_NO_RESULTS,
+                  err.category)
+            check(f"{label}: copy says nothing was found",
+                  err.user_message == "No matching tracks were found.",
+                  err.user_message)
+            check(f"{label}: nothing cached",
+                  eng.cache_stats()["resolver_cache_entries"] == 0,
+                  str(eng.cache_stats()))
+        # A real query and a real link still get through (the recorder may see
+        # the query more than once: one plan per egress).
+        attempts.clear()
+        await eng._resolve_unbounded("take on me a-ha")
+        check("a real search is not refused",
+              attempts and set(attempts) == {"take on me a-ha"}, str(attempts))
+        attempts.clear()
+        await eng._resolve_unbounded("https://youtu.be/dQw4w9WgXcQ")
+        check("a real link is not refused",
+              attempts and set(attempts) == {"https://youtu.be/dQw4w9WgXcQ"},
+              str(attempts))
+    finally:
+        music.build_strategies = original
+
+
 async def test_one_resolver_for_every_surface() -> None:
     print("every surface reads the SAME classification")
     reset_gate()
@@ -426,6 +477,7 @@ def main() -> int:
     for coro in (
         test_engine_surfaces(),
         test_unsupported_url_never_reaches_yt_dlp(),
+        test_unsearchable_query_never_invents_a_source(),
         test_one_resolver_for_every_surface(),
     ):
         asyncio.run(coro)
