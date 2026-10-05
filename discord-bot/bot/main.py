@@ -1536,8 +1536,15 @@ async def _health_server() -> None:
                 return web.json_response({"ok": True, "autoplay": p.autoplay})
             return web.json_response({"ok": False, "error": f"Unknown action: {action}"}, status=400)
         except Exception as exc:
-            log.warning("music_control %s failed for guild %s: %s", action, guild_id, str(exc)[:150])
-            return web.json_response({"ok": False, "error": str(exc)[:200]}, status=500)
+            log.warning("music_control %s failed for guild %s: %s", action, guild_id,
+                        music_mod.sanitize_for_log(str(exc), limit=150))
+            # The dashboard renders this `error`. A raw exception string is
+            # neither a useful message nor a safe one, and scrubbing it answers
+            # "[redacted: possible credential]" — so the copy is fixed here and
+            # the detail stays in the log.
+            return web.json_response(
+                {"ok": False, "error": "The music service could not handle that action.",
+                 "reason": "YT_SEARCH_FAILED"}, status=500)
 
     async def music_search(request: web.Request) -> web.Response:
         """Dashboard music search: top metadata results WITHOUT extracting
@@ -1560,9 +1567,12 @@ async def _health_server() -> None:
         try:
             results = await music_mod.engine.search_top(query, limit=5, timeout=40)
         except Exception as exc:
+            log.warning("music search raised: %s: %s", type(exc).__name__,
+                        music_mod.sanitize_for_log(f"{type(exc).__name__}: {exc}", limit=300))
             return web.json_response(
                 {"ok": False,
-                 "error": music_mod.sanitize_for_log(f"{type(exc).__name__}: {exc}", limit=200) or "Search failed"},
+                 "error": "Music search failed unexpectedly. Please try again.",
+                 "reason": "YT_SEARCH_FAILED"},
                 status=502)
         return web.json_response({"ok": True, "results": results})
 
@@ -1613,9 +1623,17 @@ async def _health_server() -> None:
         except asyncio.TimeoutError:
             return web.json_response({"ok": False, "error": "Resolving timed out — try again"}, status=504)
         except Exception as exc:
+            # A crash inside resolve() is a fault, not a provider message. The
+            # detail is scrubbed and logged; the dashboard gets fixed copy —
+            # `sanitize_for_log` on a provider-flavoured exception answers
+            # "[redacted: possible credential]", which is the exact string this
+            # whole path was rewritten to stop showing users.
+            log.warning("queue resolve raised: %s: %s", type(exc).__name__,
+                        music_mod.sanitize_for_log(f"{type(exc).__name__}: {exc}", limit=300))
             return web.json_response(
                 {"ok": False,
-                 "error": music_mod.sanitize_for_log(f"{type(exc).__name__}: {exc}", limit=200) or "Resolve failed"},
+                 "error": "Music search failed unexpectedly. Please try again.",
+                 "reason": "YT_SEARCH_FAILED"},
                 status=502)
         if track is None:
             # The dashboard renders this `error` string to the user, so it must
