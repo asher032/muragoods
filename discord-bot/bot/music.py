@@ -756,7 +756,8 @@ def proxy_state() -> dict[str, Any]:
 
 
 def build_strategies(
-    query: str, is_url: bool, use_proxy: bool, scope: str = "all"
+    query: str, is_url: bool, use_proxy: bool, scope: str = "all",
+    *, tight: bool = False,
 ) -> list[tuple[str, dict[str, Any]]]:
     """yt-dlp strategies for this query, with the proxy included or omitted.
 
@@ -770,6 +771,16 @@ def build_strategies(
     guess at it.
     """
     base = get_ydl_opts(use_proxy=use_proxy)
+    if tight:
+        # Resolve is a SEARCH, not a playback fetch. The playback opts are
+        # tuned for downloading a whole track (retries 5 / socket-timeout 20),
+        # which is the wrong trade for picking a source: a single slow strategy
+        # could burn 20s x 5 retries, and with callers queued behind each other
+        # that is what pushed past the 90s request budget and turned requests
+        # into 503s. The search path already uses these values; resolve now
+        # matches it. This changes retry budget only — never which track wins.
+        base = {**base, "retries": 1, "extractor_retries": 2,
+                "fragment_retries": 1, "socket-timeout": 10}
     if is_url:
         return [("url", base)]
     youtube = [
@@ -1797,21 +1808,21 @@ class MusicEngine:
         try_proxy = bool(config.YOUTUBE_PROXY) and not _proxy_benched()
         plans: list[tuple[str, dict[str, Any], bool]] = [
             (*strategy, try_proxy)
-            for strategy in build_strategies(query, is_url, try_proxy, "youtube")
+            for strategy in build_strategies(query, is_url, try_proxy, "youtube", tight=True)
         ]
         if try_proxy:
             # Same query, this host's own egress, tried immediately: it is the
             # same track, just a different IP, so it beats a different provider.
             plans.extend(
                 (*strategy, False)
-                for strategy in build_strategies(query, is_url, False, "youtube")
+                for strategy in build_strategies(query, is_url, False, "youtube", tight=True)
             )
         # Other providers last: they do not hit YouTube, so the challenge does
         # not apply to them and they keep the pre-existing behaviour of being a
         # fallback rather than the first answer.
         plans.extend(
             (*strategy, try_proxy)
-            for strategy in build_strategies(query, is_url, try_proxy, "providers")
+            for strategy in build_strategies(query, is_url, try_proxy, "providers", tight=True)
         )
         youtube_challenged = False
         challenged_egress: set[bool] = set()
