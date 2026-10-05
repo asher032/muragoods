@@ -2,6 +2,10 @@
   "name": "muragoods",
   "version": "0.1.0",
   "private": true,
+  "allowScripts": {
+    "msgpackr-extract": true,
+    "unrs-resolver": true
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
