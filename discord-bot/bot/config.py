@@ -125,6 +125,23 @@ MUSIC_RESOLVE_CONCURRENCY = _positive_int("MUSIC_RESOLVE_CONCURRENCY", 2)
 # cannot pile up unboundedly: past this the caller is told the service is
 # busy, which is honest, rather than being silently starved.
 MUSIC_RESOLVE_QUEUE_TIMEOUT = _positive_int("MUSIC_RESOLVE_QUEUE_TIMEOUT", 120)
+
+
+def _positive_float(name: str, default: float) -> float:
+    raw = _get(name, str(default))
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
+# How long a successfully resolved track is reused before re-resolving, and the
+# hard ceiling on cache size. The TTL is deliberately SHORT: a resolved stream
+# URL can expire, so a long TTL would eventually hand out dead sources. It only
+# needs to outlast a burst of people asking for the same track.
+MUSIC_RESOLVE_CACHE_TTL = _positive_float("MUSIC_RESOLVE_CACHE_TTL", 300.0)
+MUSIC_RESOLVE_CACHE_MAX = _positive_int("MUSIC_RESOLVE_CACHE_MAX", 200)
 YT_PLAYER_CLIENT = _get("YT_PLAYER_CLIENT")
 
 # ── Behaviour tuning ─────────────────────────────────────────────────────

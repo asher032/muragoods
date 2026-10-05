@@ -304,10 +304,19 @@ async def probe() -> bool:
         try:
             out, _ = await asyncio.wait_for(proc.communicate(), timeout=8)
         except asyncio.TimeoutError:
+            # kill() alone leaves a zombie until the event loop reaps it. This
+            # probe runs on a loop, so await wait() to actually collect the
+            # child — otherwise every timed-out probe leaks a process entry,
+            # which on a small host is exactly the kind of slow leak that
+            # exhausts the container over hours.
             try:
                 proc.kill()
             except Exception:
                 pass
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=5)
+            except Exception:
+                log.warning("FFmpeg probe process did not reap cleanly")
             FFMPEG_ERROR = "ffmpeg -version timed out"
             raise
         ok = proc.returncode == 0
@@ -859,6 +868,14 @@ FILTERS: dict[str, str] = {
 # Autoplay safety: a resolver that keeps failing must not spin forever.
 AUTOPLAY_MAX_CHAIN = 50
 AUTOPLAY_MAX_CONSECUTIVE_FAILURES = 3
+
+# ── Resolver result cache ────────────────────────────────────────────────
+# Short-lived by design: a pinned stream URL can expire, so a long TTL would
+# eventually hand out dead sources. Long enough that a burst of users asking
+# for the same track (or the queue re-selecting it) costs one resolve.
+RESOLVE_CACHE_TTL = float(getattr(config, "MUSIC_RESOLVE_CACHE_TTL", 300.0))
+# Hard ceiling so a long-running process cannot grow the cache without bound.
+RESOLVE_CACHE_MAX = int(getattr(config, "MUSIC_RESOLVE_CACHE_MAX", 200))
 
 # Per-guild music config cache (bot's own guild_config store, fed by the
 # dashboard through POST /music/config). Short TTL so saves apply quickly
@@ -1514,6 +1531,91 @@ class MusicEngine:
         # Ring buffer of staged playback diagnostics (newest last, max 50).
         # Powers the dashboard's "what failed, why, what to fix" view.
         self._playback_log: _dq = _dq(maxlen=50)
+        # ── Resolver cache + in-flight de-duplication ─────────────────────
+        # Two costs are avoided here:
+        #
+        #   stampede  — N callers asking for the SAME track each started their
+        #               own yt-dlp resolve. They now share one in-flight future.
+        #   repeat    — a track re-requested shortly after was resolved from
+        #               scratch, paying full provider cost again for a result
+        #               that is still valid.
+        #
+        # Correctness is untouched: a cache HIT replays the exact Track the
+        # original resolve produced (same pinned source), and the key includes
+        # the requested variant, so an explicit "sped up" never receives the
+        # plain recording. Failures are never cached.
+        self._resolve_cache: dict[str, tuple[float, "Track"]] = {}
+        self._resolve_inflight: dict[str, "asyncio.Future[Optional[Track]]"] = {}
+        self._cache_hits = 0
+        self._cache_misses = 0
+        self._cache_shared = 0
+
+    # ── Cache key ─────────────────────────────────────────────────────────
+    @staticmethod
+    def resolve_cache_key(query: str) -> str:
+        """provider + normalized artist/title + requested variant.
+
+        Normalisation folds case and collapses whitespace/punctuation so
+        "Take On Me  -  A-HA" and "take on me a-ha" are one entry, while the
+        requested variant words are preserved because an explicit variant
+        request must never be served a different recording.
+        """
+        from music_resolver import normalize_query, requested_kinds
+        try:
+            normalized = normalize_query(query)
+            kinds = ",".join(sorted(requested_kinds(query)))
+        except Exception:
+            normalized = query
+            kinds = ""
+        # normalize_query preserves case on purpose (it feeds display), so the
+        # KEY folds it here: "Take On Me A-HA" and "take on me a-ha" are the
+        # same request and must not each pay for a resolve.
+        normalized = str(normalized).casefold()
+        # The key additionally folds punctuation/whitespace. normalize_query
+        # only removes noise it recognises and deliberately preserves the rest,
+        # so "Take On Me - A-HA" and "Take On Me A-HA" are the same request
+        # and must not each pay for a resolve. Only the KEY is folded; the
+        # query handed to the provider is untouched.
+        normalized = "".join(ch if ch.isalnum() else " " for ch in normalized)
+        normalized = " ".join(normalized.split())
+        return f"youtube|{normalized}|{kinds}"
+
+    def cache_stats(self) -> dict[str, int]:
+        return {
+            "resolver_cache_entries": len(self._resolve_cache),
+            "resolver_inflight_queries": len(self._resolve_inflight),
+            "resolver_cache_hits": self._cache_hits,
+            "resolver_cache_misses": self._cache_misses,
+            "resolver_shared_waiters": self._cache_shared,
+        }
+
+    def player_stats(self) -> dict[str, int]:
+        """Live player/voice gauges, counted rather than assumed."""
+        players = list(self._players.values())
+        return {
+            "players_tracked": len(players),
+            "players_with_queue": sum(1 for p in players if getattr(p, "queue", None)),
+            "players_connected": sum(
+                1 for p in players if getattr(p, "voice", None) is not None),
+        }
+
+    def _cache_get(self, key: str) -> Optional[Track]:
+        hit = self._resolve_cache.get(key)
+        if hit is None:
+            return None
+        expires_at, track = hit
+        if expires_at < time.monotonic():
+            self._resolve_cache.pop(key, None)
+            return None
+        self._cache_hits += 1
+        return track
+
+    def _cache_put(self, key: str, track: Track) -> None:
+        self._resolve_cache[key] = (time.monotonic() + RESOLVE_CACHE_TTL, track)
+        # Hard ceiling so a long-lived process cannot accumulate tracks.
+        if len(self._resolve_cache) > RESOLVE_CACHE_MAX:
+            oldest = min(self._resolve_cache, key=lambda k: self._resolve_cache[k][0])
+            self._resolve_cache.pop(oldest, None)
 
     def get_player(self, guild_id: int) -> GuildPlayer:
         if guild_id not in self._players:
@@ -1538,7 +1640,70 @@ class MusicEngine:
         self._players.pop(guild_id, None)
 
     async def resolve(self, query: str) -> Optional[Track]:
-        """Resolve a query to a Track, bounded by the shared concurrency gate.
+        """Resolve a query to a Track: cache, stampede guard, then admission.
+
+        Three layers, in this order, all before the expensive work:
+          1. CACHE HIT  — a recent successful resolve for the same normalized
+             key replays the exact Track, pinned source included.
+          2. STAMPEDE   — if this key is already being resolved, the caller
+             waits on that one attempt instead of starting its own.
+          3. ADMISSION  — the concurrency gate bounds actual extractions.
+
+        Correctness is unchanged. A hit replays what the original resolve
+        chose, the key carries the requested variant, and failures are never
+        cached, so this cannot turn a refusal into a result or a plain
+        recording into a variant.
+        """
+        key = self.resolve_cache_key(query)
+
+        # 1. Cache.
+        cached = self._cache_get(key)
+        if cached is not None:
+            self._last_resolve_error = None
+            self._last_error_kind = None
+            return cached
+
+        # 2. Stampede guard: join an attempt already in flight for this key.
+        existing = self._resolve_inflight.get(key)
+        if existing is not None:
+            self._cache_shared += 1
+            log.info("resolve sharing in-flight attempt for %r", key[:80])
+            try:
+                return await asyncio.shield(existing)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                return None
+
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[Optional[Track]] = loop.create_future()
+        self._resolve_inflight[key] = future
+        try:
+            track = await self._resolve_gated(query)
+            if not future.done():
+                future.set_result(track)
+            # Only successes are cached: a refusal must stay a refusal.
+            if track is not None:
+                self._cache_put(key, track)
+            return track
+        except Exception as exc:
+            if not future.done():
+                future.set_exception(exc)
+                # Nobody may ever await this future (a lone requester that
+                # raised). An un-retrieved exception on a discarded future
+                # makes asyncio log a full traceback at GC time, which on a
+                # small host is pure noise. Mark it retrieved; waiters that
+                # DID attach still observe the exception normally.
+                future.exception()
+            raise
+        finally:
+            # Always clear the entry, including on cancellation, or the key
+            # would stay permanently "in flight" and every later caller for it
+            # would wait on a dead future.
+            self._resolve_inflight.pop(key, None)
+
+    async def _resolve_gated(self, query: str) -> Optional[Track]:
+        """Admission control around the real resolve.
 
         This wrapper owns ONLY admission control. The selection logic below is
         unchanged: same strategy order, same ranking, same provenance, same
