@@ -39,6 +39,10 @@ YT_NO_RESULTS = "YT_NO_RESULTS"
 YT_INVALID_URL = "YT_INVALID_URL"
 YT_TIMEOUT = "YT_TIMEOUT"
 YT_RESOLVER_BUSY = "YT_RESOLVER_BUSY"
+YT_PREVIEW_ONLY = "YT_PREVIEW_ONLY"
+YT_FALLBACK_MISMATCH = "YT_FALLBACK_MISMATCH"
+YT_VALIDATION_FAILED = "YT_VALIDATION_FAILED"
+YT_NO_AUTHORIZED_ORIGINAL = "YT_NO_AUTHORIZED_ORIGINAL"
 
 #: Copy shown to users. Deliberately short, actionable, and free of any
 #: provider internals, URLs, credentials or filesystem paths.
@@ -54,6 +58,30 @@ USER_MESSAGES: dict[str, str] = {
     YT_INVALID_URL: "That link isn't a supported music link.",
     YT_TIMEOUT: "The music service took too long to respond. Please try again.",
     YT_RESOLVER_BUSY: "The music service is busy right now. Please try again in a moment.",
+    YT_PREVIEW_ONLY: "That link is only a short preview, not the full track.",
+    YT_FALLBACK_MISMATCH: "I couldn't confirm a playable version of that track.",
+    YT_VALIDATION_FAILED: "That search didn't match a playable track.",
+    YT_NO_AUTHORIZED_ORIGINAL: (
+        "I couldn't find a suitable authorized original recording for that. "
+        "Only covers or re-recorded versions were available, so I didn't play one."),
+}
+
+#: Codes the resolver assigns ITSELF, mapped to a category.
+#:
+#: These are authoritative and must never be re-derived from the provider's
+#: message. That is not a theoretical concern: when YouTube challenges this
+#: host the resolver records `youtube_bot_challenge` and stores a message that
+#: has ALREADY been scrubbed — so re-deriving it classified a live access
+#: refusal as a generic search failure, which is the "your track does not
+#: exist" mistake all over again.
+RESOLVER_CODES: dict[str, str] = {
+    "RESOLVER_BUSY": YT_RESOLVER_BUSY,
+    "youtube_bot_challenge": YT_BOT_CHECK,
+    "preview_only": YT_PREVIEW_ONLY,
+    "fallback_mismatch": YT_FALLBACK_MISMATCH,
+    "VALIDATION_FAILED": YT_VALIDATION_FAILED,
+    "NO_ORIGINAL_FOUND": YT_NO_AUTHORIZED_ORIGINAL,
+    "SEARCH_ALTERNATIVE_SOURCE": YT_NO_AUTHORIZED_ORIGINAL,
 }
 
 #: Categories worth ONE bounded retry. A bot check or a transient 5xx may pass;
@@ -229,3 +257,27 @@ def for_busy(category_hint: str | None = None) -> ProviderError:
         internal_detail=f"resolver busy ({category_hint or 'queue'})",
         transient=True,
     )
+
+
+def for_kind(kind: str | None, *, detail: str | None = None,
+             is_url: bool = False) -> ProviderError:
+    """Turn the resolver's own error kind into a classified failure.
+
+    This is the single entry point a UI should use. A kind the resolver
+    assigned is authoritative; only when there is none (or it is unknown) is
+    the provider message classified. `internal_detail` is for the log.
+    """
+    if kind == "RESOLVER_BUSY":
+        return for_busy(kind)
+    # A YT_* code the resolver assigned itself is already a category.
+    category = kind if kind in USER_MESSAGES else RESOLVER_CODES.get(kind or "")
+    if category:
+        return ProviderError(
+            category=category,
+            user_message=USER_MESSAGES[category],
+            internal_detail=redact_credentials(detail or kind)[:300],
+            operation="extract" if is_url or category in (
+                YT_INVALID_URL, YT_URL_EXTRACTION_FAILED) else "search",
+            transient=category in TRANSIENT_CATEGORIES,
+        )
+    return classify(detail, is_url=is_url)
