@@ -2002,7 +2002,7 @@ class MusicEngine:
         caller can reach the raw provider text by accident — which is exactly
         how `yt-dlp: ...` ended up in a Discord embed.
         """
-        from music_errors import USER_MESSAGES, classify, for_busy
+        from music_errors import USER_MESSAGES, classify, for_busy, redact_credentials
         kind = self._last_error_kind or ""
         if kind == "RESOLVER_BUSY":
             return for_busy(kind)
@@ -2014,7 +2014,7 @@ class MusicEngine:
             return ProviderError(
                 category=kind,
                 user_message=USER_MESSAGES[kind],
-                internal_detail=(self._last_resolve_error or kind)[:300],
+                internal_detail=redact_credentials(self._last_resolve_error or kind)[:300],
                 operation="extract" if kind.startswith("YT_URL") or kind == "YT_INVALID_URL"
                 else "search",
                 transient=False,
@@ -2028,7 +2028,8 @@ class MusicEngine:
                 user_message=("I couldn't find a suitable authorized original recording "
                               "for that. Only covers or re-recorded versions were "
                               "available, so I didn't play one."),
-                internal_detail=self._last_resolve_error or "no authorized original",
+                internal_detail=redact_credentials(
+                    self._last_resolve_error or "no authorized original")[:300],
                 operation="search",
             )
         return classify(self._last_resolve_error, is_url=is_url)

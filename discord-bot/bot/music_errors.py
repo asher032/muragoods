@@ -71,6 +71,43 @@ SUPPORTED_URL_HOSTS = (
 
 _URL_RE = re.compile(r"^https?://", re.IGNORECASE)
 
+# Credential shapes that appear INSIDE provider messages. yt-dlp echoes the
+# command it ran on failure, so an error raised while routing through a
+# configured proxy contains the proxy's own userinfo — which is precisely why
+# the old surface printed `[redacted: possible credential]` to end users.
+#
+# These patterns blank the SECRET and keep the rest of the sentence, so the
+# server log stays diagnosable. Replacing the whole message (what
+# sanitize_for_log does) is safe but tells nobody anything.
+_CREDENTIAL_PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
+    # scheme://user:password@host  ->  scheme://***@host
+    (re.compile(r"([a-z][a-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@", re.IGNORECASE),
+     r"\1***@"),
+    # scheme://token@host  ->  scheme://***@host
+    (re.compile(r"([a-z][a-z0-9+.-]*://)[^/\s@]+@", re.IGNORECASE), r"\1***@"),
+    # ?token=…/&sig=…/&key=… style query values
+    (re.compile(
+        r"(?i)\b((?:access[_-]?token|token|auth|authorization|signature|sig|"
+        r"api[_-]?key|key|password|passwd|pwd|session|cookie)=)[^&\s'\"]+"),
+     r"\1***"),
+    # A cookie or authorization header, whole value dropped.
+    (re.compile(r"(?i)\b(set-cookie|cookie|authorization|"
+                r"proxy-authorization)\s*:\s*[^\n]+"), r"\1: ***"),
+)
+
+
+def redact_credentials(text: str | None) -> str:
+    """Blank credential VALUES, keep the sentence around them.
+
+    Used for log-only fields. It never returns something a user should see —
+    it exists so that an operator can read WHY a resolve failed without the
+    log itself becoming a place secrets accumulate.
+    """
+    out = text or ""
+    for pattern, replacement in _CREDENTIAL_PATTERNS:
+        out = pattern.sub(replacement, out)
+    return out
+
 
 class ProviderError(NamedTuple):
     """One classified failure.
@@ -141,7 +178,7 @@ def classify(text: str | None, *, is_url: bool = False,
         return ProviderError(
             category=category,
             user_message=USER_MESSAGES[category],
-            internal_detail=raw[:300] or "no detail",
+            internal_detail=redact_credentials(raw)[:300] or "no detail",
             operation=op,
             transient=category in TRANSIENT_CATEGORIES,
         )

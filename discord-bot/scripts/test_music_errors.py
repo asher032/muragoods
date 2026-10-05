@@ -51,6 +51,7 @@ from music_errors import (  # noqa: E402
     YT_URL_EXTRACTION_FAILED,
     classify,
     for_busy,
+    redact_credentials,
     is_supported_url,
     is_url_query,
 )
@@ -194,6 +195,41 @@ def test_classification_table() -> None:
     busy = for_busy("queue")
     check("busy refusal has its own category", busy.category == YT_RESOLVER_BUSY)
     check("busy copy is safe", "yt-dlp" not in busy.user_message.lower())
+
+
+def test_log_detail_keeps_the_reason_but_not_the_secret() -> None:
+    """The log-only detail must stay diagnosable AND credential-free.
+
+    This is the shape that shipped: yt-dlp echoes the command it ran, so a
+    failure raised while routing through the configured proxy carried the
+    proxy's own userinfo. The old code replaced the WHOLE message with
+    "[redacted: possible credential]"; blanking just the secret keeps the
+    reason an operator needs.
+    """
+    print("the log detail redacts the secret, keeps the reason")
+    raw = ("ERROR: [youtube] abc: Unable to download webpage: HTTP Error 403: "
+           "Forbidden (via http://someuser:sup3rsecret@proxy.example:8080)")
+    detail = classify(raw).internal_detail
+    check("the reason survives", "http error 403" in detail.lower(), detail)
+    check("the password is gone", "sup3rsecret" not in detail, detail)
+    check("the proxy userinfo is gone", "someuser:" not in detail, detail)
+    check("the host is still visible", "proxy.example" in detail, detail)
+    check("userinfo is blanked, not the whole line",
+          "***@proxy.example:8080" in detail, detail)
+
+    for raw, secret in (
+        ("failed via https://token@cdn.example/v", "token@"),
+        ("url https://x.example/watch?signature=DEADBEEF&v=1", "DEADBEEF"),
+        ("Cookie: SID=abcdef123456; other=1", "abcdef123456"),
+        ("Authorization: Bearer ya29.abcdef", "ya29.abcdef"),
+    ):
+        out = redact_credentials(raw)
+        check(f"secret removed: {raw[:34]!r}", secret not in out, out)
+
+    # And the shape the UI never sees is still classified from the raw text.
+    err = classify("ERROR: [youtube] abc: Forbidden (via http://u:p@proxy:8080)")
+    check("classification ignores the redaction", err.category == YT_FORBIDDEN,
+          err.category)
 
 
 def test_diagnostic_payload_is_credential_free() -> None:
@@ -384,6 +420,7 @@ def main() -> int:
     test_no_copy_mentions_the_provider()
     test_url_validation()
     test_classification_table()
+    test_log_detail_keeps_the_reason_but_not_the_secret()
     test_diagnostic_payload_is_credential_free()
     test_source_files_never_render_provider_output()
     for coro in (
