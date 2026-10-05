@@ -18,6 +18,7 @@ from discord.ext import commands
 import bridge
 import config
 import database
+from music_errors import is_url_query
 import embeds
 from gateway_util import gateway_latency_ms
 import net as http_mod
@@ -1617,10 +1618,14 @@ async def _health_server() -> None:
                  "error": music_mod.sanitize_for_log(f"{type(exc).__name__}: {exc}", limit=200) or "Resolve failed"},
                 status=502)
         if track is None:
-            kind = music_mod.engine.get_error_kind()
-            detail = music_mod.engine.get_resolve_error() or "no playable match"
+            # The dashboard renders this `error` string to the user, so it must
+            # be the classified, safe copy — not the provider's own words. The
+            # category goes in `reason` for the dashboard's diagnostics view.
+            err = music_mod.engine.provider_error()
+            log.warning("queue resolve failed: category=%s detail=%s",
+                        err.category, err.internal_detail)
             return web.json_response(
-                {"ok": False, "error": f"Could not resolve a playable track ({kind or 'no match'}): {detail[:200]}"},
+                {"ok": False, "error": err.user_message, "reason": err.category},
                 status=422)
         p = music_mod.engine.get_player(guild_id)
         if len(p.queue) >= music_cfg["maxQueueSize"]:
@@ -2264,6 +2269,11 @@ async def _health_server() -> None:
         except Exception:
             out["yt_dlp"] = None
 
+        # The raw provider message is for the server log. It reaches this
+        # response only when an operator explicitly asks for it — a pasted
+        # link can carry a token in its query string, and this endpoint is
+        # proxied to the dashboard, so default output stays credential-free.
+        include_detail = request.rel_url.query.get("detail") == "1"
         t0 = time.monotonic()
         try:
             track = await asyncio.wait_for(
@@ -2277,9 +2287,13 @@ async def _health_server() -> None:
                 "YT_COOKIES), or no JavaScript runtime is available to solve "
                 "the signature challenge (see js_runtimes)."
             )
-            out["last_resolve_error"] = music_mod.engine.get_resolve_error()
+            out["reason"] = "YT_TIMEOUT"
+            if include_detail:
+                out["last_resolve_error"] = music_mod.sanitize_for_log(
+                    music_mod.engine.get_resolve_error(), limit=300)
         except Exception as exc:
             out["error"] = f"{type(exc).__name__}: {str(exc)[:300]}"
+            out["reason"] = "YT_SEARCH_FAILED"
         else:
             out["elapsed"] = round(time.monotonic() - t0, 2)
             if track is not None:
@@ -2296,7 +2310,18 @@ async def _health_server() -> None:
                     "provider_host": track.source,
                 })
             else:
-                out["error"] = music_mod.engine.get_resolve_error() or "no result returned"
+                # `error` is safe copy (the dashboard shows it); `reason` and
+                # the diagnostic carry the machine-readable cause for triage.
+                err = music_mod.engine.provider_error(is_url=is_url_query(query))
+                out["error"] = err.user_message
+                out["reason"] = err.category
+                out["providerDiagnostic"] = err.diagnostic(
+                    query=query, duration_ms=int((out.get("elapsed") or 0) * 1000))
+                log.warning("diagnose resolve failed: category=%s detail=%s",
+                            err.category, err.internal_detail)
+                if include_detail:
+                    out["last_resolve_error"] = music_mod.sanitize_for_log(
+                        music_mod.engine.get_resolve_error(), limit=300)
 
         # Attach the machine-readable kind and its remedy to every outcome, so a
         # failure never reads as an indistinguishable "timed out".
