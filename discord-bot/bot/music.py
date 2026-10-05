@@ -1,6 +1,7 @@
 """Music engine — per-guild player with yt-dlp + FFmpeg, robust error handling."""
 
 import asyncio
+import concurrent.futures
 import logging
 import os
 import re
@@ -876,6 +877,34 @@ AUTOPLAY_MAX_CONSECUTIVE_FAILURES = 3
 RESOLVE_CACHE_TTL = float(getattr(config, "MUSIC_RESOLVE_CACHE_TTL", 300.0))
 # Hard ceiling so a long-running process cannot grow the cache without bound.
 RESOLVE_CACHE_MAX = int(getattr(config, "MUSIC_RESOLVE_CACHE_MAX", 200))
+
+
+# ── Bounded executor for yt-dlp extraction ──────────────────────────────
+# Why not the default executor: `run_in_executor(None, ...)` uses a pool of
+# min(32, cpu+4) workers — up to 12 on this 8-core host. Worse, that work is
+# NOT cancellable. When a resolve times out, the coroutine returns and the
+# semaphore is released, but the worker thread keeps extracting (and keeps
+# its node/ffmpeg children alive). Verified locally: four timed-out callers
+# returned while four extractions were still running.
+#
+# So the semaphore alone bounds nothing once timeouts start happening — real
+# concurrency climbs past the limit and the host absorbs the difference. A
+# DEDICATED pool sized to the same limit makes the bound hold at the thread
+# level too: work that cannot be cancelled simply queues behind the cap
+# instead of piling up.
+_RESOLVE_EXECUTOR: Optional["concurrent.futures.ThreadPoolExecutor"] = None
+
+
+def _resolve_executor() -> "concurrent.futures.ThreadPoolExecutor":
+    global _RESOLVE_EXECUTOR
+    if _RESOLVE_EXECUTOR is None:
+        _RESOLVE_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+            max_workers=config.MUSIC_RESOLVE_CONCURRENCY,
+            thread_name_prefix="ydl",
+        )
+        log.info("resolve executor bounded to %d workers",
+                 config.MUSIC_RESOLVE_CONCURRENCY)
+    return _RESOLVE_EXECUTOR
 
 # Per-guild music config cache (bot's own guild_config store, fed by the
 # dashboard through POST /music/config). Short TTL so saves apply quickly
@@ -1808,9 +1837,19 @@ class MusicEngine:
             for attempt in range(2):
                 try:
                     loop = asyncio.get_running_loop()
-                    with yt_dlp.YoutubeDL(strategy_opts) as ydl:
-                        data = await loop.run_in_executor(
-                            None, lambda q=search_query: ydl.extract_info(q, download=False))
+                    # The YoutubeDL instance is created AND closed INSIDE the
+                    # worker thread. Previously the `with` block lived on the
+                    # event loop, so a cancelled/timed-out await exited the
+                    # block and called close() while the executor thread was
+                    # still inside extract_info() on that same object —
+                    # closing a yt-dlp instance out from under an in-flight
+                    # extraction. Owning the object entirely within the thread
+                    # removes the race by construction.
+                    def _extract(opts=strategy_opts, q=search_query):
+                        with yt_dlp.YoutubeDL(opts) as ydl:
+                            return ydl.extract_info(q, download=False)
+
+                    data = await loop.run_in_executor(_resolve_executor(), _extract)
                     if data is None:
                         last_exc = ValueError(f"[{strategy_name}] yt-dlp returned None")
                         continue

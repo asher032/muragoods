@@ -106,6 +106,29 @@ def uptime_seconds() -> float:
     return round(time.monotonic() - _START, 1)
 
 
+def children_peak_mb() -> float | None:
+    """Peak RSS of REAPED child processes (node, ffmpeg, deno).
+
+    `rss_mb` above reads /proc/self/status, which counts ONLY this process.
+    yt-dlp spawns a JavaScript runtime (node) to solve YouTube's signature
+    challenge and ffmpeg for transcoding, and none of that memory appears in
+    the parent's RSS. A parent sitting at a flat 115 MB while a dozen node
+    children hold hundreds of MB between them is exactly the shape of a
+    host being OOM-killed, and it is invisible without this number.
+    """
+    try:
+        return round(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / 1024.0, 1)
+    except (ValueError, OSError):
+        return None
+
+
+def children_cpu_seconds() -> float | None:
+    try:
+        return round(resource.getrusage(resource.RUSAGE_CHILDREN).ru_utime, 2)
+    except (ValueError, OSError):
+        return None
+
+
 def sample(extra: dict[str, Any] | None = None) -> dict[str, Any]:
     """One credential-free resource snapshot.
 
@@ -120,6 +143,9 @@ def sample(extra: dict[str, Any] | None = None) -> dict[str, Any]:
         "open_fds": open_fds(),
         "threads": thread_count(),
         "cpu_count": os.cpu_count(),
+        # Child processes are a separate memory pool from this process.
+        "children_peak_mb": children_peak_mb(),
+        "children_cpu_seconds": children_cpu_seconds(),
     }
     if extra:
         snap.update(extra)
