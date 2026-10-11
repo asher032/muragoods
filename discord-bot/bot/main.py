@@ -18,6 +18,7 @@ from discord.ext import commands
 import bridge
 import config
 import database
+import i18n
 from music_errors import is_url_query
 import embeds
 from gateway_util import gateway_latency_ms
@@ -2233,6 +2234,68 @@ async def _health_server() -> None:
             pass
         return web.json_response({"ok": True, "refreshed": guild_id or "all"})
 
+    #: The guild-level GENERAL settings this endpoint may store. Declared once:
+    #: anything not in this tuple is ignored rather than written, so the
+    #: endpoint cannot become a second unvalidated config writer. The command
+    #: prefix is deliberately absent — it has one writer (`prefix_refresh`).
+    GENERAL_CONFIG_FIELDS = ("language", "welcomeChannelId", "welcomeMessage",
+                             "leaveChannelId", "leaveMessage")
+
+    async def config_refresh(request: web.Request) -> web.Response:
+        """Dashboard pushes a guild's general settings; Murabot answers with
+        what is actually STORED.
+
+        The response is a read-back from the database, not an echo of the
+        request body: the dashboard reports a save as "applied" only for values
+        Murabot can itself see, and "pending" otherwise.
+        """
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+        guild_id = str(body.get("guildId") or "").strip()
+        if not guild_id.isdigit():
+            return web.json_response({"ok": False, "error": "Valid guildId required"}, status=400)
+
+        update: dict[str, object] = {}
+        if "language" in body:
+            code = i18n.normalize_language(body.get("language"))
+            if code is None:
+                return web.json_response({
+                    "ok": False,
+                    "code": "INVALID_LANGUAGE",
+                    "error": "Unsupported language. Supported: "
+                             + ", ".join(i18n.supported_language_codes()),
+                }, status=400)
+            update["language"] = code
+        for field in ("welcomeMessage", "leaveMessage"):
+            if field in body:
+                update[field] = str(body.get(field) or "")[:600]
+        for field in ("welcomeChannelId", "leaveChannelId"):
+            if field in body:
+                clean = str(body.get(field) or "").strip()
+                if clean and not clean.isdigit():
+                    return web.json_response({
+                        "ok": False, "code": "INVALID_CHANNEL",
+                        "error": f"{field} must be a Discord channel id",
+                    }, status=400)
+                update[field] = clean
+
+        try:
+            import database as db
+            if update:
+                await db.set_guild_config(guild_id, update)
+            stored = await db.get_guild_config(guild_id)
+        except Exception as exc:
+            log.warning("General config store failed for guild %s: %s", guild_id, str(exc)[:150])
+            return web.json_response({"ok": False, "error": "Storage unavailable"}, status=503)
+        return web.json_response({
+            "ok": True,
+            "general": {key: stored.get(key) for key in GENERAL_CONFIG_FIELDS},
+        })
+
     async def music_diagnose(request: web.Request) -> web.Response:
         """Run a REAL provider search from the runtime that serves the bot.
 
@@ -2484,6 +2547,7 @@ async def _health_server() -> None:
     app.router.add_get("/music/test-audio", music_test_audio)
     app.router.add_get("/music/preflight", music_preflight)
     app.router.add_post("/prefix/refresh", prefix_refresh)
+    app.router.add_post("/config/refresh", config_refresh)
     app.router.add_get("/music/state/{guild_id:\\d+}", music_state)
     app.router.add_post("/music/control/{guild_id:\\d+}", music_control)
     app.router.add_post("/music/search/{guild_id:\\d+}", music_search)

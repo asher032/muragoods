@@ -3,10 +3,10 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
-  Bot, Check, ExternalLink, Link2, LogOut, RefreshCw, Server, ShieldAlert, Terminal, User, X,
+  Bot, Check, ExternalLink, Link2, LogOut, RefreshCw, ShieldAlert, Terminal, User, X,
 } from 'lucide-react';
 import { useGuild } from '@/app/lib/guild-context';
-import ServerSwitcher from '../components/ServerSwitcher';
+import GeneralSettingsPanel from '../components/GeneralSettings';
 
 // ── Settings → Discord ───────────────────────────────────────────────────
 // Everything here is read from the REAL session (/api/auth/session, which is
@@ -47,8 +47,8 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export default function SettingsPage() {
   const {
-    authChecked, authenticated, me, user, guilds, selected,
-    botOnline, botLatency, loginUrl, logout, setSelected,
+    authChecked, authenticated, me, user, selected,
+    botOnline, botLatency, loginUrl, logout,
   } = useGuild();
 
   const [install, setInstall] = useState<InstallState>({ checking: false, installed: null, inviteUrl: null, error: '' });
@@ -330,42 +330,11 @@ export default function SettingsPage() {
         {prefixErr && <div className="cc-alert cc-alert-error" role="alert" style={{ marginTop: 10, fontSize: 12.5 }}>{prefixErr}</div>}
       </section>
 
-      {/* ── Server ── */}
-      <section className="cc-card" style={{ padding: '18px 20px' }}>
-        <h2 style={{ margin: '0 0 10px', fontSize: 14, fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Server size={15} /> Discord Server
-        </h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-          {selected?.icon ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={selected.icon} alt="" width={36} height={36} style={{ borderRadius: 10 }} />
-          ) : null}
-          <div style={{ color: '#fff', fontWeight: 700 }}>{selected?.name || 'No server selected'}</div>
-          <ServerSwitcher />
-        </div>
-        <Row label="Servers you manage">{guilds.length}</Row>
-        <div style={{ display: 'grid', gap: 6, marginTop: 10 }}>
-          {guilds.map((g) => (
-            <button
-              key={g.id}
-              onClick={() => setSelected(g)}
-              className="cc-btn"
-              style={{ justifyContent: 'flex-start', gap: 10, padding: '8px 12px' }}
-            >
-              {g.icon ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={g.icon} alt="" width={22} height={22} style={{ borderRadius: 6 }} />
-              ) : (
-                <span style={{ width: 22, height: 22, borderRadius: 6, background: 'var(--cc-accent-soft)', display: 'grid', placeItems: 'center', fontSize: 11 }}>
-                  {g.name.slice(0, 1).toUpperCase()}
-                </span>
-              )}
-              <span style={{ color: '#fff', fontWeight: 600, fontSize: 13 }}>{g.name}</span>
-              {g.id === selected?.id && <Check size={14} color="var(--cc-ok)" style={{ marginLeft: 'auto' }} />}
-            </button>
-          ))}
-        </div>
-      </section>
+      {/* ── Server profile + Murabot's own settings ── */}
+      {/* Discord-owned facts and Murabot-owned settings are two different
+          things with two different owners, so they are two panels — see
+          GeneralSettings.tsx. */}
+      <GeneralSettingsPanel />
 
       {/* ── Bot ── */}
       <section className="cc-card" style={{ padding: '18px 20px' }}>

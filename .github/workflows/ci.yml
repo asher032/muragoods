@@ -116,6 +116,16 @@ jobs:
       - name: Economy data source (store/bot parity, error states are never empty data)
         run: node scripts/test-economy-store.mjs
 
+      # General server settings (prefix, language, welcome/leave) and the embed
+      # builder. The language list must equal the one the bot speaks, the
+      # preview copy must be the copy Murabot actually sends, message
+      # placeholders are validated instead of posted as `{usr}`, and Discord's
+      # embed limits are REFUSED rather than silently truncating the operator's
+      # text. The route checks pin that the send/save paths re-authorize the
+      # caller and verify the channel server-side.
+      - name: General settings + embed builder (limits, placeholders, server-side authz)
+        run: node scripts/test-general-settings.mjs
+
       # Owner-only economy values are gated on the AUTHENTICATED Discord user
       # id (MURABOT_OWNER_DISCORD_ID), never on a name, a guild role or a
       # client-supplied flag; and every bot-check failure keeps its own code
@@ -292,6 +302,16 @@ jobs:
       # Hermetic: mongomock-motor only, no cluster, no network.
       - name: XP row uniqueness (lossless dedupe, guild isolation, defaults never reset)
         run: python discord-bot/scripts/test_xp_uniqueness.py
+
+      # The bot side of the general-settings contract: every language declares
+      # every string (no half-translated language falling back to English
+      # mid-message), the dashboard and the bot agree on the language codes,
+      # `/config/refresh` stores only the declared general fields and never the
+      # command prefix (which has one writer), and the member notices render
+      # through the language table instead of a hardcoded English sentence.
+      # Hermetic: it parses sources and the pure i18n module.
+      - name: General settings & i18n (language parity, config endpoint, member notices)
+        run: python discord-bot/scripts/test_general_settings.py
 
       # Music must play the ORIGINAL recording.
       #

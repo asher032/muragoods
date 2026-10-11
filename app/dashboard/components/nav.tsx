@@ -18,6 +18,7 @@ export const DASH_SECTIONS: { label: string; items: NavItem[] }[] = [
     items: [
       { label: 'Command Center', href: '/dashboard', icon: <Bot size={16} /> },
       { label: 'Commands', href: '/dashboard/commands', icon: <ListMusic size={16} /> },
+      { label: 'Embed Builder', href: '/dashboard/embeds', icon: <MessageSquare size={16} /> },
       { label: 'Activity', href: '/dashboard/audit', icon: <Activity size={16} /> },
       { label: 'Analytics', href: '/dashboard/analytics', icon: <BarChart3 size={16} /> },
       { label: 'Health', href: '/dashboard/health', icon: <HeartPulse size={16} /> },
