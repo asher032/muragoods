@@ -14,6 +14,7 @@ from discord.ext import commands
 
 import database
 import embeds
+import i18n
 import utils
 
 log = logging.getLogger("bot.community")
@@ -438,27 +439,73 @@ class CommunityCog(commands.Cog):
         e.timestamp = c.get("createdAt")
         await interaction.followup.send(embed=e, ephemeral=True)
 
+    # ── Member notices (welcome / leave) ──────────────────────────────
+    #
+    # Both notices are the same three steps: resolve the configured channel,
+    # render the operator's own message when they wrote one (otherwise
+    # Murabot's default, in the server's selected language), and post it.
+    #
+    # They used to be two different shapes. The leave notice read
+    # `leaveMessage` only as an on/off flag and then posted a hardcoded English
+    # sentence, so a server that wrote its own goodbye never saw it; and there
+    # was no join notice at all, so `welcomeMessage`/`welcomeChannelId` — which
+    # the dashboard has always been able to write — did nothing.
+    #
+    # The configured CHANNEL is the switch, on both sides: leaving it empty
+    # turns the notice off, and nothing is ever sent to a server that did not
+    # name a channel.
+    async def _member_notice(self, cfg: dict, member: discord.Member, kind: str,
+                             channel_id, custom_message) -> None:
+        if not channel_id:
+            return
+        try:
+            cid = int(channel_id)
+        except (TypeError, ValueError):
+            log.warning("%s notice: stored channel id %r is not a number", kind, channel_id)
+            return
+        channel = member.guild.get_channel(cid)
+        if not isinstance(channel, discord.TextChannel):
+            # Deleted, or a channel type that cannot receive an embed. The
+            # dashboard re-verifies channel settings, so this is the server
+            # having changed since — not something to guess about.
+            return
+        fields = {
+            "user": member.mention,
+            "username": member.display_name,
+            "server": member.guild.name,
+            "member_count": getattr(member.guild, "member_count", None) or "",
+        }
+        try:
+            await channel.send(embed=utils.base_embed(
+                i18n.t(cfg, f"{kind}.title"),
+                i18n.render_message(cfg, custom_message, f"{kind}.body", **fields),
+            ))
+        except discord.HTTPException:
+            pass
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        """Member joined — post the welcome notice when the server named a channel."""
+        try:
+            cfg = await database.get_guild_config(member.guild.id)
+        except Exception:
+            # A failed config read must never break the gateway event.
+            log.warning("Welcome config lookup failed", exc_info=True)
+            return
+        channel_id = cfg.get("welcomeChannelId") or (cfg.get("channels") or {}).get("welcome")
+        await self._member_notice(cfg, member, "join", channel_id, cfg.get("welcomeMessage"))
+
     # ── Background loops ──────────────────────────────────────────────
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
-        """Member left — used by welcome/leave symmetry and any future leave
-        notification the server configures."""
-        cfg = await database.get_guild_config(member.guild.id)
-        if not cfg.get("leaveMessage"):
-            return
-        channel_id = cfg.get("leaveChannelId") or (await database.get_guild_config(member.guild.id)).get("channels", {}).get("leave")
-        if not channel_id:
-            return
-        channel = member.guild.get_channel(int(channel_id))
-        if not isinstance(channel, discord.TextChannel):
-            return
+        """Member left — the leave half of the same notice pair."""
         try:
-            await channel.send(
-                embed=utils.base_embed(
-                    "👋 Left",
-                    f"{member.mention} ({member.display_name}) left {member.guild.name}."))
-        except discord.HTTPException:
-            pass
+            cfg = await database.get_guild_config(member.guild.id)
+        except Exception:
+            log.warning("Leave config lookup failed", exc_info=True)
+            return
+        channel_id = cfg.get("leaveChannelId") or (cfg.get("channels") or {}).get("leave")
+        await self._member_notice(cfg, member, "leave", channel_id, cfg.get("leaveMessage"))
 
 
     @commands.Cog.listener()

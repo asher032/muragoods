@@ -28,6 +28,21 @@ export const PREFIX_MAX_LENGTH = 10;
 export const PREFIX_PATTERN = /^[a-zA-Z0-9_!@#$%^&*()-=.]+$/;
 
 /**
+ * The guild-level general settings this module may persist.
+ *
+ * `prefix` is NOT here: it has its own canonical writer (`saveGuildPrefix`),
+ * and a second path into the same field is exactly how the prefix drifted into
+ * four places.
+ */
+export const GENERAL_CONFIG_KEYS: readonly string[] = [
+  'language',
+  'welcomeChannelId',
+  'welcomeMessage',
+  'leaveChannelId',
+  'leaveMessage',
+];
+
+/**
  * How far a canonical write actually got.
  *
  * `applied`  Murabot confirmed it — the prefix is live in Discord now.
@@ -189,6 +204,154 @@ export async function saveGuildPrefix(guildId: string, prefix: string): Promise<
       : 'Saved, but Murabot did not confirm in time. It is not applied in Discord yet — '
         + 'it will be picked up automatically within about a minute.',
   };
+}
+
+// ── General settings (language + the welcome/leave notices) ─────────────
+//
+// Same contract as the prefix, and the same single writer: this module is the
+// only place the dashboard persists guild configuration to Murabot. The fields
+// themselves are declared by the schema (`app/lib/general-settings.ts`); this
+// function deliberately takes an already-validated object so validation cannot
+// be skipped by a caller that writes a field directly.
+
+export interface FieldsWriteResult {
+  ok: boolean;
+  propagation: PropagationState;
+  retryWithinSec?: number;
+  message?: string;
+}
+
+export async function readGuildGeneralFields(guildId: string): Promise<Record<string, unknown> | null> {
+  const collection = await discordConfigCollection();
+  const doc = await collection.findOne({ guildId });
+  if (!doc) return null;
+  // Only the general fields come back: the rest of this document belongs to the
+  // module panels, and echoing it here would put a second read path on settings
+  // this surface does not own.
+  const out: Record<string, unknown> = {};
+  for (const key of GENERAL_CONFIG_KEYS) {
+    if (key in doc) out[key] = (doc as Record<string, unknown>)[key];
+  }
+  return out;
+}
+
+/**
+ * Persist the general fields and tell Murabot, reporting how far it got.
+ *
+ * `applied` only when Murabot answers AND reads the new values back; a silent
+ * bot is `pending`, never a plain success.
+ */
+export async function saveGuildGeneralFields(
+  guildId: string,
+  fields: Record<string, unknown>,
+): Promise<FieldsWriteResult> {
+  if (!/^\d{5,25}$/.test(guildId)) {
+    return { ok: false, propagation: 'failed', message: 'Valid guildId required' };
+  }
+  const entries = Object.entries(fields).filter(([key]) => GENERAL_CONFIG_KEYS.includes(key));
+  if (entries.length === 0) {
+    return { ok: false, propagation: 'failed', message: 'No settings to save' };
+  }
+
+  try {
+    const collection = await discordConfigCollection();
+    const res = await collection.updateOne(
+      { guildId },
+      { $set: { ...Object.fromEntries(entries), updatedAt: new Date() } },
+      { upsert: true },
+    );
+    if (!res.acknowledged) {
+      return {
+        ok: false, propagation: 'failed',
+        message: 'The settings could not be saved. Your previous settings were not changed.',
+      };
+    }
+  } catch {
+    return {
+      ok: false, propagation: 'failed',
+      message: 'The settings could not be saved. Your previous settings were not changed.',
+    };
+  }
+
+  // ONE round trip decides the verdict: Murabot stores the values and answers
+  // with what it can read back. "Applied" therefore means "Murabot can see it",
+  // not "the HTTP call did not throw". A bridge that is absent or slow leaves
+  // the write canonically stored — pending, never reported as applied.
+  const secret = process.env.DISCORD_BRIDGE_SECRET;
+  if (!secret) {
+    return {
+      ok: true,
+      propagation: 'pending',
+      retryWithinSec: 60,
+      message: 'Saved. Murabot has not been notified (no bridge is configured on this deployment), '
+        + 'so it will apply the change on its next reload.',
+    };
+  }
+  const base = process.env.BOT_HEALTH_URL?.replace(/\/health$/, '')
+    || 'https://murastream-bot-pf11.onrender.com';
+  try {
+    const resp = await fetch(`${base}/config/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+      body: JSON.stringify({ guildId, ...Object.fromEntries(entries) }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(2500),
+    });
+    if (resp.ok) {
+      const body = (await resp.json().catch(() => null)) as
+        { ok?: boolean; general?: Record<string, unknown> } | null;
+      const stored = body?.ok === true ? body.general ?? {} : null;
+      // Every field the caller changed must be readable from Murabot's answer,
+      // with the same value, or this is not an applied write.
+      const confirmed = stored !== null
+        && entries.every(([key, value]) => stored[key] === value);
+      if (confirmed) return { ok: true, propagation: 'applied' };
+      return {
+        ok: true,
+        propagation: 'pending',
+        retryWithinSec: 60,
+        message: 'Saved, but Murabot did not read the new values back in time. It is not applied '
+          + 'in Discord yet — it will be picked up automatically within about a minute.',
+      };
+    }
+  } catch {
+    /* bounded and best-effort — the canonical write already landed */
+  }
+  return {
+    ok: true,
+    propagation: 'pending',
+    retryWithinSec: 60,
+    message: 'Saved, but Murabot did not confirm in time. It is not applied in Discord yet — '
+      + 'it will be picked up automatically within about a minute.',
+  };
+}
+
+/** Ask Murabot for the general settings it can actually read. */
+export async function verifyGuildGeneralWithBot(
+  guildId: string,
+  timeoutMs = 2500,
+): Promise<{ confirmed: boolean; general: Record<string, unknown> | null; reason?: string }> {
+  const secret = process.env.DISCORD_BRIDGE_SECRET;
+  if (!secret) return { confirmed: false, general: null, reason: 'NOT_CONFIGURED' };
+  const base = process.env.BOT_HEALTH_URL?.replace(/\/health$/, '')
+    || 'https://murastream-bot-pf11.onrender.com';
+  try {
+    const resp = await fetch(`${base}/config/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+      // An empty update asks Murabot the only question left: "what do you hold?"
+      body: JSON.stringify({ guildId }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!resp.ok) return { confirmed: false, general: null, reason: `BOT_HTTP_${resp.status}` };
+    const body = (await resp.json().catch(() => null)) as
+      { ok?: boolean; general?: Record<string, unknown> } | null;
+    if (!body || body.ok !== true) return { confirmed: false, general: null, reason: 'BOT_REJECTED' };
+    return { confirmed: true, general: body.general ?? {} };
+  } catch {
+    return { confirmed: false, general: null, reason: 'BOT_UNREACHABLE' };
+  }
 }
 
 /** Ask the bot what it actually holds — the honest read-back. */
