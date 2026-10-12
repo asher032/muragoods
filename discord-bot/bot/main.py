@@ -402,48 +402,73 @@ async def on_guild_unavailable(guild: discord.Guild):
     _unregister_guild(guild.id)
 
 
+def _forward_targets(event: str):
+    """Cogs that still need THIS module to call their `event` handler.
+
+    discord.py dispatches a cog method itself ONLY when it is decorated with
+    ``@commands.Cog.listener()``; every other ``on_*`` method on a cog exists
+    but is never called by the library. main.py's forwarding loops are what
+    covers those — and calling a *decorated* one from here as well runs it a
+    second time.
+
+    That is not theoretical: ``on_member_join`` was registered in the security,
+    community and moderation cogs AND forwarded here, so every join produced
+    two welcome messages and was counted twice by raid detection — a doubled
+    join counter is exactly how a small server gets flagged as a raid. Yielding
+    only the unregistered handlers makes each event run once, while keeping the
+    undecorated handlers (delete logging, for one) reachable.
+    """
+    for cog in bot.cogs.values():
+        handler = getattr(cog, event, None)
+        if handler is None:
+            continue
+        try:
+            registered = {name for name, _ in cog.get_listeners()}
+        except Exception:
+            registered = set()
+        if event in registered:
+            continue
+        yield cog, handler
+
+
 @bot.event
 async def on_member_join(member: discord.Member):
-    """New member joined. Forward to every cog that opted in."""
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_member_join"):
-            try:
-                await cog.on_member_join(member)
-            except Exception:
-                log.exception("cog.on_member_join raised in %s", cog.qualified_name)
+    """New member joined. Forward to every cog that has NOT registered itself."""
+    for cog, handler in _forward_targets("on_member_join"):
+        try:
+            await handler(member)
+        except Exception:
+            log.exception("cog.on_member_join raised in %s", cog.qualified_name)
 
 
 @bot.event
 async def on_member_remove(member: discord.Member):
-    """Member left/banned/kicked. Forward to every cog that opted in."""
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_member_remove"):
-            try:
-                await cog.on_member_remove(member)
-            except Exception:
-                log.exception("cog.on_member_remove raised in %s", cog.qualified_name)
+    """Member left/banned/kicked. Forward to every cog that has NOT registered."""
+    for cog, handler in _forward_targets("on_member_remove"):
+        try:
+            await handler(member)
+        except Exception:
+            log.exception("cog.on_member_remove raised in %s", cog.qualified_name)
 
 
 @bot.event
 async def on_member_ban(guild: discord.Guild, user: discord.User):
-    """User banned. Forward to every cog that opted in."""
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_member_ban"):
-            try:
-                await cog.on_member_ban(guild, user)
-            except Exception:
-                log.exception("cog.on_member_ban raised in %s", cog.qualified_name)
+    """User banned. Forward to every cog that has NOT registered."""
+    for cog, handler in _forward_targets("on_member_ban"):
+        try:
+            await handler(guild, user)
+        except Exception:
+            log.exception("cog.on_member_ban raised in %s", cog.qualified_name)
 
 
 @bot.event
 async def on_member_unban(guild: discord.Guild, user: discord.User):
-    """User unbanned. Forward to every cog that opted in."""
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_member_unban"):
-            try:
-                await cog.on_member_unban(guild, user)
-            except Exception:
-                log.exception("cog.on_member_unban raised in %s", cog.qualified_name)
+    """User unbanned. Forward to every cog that has NOT registered."""
+    for cog, handler in _forward_targets("on_member_unban"):
+        try:
+            await handler(guild, user)
+        except Exception:
+            log.exception("cog.on_member_unban raised in %s", cog.qualified_name)
 
 
 @bot.event
@@ -451,76 +476,69 @@ async def on_member_update(before: discord.Member, after: discord.Member):
     """Member metadata changed: roles, nickname, pending, timed_out."""
     if (before.roles != after.roles or before.nick != after.nick or before.pending != after.pending or
             (hasattr(before, "timed_out_until") and before.timed_out_until != after.timed_out_until)):
-        for cog in bot.cogs.values():
-            if hasattr(cog, "on_member_update"):
-                try:
-                    await cog.on_member_update(before, after)
-                except Exception:
-                    log.exception("cog.on_member_update raised in %s", cog.qualified_name)
+        for cog, handler in _forward_targets("on_member_update"):
+            try:
+                await handler(before, after)
+            except Exception:
+                log.exception("cog.on_member_update raised in %s", cog.qualified_name)
 
 
 @bot.event
 async def on_guild_channel_create(channel: discord.abc.GuildChannel):
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_guild_channel_create"):
-            try:
-                await cog.on_guild_channel_create(channel)
-            except Exception:
-                log.exception("cog.on_guild_channel_create raised in %s", cog.qualified_name)
+    for cog, handler in _forward_targets("on_guild_channel_create"):
+        try:
+            await handler(channel)
+        except Exception:
+            log.exception("cog.on_guild_channel_create raised in %s", cog.qualified_name)
 
 
 @bot.event
 async def on_guild_channel_update(before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
     if (before.name != after.name or before.permission_overwrites != after.permission_overwrites or
             before.category_id != after.category_id or before.topic != after.topic):
-        for cog in bot.cogs.values():
-            if hasattr(cog, "on_guild_channel_update"):
-                try:
-                    await cog.on_guild_channel_update(before, after)
-                except Exception:
-                    log.exception("cog.on_guild_channel_update raised in %s", cog.qualified_name)
+        for cog, handler in _forward_targets("on_guild_channel_update"):
+            try:
+                await handler(before, after)
+            except Exception:
+                log.exception("cog.on_guild_channel_update raised in %s", cog.qualified_name)
 
 
 @bot.event
 async def on_guild_channel_delete(channel: discord.abc.GuildChannel):
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_guild_channel_delete"):
-            try:
-                await cog.on_guild_channel_delete(channel)
-            except Exception:
-                log.exception("cog.on_guild_channel_delete raised in %s", cog.qualified_name)
+    for cog, handler in _forward_targets("on_guild_channel_delete"):
+        try:
+            await handler(channel)
+        except Exception:
+            log.exception("cog.on_guild_channel_delete raised in %s", cog.qualified_name)
 
 
 @bot.event
 async def on_guild_role_create(role: discord.Role):
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_guild_role_create"):
-            try:
-                await cog.on_guild_role_create(role)
-            except Exception:
-                log.exception("cog.on_guild_role_create raised in %s", cog.qualified_name)
+    for cog, handler in _forward_targets("on_guild_role_create"):
+        try:
+            await handler(role)
+        except Exception:
+            log.exception("cog.on_guild_role_create raised in %s", cog.qualified_name)
 
 
 @bot.event
 async def on_guild_role_update(before: discord.Role, after: discord.Role):
     if (before.name != after.name or before.color != after.color or before.hoist != after.hoist or
             before.permissions != after.permissions or before.position != after.position):
-        for cog in bot.cogs.values():
-            if hasattr(cog, "on_guild_role_update"):
-                try:
-                    await cog.on_guild_role_update(before, after)
-                except Exception:
-                    log.exception("cog.on_guild_role_update raised in %s", cog.qualified_name)
+        for cog, handler in _forward_targets("on_guild_role_update"):
+            try:
+                await handler(before, after)
+            except Exception:
+                log.exception("cog.on_guild_role_update raised in %s", cog.qualified_name)
 
 
 @bot.event
 async def on_guild_role_delete(role: discord.Role):
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_guild_role_delete"):
-            try:
-                await cog.on_guild_role_delete(role)
-            except Exception:
-                log.exception("cog.on_guild_role_delete raised in %s", cog.qualified_name)
+    for cog, handler in _forward_targets("on_guild_role_delete"):
+        try:
+            await handler(role)
+        except Exception:
+            log.exception("cog.on_guild_role_delete raised in %s", cog.qualified_name)
 
 
 @bot.event
@@ -530,12 +548,11 @@ async def on_message_edit(before: discord.Message, after: discord.Message):
         return
     if before.content == after.content and before.embeds == after.embeds and before.attachments == after.attachments:
         return
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_message_edit"):
-            try:
-                await cog.on_message_edit(before, after)
-            except Exception:
-                log.exception("cog.on_message_edit raised in %s", cog.qualified_name)
+    for cog, handler in _forward_targets("on_message_edit"):
+        try:
+            await handler(before, after)
+        except Exception:
+            log.exception("cog.on_message_edit raised in %s", cog.qualified_name)
 
 
 @bot.event
@@ -543,12 +560,11 @@ async def on_message_delete(message: discord.Message):
     """A single message was deleted. Forward to every cog that opted in."""
     if not message.guild or message.author.bot:
         return
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_message_delete"):
-            try:
-                await cog.on_message_delete(message)
-            except Exception:
-                log.exception("cog.on_message_delete raised in %s", cog.qualified_name)
+    for cog, handler in _forward_targets("on_message_delete"):
+        try:
+            await handler(message)
+        except Exception:
+            log.exception("cog.on_message_delete raised in %s", cog.qualified_name)
 
 
 @bot.event
@@ -559,12 +575,11 @@ async def on_bulk_message_delete(messages: list[discord.Message]):
     guild = messages[0].guild
     if not guild:
         return
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_bulk_message_delete"):
-            try:
-                await cog.on_bulk_message_delete(messages)
-            except Exception:
-                log.exception("cog.on_bulk_message_delete raised in %s", cog.qualified_name)
+    for cog, handler in _forward_targets("on_bulk_message_delete"):
+        try:
+            await handler(messages)
+        except Exception:
+            log.exception("cog.on_bulk_message_delete raised in %s", cog.qualified_name)
 
 
 @bot.event
@@ -572,12 +587,11 @@ async def on_reaction_add(reaction: discord.Reaction, user: discord.User | disco
     """Reaction added. Forward to every cog that opted in."""
     if not user.guild or user.bot:
         return
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_reaction_add"):
-            try:
-                await cog.on_reaction_add(reaction, user)
-            except Exception:
-                log.exception("cog.on_reaction_add raised in %s", cog.qualified_name)
+    for cog, handler in _forward_targets("on_reaction_add"):
+        try:
+            await handler(reaction, user)
+        except Exception:
+            log.exception("cog.on_reaction_add raised in %s", cog.qualified_name)
 
 
 @bot.event
@@ -585,12 +599,11 @@ async def on_reaction_remove(reaction: discord.Reaction, user: discord.User | di
     """Reaction removed. Forward to every cog that opted in."""
     if not user.guild or user.bot:
         return
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_reaction_remove"):
-            try:
-                await cog.on_reaction_remove(reaction, user)
-            except Exception:
-                log.exception("cog.on_reaction_remove raised in %s", cog.qualified_name)
+    for cog, handler in _forward_targets("on_reaction_remove"):
+        try:
+            await handler(reaction, user)
+        except Exception:
+            log.exception("cog.on_reaction_remove raised in %s", cog.qualified_name)
 
 
 @bot.event
@@ -598,12 +611,11 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
     """Voice join/move/leave/mute/deaf/afk. Forward to every cog that opted in."""
     if (before.channel != after.channel or before.self_mute != after.self_mute or before.self_deaf != after.self_deaf or
             before.afk != after.afk or before.self_stream != after.self_stream):
-        for cog in bot.cogs.values():
-            if hasattr(cog, "on_voice_state_update"):
-                try:
-                    await cog.on_voice_state_update(member, before, after)
-                except Exception:
-                    log.exception("cog.on_voice_state_update raised in %s", cog.qualified_name)
+        for cog, handler in _forward_targets("on_voice_state_update"):
+            try:
+                await handler(member, before, after)
+            except Exception:
+                log.exception("cog.on_voice_state_update raised in %s", cog.qualified_name)
 
 
 def gateway_liveness(bot) -> tuple[bool, float | None, str | None]:
@@ -1537,8 +1549,15 @@ async def _health_server() -> None:
                 return web.json_response({"ok": True, "autoplay": p.autoplay})
             return web.json_response({"ok": False, "error": f"Unknown action: {action}"}, status=400)
         except Exception as exc:
-            log.warning("music_control %s failed for guild %s: %s", action, guild_id, str(exc)[:150])
-            return web.json_response({"ok": False, "error": str(exc)[:200]}, status=500)
+            log.warning("music_control %s failed for guild %s: %s", action, guild_id,
+                        music_mod.sanitize_for_log(str(exc), limit=150))
+            # The dashboard renders this `error`. A raw exception string is
+            # neither a useful message nor a safe one, and scrubbing it answers
+            # "[redacted: possible credential]" — so the copy is fixed here and
+            # the detail stays in the log.
+            return web.json_response(
+                {"ok": False, "error": "The music service could not handle that action.",
+                 "reason": "YT_SEARCH_FAILED"}, status=500)
 
     async def music_search(request: web.Request) -> web.Response:
         """Dashboard music search: top metadata results WITHOUT extracting
@@ -1561,9 +1580,12 @@ async def _health_server() -> None:
         try:
             results = await music_mod.engine.search_top(query, limit=5, timeout=40)
         except Exception as exc:
+            log.warning("music search raised: %s: %s", type(exc).__name__,
+                        music_mod.sanitize_for_log(f"{type(exc).__name__}: {exc}", limit=300))
             return web.json_response(
                 {"ok": False,
-                 "error": music_mod.sanitize_for_log(f"{type(exc).__name__}: {exc}", limit=200) or "Search failed"},
+                 "error": "Music search failed unexpectedly. Please try again.",
+                 "reason": "YT_SEARCH_FAILED"},
                 status=502)
         return web.json_response({"ok": True, "results": results})
 
@@ -1614,9 +1636,17 @@ async def _health_server() -> None:
         except asyncio.TimeoutError:
             return web.json_response({"ok": False, "error": "Resolving timed out — try again"}, status=504)
         except Exception as exc:
+            # A crash inside resolve() is a fault, not a provider message. The
+            # detail is scrubbed and logged; the dashboard gets fixed copy —
+            # `sanitize_for_log` on a provider-flavoured exception answers
+            # "[redacted: possible credential]", which is the exact string this
+            # whole path was rewritten to stop showing users.
+            log.warning("queue resolve raised: %s: %s", type(exc).__name__,
+                        music_mod.sanitize_for_log(f"{type(exc).__name__}: {exc}", limit=300))
             return web.json_response(
                 {"ok": False,
-                 "error": music_mod.sanitize_for_log(f"{type(exc).__name__}: {exc}", limit=200) or "Resolve failed"},
+                 "error": "Music search failed unexpectedly. Please try again.",
+                 "reason": "YT_SEARCH_FAILED"},
                 status=502)
         if track is None:
             # The dashboard renders this `error` string to the user, so it must
@@ -1774,6 +1804,15 @@ async def _health_server() -> None:
         action = str(body.get("action") or "")
         target_id = int(body.get("userId") or 0)
         reason = str(body.get("reason") or "Dashboard action")[:300]
+        # The acting moderator's Discord id, taken from the signed-in session by
+        # the dashboard route. It is NOT trusted for what it claims to allow —
+        # the service re-reads that member's live permissions and role position
+        # from Discord — but without it there is no human to authorize at all,
+        # and an action with no actor is refused (INVALID_ACTOR).
+        try:
+            actor_id = int(str(body.get("actorId") or "").strip() or 0)
+        except (TypeError, ValueError):
+            actor_id = 0
         minutes = max(1, min(int(body.get("minutes") or 10), 40320))
         duration_raw = body.get("duration") or body.get("minutes") or 10
         delete_days = max(0, min(int(body.get("deleteMessageDays") or 0), 7))
@@ -1804,7 +1843,7 @@ async def _health_server() -> None:
                                       "error": "Valid userId required"}, status=400)
         try:
             if action == "warn":
-                return _out(await svc.warn_member(bot, db, guild_id, target_id, reason, 0, "dashboard"))
+                return _out(await svc.warn_member(bot, db, guild_id, target_id, reason, actor_id, "dashboard"))
             if action in ("timeout", "mute"):
                 # Dashboard timeout buttons send minutes; duration strings also accepted.
                 mins = minutes
@@ -1812,8 +1851,8 @@ async def _health_server() -> None:
                     parsed = svc.parse_duration_minutes(duration_raw, default=-1)
                     mins = parsed if parsed and parsed > 0 else None
                 if action == "mute":
-                    return _out(await svc.mute_member(bot, db, guild_id, target_id, reason, mins, 0, "dashboard"))
-                return _out(await svc.timeout_member(bot, db, guild_id, target_id, mins, reason, 0, "dashboard"))
+                    return _out(await svc.mute_member(bot, db, guild_id, target_id, reason, mins, actor_id, "dashboard"))
+                return _out(await svc.timeout_member(bot, db, guild_id, target_id, mins, reason, actor_id, "dashboard"))
             if action == "hardmute":
                 mins = None
                 if isinstance(duration_raw, str):
@@ -1821,26 +1860,37 @@ async def _health_server() -> None:
                     mins = parsed if parsed and parsed > 0 else None
                 elif isinstance(duration_raw, (int, float)):
                     mins = max(1, min(int(duration_raw), 40320))
-                return _out(await svc.hardmute_member(bot, db, guild_id, target_id, reason, mins, 0, "dashboard"))
+                return _out(await svc.hardmute_member(bot, db, guild_id, target_id, reason, mins, actor_id, "dashboard"))
             if action == "unmute":
-                return _out(await svc.unmute_member(bot, db, guild_id, target_id, reason, 0, "dashboard"))
+                return _out(await svc.unmute_member(bot, db, guild_id, target_id, reason, actor_id, "dashboard"))
             if action in ("untimeout", "removetimeout"):
-                return _out(await svc.remove_timeout(bot, db, guild_id, target_id, reason, 0, "dashboard"))
+                return _out(await svc.remove_timeout(bot, db, guild_id, target_id, reason, actor_id, "dashboard"))
             if action == "kick":
-                return _out(await svc.kick_member(bot, db, guild_id, target_id, reason, 0, "dashboard"))
+                return _out(await svc.kick_member(bot, db, guild_id, target_id, reason, actor_id, "dashboard"))
             if action == "ban":
-                return _out(await svc.ban_member(bot, db, guild_id, target_id, reason, delete_days, 0, "dashboard"))
+                return _out(await svc.ban_member(bot, db, guild_id, target_id, reason, delete_days, actor_id, "dashboard"))
             if action == "softban":
-                return _out(await svc.softban_member(bot, db, guild_id, target_id, reason, delete_days, 0, "dashboard"))
+                return _out(await svc.softban_member(bot, db, guild_id, target_id, reason, delete_days, actor_id, "dashboard"))
             if action == "tempban":
                 mins = minutes
                 if isinstance(duration_raw, str):
                     parsed = svc.parse_duration_minutes(duration_raw, default=-1)
                     mins = parsed if parsed and parsed > 0 else minutes
                 return _out(await svc.tempban_member(bot, db, guild_id, target_id, reason,
-                                                     delete_days, mins, 0, "dashboard"))
+                                                     delete_days, mins, actor_id, "dashboard"))
             if action == "unban":
-                return _out(await svc.unban_member(bot, db, guild_id, target_id, reason, 0, "dashboard"))
+                return _out(await svc.unban_member(bot, db, guild_id, target_id, reason, actor_id, "dashboard"))
+            if action == "restore_roles":
+                guild = bot.get_guild(guild_id)
+                if not guild:
+                    return web.json_response({"ok": False, "code": "BOT_NOT_IN_GUILD",
+                                              "error": "I'm not in that server."}, status=404)
+                member = guild.get_member(target_id)
+                if member is None:
+                    return web.json_response({"ok": False, "code": "TARGET_NOT_FOUND",
+                                              "error": "That member is not on this server."}, status=404)
+                res = await svc.restore_member_roles(bot, db, guild, member)
+                return _out(res)
             return web.json_response({"ok": False, "code": "INVALID_INPUT",
                                       "error": f"Unknown action: {action}"}, status=400)
         except discord.Forbidden as exc:
@@ -2043,6 +2093,28 @@ async def _health_server() -> None:
         stats["bans"] = bans
         stats["activeTimeouts"] = timeouts
         stats["members"] = guild.member_count
+        # Everything below is COUNTED from stored rows, never estimated: an
+        # operator deciding whether to change a rule needs real numbers.
+        try:
+            stats["automod24h"] = await db.automod_recent_counts(guild_id, 24)
+        except Exception:
+            stats["automod24h"] = {}
+        try:
+            state = await db.get_security_state(guild_id)
+            stats["raidMode"] = bool(state.get("raidMode"))
+            stats["pendingReview"] = int(state.get("pendingReview") or 0)
+        except Exception:
+            stats["raidMode"] = None
+            stats["pendingReview"] = None
+        try:
+            pending = await db.pending_scheduled_actions(guild_id)
+            stats["pendingExpiries"] = [
+                {"action": str(r.get("action")),
+                 "userId": str(r.get("userId") or ""),
+                 "runAt": r["runAt"].isoformat() if hasattr(r.get("runAt"), "isoformat") else None}
+                for r in pending[:25]]
+        except Exception:
+            stats["pendingExpiries"] = []
         return web.json_response({"ok": True, "stats": stats})
 
     async def mod_warnings(request: web.Request) -> web.Response:
@@ -2241,6 +2313,348 @@ async def _health_server() -> None:
     GENERAL_CONFIG_FIELDS = ("language", "welcomeChannelId", "welcomeMessage",
                              "leaveChannelId", "leaveMessage")
 
+    # ── Phase 3: audit trail, AutoMod read-back, security posture ──────
+    class _NullAutomodState:
+        """Dry-run state: every hit is a first hit, nothing is remembered.
+
+        A rule test must not consume a real window or arm a real cooldown —
+        otherwise testing a rule against a member's text would pre-load their
+        strike count.
+        """
+
+        async def hit(self, guild_id, user_id, key, window_seconds):  # noqa: D102
+            return 1
+
+        async def cooldown(self, guild_id, user_id, seconds):  # noqa: D102
+            return 0
+
+        async def seen(self, guild_id, message_id, digest):  # noqa: D102
+            return False
+
+    class _ProbeMessage:
+        """The smallest object automod.evaluate() needs. No Discord calls."""
+
+        class _Author:
+            def __init__(self, user_id: int, role_ids):
+                self.id = user_id
+                self.bot = False
+                self.guild_permissions = None
+                self.roles = [type("R", (), {"id": rid})() for rid in role_ids]
+
+        class _Channel:
+            def __init__(self, channel_id: int, name: str):
+                self.id = channel_id
+                self.name = name
+
+        class _Guild:
+            def __init__(self, guild_id: int):
+                self.id = guild_id
+
+        def __init__(self, guild_id: int, content: str, *, user_id: int = 1,
+                     channel_id: int = 1, channel_name: str = "probe",
+                     mentions: int = 0, role_ids=()):
+            self.id = 0
+            self.guild = self._Guild(guild_id)
+            self.author = self._Author(user_id, role_ids)
+            self.channel = self._Channel(channel_id, channel_name)
+            self.content = content
+            self.mentions = list(range(mentions))
+            self.attachments = []
+            self.embeds = []
+
+    async def mod_audit(request: web.Request) -> web.Response:
+        """Murabot's own moderation audit trail — filtered and paginated.
+
+        Distinct from Discord's audit log on purpose (see mod_discord_audit):
+        these rows know the SOURCE (discord / dashboard / automod / anti-raid),
+        whether the action SUCCEEDED, which case it belongs to and when a
+        temporary action expires. Discord's log knows none of that.
+        """
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        q = request.rel_url.query
+        success_raw = (q.get("success") or "").strip().lower()
+        success = None if success_raw in ("", "any", "all") else success_raw in ("1", "true", "yes")
+        import database as db
+        try:
+            data = await db.query_mod_audit(
+                guild_id,
+                action=(q.get("action") or "")[:60],
+                moderator_id=(q.get("moderatorId") or "")[:25],
+                target_id=(q.get("targetId") or "")[:25],
+                source=(q.get("source") or "")[:20],
+                success=success,
+                since=q.get("from"), until=q.get("to"),
+                limit=q.get("limit") or 50, skip=q.get("skip") or 0)
+        except Exception as exc:
+            log.warning("Audit query failed for %s: %s", guild_id, type(exc).__name__)
+            return web.json_response({"ok": False, "code": "DATABASE_ERROR",
+                                      "error": "Audit trail unavailable"}, status=503)
+        return web.json_response({"ok": True, **data, "sources": list(db.AUDIT_SOURCES)})
+
+    async def mod_discord_audit(request: web.Request) -> web.Response:
+        """Discord's OWN audit log, labelled as such.
+
+        Two logs, never merged into one list: Discord knows that a human clicked
+        delete in the client; it cannot report a failure, an automatic rule, an
+        expiry or a dashboard action. When the bot lacks View Audit Log this
+        says so with the permission name instead of returning an empty list that
+        looks like "nothing happened".
+        """
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            return web.json_response({"ok": False, "code": "BOT_NOT_IN_GUILD",
+                                      "error": "Bot not in that guild"}, status=404)
+        q = request.rel_url.query
+        try:
+            limit = max(1, min(int(q.get("limit") or 50), 100))
+        except (TypeError, ValueError):
+            limit = 50
+        action_name = (q.get("action") or "").strip()
+        action = None
+        if action_name:
+            action = getattr(discord.AuditLogAction, action_name, None)
+            if action is None:
+                return web.json_response({"ok": False, "code": "INVALID_OP",
+                                          "error": f"Unknown audit action {action_name!r}"}, status=400)
+        try:
+            entries = [e async for e in guild.audit_logs(limit=limit, action=action)]
+        except discord.Forbidden:
+            return web.json_response({
+                "ok": False, "code": "BOT_MISSING_PERMISSION", "permission": "View Audit Log",
+                "error": "I need **View Audit Log** to read Discord's audit log."}, status=403)
+        except discord.HTTPException:
+            return web.json_response({"ok": False, "code": "DISCORD_API_ERROR",
+                                      "status": "discord-error",
+                                      "error": "Discord refused the audit-log read — retry in a moment."},
+                                     status=502)
+        out = []
+        for entry in entries:
+            actor = getattr(entry, "user", None)
+            target = getattr(entry, "target", None)
+            out.append({
+                "id": str(getattr(entry, "id", "")),
+                "action": str(getattr(getattr(entry, "action", None), "name", "unknown")),
+                "actorId": str(getattr(actor, "id", "")),
+                "actorName": str(getattr(actor, "display_name", "") or getattr(actor, "name", "")),
+                "targetId": str(getattr(target, "id", "")),
+                "targetName": str(getattr(target, "name", "") or getattr(target, "display_name", "")),
+                "reason": str(getattr(entry, "reason", "") or "")[:300],
+                "at": (entry.created_at.isoformat() if hasattr(entry, "created_at")
+                       and entry.created_at else None),
+                "source": "discord-audit",
+            })
+        return web.json_response({"ok": True, "entries": out, "source": "discord-audit"})
+
+    async def mod_automod(request: web.Request) -> web.Response:
+        """AutoMod read-back: the rules that WILL run, and whether they can."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        import database as db
+        import automod as automod_mod
+        try:
+            cfg = await db.get_guild_config(guild_id)
+        except Exception as exc:
+            return web.json_response({"ok": False, "code": "DATABASE_ERROR",
+                                      "error": type(exc).__name__}, status=503)
+        moderation = cfg.get("moderation") or {}
+        norm = automod_mod.normalize_config(moderation, cfg.get("automod"))
+        cog = bot.get_cog("ModerationCog")
+        availability = (cog.automod_availability() if cog is not None else {
+            "messageContentIntent": bool(getattr(bot.intents, "message_content", False)),
+            "membersIntent": bool(getattr(bot.intents, "members", False)),
+            "operational": bool(getattr(bot.intents, "message_content", False)),
+            "code": "MODERATION_COG_NOT_LOADED",
+            "message": "The moderation module did not load, so no rule is evaluated."})
+        try:
+            recent = await db.automod_recent_counts(guild_id, 24)
+        except Exception:
+            recent = {}
+        return web.json_response({
+            "ok": True,
+            "config": norm,
+            "summary": automod_mod.summarize(norm),
+            "problems": automod_mod.config_problems(moderation, cfg.get("automod")),
+            "availability": availability,
+            "recent24h": recent,
+        })
+
+    async def mod_automod_test(request: web.Request) -> web.Response:
+        """Dry-run a text against the stored rules. No message, no punishment.
+
+        So an operator can see WHICH rule fires and WHY before arming it, rather
+        than discovering it by muting their own members. The probe consumes no
+        window, arms no cooldown and touches no Discord object.
+        """
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+        guild_id = str(body.get("guildId") or "").strip()
+        if not guild_id.isdigit():
+            return web.json_response({"ok": False, "error": "Valid guildId required"}, status=400)
+        content = str(body.get("content") or "")[:2000]
+        if not content.strip():
+            return web.json_response({"ok": False, "code": "INVALID_INPUT",
+                                      "error": "Provide the text to test"}, status=400)
+        import database as db
+        import automod as automod_mod
+        cfg = await db.get_guild_config(guild_id)
+        norm = automod_mod.normalize_config(cfg.get("moderation"), cfg.get("automod"))
+        probe = _ProbeMessage(int(guild_id), content,
+                             channel_id=int(str(body.get("channelId") or 1) or 1),
+                             mentions=max(0, min(int(body.get("mentions") or 0), 100)))
+        try:
+            decision = await automod_mod.evaluate(probe, norm, _NullAutomodState(),
+                                                 has_message_content=True)
+        except automod_mod.AutomodUnavailable as exc:
+            # Fixed copy, deliberately: the repo forbids handing an exception's
+            # own text to a user (scripts/test_music_errors.py enforces it), and
+            # this message is a constant anyway.
+            return web.json_response({
+                "ok": True, "violation": False, "skip": exc.code,
+                "error": "AutoMod needs the Message Content intent: Discord sends no guild "
+                         "message text without it, so no rule can be evaluated."})
+        cog = bot.get_cog("ModerationCog")
+        availability = cog.automod_availability() if cog is not None else None
+        return web.json_response({"ok": True, **decision.as_dict(),
+                                  "availability": availability})
+
+    async def mod_security(request: web.Request) -> web.Response:
+        """Security posture read (GET) and administrator actions (POST).
+
+        Actions: raidmode-on, raidmode-off, verification, undo, review,
+        restore-roles. Every one of them goes through the same services the
+        slash commands use, so the dashboard cannot do anything a moderator
+        with the same Discord permissions could not.
+        """
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            return web.json_response({"ok": False, "code": "BOT_NOT_IN_GUILD",
+                                      "error": "Bot not in that guild"}, status=404)
+        import database as db
+        import modservice as svc
+        cog = bot.get_cog("SecurityCog")
+        if request.method == "GET":
+            capabilities = (await cog.capabilities(guild) if cog is not None else {
+                "operational": False, "problems": ["The security module did not load."]})
+            settings = await cog._settings(guild_id) if cog is not None else {}
+            channel_where = None
+            if cog is not None:
+                channel, how = await cog._alert_channel(guild, settings)
+                channel_where = {"channelId": str(getattr(channel, "id", "")),
+                                 "channelName": str(getattr(channel, "name", "")),
+                                 "how": how} if channel else {"channelId": "", "how": how}
+            try:
+                review = await db.unreviewed_auto_actions(guild_id, 25)
+            except Exception:
+                review = []
+            try:
+                pending = await db.pending_scheduled_actions(guild_id)
+            except Exception:
+                pending = []
+            return web.json_response({
+                "ok": True, "capabilities": capabilities, "settings": settings,
+                "alerts": channel_where,
+                "review": review,
+                "pending": [{"action": str(r.get("action")), "userId": str(r.get("userId") or ""),
+                             "runAt": r["runAt"].isoformat() if hasattr(r.get("runAt"), "isoformat") else None}
+                            for r in pending[:25]],
+            })
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+        action = str(body.get("action") or "").strip()
+        try:
+            actor_id = int(str(body.get("actorId") or "").strip() or 0)
+        except (TypeError, ValueError):
+            actor_id = 0
+        if action in ("raidmode-on", "raidmode-off") and not actor_id:
+            return web.json_response({"ok": False, "code": "INVALID_ACTOR",
+                                      "error": "Sign in again so the action can be attributed."}, status=400)
+        if action == "raidmode-on":
+            minutes = max(1, min(int(body.get("minutes") or 10), 1440))
+            res = await svc.begin_raid_mode(bot, db, guild_id, minutes=minutes,
+                                            reason=f"Enabled from the dashboard by {actor_id}",
+                                            automatic=False, actor_id=actor_id, source="dashboard")
+            return _svc_out(res)
+        if action == "raidmode-off":
+            res = await svc.end_raid_mode(bot, db, guild_id,
+                                          reason=f"Disabled from the dashboard by {actor_id}",
+                                          actor_id=actor_id, source="dashboard")
+            return _svc_out(res)
+        if action == "verification":
+            enabled = bool(body.get("enabled"))
+            role_id = str(body.get("roleId") or "").strip()
+            channel_id = str(body.get("channelId") or "").strip()
+            if enabled and not (role_id.isdigit()):
+                return web.json_response({"ok": False, "code": "INVALID_INPUT",
+                                          "error": "Pick a verification role"}, status=400)
+            if enabled:
+                role = guild.get_role(int(role_id))
+                if role is None:
+                    return web.json_response({"ok": False, "code": "TARGET_NOT_FOUND",
+                                              "error": "That role no longer exists"}, status=404)
+                dangerous = [name for name in ("administrator", "manage_guild", "manage_roles",
+                                               "ban_members", "kick_members")
+                             if bool(getattr(role.permissions, name, False))]
+                if dangerous and not bool(body.get("allowDangerous")):
+                    return web.json_response({
+                        "ok": False, "code": "DANGEROUS_ROLE",
+                        "error": f"@{role.name} grants {', '.join(dangerous)} — a verification role "
+                                 f"is assigned automatically, so it must not carry power."}, status=400)
+            await db.set_security_state(guild_id, verificationEnabled=enabled,
+                                        verificationRoleId=role_id if enabled else "",
+                                        verificationChannelId=channel_id)
+            await db.log_mod_audit(guild_id, "verification_setup", moderator_id=actor_id,
+                                   target_id=role_id or 0, source="dashboard", success=True,
+                                   reason=("verification enabled" if enabled else "verification disabled"))
+            return web.json_response({"ok": True, "enabled": enabled})
+        if action == "restore-roles":
+            target_id = str(body.get("userId") or "").strip()
+            member = guild.get_member(int(target_id)) if target_id.isdigit() else None
+            if member is None:
+                return web.json_response({"ok": False, "code": "TARGET_NOT_FOUND",
+                                          "error": "That member is not on this server"}, status=404)
+            res = await svc.restore_member_roles(bot, db, guild, member)
+            return web.json_response({**res, "ok": bool(res.get("ok"))},
+                                     status=200 if res.get("ok") else 409)
+        if action in ("review", "undo"):
+            rows = await db.unreviewed_auto_actions(guild_id, 100)
+            if action == "review":
+                return web.json_response({"ok": True, "review": rows})
+            audit_id = str(body.get("id") or "").strip()
+            row = next((r for r in rows if r["id"] == audit_id or r["id"].endswith(audit_id)), None)
+            if row is None:
+                return web.json_response({"ok": False, "code": "TARGET_NOT_FOUND",
+                                          "error": "No unreviewed automatic action matches that id"},
+                                         status=404)
+            undo_actor = actor_id or 1  # 0 is the system actor; a human must be named
+            result = (await cog._reverse(guild, row, actor_id=undo_actor)) if cog is not None else {
+                "ok": False, "error": "The security module did not load"}
+            await db.mark_audit_reviewed(guild_id, row["id"], note=f"undo via dashboard by {undo_actor}")
+            try:
+                await db.bump_pending_review(guild_id, -1)
+            except Exception:
+                pass
+            return web.json_response({"ok": bool(result.get("ok")),
+                                      "detail": result.get("detail"),
+                                      "error": result.get("error")},
+                                     status=200 if result.get("ok") else 409)
+        return web.json_response({"ok": False, "code": "INVALID_OP",
+                                  "error": f"Unknown security action {action!r}"}, status=400)
+
     async def config_refresh(request: web.Request) -> web.Response:
         """Dashboard pushes a guild's general settings; Murabot answers with
         what is actually STORED.
@@ -2291,1429 +2705,3 @@ async def _health_server() -> None:
         except Exception as exc:
             log.warning("General config store failed for guild %s: %s", guild_id, str(exc)[:150])
             return web.json_response({"ok": False, "error": "Storage unavailable"}, status=503)
-        return web.json_response({
-            "ok": True,
-            "general": {key: stored.get(key) for key in GENERAL_CONFIG_FIELDS},
-        })
-
-    async def music_diagnose(request: web.Request) -> web.Response:
-        """Run a REAL provider search from the runtime that serves the bot.
-
-        The playback code is identical to the version that resolves and plays
-        correctly outside Render, so when music fails in production the only
-        way to separate a code fault from an egress fault (datacenter IPs are
-        commonly challenged by YouTube) is to run the resolver HERE and report
-        the true error instead of guessing.
-        """
-        if not _authorized(request):
-            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
-
-        query = (request.rel_url.query.get("q") or "Rick Astley Never Gonna Give You Up")[:200]
-        import music as music_mod
-
-        out: dict[str, object] = {
-            "ok": False,
-            "query": query,
-            "ffmpeg": music_mod.FFMPEG_EXE,
-            # A resolve can succeed on a residential machine and stall on a
-            # datacenter host. These three facts distinguish the possible
-            # causes, so a failure is actionable instead of just "timed out".
-            "proxy_configured": bool(config.YOUTUBE_PROXY),
-            # Presence is not health: this carries the outcome of the proxy
-            # (ready / challenged / bypassed) and which egress served the last
-            # resolve. Credential-free by construction.
-            "youtube_egress": music_mod.proxy_state(),
-            "cookies_configured": bool(music_mod.cookies_path()),
-            "js_runtimes": music_mod.js_runtimes(),
-        }
-        try:
-            import yt_dlp
-            out["yt_dlp"] = yt_dlp.version.__version__
-        except Exception:
-            out["yt_dlp"] = None
-
-        # The raw provider message is for the server log. It reaches this
-        # response only when an operator explicitly asks for it — a pasted
-        # link can carry a token in its query string, and this endpoint is
-        # proxied to the dashboard, so default output stays credential-free.
-        include_detail = request.rel_url.query.get("detail") == "1"
-        t0 = time.monotonic()
-        try:
-            track = await asyncio.wait_for(
-                music_mod.engine.resolve(query),
-                timeout=config.MUSIC_RESOLVE_REQUEST_TIMEOUT)
-        except asyncio.TimeoutError:
-            out["elapsed"] = round(time.monotonic() - t0, 2)
-            out["error"] = (
-                "resolve timed out — yt-dlp produced no result. Most likely "
-                "YouTube is challenging this host's IP (set YOUTUBE_PROXY or "
-                "YT_COOKIES), or no JavaScript runtime is available to solve "
-                "the signature challenge (see js_runtimes)."
-            )
-            out["reason"] = "YT_TIMEOUT"
-            if include_detail:
-                out["last_resolve_error"] = music_mod.sanitize_for_log(
-                    music_mod.engine.get_resolve_error(), limit=300)
-        except Exception as exc:
-            out["error"] = f"{type(exc).__name__}: {str(exc)[:300]}"
-            out["reason"] = "YT_SEARCH_FAILED"
-        else:
-            out["elapsed"] = round(time.monotonic() - t0, 2)
-            if track is not None:
-                url = track.stream_url or ""
-                out.update({
-                    "ok": True,
-                    "title": track.title,
-                    "uploader": track.uploader,
-                    "duration": track.duration,
-                    "has_stream_url": bool(url),
-                    "stream_host": url.split("/")[2] if url.count("/") > 2 else None,
-                    # A preview CDN means a short clip, not the song.
-                    "preview_clip": music_mod.is_preview_url(url),
-                    "provider_host": track.source,
-                })
-            else:
-                # `error` is safe copy (the dashboard shows it); `reason` and
-                # the diagnostic carry the machine-readable cause for triage.
-                err = music_mod.engine.provider_error(is_url=is_url_query(query))
-                out["error"] = err.user_message
-                out["reason"] = err.category
-                out["providerDiagnostic"] = err.diagnostic(
-                    query=query, duration_ms=int((out.get("elapsed") or 0) * 1000))
-                log.warning("diagnose resolve failed: category=%s detail=%s",
-                            err.category, err.internal_detail)
-                if include_detail:
-                    out["last_resolve_error"] = music_mod.sanitize_for_log(
-                        music_mod.engine.get_resolve_error(), limit=300)
-
-        # Attach the machine-readable kind and its remedy to every outcome, so a
-        # failure never reads as an indistinguishable "timed out".
-        kind = music_mod.engine.get_error_kind()
-        out["error_kind"] = kind
-        # True even on success when a fallback served the request, so a working
-        # fallback cannot hide that the primary provider is refusing this host.
-        out["youtube_challenged"] = music_mod.engine.youtube_challenged()
-        if not out["ok"]:
-            out["remedy"] = _RESOLVE_REMEDIES.get(kind or "", _RESOLVE_REMEDY_DEFAULT)
-        return web.json_response(out, status=200 if out["ok"] else 503)
-
-    async def music_diagnostics(request: web.Request) -> web.Response:
-        """⚙️ Music Diagnostics aggregate: audio service, FFmpeg, Discord
-        voice, per-guild players, last playback failure. No secrets."""
-        if not _authorized(request):
-            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
-        import music as music_mod
-        gateway_alive, hb_age, _ = gateway_liveness(bot)
-        snap = music_mod.engine.diagnostics_snapshot()
-        return web.json_response({
-            "ok": True,
-            "gateway": {"alive": gateway_alive,
-                        "heartbeat_age_seconds": round(hb_age, 1) if hb_age is not None else None},
-            "audio_service": snap["audio_service"],
-            "ffmpeg": snap["ffmpeg"],
-            "players": snap["players"],
-            "last_playback": snap["last_playback"],
-        })
-
-    async def health_music(_request: web.Request) -> web.Response:
-        """Public music aggregate for monitors and the dashboard.
-
-        No auth (uptime monitors cannot authenticate) and no secrets: only
-        measured subsystem states, counts (never guild/channel IDs), and a
-        machine-readable failure reason when degraded. Anything down here is
-        a real measurement, never a guess.
-        """
-        import music as music_mod
-        gateway_alive, hb_age, _ = gateway_liveness(bot)
-        ff = music_mod.ffmpeg_check()
-        opus = music_mod.opus_status()
-        runtimes = music_mod.js_runtimes()
-        try:
-            import davey  # noqa: F401
-            voice_backend: dict = {"davey": True}
-        except Exception:
-            voice_backend = {"davey": False}
-        snap = music_mod.engine.diagnostics_snapshot()
-        players = snap.get("players", {}) if isinstance(snap, dict) else {}
-        connected = sum(1 for p in players.values()
-                        if isinstance(p, dict) and p.get("connected"))
-        # Honest voice-playback claim: VERIFIED only while a player is audibly
-        # engaged (state playing + voice connected) this boot. Anything else
-        # — including a green HTTP service — is NOT_LIVE_VERIFIED. Hearing
-        # actual Discord audio is the only proof; this endpoint never fakes it.
-        voice_playback = "NOT_LIVE_VERIFIED"
-        for p in players.values():
-            if (isinstance(p, dict) and p.get("player") == "playing"
-                    and p.get("connected")):
-                voice_playback = "VERIFIED"
-                break
-        failed: list[str] = []
-        if ff.get("probed_ok") is not True:
-            failed.append("ffmpeg")
-        if opus.get("status") not in ("ready", "unknown"):
-            failed.append("opus")
-        if not runtimes.get("any"):
-            failed.append("audio_extractor")
-        if voice_backend.get("davey") is not True:
-            failed.append("voice_backend")
-        if not gateway_alive:
-            failed.append("discord_voice")
-        status = "online" if not failed else "degraded"
-        latency_ms = gateway_latency_ms(bot, None)
-        body: dict = {
-            "status": status,
-            "discord_voice": "ready" if gateway_alive else "unavailable",
-            "ffmpeg": ff.get("status"),
-            "audio_extractor": "ready" if runtimes.get("any") else "missing",
-            # Which egress YouTube actually accepted. A configured proxy that
-            # answers HTTP 200 but is refused by YouTube looks identical to a
-            # healthy one without this, so health reports the measured outcome
-            # (configured/ready/challenged/bypassed + last egress) and never the
-            # proxy URL or its credentials.
-            "youtube_egress": music_mod.proxy_state(),
-            "opus": opus.get("status"),
-            "player": "ready" if status == "online" else "degraded",
-            "latency": latency_ms,
-            "voice_backend": voice_backend,
-            "connected_voice_clients": connected,
-            "tracked_players": len(players),
-            "voice_playback": voice_playback,
-        }
-        if failed:
-            body["error"] = f"Degraded subsystems: {', '.join(failed)}"
-            body["failing"] = failed
-        return web.json_response(body, status=200 if status == "online" else 503)
-
-    async def music_playback_log(request: web.Request) -> web.Response:
-        """Recent staged playback attempts (newest first). Sanitized."""
-        if not _authorized(request):
-            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
-        import music as music_mod
-        try:
-            limit = max(1, min(int(request.rel_url.query.get("limit", "20")), 50))
-        except ValueError:
-            limit = 20
-        return web.json_response({
-            "ok": True,
-            "attempts": music_mod.engine.get_playback_log(limit),
-        })
-
-    async def music_test_audio(request: web.Request) -> web.Response:
-        """[ ▶ Test Audio ] — staged PASS/FAIL/NOT TESTED for the dashboard."""
-        if not _authorized(request):
-            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
-        import music as music_mod
-        gateway_alive, hb_age, _ = gateway_liveness(bot)
-        result = await music_mod.engine.run_playback_test()
-        stages = result.get("stages", {})
-        # The gateway measurement is real here, not inferred from the loop.
-        stages["discord_gateway"] = "PASS" if gateway_alive else "FAIL"
-        result["stages"] = stages
-        result["detail"] = {**(result.get("detail", {})),
-                            "gateway_heartbeat_age_seconds": hb_age}
-        return web.json_response(result, status=200 if result.get("ok") else 503)
-
-    async def music_preflight(request: web.Request) -> web.Response:
-        """Egress preflight for the dashboard: resolve one track on every
-        egress path (direct / proxy / engine) without shell access to the
-        host. Bridge-secret auth; credential-free payload (the shared engine
-        core never emits proxy URLs, cookies or paths). Overall timeout so a
-        wedged extractor cannot hold the request open: TIMEOUT is a reported
-        path state, never a hung connection."""
-        if not _authorized(request):
-            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
-        import music as music_mod
-        query = (request.rel_url.query.get("q") or "").strip()[:200]
-        try:
-            result = await asyncio.wait_for(
-                music_mod.engine.preflight(query or None), timeout=180)
-        except asyncio.TimeoutError:
-            return web.json_response({
-                "ok": False,
-                "track": query or music_mod.MusicEngine.PREFLIGHT_TRACK,
-                "paths": {"direct": {"state": "TIMEOUT", "note": "preflight exceeded 180s"}},
-                "proxy_configured": music_mod.proxy_configured(),
-                "cookies_configured": bool(music_mod.cookies_path()),
-            }, status=503)
-        return web.json_response(result, status=200 if result.get("ok") else 503)
-
-    app = web.Application()
-    app.router.add_get("/health", health)
-    app.router.add_get("/health/music", health_music)
-    app.router.add_get("/music/diagnose", music_diagnose)
-    app.router.add_get("/music/diagnostics", music_diagnostics)
-    app.router.add_get("/music/playback-log", music_playback_log)
-    app.router.add_post("/music/test-audio", music_test_audio)
-    app.router.add_get("/music/test-audio", music_test_audio)
-    app.router.add_get("/music/preflight", music_preflight)
-    app.router.add_post("/prefix/refresh", prefix_refresh)
-    app.router.add_post("/config/refresh", config_refresh)
-    app.router.add_get("/music/state/{guild_id:\\d+}", music_state)
-    app.router.add_post("/music/control/{guild_id:\\d+}", music_control)
-    app.router.add_post("/music/search/{guild_id:\\d+}", music_search)
-    app.router.add_post("/music/queue/{guild_id:\\d+}", music_queue_add)
-    app.router.add_post("/music/config/{guild_id:\\d+}", music_config_push)
-    app.router.add_get("/mod/member/{guild_id:\\d+}/{user_id:\\d+}", member_lookup)
-    app.router.add_post("/mod/action/{guild_id:\\d+}", mod_action)
-    app.router.add_get("/mod/cases/{guild_id:\\d+}", mod_cases)
-    app.router.add_post("/mod/cases/{guild_id:\\d+}", mod_cases)
-    app.router.add_post("/mod/case/{guild_id:\\d+}/{case_id:\\d+}", mod_case)
-    app.router.add_get("/mod/bans/{guild_id:\\d+}", mod_bans)
-    app.router.add_post("/mod/role/{guild_id:\\d+}", mod_role)
-    app.router.add_get("/mod/overview/{guild_id:\\d+}", mod_overview)
-    app.router.add_delete("/mod/warnings/{guild_id:\\d+}/{user_id:\\d+}", mod_warnings)
-    app.router.add_post("/mod/warnings/{guild_id:\\d+}/{user_id:\\d+}", mod_warnings)
-    app.router.add_post("/mod/notes/{guild_id:\\d+}", mod_notes)
-    app.router.add_get("/mod/notes/{guild_id:\\d+}/{user_id:\\d+}", mod_notes)
-    app.router.add_delete("/mod/note/{guild_id:\\d+}/{note_id:\\d+}", mod_notes)
-    app.router.add_post("/mod/notes-clear/{guild_id:\\d+}", mod_notes)
-    app.router.add_post("/mod/lockdown/{guild_id:\\d+}", mod_lockdown)
-    app.router.add_post("/mod/purge/{guild_id:\\d+}", mod_purge)
-
-    async def _economy_guild(request: web.Request) -> tuple[object | None, web.Response | None]:
-        """Shared guard: bridge auth + bot membership for economy reads/writes.
-
-        Returns `(guild, None)` on success or `(None, response)` when the
-        request must be refused. The three refusals are deliberately distinct:
-        a bad bridge secret (401), a guild the bot is not in (404), and a
-        missing economy configuration are different problems and must never
-        collapse into one generic error.
-        """
-        if not _authorized(request):
-            return None, web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
-        try:
-            guild_id = int(request.match_info["guild_id"])
-        except (KeyError, ValueError):
-            return None, web.json_response(
-                {"ok": False, "error": "Invalid guild id"}, status=400)
-        guild = bot.get_guild(guild_id)
-        if guild is None:
-            return None, web.json_response(
-                {"ok": False, "code": "BOT_NOT_IN_GUILD",
-                 "error": "Murabot is not in that server."}, status=404)
-        return guild, None
-
-    def _is_bot_owner(guild, actor_id) -> bool:
-        """Is this Discord account the Murabot owner?
-
-        The authoritative answer is `config.MURABOT_OWNER_DISCORD_ID` — a
-        Discord USER ID, compared numerically. The dashboard resolves the same
-        variable from the same authenticated session, so both sides of the
-        bridge answer identically.
-
-        Deliberately NOT sufficient on their own:
-
-          * `BOT_ADMIN_IDS` — a moderator list for operational commands. Admin
-            is not ownership of economic value.
-          * Manage Server, or Administrator, in this guild.
-          * `guild.owner_id`. Owning the SELECTED SERVER is a different role
-            from owning the BOT. Letting a server owner mint currency in a
-            server they merely happen to own would let anyone who creates a
-            guild set economy values in it, which is precisely what this gate
-            exists to prevent.
-
-        A username, display name, nickname or tag is never consulted. All of
-        those are changeable by the account holder, so authorizing on one would
-        either lock the real owner out after a rename or let whoever takes the
-        name through.
-
-        The bot's own application id is accepted: it is Murabot talking to
-        itself, not a person claiming to be the owner.
-        """
-        try:
-            uid = int(actor_id)
-        except (TypeError, ValueError):
-            return False
-        if config.MURABOT_OWNER_DISCORD_ID and uid == config.MURABOT_OWNER_DISCORD_ID:
-            return True
-        if uid == getattr(bot.user, "id", None):
-            return True
-        return False
-
-    def _owner_diagnostics(actor_id) -> dict:
-        """Credential-free owner resolution, for development diagnostics.
-
-        Reports the two IDs MASKED (last four characters only). The full values
-        are never logged, never returned to a client, and never compared by
-        name — only numerically, in `_is_bot_owner`.
-        """
-        def mask(value) -> str | None:
-            try:
-                text = str(int(value))
-            except (TypeError, ValueError):
-                return None
-            return f"********{text[-4:]}" if len(text) > 4 else "********"
-
-        try:
-            uid = int(actor_id)
-        except (TypeError, ValueError):
-            uid = None
-        return {
-            "authenticatedDiscordUserId": mask(uid),
-            "configuredOwnerId": mask(config.MURABOT_OWNER_DISCORD_ID),
-            "ownerConfigured": config.MURABOT_OWNER_DISCORD_ID is not None,
-            "isOwner": _is_bot_owner(None, uid) if uid is not None else False,
-        }
-
-    async def _economy_owner_guard(request: web.Request, guild) -> tuple[int | None, web.Response | None]:
-        """Reject non-owner economic writes at the API, not just the UI.
-
-        Returns `(actor_id, None)` when the caller may write economic values,
-        or `(None, response)` otherwise. The dashboard hides these controls for
-        non-owners, but that is presentation: this is the check that actually
-        holds, so a forged request from a server admin — or from someone who
-        owns the server but is not the bot owner — is refused here.
-        """
-        body = await request.json() if request.can_read_body else {}
-        actor = body.get("actorId") if isinstance(body, dict) else None
-        if actor is None:
-            actor = request.query.get("actorId")
-        if not _is_bot_owner(guild, actor):
-            return None, web.json_response({
-                "ok": False, "code": "OWNER_ONLY",
-                "error": "Only the Murabot owner can change economic values.",
-            }, status=403)
-        try:
-            return int(actor), None
-        except (TypeError, ValueError):
-            return None, web.json_response(
-                {"ok": False, "error": "Invalid actor id"}, status=400)
-
-    async def economy_overview(request: web.Request) -> web.Response:
-        """Dashboard economy overview — same collections the slash commands
-        use, so the dashboard can never show disconnected numbers."""
-        guild, deny = await _economy_guild(request)
-        if deny is not None:
-            return deny
-        import economy as eco_mod
-        import database as db_mod
-        try:
-            data = await eco_mod.economy_overview(db_mod._require_db(), guild.id)
-            import leveling_sys as lvl_mod
-            # Display names are attached for presentation only. The row's
-            # identity is `canonicalUserId`; the name is never a grouping key.
-            for t in data.get("top", []):
-                name, _uid = await lvl_mod.display_name_for(guild, t["canonicalUserId"])
-                t["displayName"] = name
-            cfg = await eco_mod.get_economy_config(db_mod._require_db(), guild.id)
-            return web.json_response({"ok": True, "overview": data, "config": {
-                k: cfg.get(k) for k in (
-                    "currencyName", "currencySymbol", "startBalance", "dailyAmount",
-                    "weeklyAmount", "monthlyAmount", "workMin", "workMax", "begMin", "begMax",
-                    "workCooldownSec", "begCooldownSec", "crimeCooldownSec",
-                    "activityCooldownSec", "gambleMax", "gambleCooldownSec",
-                    "robCooldownSec", "robMinTarget", "lotteryTicketPrice", "lotteryMaxTickets",
-                    "jobCooldownSec", "jobFailRate", "jobCooldownOverrides", "disabledJobs",
-                    "bankCapacity",
-                )},
-                # Lets the dashboard render read-only controls accurately
-                # without the UI having to guess who the owner is.
-                "ownerOnly": True})
-        except Exception as exc:
-            return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
-    app.router.add_get("/economy/overview/{guild_id:\\d+}", economy_overview)
-
-    async def economy_leaderboard(request: web.Request) -> web.Response:
-        """Full leaderboard. Identity is the canonical user id.
-
-        Display names are resolved live from the guild and attached as
-        presentation only; they are never used to group, merge or sort rows,
-        because two members may share a name and any name may change.
-        """
-        guild, deny = await _economy_guild(request)
-        if deny is not None:
-            return deny
-        import economy as eco_mod
-        import database as db_mod
-        import leveling_sys as lvl_mod
-        try:
-            limit = max(1, min(int(request.query.get("limit", 10)), 25))
-            skip = max(0, int(request.query.get("skip", 0)))
-            by = request.query.get("by", "net")
-            if by not in ("net", "balance", "bank", "gems"):
-                by = "net"
-            rows = await eco_mod.economy_leaderboard(
-                db_mod._require_db(), guild.id, limit=limit, skip=skip, by=by)
-            for row in rows:
-                name, _ = await lvl_mod.display_name_for(guild, row["canonicalUserId"])
-                row["displayName"] = name
-            return web.json_response({"ok": True, "rows": rows, "guildId": str(guild.id)})
-        except Exception as exc:
-            log.exception("economy leaderboard failed")
-            return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
-    app.router.add_get("/economy/leaderboard/{guild_id:\\d+}", economy_leaderboard)
-
-    async def economy_health(request: web.Request) -> web.Response:
-        """Circulation, flow and volume aggregates from real database sums."""
-        guild, deny = await _economy_guild(request)
-        if deny is not None:
-            return deny
-        import economy as eco_mod
-        import database as db_mod
-        try:
-            data = await eco_mod.economy_health(db_mod._require_db(), guild.id)
-            cfg = await eco_mod.get_economy_config(db_mod._require_db(), guild.id)
-            data["currency"] = {
-                "name": cfg.get("currencyName"), "symbol": cfg.get("currencySymbol"),
-            }
-            return web.json_response({"ok": True, "health": data})
-        except Exception as exc:
-            log.exception("economy health failed")
-            return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
-    app.router.add_get("/economy/health/{guild_id:\\d+}", economy_health)
-
-    async def economy_transactions(request: web.Request) -> web.Response:
-        """Filtered economy audit log. Filters are applied server-side."""
-        guild, deny = await _economy_guild(request)
-        if deny is not None:
-            return deny
-        import economy as eco_mod
-        import database as db_mod
-        try:
-            q = request.query
-            def _int(name: str, default: int) -> int:
-                try:
-                    return int(q.get(name, default))
-                except (TypeError, ValueError):
-                    return default
-            user_id = q.get("userId")
-            data = await eco_mod.economy_transactions(
-                db_mod._require_db(), guild.id,
-                user_id=int(user_id) if user_id and str(user_id).isdigit() else None,
-                action=q.get("action", "all"),
-                since_hours=max(1, min(_int("hours", 168), 24 * 90)),
-                direction=q.get("direction", "all"),
-                item_id=q.get("itemId") or None,
-                tx_id=q.get("txId") or None,
-                limit=max(1, min(_int("limit", 50), 200)),
-                skip=max(0, _int("skip", 0)),
-            )
-            cfg = await eco_mod.get_economy_config(db_mod._require_db(), guild.id)
-            currency = cfg.get("currencyName") or "coins"
-            for row in data["rows"]:
-                row["currency"] = currency
-            return web.json_response({"ok": True, **data})
-        except Exception as exc:
-            log.exception("economy transactions failed")
-            return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
-    app.router.add_get("/economy/transactions/{guild_id:\\d+}", economy_transactions)
-
-    async def economy_audit(request: web.Request) -> web.Response:
-        """Read-only anti-exploit scan. Never mutates history."""
-        guild, deny = await _economy_guild(request)
-        if deny is not None:
-            return deny
-        import economy as eco_mod
-        import database as db_mod
-        try:
-            data = await eco_mod.anti_exploit_audit(db_mod._require_db(), guild.id)
-            return web.json_response({"ok": True, **data})
-        except Exception as exc:
-            log.exception("economy audit failed")
-            return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
-    app.router.add_get("/economy/audit/{guild_id:\\d+}", economy_audit)
-
-    async def economy_shop(request: web.Request) -> web.Response:
-        """Shop contents + live stock, straight from the canonical catalog."""
-        guild, deny = await _economy_guild(request)
-        if deny is not None:
-            return deny
-        import database as db_mod
-        import items as itemdb
-        import shop as shopmod
-        try:
-            section = request.query.get("section") or None
-            if section and section not in shopmod.SECTIONS:
-                return web.json_response({
-                    "ok": False, "code": "UNKNOWN_SECTION",
-                    "error": f"Unknown shop section. Valid: {', '.join(shopmod.SECTIONS)}",
-                }, status=400)
-            rows = shopmod.shop_items(section)
-            stock = await shopmod.stock_map(db=db_mod._require_db(),
-                                             guild_id=guild.id, rows=rows)
-            cfg = await eco_get_config(guild.id)
-            return web.json_response({
-                "ok": True,
-                "sections": [{"id": k, "label": v["label"], "blurb": v["blurb"],
-                              "hours": v["hours"],
-                              "rotatesIn": shopmod.time_left(k)}
-                             for k, v in shopmod.SECTIONS.items()],
-                "items": [{
-                    "id": r["item_id"], "name": r["name"], "rarity": r["rarity"],
-                    "category": r["category"], "buyPrice": r["buy_price"],
-                    "sellPrice": r["sell_price"], "sellable": r["sellable"],
-                    "section": shopmod.section_for(r),
-                    "stock": stock.get(r["item_id"]),
-                    "effectType": r.get("effect_type"),
-                    "dropSources": list(r.get("drop_sources") or []),
-                } for r in rows],
-                "currency": {"name": cfg.get("currencyName"),
-                             "symbol": cfg.get("currencySymbol")},
-            })
-        except Exception as exc:
-            log.exception("economy shop read failed")
-            return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
-    app.router.add_get("/economy/shop/{guild_id:\\d+}", economy_shop)
-
-    async def eco_get_config(guild_id: int) -> dict:
-        """Indirection so route bodies share one config read."""
-        import economy as eco_mod
-        import database as db_mod
-        return await eco_mod.get_economy_config(db_mod._require_db(), guild_id)
-
-    #: Economic values only the owner may change. Operational settings (which
-    #: modules are on, alert channels, cooldowns for non-economic features)
-    #: remain admin-editable and are deliberately NOT in this list.
-    ECONOMIC_KEYS: frozenset[str] = frozenset({
-        "currencyName", "currencySymbol", "startBalance",
-        "dailyAmount", "weeklyAmount", "monthlyAmount",
-        "workMin", "workMax", "begMin", "begMax",
-        "gambleMax", "gambleCooldownSec",
-        "workCooldownSec", "begCooldownSec", "crimeCooldownSec",
-        "activityCooldownSec", "robCooldownSec", "robMinTarget",
-        "lotteryTicketPrice", "lotteryMaxTickets",
-        "jobCooldownSec", "jobFailRate", "jobCooldownOverrides", "disabledJobs",
-        "disabledItems", "bankCapacity",
-    })
-
-    async def economy_owner_check(request: web.Request) -> web.Response:
-        """Is this Discord account the Murabot owner?
-
-        The authoritative comparison is `MURABOT_OWNER_DISCORD_ID` against the
-        numeric Discord user ID. The dashboard resolves the same variable from
-        the authenticated session and compares it itself, so this endpoint is
-        corroboration rather than the only check — the write is enforced in
-        BOTH places, and neither can be satisfied by a client-supplied flag.
-        """
-        guild, deny = await _economy_guild(request)
-        if deny is not None:
-            return deny
-        body = await request.json() if request.can_read_body else {}
-        actor = body.get("actorId") if isinstance(body, dict) else None
-        if actor is None:
-            actor = request.query.get("actorId")
-        owner = _is_bot_owner(guild, actor)
-        return web.json_response({
-            "ok": True, "owner": owner,
-            "guildId": str(guild.id),
-            # Masked ids only: enough to debug a mismatch, useless to harvest.
-            "diagnostics": _owner_diagnostics(actor),
-        })
-    app.router.add_post("/economy/owner-check/{guild_id:\\d+}", economy_owner_check)
-
-    # ── Bot status + gateway-backed channel selection ───────────────────
-    #
-    # "Is Murabot actually in this server and can it post in these channels?"
-    # is answered here, from the bot's OWN gateway cache, because the bot holds
-    # the connection, the cached guild objects and the resolved permission
-    # overwrites. The dashboard used to answer it with its own Discord REST
-    # calls using a site-side bot token — a second credential that could be
-    # absent, stale or rejected, which surfaced as one useless message about the
-    # bot not answering, shown under a channel field as if the channel were at
-    # fault.
-    #
-    # Every failure mode now has its own code, and "the bot is not connected"
-    # is never dressed up as "this channel is invalid".
-
-    #: Channel types that can receive a message with an embed.
-    #:
-    #: Built by LOOKING THE NAMES UP rather than by referencing the classes
-    #: directly. `discord.VoiceTextChannel` was removed in discord.py 2.7, and a
-    #: direct reference is evaluated the moment this line runs — which is inside
-    #: _health_server(), so the AttributeError aborted the whole function. The
-    #: bot still logged in fine and the gateway was still connected, so nothing
-    #: looked wrong; the process simply never bound a port, and every
-    #: dashboard→bot call failed while /health on the PREVIOUS deployment kept
-    #: answering. Two separate startup crashes hid behind one 404.
-    #:
-    #: Filtering by existence means a discord.py rename can never again take the
-    #: whole HTTP surface down with it.
-    _TEXT_CAPABLE = tuple(
-        cls for cls in (
-            getattr(discord, name, None)
-            for name in ("TextChannel", "VoiceTextChannel", "StageChannel",
-                         "Thread", "DMChannel")
-        ) if isinstance(cls, type)
-    )
-
-    async def bot_status(request: web.Request) -> web.Response:
-        """Live gateway state. Credential-free apart from the bridge check."""
-        if not _authorized(request):
-            return web.json_response({"ok": False, "code": "AUTHENTICATION_ERROR",
-                                      "error": "Unauthorized"}, status=401)
-        statuses = http_mod.get_status()
-        latency_ms = gateway_latency_ms(bot, 0)
-        gateway_alive, hb_age, last_hb = gateway_liveness(bot)
-        user = getattr(bot, "user", None)
-        return web.json_response({
-            "ok": True,
-            "state": _gateway_state(gateway_alive, None),
-            "connection_state": _connection_state(gateway_alive, None),
-            "ready": bool(bot.is_ready()) and not bot.is_closed(),
-            "heartbeatAgeSeconds": hb_age,
-            "lastHeartbeat": last_hb,
-            "reconnectCount": _gateway_reconnects + _reconnect_count,
-            "uptimeSeconds": round(time.time() - _start_time),
-            "latencyMs": latency_ms,
-            "botUserId": str(user.id) if user is not None else None,
-            "botUsername": user.name if user is not None else None,
-            "guildIds": [str(g.id) for g in bot.guilds],
-            "ownerConfigured": config.MURABOT_OWNER_DISCORD_ID is not None,
-            "subsystems": statuses,
-        })
-    app.router.add_get("/bot/status", bot_status)
-
-    def _channel_verdict(channel, requires: list[str]) -> dict:
-        """Can the BOT post here? Resolved by discord.py from the cached
-        guild — the same computation the gateway uses when it applies
-        overwrites, so there is no second permission model to drift."""
-        member = getattr(bot, "user", None)
-        perms = channel.permissions_for(member) if member is not None else None
-        names = {"view": ("view_channel", "View Channel"),
-                 "send": ("send_messages", "Send Messages"),
-                 "embed": ("embed_links", "Embed Links"),
-                 "read": ("read_message_history", "Read Message History")}
-        checks, missing = [], None
-        for key in requires:
-            attr, label = names.get(key, (key, key))
-            ok = bool(getattr(perms, attr, False)) if perms is not None else False
-            checks.append({"requirement": key, "label": f"Murabot can: {label}", "ok": ok})
-            if not ok and missing is None:
-                missing = {"requirement": key, "permission": attr, "label": label}
-        return {"id": str(channel.id), "name": channel.name,
-                "type": int(getattr(channel, "type", 0)),
-                "categoryName": (channel.category.name if getattr(channel, "category", None) else None),
-                "usable": missing is None, "missing": missing, "checks": checks}
-
-    async def economy_channels(request: web.Request) -> web.Response:
-        """Selectable channels for a guild, from the bot's gateway cache.
-
-        Zero Discord REST calls: the guild, its channels and their permission
-        overwrites are already in memory, which is also why this cannot be
-        rate-limited the way the dashboard's own reads were.
-        """
-        if not _authorized(request):
-            return web.json_response({"ok": False, "code": "AUTHENTICATION_ERROR",
-                                      "error": "Unauthorized"}, status=401)
-        try:
-            guild_id = int(request.match_info["guild_id"])
-        except (KeyError, TypeError, ValueError):
-            return web.json_response({"ok": False, "code": "INVALID_GUILD_ID",
-                                      "error": "Invalid guild id"}, status=400)
-        requires = [r for r in (request.query.get("requires") or "view,send,embed").split(",")
-                    if r.strip() in ("view", "send", "embed", "read")]
-        if not requires:
-            requires = ["view", "send", "embed"]
-        requires = [r.strip() for r in requires]
-
-        gateway_alive, hb_age, _ = gateway_liveness(bot)
-        state = _gateway_state(gateway_alive, None)
-        user = getattr(bot, "user", None)
-        base = {
-            "ok": True,
-            "state": state,
-            "bot": {
-                "installed": False, "online": bool(bot.is_ready()) and not bot.is_closed(),
-                "guildAccessible": False,
-                "userId": str(user.id) if user is not None else None,
-                "username": user.name if user is not None else None,
-                "heartbeatAgeSeconds": hb_age,
-                "latencyMs": gateway_latency_ms(bot, 0),
-            },
-            "requires": requires,
-        }
-        if not bot.is_ready() or bot.is_closed():
-            # A disconnected bot is not a channel problem. Say exactly that.
-            return web.json_response({**base, "channels": [], **{
-                "error": {"code": "BOT_OFFLINE" if bot.is_closed() else "BOT_GATEWAY_NOT_READY",
-                          "message": "Murabot is not connected to Discord right now. "
-                                     "Channel availability cannot be determined until it reconnects."}}},
-                                    status=503)
-        guild = bot.get_guild(guild_id)
-        if guild is None:
-            return web.json_response({**base, "channels": [], **{
-                "error": {"code": "BOT_NOT_IN_GUILD",
-                          "message": "Murabot is not installed in this server."}}}, status=404)
-        rows = [c for c in guild.channels if isinstance(c, _TEXT_CAPABLE)]
-        rows.sort(key=lambda c: (getattr(getattr(c, "category", None), "position", 0), c.position, c.name))
-        return web.json_response({
-            **base,
-            "bot": {**base["bot"], "installed": True, "guildAccessible": True},
-            "guild": {"id": str(guild.id), "name": guild.name},
-            "channels": [_channel_verdict(c, requires) for c in rows],
-        })
-    app.router.add_get("/economy/channels/{guild_id:\\d+}", economy_channels)
-
-    async def economy_config_save(request: web.Request) -> web.Response:
-        """Persist economy config. Owner-only for ECONOMIC_KEYS.
-
-        A server admin may still save operational settings, but any attempt to
-        change a currency, reward, price, cooldown or probability is refused
-        with OWNER_ONLY — enforced here, server-side, where a forged request
-        cannot bypass it.
-        """
-        guild, deny = await _economy_guild(request)
-        if deny is not None:
-            return deny
-        actor, denied = await _economy_owner_guard(request, guild)
-        if denied is not None:
-            return denied
-        body = await request.json() if request.can_read_body else {}
-        patch = body.get("config") if isinstance(body, dict) else None
-        if not isinstance(patch, dict):
-            return web.json_response(
-                {"ok": False, "error": "config object required"}, status=400)
-        touched = ECONOMIC_KEYS.intersection(patch.keys())
-        if touched:
-            return web.json_response({
-                "ok": False, "code": "OWNER_ONLY",
-                "error": "Only the Murabot owner can change economic values.",
-                "rejected": sorted(touched),
-            }, status=403)
-        import database as db_mod
-        try:
-            cfg = await eco_get_config(guild.id)
-            cfg.update(patch)
-            await db_mod._require_db().guild_config.update_one(
-                {"guildId": str(guild.id)},
-                {"$set": {"economy": cfg}}, upsert=True)
-            return web.json_response({"ok": True, "config": cfg})
-        except Exception as exc:
-            log.exception("economy config save failed")
-            return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
-    app.router.add_post("/economy/config/{guild_id:\\d+}", economy_config_save)
-
-    async def leveling_config_push(request: web.Request) -> web.Response:
-        """Write leveling config through the BOT's own database connection.
-
-        This exists because of a structural gap, not a missing feature. The
-        dashboard resolves the bot's cluster from its OWN environment, where
-        the bot URI is a fallback (`MURABOT_MONGODB_URI` → `MONGODB_URI` →
-        `MONGO_URI`) and the database name can come from a SHARED `MONGO_DB`.
-        When those resolve to the site's own cluster instead of the bot's, the
-        dashboard writes a perfectly valid `guild_config` document that this
-        process never reads — the picker updates, the save returns 200, the
-        preview redraws, and every Discord card keeps the default. Two sides,
-        two databases, no error anywhere.
-
-        Writing here removes the second guess entirely: the value lands in the
-        same collection this process renders from, because it is the same
-        connection. The dashboard's own write is kept as a fallback for when the
-        bot is unreachable, so a save is never lost — it just is not yet
-        rendered.
-
-        Bridge-secret auth; the payload is a flat set of scalars and the theme
-        id, all of which are validated against the shared schema before the
-        write.
-        """
-        if not _authorized(request):
-            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
-        try:
-            guild_id = int(request.match_info["guild_id"])
-        except (KeyError, TypeError, ValueError):
-            return web.json_response({"ok": False, "error": "Invalid guild id"}, status=400)
-        try:
-            body = await request.json()
-        except Exception:
-            body = None
-        if not isinstance(body, dict):
-            return web.json_response({"ok": False, "error": "Object required"}, status=400)
-
-        import leveling_sys as levels
-        try:
-            current = dict(await levels.get_level_config(database._db, guild_id))
-        except Exception:
-            current = dict(levels.LEVEL_DEFAULTS)
-
-        # Only keys the bot already understands, and never a raw theme string:
-        # an unknown id would be stored and then silently render the default,
-        # which is the exact failure this endpoint exists to make impossible.
-        #
-        # An incoming background key is AUTHORITATIVE. `current` already holds
-        # a previously-stored theme in both spellings, so deriving the result
-        # from `current` alone would let the stale canonical field beat the
-        # selection in this very request and silently drop the save.
-        incoming_background = None
-        for key, value in body.items():
-            if key not in levels.LEVEL_DEFAULTS:
-                continue
-            if key in ("serverBackground", "server_card_background"):
-                incoming_background = levels.resolve_server_background(value)
-                current[key] = incoming_background
-            else:
-                current[key] = value
-        # Both spellings are then written with the SAME value, so the record
-        # can never hold two different answers to "what is this guild's
-        # background" and no reader can observe a disagreement between them.
-        theme = incoming_background or levels.coerce_server_background(
-            current.get("server_card_background"), current.get("serverBackground"))
-        current["server_card_background"] = theme
-        current["serverBackground"] = theme
-
-        try:
-            await database._db.guild_config.update_one(
-                {"guildId": str(guild_id)},
-                {"$set": {"leveling": current, "updatedAt": database._now()}},
-                upsert=True,
-            )
-        except Exception as exc:
-            log.exception("leveling config push failed")
-            return web.json_response(
-                {"ok": False, "error": "DATABASE_ERROR", "detail": type(exc).__name__}, status=502)
-
-        detail = _db_detail()
-        print(f"LEVEL CARD CONFIG SAVED guild_id={guild_id} "
-              f"server_card_background={current.get('server_card_background')!r} "
-              f"database={detail.get('database')}")
-        return web.json_response({
-            "ok": True,
-            "guildId": str(guild_id),
-            "server_card_background": current.get("server_card_background"),
-            "database": detail.get("database"),
-            "buildFingerprint": BUILD_FINGERPRINT,
-        })
-
-    app.router.add_post("/leveling/config/{guild_id:\\d+}", leveling_config_push)
-
-    async def leveling_background(request: web.Request) -> web.Response:
-        """What THIS PROCESS reads for a guild's level-card background.
-
-        The one question nobody could answer before: does the dashboard's
-        write and this process's read land on the same record? Every layer in
-        between can look correct — the picker updates, the save returns 200,
-        the preview redraws — while the two sides sit on different clusters or
-        different documents, in which case the bot sees the default forever.
-
-        So this answers from the bot's OWN connection, with no interpolation:
-        which document, which field, what it resolved to, whether the asset is
-        actually on disk, and which database name it came from. The dashboard
-        compares that against its own value and names the broken link.
-
-        Credential-free by construction: it reports the DATABASE NAME (public)
-        and the resolved THEME ID, never a URI, user or password.
-        """
-        if not _authorized(request):
-            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
-        try:
-            guild_id = int(request.match_info["guild_id"])
-        except (KeyError, TypeError, ValueError):
-            return web.json_response({"ok": False, "error": "Invalid guild id"}, status=400)
-
-        import leveling_sys as levels
-        try:
-            doc = await database._db.guild_config.find_one({"guildId": str(guild_id)})
-        except Exception as exc:
-            return web.json_response(
-                {"ok": False, "error": "DATABASE_UNAVAILABLE", "detail": type(exc).__name__},
-                status=503)
-
-        stored = (doc or {}).get("leveling")
-        stored = stored if isinstance(stored, dict) else {}
-        # Read the CANONICAL name first, then the legacy alias, so a value
-        # saved under the other spelling is still honoured rather than
-        # silently defaulting.
-        raw = stored.get("server_card_background")
-        field_used = "server_card_background"
-        if raw is None:
-            raw = stored.get("serverBackground")
-            field_used = "serverBackground"
-        resolved = levels.coerce_server_background(
-            stored.get("server_card_background"), stored.get("serverBackground"))
-        meta = levels.server_background_meta(resolved)
-        asset = levels._LEVEL_BG_DIR / str(meta.get("file") or "")
-        detail = _db_detail()
-        return web.json_response({
-            "ok": True,
-            "guildId": str(guild_id),
-            "buildFingerprint": BUILD_FINGERPRINT,
-            "database": detail.get("database"),
-            "databaseSource": detail.get("database_source"),
-            "raw": raw,
-            "field": field_used,
-            "resolved": resolved,
-            "asset": meta.get("file"),
-            "assetPresent": asset.is_file(),
-            "defaultTheme": levels.SERVER_CARD_DEFAULT,
-            "documentFound": doc is not None,
-            "valid": raw == resolved,
-        })
-
-    # Registered HERE, immediately after the handler is defined.
-    #
-    # This used to sit ~90 lines earlier, above the `def`. `app.router.add_get`
-    # takes the NAME `leveling_background`, so that line raised NameError the
-    # moment `_health_server()` ran — and because every handler is nested in
-    # this one function, the FIRST such failure aborts the whole thing: the
-    # TCPSite is never created and the bot serves no HTTP at all while still
-    # looking perfectly online on Discord. It 404'd here and only here because
-    # the live process was still on the pre-route build, so the crash never
-    # had a chance to show up.
-    #
-    # `scripts/check_route_registration.py` now fails the build on any handler
-    # registered before it is defined.
-    app.router.add_get("/leveling/background/{guild_id:\\d+}", leveling_background)
-
-    async def leveling_overview(request: web.Request) -> web.Response:
-        """Dashboard leveling overview — same xp collection the listeners
-        and slash commands use."""
-        if not _authorized(request):
-            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
-        guild_id = int(request.match_info["guild_id"])
-        guild = bot.get_guild(guild_id)
-        if not guild:
-            return web.json_response({"ok": False, "error": "Bot not in that guild"}, status=404)
-        import leveling_sys as lvl_mod
-        import database as db_mod
-        try:
-            db = db_mod._require_db()
-            top = await lvl_mod.top_xp(db, guild_id, 5)
-            users = await db.xp.count_documents({"guildId": int(guild_id)})
-            cfg = await lvl_mod.get_level_config(db, guild_id)
-            top_rows = []
-            for t in top:
-                xp = int(t.get("xp", 0))
-                name, uid = await lvl_mod.display_name_for(guild, t.get("userId"))
-                top_rows.append({"userId": str(uid), "displayName": name, "xp": xp,
-                                 "level": lvl_mod.level_from_xp(xp)[0]})
-            return web.json_response({"ok": True, "overview": {
-                "users": users,
-                "top": top_rows,
-            }, "config": {
-                "xpMin": cfg.get("xpMin"), "xpMax": cfg.get("xpMax"),
-                "xpCooldownSec": cfg.get("xpCooldownSec"), "voiceXp": cfg.get("voiceXp"),
-            }})
-        except Exception as exc:
-            return web.json_response({"ok": False, "error": type(exc).__name__}, status=502)
-    app.router.add_get("/leveling/overview/{guild_id:\\d+}", leveling_overview)
-    app.router.add_post("/self-test/gateway-drop", gateway_drop)
-
-    # ── Resource verification, from the gateway cache ──────────────────────
-    #
-    # The dashboard used to verify a channel or role by calling Discord's REST
-    # API directly, with its OWN copy of the bot token, from the site. That was
-    # a second Discord client for one bot, and it meant every selector did two
-    # to four blocking round-trips to discord.com inside a serverless function.
-    # Under a cold start, a throttle or a Cloudflare challenge those calls
-    # simply did not come back, and the panel reported "Discord did not respond
-    # in time" about a channel that was fine — which is how a giveaways save
-    # ended up both unverified and unwritable.
-    #
-    # Everything this endpoint needs is already in memory: the guild, its
-    # channels, its roles, their overwrites, and the bot's member object.
-    # Answering from the cache means zero Discord requests, so it cannot time
-    # out and cannot be rate limited. The dashboard keeps ONE credential, the
-    # bridge secret, and asks the process that already holds the state.
-
-    #: Permission keys the dashboard may request, mapped to the label an admin
-    #: recognises. Administrator is deliberately NOT here: it is never
-    #: required by a giveaway, and demanding it would reject setups that work.
-    _VERIFY_PERMS: dict = {
-        "view": (1024, "View Channel"),
-        "send": (2048, "Send Messages"),
-        "embed": (4096, "Embed Links"),
-        "history": (65536, "Read Message History"),
-        "react": (64, "Add Reactions"),
-        "manageMessages": (8192, "Manage Messages"),
-        "connect": (1048576, "Connect (voice)"),
-        "speak": (2097152, "Speak (voice)"),
-    }
-
-    def _verify_response(payload: dict, status: int) -> web.Response:
-        return web.json_response(payload, status=status)
-
-    async def resources_verify(request: web.Request) -> web.Response:
-        """POST /resources/verify — is this channel/role usable, and why not?
-
-        Body: { guildId, kind: channel|category|role|member, id, require: [] }
-
-        The outcome is always a code from a CLOSED set, and a code that means
-        "we could not find out" is never dressed up as a code that means "your
-        selection is wrong". That distinction is the whole point: a timeout must
-        never be able to mark a good channel invalid, and must never be able to
-        overwrite the configuration that is already working.
-        """
-        if not _authorized(request):
-            return _verify_response(
-                {"ok": False, "verified": False, "code": "AUTHENTICATION_ERROR",
-                 "message": "Bridge authentication failed."}, status=401)
-        try:
-            body = await request.json()
-        except Exception:
-            body = None
-        if not isinstance(body, dict):
-            return _verify_response(
-                {"ok": False, "verified": False, "code": "INVALID_REQUEST",
-                 "message": "An object body is required."}, status=400)
-        try:
-            guild_id = int(body.get("guildId"))
-            object_id = int(body.get("id"))
-        except (TypeError, ValueError):
-            return _verify_response(
-                {"ok": False, "verified": False, "code": "INVALID_GUILD_ID",
-                 "message": "Valid guildId and object id are required."}, status=400)
-        kind = str(body.get("kind") or "channel")
-        if kind not in ("channel", "category", "role", "member"):
-            return _verify_response(
-                {"ok": False, "verified": False, "code": "INVALID_OP",
-                 "message": "kind must be channel, category, role or member."}, status=400)
-        require = [str(r) for r in (body.get("require") or [])
-                   if str(r) in _VERIFY_PERMS]
-
-        base = {"ok": True, "guildId": str(guild_id), "kind": kind,
-                "id": str(object_id), "source": "gateway-cache", "checks": [],
-                "objectName": None, "missingPermissions": []}
-
-        # 1. Is the process even able to answer?
-        if bot.is_closed():
-            return _verify_response(
-                {**base, "ok": False, "verified": False, "retryable": True,
-                 "code": "DISCORD_SERVICE_UNAVAILABLE",
-                 "message": "Murabot has shut down. Nothing about this selection "
-                            "has been checked and nothing has been changed."}, status=503)
-        if not bot.is_ready():
-            return _verify_response(
-                {**base, "ok": False, "verified": False, "retryable": True,
-                 "code": "DISCORD_SERVICE_UNAVAILABLE",
-                 "message": "Murabot is not connected to Discord yet, so this "
-                            "selection has NOT been checked. Retry in a moment."},
-                status=503)
-        gateway_alive, hb_age, _ = gateway_liveness(bot)
-
-        # 2. Is it in the guild?
-        guild = bot.get_guild(guild_id)
-        if guild is None:
-            return _verify_response(
-                {**base, "ok": False, "verified": False, "retryable": False,
-                 "code": "BOT_NOT_IN_GUILD",
-                 "checks": [{"key": "installed", "label": "Bot installed on this server",
-                             "ok": False}],
-                 "message": "Murabot is not installed on this server. Invite it "
-                            "first — this selection has not been checked yet."},
-                status=404)
-        me = guild.me
-        if me is None:
-            return _verify_response(
-                {**base, "ok": False, "verified": False, "retryable": True,
-                 "code": "DISCORD_SERVICE_UNAVAILABLE",
-                 "message": "Murabot cannot read its own membership in this server."},
-                status=503)
-
-        checks: list = [{"key": "installed", "label": "Bot installed on this server",
-                         "ok": True}]
-
-        # 3. Does the object exist, in THIS guild?
-        obj = None
-        if kind in ("channel", "category"):
-            obj = guild.get_channel(object_id) or guild.get_thread(object_id)
-        elif kind == "role":
-            obj = guild.get_role(object_id)
-        elif kind == "member":
-            obj = guild.get_member(object_id)
-
-        if obj is None:
-            label = {"channel": "Channel", "category": "Category",
-                     "role": "Role", "member": "Member"}[kind]
-            return _verify_response(
-                {**base, "ok": True, "verified": True, "valid": False, "retryable": False,
-                 "code": "INVALID_SELECTION",
-                 "checks": checks + [{"key": "exists", "label": f"{label} found",
-                                      "ok": False}],
-                 "message": f"That {label.lower()} no longer exists on this server. "
-                            "It was probably deleted — select another one."},
-                status=404)
-
-        if kind == "category" and not hasattr(obj, "channels"):
-            return _verify_response(
-                {**base, "ok": True, "verified": True, "valid": False, "retryable": False,
-                 "code": "INVALID_SELECTION", "objectName": getattr(obj, "name", None),
-                 "checks": checks + [{"key": "type", "label": "Selection is a category",
-                                      "ok": False}],
-                 "message": f"“{getattr(obj, 'name', 'That')}” is not a category. "
-                            "Pick a category."}, status=404)
-
-        object_name = (f"#{getattr(obj, 'name', '')}" if kind in ("channel", "category")
-                       else f"@{getattr(obj, 'name', '')}" if kind == "role"
-                       else str(getattr(obj, "display_name", getattr(obj, "name", ""))))
-        checks.append({"key": "exists",
-                       "label": {"channel": "Channel found", "category": "Category found",
-                                 "role": "Role found", "member": "Member found"}[kind],
-                       "ok": True})
-
-        # 4. Permissions. discord.py resolves base roles, @everyone, role and
-        #    member overwrites for us, so this is the same answer the bot's own
-        #    runtime acts on rather than a re-implementation of it.
-        missing: list = []
-        if kind in ("channel", "category") and require:
-            perms = obj.permissions_for(me)
-            for rkey in require:
-                bit, label = _VERIFY_PERMS[rkey]
-                if not perms.value & bit:
-                    missing.append({"key": rkey, "label": label})
-        elif kind == "role" and require:
-            # A role cannot "send"; the meaningful check is that the bot can see
-            # and therefore assign it, and that it is not managed or above it.
-            if obj.managed:
-                missing.append({"key": "view", "label": "Role can be assigned by Murabot"})
-            elif obj >= me.top_role:
-                missing.append({"key": "view", "label": "Role is below Murabot's highest role"})
-
-        if missing:
-            names = ", ".join(m["label"] for m in missing)
-            return _verify_response(
-                {**base, "ok": True, "verified": True, "valid": False, "retryable": False,
-                 "code": "PERMISSION_DENIED", "objectName": object_name,
-                 "missingPermissions": missing,
-                 "checks": checks + [{"key": "permissions",
-                                      "label": f"Murabot can use {object_name}",
-                                      "ok": False}],
-                 "message": f"Murabot cannot use {object_name}. Missing: {names}."},
-                status=403)
-
-        return _verify_response(
-            {**base, "ok": True, "verified": True, "valid": True, "retryable": False,
-             "code": "VERIFIED", "objectName": object_name,
-             "gatewayHeartbeatAgeSeconds": round(hb_age, 1) if hb_age is not None else None,
-             "checks": checks + [{"key": "permissions",
-                                  "label": f"Murabot can use {object_name}", "ok": True}]},
-            status=200)
-
-    app.router.add_post("/resources/verify", resources_verify)
-
-    # Read the route table off the router itself, after every add_* has run.
-    # This is what makes "the deployed build does not have the endpoint" a
-    # measurement rather than an inference from a 404.
-    try:
-        LEVELING_ROUTES["background"] = any(
-            r.resource and r.resource.canonical.endswith("/leveling/background/{guild_id}")
-            for r in app.router.routes())
-        LEVELING_ROUTES["config"] = any(
-            r.resource and r.resource.canonical.endswith("/leveling/config/{guild_id}")
-            for r in app.router.routes())
-    except Exception as exc:
-        log.warning("Could not read the route table: %s", type(exc).__name__)
-    log.info("Registered routes — leveling/background: %s, leveling/config: %s",
-             LEVELING_ROUTES["background"], LEVELING_ROUTES["config"])
-
-    async def health_version(request: web.Request) -> web.Response:
-        """Which build is this, and what can it do? Deliberately UNAUTHENTICATED.
-
-        This exists to answer "am I talking to the build I think I am?" during
-        exactly the failure where the answer matters most: the dashboard calls
-        /leveling/background, gets a 404, and currently has no way to tell a
-        stale process from a misrouted request — both look identical from the
-        outside. This endpoint lives on /health, which is already public, and
-        returns only non-secret facts.
-
-        Never a token, a MongoDB URI, a bridge secret or any other credential:
-        the commit, the build time, the environment name and the route table are
-        the whole point, and none of them are sensitive.
-        """
-        commit = (os.environ.get("RENDER_GIT_COMMIT")
-                  or os.environ.get("COMMIT_SHA")
-                  or os.environ.get("GIT_COMMIT") or "").strip()
-        return web.json_response({
-            "ok": True,
-            "service": "murabot",
-            # Prefer the real commit; fall back to the source mtime, which
-            # changes on every deploy and so still dates the build.
-            "version": commit[:12] or BUILD_FINGERPRINT,
-            "commit": commit or None,
-            "buildFingerprint": BUILD_FINGERPRINT,
-            "buildTime": BUILD_FINGERPRINT,
-            "environment": ("production" if os.environ.get("RENDER")
-                            else os.environ.get("APP_ENV")
-                            or os.environ.get("NODE_ENV") or "development"),
-            "botVersion": getattr(config, "BOT_VERSION", "1.0.0"),
-            # The canonical paths, spelled out so a caller never has to guess
-            # whether a /api prefix is expected. There is exactly one path for
-            # each operation; no aliases are served.
-            "canonicalRoutes": {
-                "readBackground": "GET /leveling/background/{guildId}",
-                "writeConfig": "POST /leveling/config/{guildId}",
-                "economyChannels": "GET /economy/channels/{guildId}",
-                "verifyResource": "POST /resources/verify",
-            },
-            "levelingRoutesRegistered": dict(LEVELING_ROUTES),
-            # The exact routes this process serves. A build that registers all of
-            # them cannot be the build the dashboard is 404ing on.
-            "dashboardContract": {
-                "registered": sorted(_registered),
-                "missing": [r for r in CRITICAL_ROUTES if r not in _registered],
-                "complete": not _missing,
-            },
-        })
-    app.router.add_get("/health/version", health_version)
-
-    # ── The dashboard contract ─────────────────────────────────────────────
-    # Checked here, after EVERY add_* has run — including /health/version
-    # itself, which is registered just above.
-    #
-    # Every handler is nested inside this function, so a NameError or an
-    # AttributeError in ANY of them aborts the whole thing before
-    # `site.start()` — the bot keeps its Discord gateway connected, keeps
-    # looking perfectly healthy, and serves no HTTP at all. That happened twice
-    # in production (#121, #122) and was invisible from outside: the deploy
-    # platform saw the still-running PREVIOUS instance answer its health check,
-    # reported the rollout as successful, and left the stale process serving.
-    #
-    # So the routes the dashboard depends on are asserted here. A build that
-    # cannot serve them fails loudly and immediately instead of starting up
-    # healthy while quietly serving a stale contract.
-    _registered = {r.resource.canonical for r in app.router.routes() if r.resource}
-    _missing = [r for r in CRITICAL_ROUTES if r not in _registered]
-    if _missing:
-        log.error("FATAL: the dashboard contract is incomplete — these routes "
-                  "did not register: %s", ", ".join(_missing))
-        log.error("FATAL: refusing to start. Serving a partial contract makes the "
-                  "dashboard blame Discord for a Murabot deployment problem.")
-        raise RuntimeError(f"missing dashboard routes: {', '.join(_missing)}")
-    log.info("Dashboard contract OK — all %d critical routes registered",
-             len(CRITICAL_ROUTES))
-
-    port = int(os.environ.get("PORT") or 8080) or 8080  # PORT=0 → default
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", port)
-    await site.start()
-    try:
-        import music as music_mod
-        await music_mod.probe()
-    except Exception as exc:
-        log.warning("Music probe failed at startup: %s", str(exc)[:160])
-    # Keep-alive: ping the site's health endpoint every 5 minutes so the
-    # dashboard Health Monitor has real server-side data, and so the site
-    # (which polls bot health too) sees a live bot. This is legitimate
-    # health monitoring, not traffic generation.
-    async def _keepalive_loop() -> None:
-        await bot.wait_until_ready()
-        while not bot.is_closed():
-            ok = not bot.is_closed() and http_mod.get_status().get("discord") == "online"
-            await database.keepalive_record(ok, gateway_latency_ms(bot, 0),
-                                            200 if ok else 503, "bot self-check")
-            try:
-                resp_status, _data = await http_mod.get_json(f"{config.MURASTREAM_URL}/api/dashboard/status")
-                await database.keepalive_record(
-                    resp_status == 200, 0, resp_status,
-                    f"site /api/dashboard/status → {resp_status}")
-            except Exception:
-                pass
-            # Actively measure each subsystem instead of waiting for a command
-            # to touch it. These were previously written only as a side effect
-            # of a user command, so an idle bot reported them as "starting"
-            # forever and the dashboard showed a permanently broken service.
-            import music as music_mod
-            for name, probe in (("site_bridge", bridge.probe), ("movies", tmdb.probe),
-                                ("music", music_mod.probe)):
-                try:
-                    value = await probe()
-                    log.debug("probe %s -> %s", name, value)
-                except Exception as exc:
-                    log.warning("probe %s failed: %s", name, str(exc)[:160])
-            await asyncio.sleep(300)
-
-    async def _mod_schedule_loop() -> None:
-        """Expiry dispatcher for tempbans, timed mutes/hardmutes and timed
-        lockdowns. Rows live in Mongo, so a restart never loses a pending
-        expiry — the loop simply picks up whatever is due."""
-        await bot.wait_until_ready()
-        while not bot.is_closed():
-            try:
-                import modservice as svc
-                res = await svc.run_due(bot, database)
-                if res.get("due"):
-                    log.info("Scheduled moderation: %s/%s processed",
-                             res.get("processed"), res.get("due"))
-            except Exception as exc:
-                log.warning("Scheduled moderation sweep failed: %s", type(exc).__name__)
-            await asyncio.sleep(60)
-    asyncio.create_task(_keepalive_loop())
-    asyncio.create_task(_mod_schedule_loop())
-    while True:
-        await asyncio.sleep(3600)
-
-
-async def main() -> None:
-    global bot, _privileged_ok
-    problems = config.validate()
-    if problems:
-        for p in problems:
-            log.error("CONFIG: %s", p)
-        sys.exit(1)
-    _health_task = asyncio.create_task(_health_server())
-
-    def _health_server_watchdog(task: "asyncio.Task") -> None:
-        """Turn a dead HTTP server into a FAILED process.
-
-        `create_task` swallows whatever the coroutine raised: the task simply
-        dies, `bot.start()` keeps running, the gateway stays connected, and the
-        process looks alive while serving nothing. That is how two separate
-        startup crashes reached production as "successful" deploys.
-
-        Exiting non-zero makes the rollout fail visibly instead of leaving the
-        previous instance quietly serving a stale contract.
-        """
-        if task.cancelled():
-            return
-        exc = task.exception()
-        if exc is None:
-            return
-        log.error("FATAL: the HTTP server failed to start: %s: %s",
-                  type(exc).__name__, exc)
-        log.error("FATAL: exiting non-zero so the deployment is marked FAILED. "
-                  "Serving an incomplete API is worse than not starting.")
-        import traceback
-        log.error("Startup traceback:\n%s", traceback.format_exc())
-        sys.exit(1)
-
-    _health_task.add_done_callback(_health_server_watchdog)
-    # Exponential backoff reconnect loop — survives network drops and the
-    # privileged-intent fallback rebuild.
-    delay = 5
-    while True:
-        try:
-            await bot.start(config.DISCORD_TOKEN)
-            break  # clean shutdown
-        except discord.LoginFailure:
-            global _login_failed
-            _login_failed = True
-            try:
-                http_mod.set_status("discord", "auth-failed-invalid-token")
-            except Exception:
-                pass
-            log.error("Discord rejected the token — check DISCORD_TOKEN.")
-            sys.exit(1)
-        except discord.errors.PrivilegedIntentsRequired:
-            if _privileged_ok:
-                _privileged_ok = False
-                # NOT a cosmetic degradation: without message_content Discord
-                # never delivers normal messages, so EVERY `mg!` prefix command
-                # (mg!play included) silently does nothing. Say so loudly.
-                log.error(
-                    "PRIVILEGED INTENTS MISSING. Enable 'Message Content Intent' "
-                    "(and 'Server Members Intent') at "
-                    "https://discord.com/developers/applications → your app → Bot. "
-                    "Until then, `mg!` prefix commands (mg!play, mg!skip, …) will "
-                    "NOT respond — slash commands still work."
-                )
-                http_mod.set_status("prefix_commands", "disabled-no-message-content")
-                try:
-                    await bot.close()
-                except Exception:
-                    pass
-                bot = MuraBot()  # fresh instance, handlers intact (subclass)
-                delay = 5
-                continue
-            raise
-        except (discord.HTTPException, asyncio.TimeoutError, OSError) as exc:
-            global _reconnect_count
-            _reconnect_count += 1
-            log.warning("Connection lost (%s) — reconnecting in %ds", str(exc)[:200], delay)
-            await asyncio.sleep(delay)
-            delay = min(delay * 2, 300)
-
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        log.info("Shutting down gracefully.")
