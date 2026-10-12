@@ -326,6 +326,15 @@ async def _ensure_indexes() -> list[str]:
         ("economy_farm.guildId_userId", ""),
         ("economy_social.guildId_userId", ""),
         ("economy_heist.guildId_status", ""),
+        # Phase 2 systems. The adventure claim slot is UNIQUE: it is the
+        # durable replay guard, so a duplicate insert has to fail at the
+        # database rather than at an application check.
+        ("economy_garden.guildId_userId", ""),
+        ("economy_garden.guildId_userId_plots", ""),
+        ("economy_adventure.guildId_userId", ""),
+        ("economy_adventure_claim.guildId_userId_slot", "unique"),
+        ("economy_rob_shield.guildId_userId", ""),
+        ("economy_rob_audit.guildId_createdAt", ""),
         ("economy_lottery_auto.guildId_userId", ""),
         ("xp.guildId_xp", ""),
         # One XP row per (guild, user) — the uniqueness the leveling service
@@ -336,6 +345,31 @@ async def _ensure_indexes() -> list[str]:
         # duplicates first so this can be created without losing earned XP.
         ("xp.guildId_userId", "unique"),
         ("level_events.guildId_at", ""),
+        # Phase 3 — moderation & security. `mod_audit` is the behavioural log
+        # the dashboard filters by action/moderator/target/date; the three
+        # phase 3 indexes below it are what make each of those filters a key
+        # lookup instead of a collection scan.
+        ("mod_audit.guildId_at", ""),
+        ("mod_audit.guildId_targetId", ""),
+        ("mod_audit.guildId_moderatorId", ""),
+        ("mod_audit.guildId_action", ""),
+        ("automod_events.guildId_at", ""),
+        # AutoMod counters: one document per (guild, user, rule). UNIQUE, and
+        # that uniqueness is the point — it is what stops the same window being
+        # tracked twice (which would double a member's strike count), and the
+        # TTL index retires counters nobody will read again.
+        ("automod_state.guildId_userId_key", "unique"),
+        ("automod_state.expiresAt", "ttl"),
+        # Screened-message ledger: the durable "we already processed this edit"
+        # guard, so one message cannot be punished twice.
+        ("automod_seen.guildId_messageId", "unique"),
+        ("automod_seen.expiresAt", "ttl"),
+        ("role_snapshots.guildId_userId", "unique"),
+        ("security_state.guildId", "unique"),
+        # SecurityModule PEP state helpers.
+        ("security_pep_state.guildId_userId", "unique"),
+        ("security_raid_state.guildId", "unique"),
+        ("antiraid_state.guildId", "unique"),
     ]
     keys: dict[str, list] = {
         "guild_config.guildId": [("guildId", ASCENDING)],
@@ -371,6 +405,13 @@ async def _ensure_indexes() -> list[str]:
         "economy_tx.guildId_createdAt": [("guildId", DESCENDING), ("createdAt", DESCENDING)],
         "economy_tx.txId": [("txId", ASCENDING)],
         "economy_inv.guildId_userId": [("guildId", DESCENDING), ("userId", DESCENDING)],
+        # The item event log: queried per-player for "what happened to my
+        # items", and per-guild for moderation. The unique txId index lets a
+        # replayed gift reference be detected without a scan.
+        "item_log.guildId_createdAt": [("guildId", DESCENDING), ("createdAt", DESCENDING)],
+        "item_log.guildId_userId": [("guildId", DESCENDING), ("userId", DESCENDING)],
+        "item_log.guildId_itemId": [("guildId", DESCENDING), ("itemId", DESCENDING)],
+        "economy_tx.reference": [("reference", ASCENDING)],
         "economy_pets.guildId_userId": [("guildId", DESCENDING), ("userId", DESCENDING)],
         "economy_trades.status_expires": [("status", ASCENDING), ("expiresAt", ASCENDING)],
         "economy_lottery.guildId_drawAt": [("guildId", DESCENDING), ("drawAt", ASCENDING)],
@@ -388,10 +429,37 @@ async def _ensure_indexes() -> list[str]:
         "economy_farm.guildId_userId": [("guildId", DESCENDING), ("userId", DESCENDING)],
         "economy_social.guildId_userId": [("guildId", DESCENDING), ("userId", DESCENDING)],
         "economy_heist.guildId_status": [("guildId", DESCENDING), ("status", ASCENDING)],
+        # Phase 2 systems. `economy_adventure_claim` is the durable replay
+        # guard for adventure rewards: the unique slot index is what makes a
+        # double claim impossible even if the cooldown guard were ever lost.
+        "economy_garden.guildId_userId": [("guildId", DESCENDING), ("userId", DESCENDING)],
+        "economy_garden.guildId_userId_plots": [
+            ("guildId", ASCENDING), ("userId", ASCENDING), ("plots.plotId", ASCENDING)],
+        "economy_adventure.guildId_userId": [("guildId", DESCENDING), ("userId", DESCENDING)],
+        "economy_adventure_claim.guildId_userId_slot": [
+            ("guildId", ASCENDING), ("userId", ASCENDING), ("slot", ASCENDING)],
+        "economy_rob_shield.guildId_userId": [("guildId", DESCENDING), ("userId", DESCENDING)],
+        "economy_rob_audit.guildId_createdAt": [("guildId", DESCENDING), ("createdAt", DESCENDING)],
         "economy_lottery_auto.guildId_userId": [("guildId", DESCENDING), ("userId", DESCENDING)],
         "xp.guildId_xp": [("guildId", DESCENDING), ("xp", DESCENDING)],
         "xp.guildId_userId": [("guildId", DESCENDING), ("userId", DESCENDING)],
         "level_events.guildId_at": [("guildId", DESCENDING), ("at", DESCENDING)],
+        "mod_audit.guildId_at": [("guildId", ASCENDING), ("at", DESCENDING)],
+        "mod_audit.guildId_targetId": [("guildId", ASCENDING), ("targetId", ASCENDING)],
+        "mod_audit.guildId_moderatorId": [("guildId", ASCENDING), ("moderatorId", ASCENDING)],
+        "mod_audit.guildId_action": [("guildId", ASCENDING), ("action", ASCENDING)],
+        "automod_events.guildId_at": [("guildId", ASCENDING), ("at", DESCENDING)],
+        "automod_state.guildId_userId_key": [
+            ("guildId", ASCENDING), ("userId", ASCENDING), ("key", ASCENDING)],
+        "automod_state.expiresAt": [("expiresAt", ASCENDING)],
+        "automod_seen.guildId_messageId": [("guildId", ASCENDING), ("messageId", ASCENDING)],
+        "automod_seen.expiresAt": [("expiresAt", ASCENDING)],
+        "role_snapshots.guildId_userId": [("guildId", ASCENDING), ("userId", ASCENDING)],
+        "security_state.guildId": [("guildId", ASCENDING)],
+        # SecurityModule PEP state helpers.
+        "security_pep_state.guildId_userId": [("guildId", ASCENDING), ("userId", ASCENDING)],
+        "security_raid_state.guildId": [("guildId", ASCENDING)],
+        "antiraid_state.guildId": [("guildId", ASCENDING)],
     }
     failures: list[str] = []
     for label, kind in specs:
@@ -680,9 +748,15 @@ async def add_case(guild_id: int, target_id: int, moderator_id: int,
                    action: str, reason: str, duration: str = "",
                    source: str = "discord") -> int:
     """Record a moderation case. `source` is one of discord|dashboard|automod|
-    system — callers must say where the action originated so the dashboard
-    and bot never show disconnected histories for the same guild."""
-    if source not in ("discord", "dashboard", "automod", "system"):
+    anti-raid|verification|system — callers must say where the action
+    originated so the dashboard and bot never show disconnected histories for
+    the same guild.
+
+    `anti-raid` and `verification` are separate on purpose: an operator
+    reviewing automated damage needs to tell a raid response apart from an
+    AutoMod rule fire, and both apart from a human."""
+    if source not in ("discord", "dashboard", "automod", "anti-raid",
+                      "verification", "system"):
         source = "discord"
     case_id = await next_case_id(guild_id)
     # IDs stored as strings: Mongo $regex (used by dashboard search) only
@@ -802,6 +876,273 @@ async def guild_mod_stats(guild_id: int) -> dict:
         "warnings": warnings,
         "total": sum(by_action.values()),
     }
+
+
+# ── Moderation & security audit trail (Phase 3) ───────────────────────────
+# One behavioural record per ATTEMPT — success and failure alike. This is
+# Murabot's own log and it is deliberately not a copy of Discord's audit log:
+# Discord can say "member X was banned", but it cannot say "this failed",
+# "this came from the dashboard", "an automatic rule did it" or "this expires
+# at 18:40". The dashboard shows both, labelled, instead of presenting one as
+# the other.
+AUDIT_SOURCES = ("discord", "dashboard", "automod", "anti-raid", "system", "verification")
+
+
+def _as_dt(value: Any) -> datetime | None:
+    """Accept a datetime or an ISO-8601 string (what the dashboard sends).
+
+    Anything else is None — an unparsable date filter must widen the query, not
+    silently match nothing, because "0 results" and "a broken filter" look
+    identical to an operator.
+    """
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, str) and value.strip():
+        text = value.strip().replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(text)
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    return None
+
+
+async def log_mod_audit(guild_id: int, action: str, *,
+                        moderator_id: int | str = 0, target_id: int | str = 0,
+                        source: str = "system", success: bool = True,
+                        reason: str = "", case_id: int | None = None,
+                        expires_at: Any = None, detail: str = "",
+                        reversible: bool = False, meta: dict | None = None) -> str | None:
+    """Record one moderation attempt. Returns the audit id (or None).
+
+    Fields are clamped rather than rejected: an audit write must never be the
+    reason an action reports failure, and a too-long reason must not lose the
+    record. Credentials never reach this function — see ``redact_secrets``,
+    which the caller-facing paths use for anything user-supplied.
+    """
+    src = str(source or "system").lower()
+    if src not in AUDIT_SOURCES:
+        src = "system"
+    expires = _as_dt(expires_at)
+    doc = {
+        "guildId": _gid(guild_id),
+        "action": str(action or "unknown")[:60],
+        "moderatorId": str(moderator_id or 0),
+        "targetId": str(target_id or 0),
+        "source": src,
+        "success": bool(success),
+        "reason": redact_secrets(str(reason or "")[:500]),
+        "detail": redact_secrets(str(detail or "")[:500]),
+        "caseId": int(case_id) if case_id else None,
+        "expiresAt": expires,
+        "reversible": bool(reversible),
+        "meta": {k: redact_secrets(str(v)[:200]) for k, v in (meta or {}).items()},
+        "at": _now(),
+    }
+    try:
+        res = await _require_db().mod_audit.insert_one(doc)
+        return str(res.inserted_id)
+    except Exception as exc:
+        log.warning("Mod audit write failed for %s: %s", action, type(exc).__name__)
+        return None
+
+
+async def query_mod_audit(guild_id: int, *, action: str = "", moderator_id: str = "",
+                          target_id: str = "", source: str = "", success: Any = None,
+                          since: Any = None, until: Any = None,
+                          limit: int = 50, skip: int = 0) -> dict:
+    """Filtered, paginated read of the moderation audit trail.
+
+    Every filter is applied inside the query and the guild is always part of
+    it, so no filter combination can widen the read to another server. The
+    returned ``total`` is the count BEFORE pagination, which is what a
+    paginator needs to be honest about "page 2 of 7".
+    """
+    query: dict[str, Any] = {"guildId": _gid(guild_id)}
+    if action:
+        query["action"] = str(action)[:60]
+    if moderator_id:
+        query["moderatorId"] = str(moderator_id)
+    if target_id:
+        query["targetId"] = str(target_id)
+    if source:
+        src = str(source).lower()[:20]
+        query["source"] = src
+    if success is not None and success != "":
+        query["success"] = bool(success)
+    span: dict[str, datetime] = {}
+    start = _as_dt(since)
+    end = _as_dt(until)
+    if start:
+        span["$gte"] = start
+    if end:
+        span["$lte"] = end
+    if span:
+        query["at"] = span
+    limit = max(1, min(int(limit or 50), 200))
+    skip = max(0, int(skip or 0))
+    coll = _require_db().mod_audit
+    total = await coll.count_documents(query)
+    cur = coll.find(query).sort("at", DESCENDING).skip(skip).limit(limit)
+    rows = await cur.to_list(limit)
+    return {"total": int(total), "entries": [_audit_out(r) for r in rows]}
+
+
+def _audit_out(row: dict) -> dict:
+    """JSON-safe projection. Dates become ISO strings so the dashboard never
+    has to guess a format, and Mongo's _id is stringified rather than shipped
+    raw (a paginator uses it; a template should never print it)."""
+    return {
+        "id": str(row.get("_id", "")),
+        "guildId": str(row.get("guildId", "")),
+        "action": str(row.get("action", "")),
+        "moderatorId": str(row.get("moderatorId", "")),
+        "targetId": str(row.get("targetId", "")),
+        "source": str(row.get("source", "")),
+        "success": bool(row.get("success", True)),
+        "reason": str(row.get("reason", "")),
+        "detail": str(row.get("detail", "")),
+        "caseId": row.get("caseId"),
+        "expiresAt": row["expiresAt"].isoformat() if isinstance(row.get("expiresAt"), datetime) else None,
+        "reversible": bool(row.get("reversible", False)),
+        "meta": row.get("meta") or {},
+        "at": row["at"].isoformat() if isinstance(row.get("at"), datetime) else str(row.get("at")),
+    }
+
+
+# ── AutoMod state (windows, cooldowns, screened messages) ────────────────
+async def automod_hit(guild_id: int, user_id: int, key: str, window_seconds: int) -> int:
+    """Count one event inside a DB-backed sliding window; return the count.
+
+    Two steps on purpose: an increment that only matches a LIVE window, then a
+    reset-or-insert. The reset is guarded by the unique index, so a race
+    between two processes cannot create a second counter — the loser gets a
+    duplicate-key error, retries the increment, and the count stays correct
+    instead of forking.
+    """
+    now = _now()
+    window = max(1, int(window_seconds or 60))
+    deadline = now + timedelta(seconds=window)
+    coll = _require_db().automod_state
+    base = {"guildId": _gid(guild_id), "userId": str(user_id), "key": str(key)[:120]}
+    live = await coll.update_one({**base, "expiresAt": {"$gte": now}}, {"$inc": {"count": 1}})
+    if live.matched_count:
+        doc = await coll.find_one(base)
+        return int((doc or {}).get("count", 1))
+    try:
+        await coll.update_one(base, {"$set": {"count": 1, "windowStart": now,
+                                                "expiresAt": deadline}}, upsert=True)
+        return 1
+    except Exception:
+        # Lost a race with another process that just reset the window: count
+        # the event against the window it created instead of dropping it.
+        again = await coll.update_one(base, {"$inc": {"count": 1}})
+        if again.matched_count:
+            doc = await coll.find_one(base)
+            return int((doc or {}).get("count", 1))
+        return 1
+
+
+async def automod_cooldown(guild_id: int, user_id: int, seconds: int) -> int:
+    """Arm a per-member cooldown and return the seconds still remaining.
+
+    A cooldown of 0 disarms it. The first call returns the armed window and a
+    violation inside it returns the remainder — the caller decides whether
+    "still cooling down" means skip the punishment or skip the counter.
+    """
+    seconds = max(0, int(seconds or 0))
+    coll = _require_db().automod_state
+    base = {"guildId": _gid(guild_id), "userId": str(user_id), "key": "cooldown"}
+    now = _now()
+    if seconds <= 0:
+        await coll.delete_one(base)
+        return 0
+    deadline = now + timedelta(seconds=seconds)
+    doc = await coll.find_one(base)
+    if doc and isinstance(doc.get("expiresAt"), datetime) and doc["expiresAt"] > now:
+        return int((doc["expiresAt"] - now).total_seconds())
+    await coll.update_one(base, {"$set": {"count": 1, "windowStart": now,
+                                           "expiresAt": deadline}}, upsert=True)
+    return seconds
+
+
+async def automod_seen_message(guild_id: int, message_id: int, digest: str,
+                               ttl_seconds: int = 7200) -> bool:
+    """True when this message CONTENT was already screened before.
+
+    Edits re-enter the scanner and a delete/insert race can deliver the same
+    message twice; without this ledger a member can be punished twice for one
+    message. The stored hash matters: an edit that changes the text IS a new
+    message and is screened again.
+    """
+    if not message_id:
+        return False
+    coll = _require_db().automod_seen
+    key = {"guildId": _gid(guild_id), "messageId": str(message_id)}
+    try:
+        res = await coll.update_one(
+            key,
+            {"$setOnInsert": {"hash": str(digest)[:64], "at": _now(),
+                               "expiresAt": _now() + timedelta(seconds=ttl_seconds)}},
+            upsert=True,
+        )
+    except Exception:
+        # Duplicate-key on a concurrent insert means somebody else is (or just)
+        # screened it — treat it as already seen, which is the safe direction.
+        return True
+    if res.upserted_id is not None:
+        return False
+    doc = await coll.find_one(key)
+    if doc and str(doc.get("hash")) == str(digest):
+        return True
+    # Same message id, different text: it was edited, which is a NEW message.
+    # Re-arm the ledger with the new hash and screen it.
+    await coll.update_one(key, {"$set": {"hash": str(digest)[:64], "at": _now(),
+                                           "expiresAt": _now() + timedelta(seconds=ttl_seconds)}})
+    return False
+
+
+async def log_automod_event(guild_id: int, *, rule: str, member_id: int | str,
+                            action: str, reason: str, detail: str = "",
+                            channel_id: int | str = "", message_id: int | str = "",
+                            strikes: int = 0, source: str = "automod") -> None:
+    """Record what a rule decided, including the "rule could not run" skips.
+
+    A rule that fires is recorded through ``log_mod_audit`` as well; this feed
+    exists for the per-guild AutoMod traffic view (what matched, what was
+    ignored and why) without turning the audit trail into a message log.
+    """
+    try:
+        await _require_db().automod_events.insert_one({
+            "guildId": _gid(guild_id),
+            "rule": str(rule)[:40],
+            "userId": str(member_id or 0),
+            "action": str(action)[:20],
+            "reason": redact_secrets(str(reason or "")[:300]),
+            "detail": redact_secrets(str(detail or "")[:300]),
+            "channelId": str(channel_id or ""),
+            "messageId": str(message_id or ""),
+            "strikes": int(strikes or 0),
+            "source": str(source)[:20],
+            "at": _now(),
+        })
+    except Exception as exc:
+        log.warning("AutoMod event write failed: %s", type(exc).__name__)
+
+
+async def automod_recent_counts(guild_id: int, hours: int = 24) -> dict:
+    """Per-rule firing counts for the last N hours (the AutoMod summary)."""
+    since = _now() - timedelta(hours=max(1, min(int(hours or 24), 720)))
+    out: dict[str, int] = {}
+    try:
+        cur = _require_db().automod_events.find(
+            {"guildId": _gid(guild_id), "at": {"$gte": since}}, {"rule": 1})
+        async for row in cur:
+            name = str(row.get("rule", "unknown"))
+            out[name] = out.get(name, 0) + 1
+    except Exception:
+        return {}
+    return out
 
 
 # ── Reputation / achievements ────────────────────────────────────────
@@ -1178,3 +1519,171 @@ async def get_lockdown_state(guild_id: int, scope: str, channel_id: int | None =
 async def clear_lockdown_state(guild_id: int, scope: str, channel_id: int | None = None) -> None:
     await _require_db().lockdown_state.delete_one(
         {"guildId": _gid(guild_id), "scope": scope, "channelId": str(channel_id or "")})
+
+
+async def claim_scheduled_action(doc_id: Any) -> dict | None:
+    """Atomically take ownership of a due action. None when somebody else has it.
+
+    This is what makes the expiry dispatcher idempotent. Previously the loop
+    read the due rows, performed each action, and only THEN marked the row done:
+    two overlapping sweeps (or a restart between the unban and the write) could
+    run the same unban twice. ``find_one_and_update`` from pending → running is
+    atomic, so exactly one caller ever gets the row.
+    """
+    from bson import ObjectId
+    try:
+        oid = doc_id if isinstance(doc_id, ObjectId) else ObjectId(str(doc_id))
+    except Exception:
+        return None
+    doc = await _require_db().scheduled_actions.find_one_and_update(
+        {"_id": oid, "status": "pending"},
+        {"$set": {"status": "running", "claimedAt": _now()}},
+        return_document=ReturnDocument.AFTER,
+    )
+    return doc
+
+
+async def release_scheduled_action(doc_id: Any, result: str, *, retry: bool = False) -> None:
+    """Finish a claimed action — or hand it back for a retry.
+
+    ``retry`` returns the row to ``pending`` so a transient Discord outage is
+    retried on the next sweep instead of being recorded as a completed failure.
+    """
+    from bson import ObjectId
+    try:
+        oid = doc_id if isinstance(doc_id, ObjectId) else ObjectId(str(doc_id))
+    except Exception:
+        return
+    if retry:
+        await _require_db().scheduled_actions.update_one(
+            {"_id": oid, "status": "running"},
+            {"$set": {"status": "pending", "lastError": str(result)[:200]},
+             "$inc": {"attempts": 1}})
+        return
+    await _require_db().scheduled_actions.update_one(
+        {"_id": oid},
+        {"$set": {"status": "done", "result": str(result)[:200], "completedAt": _now()}})
+
+
+async def pending_scheduled_actions(guild_id: int, *, action: str = "") -> list[dict]:
+    """Pending rows for one guild — the dashboard's "what is about to happen"
+    list, and how a manual unmute finds the role snapshot waiting for it."""
+    query: dict[str, Any] = {"guildId": _gid(guild_id), "status": {"$in": ["pending", "running"]}}
+    if action:
+        query["action"] = action
+    cur = _require_db().scheduled_actions.find(query).sort("runAt", ASCENDING).limit(200)
+    return await cur.to_list(200)
+
+
+# ── Persistent roles (restore on rejoin) ──────────────────────────────
+# Only roles Murabot is WILLING to restore are stored: unmanaged, not
+# @everyone, strictly below the bot's own top role, and — unless the guild
+# explicitly opted in — nothing carrying a dangerous permission. "Restore what
+# they had" must never mean "silently re-grant Administrator".
+async def save_role_snapshot(guild_id: int, user_id: int, roles: list[dict],
+                             *, opted_in: bool = False) -> int:
+    """Store a member's restorable roles. Returns how many were kept."""
+    rows = []
+    for entry in roles or []:
+        rid = entry.get("id")
+        if not rid:
+            continue
+        rows.append({"id": str(rid), "name": str(entry.get("name") or "")[:100],
+                     "dangerous": bool(entry.get("dangerous", False))})
+    await _require_db().role_snapshots.update_one(
+        {"guildId": _gid(guild_id), "userId": str(user_id)},
+        {"$set": {"roles": rows, "optedIn": bool(opted_in), "capturedAt": _now()}},
+        upsert=True,
+    )
+    return len(rows)
+
+
+async def get_role_snapshot(guild_id: int, user_id: int) -> dict | None:
+    return await _require_db().role_snapshots.find_one(
+        {"guildId": _gid(guild_id), "userId": str(user_id)})
+
+
+async def clear_role_snapshot(guild_id: int, user_id: int) -> None:
+    await _require_db().role_snapshots.delete_one(
+        {"guildId": _gid(guild_id), "userId": str(user_id)})
+
+
+# ── Security posture (anti-raid / verification state) ─────────────────
+# Stored, not in memory: a raid that is under way when the process restarts
+# must still be under way afterwards, and a temporary protection window must
+# still expire on time. This is the difference between "we turned raid mode on"
+# and "raid mode is on".
+async def get_security_state(guild_id: int) -> dict:
+    """Current security state, defaulted when nothing is stored yet."""
+    doc = await _require_db().security_state.find_one({"guildId": _gid(guild_id)}) or {}
+    return {
+        "guildId": _gid(guild_id),
+        "raidMode": bool(doc.get("raidMode", False)),
+        "raidModeUntil": doc.get("raidModeUntil"),
+        "raidTriggeredAt": doc.get("raidTriggeredAt"),
+        "raidReason": str(doc.get("raidReason") or ""),
+        "raidAuto": bool(doc.get("raidAuto", False)),
+        "verificationEnabled": bool(doc.get("verificationEnabled", False)),
+        "verificationRoleId": str(doc.get("verificationRoleId") or ""),
+        "verificationChannelId": str(doc.get("verificationChannelId") or ""),
+        "lastReviewAt": doc.get("lastReviewAt"),
+        "pendingReview": int(doc.get("pendingReview", 0)),
+    }
+
+
+async def set_security_state(guild_id: int, **fields: Any) -> None:
+    """Patch stored security state. Unknown keys are ignored by callers, not here."""
+    allowed = {"raidMode", "raidModeUntil", "raidTriggeredAt", "raidReason", "raidAuto",
+               "verificationEnabled", "verificationRoleId", "verificationChannelId",
+               "lastReviewAt", "pendingReview"}
+    update = {k: v for k, v in fields.items() if k in allowed}
+    if not update:
+        return
+    update["updatedAt"] = _now()
+    await _require_db().security_state.update_one(
+        {"guildId": _gid(guild_id)}, {"$set": update}, upsert=True)
+
+
+async def bump_pending_review(guild_id: int, delta: int) -> int:
+    """Count automated actions an administrator has not reviewed yet."""
+    doc = await _require_db().security_state.find_one_and_update(
+        {"guildId": _gid(guild_id)},
+        {"$inc": {"pendingReview": int(delta)}, "$set": {"updatedAt": _now()}},
+        upsert=True, return_document=ReturnDocument.AFTER,
+    )
+    value = int((doc or {}).get("pendingReview", 0))
+    if value < 0:
+        await _require_db().security_state.update_one(
+            {"guildId": _gid(guild_id)}, {"$set": {"pendingReview": 0}})
+        return 0
+    return value
+
+
+async def unreviewed_auto_actions(guild_id: int, limit: int = 25) -> list[dict]:
+    """Automated (anti-raid / anti-nuke / AutoMod) actions nobody has reviewed.
+
+    Every automated punishment is reversible by design: this is the list an
+    administrator works through, and it is why an unverified heuristic is never
+    allowed to apply something permanent without a human seeing it.
+    """
+    cur = _require_db().mod_audit.find({
+        "guildId": _gid(guild_id),
+        "source": {"$in": ["anti-raid", "automod"]},
+        "reversible": True,
+        "reviewedAt": {"$exists": False},
+    }).sort("at", DESCENDING).limit(max(1, min(int(limit or 25), 100)))
+    return [_audit_out(r) for r in await cur.to_list(100)]
+
+
+async def mark_audit_reviewed(guild_id: int, audit_id: Any, note: str = "") -> bool:
+    """Mark one automated action as reviewed (read-and-accepted or undone)."""
+    from bson import ObjectId
+    try:
+        oid = audit_id if isinstance(audit_id, ObjectId) else ObjectId(str(audit_id))
+    except Exception:
+        return False
+    res = await _require_db().mod_audit.update_one(
+        {"_id": oid, "guildId": _gid(guild_id)},
+        {"$set": {"reviewedAt": _now(), "reviewNote": redact_secrets(str(note or "")[:300])}},
+    )
+    return res.modified_count > 0

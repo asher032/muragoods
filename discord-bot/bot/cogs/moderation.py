@@ -1,13 +1,24 @@
-"""Moderation: warnings, kicks/bans, mutes, purge, lock, automod, setup."""
+"""Moderation: warnings, kicks/bans, mutes, purge, lock, automod, setup.
+
+AutoMod note — the handler below is a REAL discord.py listener
+(``@commands.Cog.listener()``). It used not to be: the method was named
+``on_message`` but never registered, and the bot's event dispatcher in
+``main.py`` has no ``on_message`` forwarding, so no rule ever ran. Discord
+still delivered commands because ``commands.Bot.on_message`` (the class
+method) does the prefix dispatch — which is exactly why the silence looked
+like "nothing to report". Any future event handler here must be decorated, or
+main.py must forward to it explicitly; the two mechanisms are not the same
+and a missing decorator fails silently.
+"""
 
 import logging
-import re
 from datetime import timedelta
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
+import automod
 import database
 import config
 import utils
@@ -15,17 +26,19 @@ import modservice
 
 log = logging.getLogger("bot.moderation")
 
-SPAM_WINDOW = 10  # seconds
-SPAM_LIMIT = 6    # messages within window
-MENTION_LIMIT = 8
-DEFAULT_BANNED_LINKS = ("discord.gg/",)  # configurable per-guild invite blocking
+#: Severity order used when the escalation ladder and a rule's own action
+#: disagree. The STRICTER wins: escalation may raise a punishment but never
+#: quietly lower one the operator configured.
+ACTION_ORDER = ("none", "delete", "warn", "timeout", "kick", "ban")
 
 
 class ModerationCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        # In-memory spam tracker: { (guild_id, user_id): [timestamps] }
-        self._msg_times: dict[tuple[int, int], list[float]] = {}
+        # AutoMod counters live in Mongo (see automod.MongoAutomodState): the
+        # in-process dict this replaces made every restart a clean slate for
+        # whoever was mid-spam-window.
+        self._state = automod.MongoAutomodState(database)
 
     # NOTE: flat /warn /warnings /kick /ban /timeout /clear /lock commands
     # were consolidated into the /moderation, /purge and /lockdown groups
@@ -436,7 +449,52 @@ class ModerationCog(commands.Cog):
         """Member metadata changed — roles / nickname / permissions-relevant state."""
         if before.roles == after.roles:
             return
-        await self._on_role_change(member=after)
+        await self._on_role_change(member=after, before=before)
+
+    async def _on_role_change(self, member: discord.Member, before: discord.Member | None = None) -> None:
+        """Log a role change to the mod-log channel.
+
+        This method was CALLED but never defined, so every role change raised
+        AttributeError inside the listener and discord.py swallowed it — role
+        changes were invisible, including the ones a raid makes.
+        """
+        try:
+            added = [r for r in member.roles if before is None or r not in before.roles]
+            removed = [r for r in (before.roles if before else []) if r not in member.roles]
+            if not added and not removed:
+                return
+            parts = []
+            if added:
+                parts.append("added " + ", ".join(f"**@{r.name}**" for r in added))
+            if removed:
+                parts.append("removed " + ", ".join(f"**@{r.name}**" for r in removed))
+            await self._log(member.guild, utils.base_embed(
+                "🎭 Roles changed", f"{member.mention} (`{member.id}`) — " + "; ".join(parts)))
+        except Exception:
+            log.warning("Role-change logging failed in %s", getattr(member.guild, "id", "?"))
+
+    def automod_availability(self) -> dict:
+        """Can AutoMod actually run on this process? Measured, not assumed.
+
+        Without the Message Content intent Discord does not deliver guild
+        message content (and does not dispatch MESSAGE_CREATE for guilds at
+        all), so the honest answer is "unavailable", with the exact remediation
+        — never a green "AutoMod enabled" badge over a scanner that cannot see
+        a single message.
+        """
+        intents = getattr(self.bot, "intents", None)
+        has_content = bool(getattr(intents, "message_content", False))
+        return {
+            "messageContentIntent": has_content,
+            "membersIntent": bool(getattr(intents, "members", False)),
+            "operational": has_content,
+            "code": None if has_content else "AUTOMOD_UNAVAILABLE_NO_MESSAGE_CONTENT",
+            "message": ("Message Content intent is enabled — rules are evaluated on every message."
+                        if has_content else
+                        "AutoMod is NOT running: enable the Message Content intent in the "
+                        "Discord developer portal (Bot → Privileged Gateway Intents). Without "
+                        "it Discord sends no guild message content and no rule can be evaluated."),
+        }
 
 
     @commands.Cog.listener()
@@ -480,114 +538,205 @@ class ModerationCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message):
-        """Edited message — re-run the same automod checks."""
+        """Edited message — re-run the SAME checks on the new text.
+
+        The dedupe ledger in the engine makes this safe: re-screening the
+        identical content is a no-op, while an edit that ADDS a blocked word or
+        a link is caught, which the previous in-memory strike counter could not
+        tell apart.
+        """
         if not after.guild or after.author.bot:
             return
         if before.content == after.content:
             return
         await self._automod_check(after)
 
-
+    @commands.Cog.listener()
     async def on_message_delete(self, message: discord.Message):
-        """Deleted message — log when a mod log channel is configured."""
-        if not message.guild:
+        """Deleted message — logged when a mod-log channel is configured."""
+        if not message.guild or message.author.bot:
             return
         await self._log_deleted_message(message)
 
-
+    @commands.Cog.listener()
     async def on_bulk_message_delete(self, messages: list[discord.Message]):
-        """Bulk delete — log when a mod log channel is configured."""
+        """Bulk delete — one entry with the count, not one per message."""
         if not messages or not messages[0].guild:
             return
         await self._log_deleted_message(messages[0], bulk=True, count=len(messages))
 
+    async def _log_deleted_message(self, message: discord.Message, *, bulk: bool = False,
+                                   count: int = 1) -> None:
+        """Report a deletion to the mod log, with WHO did it when Discord says.
+
+        Missing entirely before this phase: both callers referenced a method
+        that did not exist, so delete logging raised AttributeError into the
+        event dispatcher (and one of the two handlers was not registered at
+        all). The content is truncated and never trusted as the whole story —
+        Discord's own audit entry is what identifies the deleter when the
+        member cache has no author (a bot delete, for instance).
+        """
+        try:
+            author = getattr(message, "author", None)
+            content = str(getattr(message, "content", "") or "")[:400]
+            title = (f"🗑️ Bulk delete — {count} messages" if bulk else "🗑️ Message deleted")
+            who = f"{author.mention} (`{author.id}`)" if author else "unknown author"
+            fields = [f"**Author:** {who}", f"**Channel:** {getattr(message.channel, 'mention', '?')}"]
+            if content:
+                fields.append(f"**Content:** {content}")
+            actor = await self._audit_actor(message.guild, discord.AuditLogAction.message_delete)
+            if actor:
+                fields.append(f"**Deleted by:** {actor.mention} (`{actor.id}`) — per Discord audit log")
+            else:
+                fields.append("**Deleted by:** unknown (Discord audit log has no recent entry — "
+                              "the author or a bot may have removed it)")
+            await self._log(message.guild, utils.base_embed(title, "\n".join(fields)))
+        except Exception:
+            log.warning("Delete logging failed in %s", getattr(message, "guild", None))
+
+    async def _audit_actor(self, guild: discord.Guild, action: discord.AuditLogAction):
+        """Who performed an action, per DISCORD's audit log (or None).
+
+        Kept separate from Murabot's own audit trail on purpose: Discord's log
+        cannot say "this expired", "this failed" or "an automatic rule did it",
+        and Murabot's cannot say "a human clicked delete in the client". The
+        dashboard shows them as two labelled sources rather than merging them.
+        """
+        try:
+            entries = [e async for e in guild.audit_logs(limit=5, action=action)]
+            if not entries:
+                return None
+            newest = entries[0]
+            return getattr(newest, "user", None)
+        except Exception:
+            return None
 
     async def on_message(self, message: discord.Message):
+        """Registered listener? See the module docstring — it is now."""
+        await self._automod_check(message)
+
+    # ── AutoMod ───────────────────────────────────────────────────────
+    async def _automod_check(self, message: discord.Message) -> dict:
+        """Screen one message through the shared engine and act on its verdict.
+
+        Returns the decision (also used by the bridge's dry-run/status calls).
+        The engine owns the RULES; this method owns the Discord side effects and
+        the audit trail, and it never reports success for an action Discord
+        refused.
+        """
         if message.author.bot or not message.guild:
-            return
-        cfg = await database.get_guild_config(message.guild.id)
-        dashboard_mod = cfg.get("moderation") or {}
-        legacy_automod = cfg.get("automod") or {}
-        automod = {
-            "enabled": dashboard_mod.get("automodEnabled", legacy_automod.get("enabled", True)),
-            "blockLinks": dashboard_mod.get("antiLink", legacy_automod.get("blockLinks", False)),
-            "blockInvites": dashboard_mod.get("antiInvite", False),
-            "antiCaps": dashboard_mod.get("antiCaps", True),
-            "mentionThreshold": int(dashboard_mod.get("mentionThreshold", MENTION_LIMIT)),
+            return {"violation": False, "skip": automod.SKIP_NO_GUILD}
+        try:
+            cfg = await database.get_guild_config(message.guild.id)
+        except Exception as exc:
+            log.warning("AutoMod config read failed for %s: %s",
+                        message.guild.id, type(exc).__name__)
+            return {"violation": False, "skip": "config_unavailable"}
+        norm = automod.normalize_config(cfg.get("moderation"), cfg.get("automod"))
+        availability = self.automod_availability()
+        try:
+            decision = await automod.evaluate(
+                message, norm, self._state,
+                has_message_content=availability["messageContentIntent"])
+        except automod.AutomodUnavailable as exc:
+            # Honest, once per guild: the rule set is fine, Discord is not
+            # delivering the text. Reported through /health and the dashboard.
+            log.warning("AutoMod cannot run in %s: %s", message.guild.id, exc.code)
+            return {"violation": False, "skip": exc.code,
+                    "error": str(exc), "code": exc.code}
+        except Exception as exc:
+            log.warning("AutoMod evaluation failed in %s: %s",
+                        message.guild.id, type(exc).__name__)
+            return {"violation": False, "skip": "evaluation_failed"}
+
+        if not decision.violation:
+            if decision.skip not in (automod.SKIP_CLEAN, None):
+                log.debug("AutoMod skipped in %s: %s", message.guild.id, decision.skip)
+            return decision.as_dict()
+
+        await self._apply_automod(message, norm, decision)
+        return decision.as_dict()
+
+    async def _apply_automod(self, message: discord.Message, cfg: dict,
+                             decision: automod.Decision) -> None:
+        """Carry out an AutoMod verdict: delete, punish, notify, log, audit."""
+        member = message.author if isinstance(message.author, discord.Member) else None
+        guild = message.guild
+        severity = {
+            "none": 0, "delete": 1, "warn": 2, "timeout": 3, "kick": 4, "ban": 5,
         }
-        if not automod["enabled"]:
-            return
-
-        violations: list[str] = []
-        # Message spam (per-user within SPAM_WINDOW) — dashboard antiSpam toggle
-        if dashboard_mod.get("antiSpam", True) and not self._is_mod_msg(message):
-            import time as _time
-            key = (message.guild.id, message.author.id)
-            now_ms = _time.monotonic()
-            times = [t for t in self._msg_times.get(key, []) if now_ms - t <= SPAM_WINDOW]
-            times.append(now_ms)
-            self._msg_times[key] = times
-            if len(times) > SPAM_LIMIT:
-                violations.append("spam")
-        # Mention spam
-        if len(message.mentions) >= automod["mentionThreshold"]:
-            violations.append("mention spam")
-        # Link filtering (if enabled per guild)
-        if automod["blockLinks"] and re.search(r"https?://", message.content):
-            if not self._is_mod_msg(message):
-                violations.append("links")
-        if automod["blockInvites"] and re.search(r"(?:discord\.gg|discord(?:app)?\.com/invite)/", message.content, re.I):
-            if not self._is_mod_msg(message):
-                violations.append("invites")
-        # Excessive caps
-        letters = [c for c in message.content if c.isalpha()]
-        if automod["antiCaps"] and len(letters) >= 20 and sum(c.isupper() for c in letters) / len(letters) > 0.8:
-            violations.append("caps")
-
-        if not violations:
-            return
+        step = decision.action if decision.action in severity else "delete"
+        ladder = list(cfg.get("escalation") or [])
+        if ladder and member is not None:
+            candidate = ladder[min(max(decision.strikes, 1) - 1, len(ladder) - 1)]
+            if severity.get(candidate, 0) > severity.get(step, 0):
+                step = candidate
+        # Never let an automatic rule touch someone the bot outranks only on
+        # paper: the service re-checks the hierarchy and returns a refusal,
+        # which becomes the recorded outcome (a visible failure, not a lie).
+        deleted = False
+        if severity.get(step, 1) >= 1 or decision.action == "delete":
+            try:
+                await message.delete()
+                deleted = True
+            except discord.HTTPException as exc:
+                log.info("AutoMod could not delete a message in %s (%s)",
+                         guild.id, getattr(exc, "status", "?"))
+        result: dict = {"ok": True}
+        if member is not None and step in ("warn", "timeout", "kick", "ban"):
+            reason = f"AutoMod {decision.rule}: {decision.reason}"[:300]
+            minutes = int(decision.duration_minutes or 10)
+            if step == "warn":
+                result = await modservice.warn_member(self.bot, database, guild.id, member.id,
+                                                      reason, 0, "automod")
+            elif step == "timeout":
+                result = await modservice.timeout_member(self.bot, database, guild.id, member.id,
+                                                         minutes, reason, 0, "automod")
+            elif step == "kick":
+                result = await modservice.kick_member(self.bot, database, guild.id, member.id,
+                                                      reason, 0, "automod")
+            else:
+                result = await modservice.ban_member(self.bot, database, guild.id, member.id,
+                                                     reason, 0, 0, "automod")
         try:
-            await message.delete()
-        except discord.HTTPException:
-            return
-        strikes = await database.automod_inc_strike(message.guild.id, message.author.id, violations[0])
-        # Escalation ladder from the dashboard (warn → timeout → kick → ban)
-        try:
-            escalation = (dashboard_mod.get("escalation") or ["warn", "timeout", "timeout", "kick", "ban"])
-            step = escalation[min(strikes - 1, len(escalation) - 1)] if strikes else "warn"
-            member = message.author if isinstance(message.author, discord.Member) else None
-            # Hierarchy guard: never escalate against the owner or anyone at/above the bot.
-            if (member and member.id == message.guild.owner_id) or (
-                    member and member.top_role >= message.guild.me.top_role):
-                step = "warn"
-            if member and step == "timeout" and strikes >= 2:
-                from datetime import timedelta as _td
-                await member.timeout(discord.utils.utcnow() + _td(minutes=10),
-                                     reason=f"Automod: repeated {violations[0]}")
-                await database.add_case(message.guild.id, member.id, 0, "timeout",
-                                        f"Automod: repeated {violations[0]} (strike {strikes})",
-                                        "10m", source="automod")
-            elif member and step == "kick" and strikes >= 4:
-                await member.kick(reason=f"Automod: repeated {violations[0]}")
-                await database.add_case(message.guild.id, member.id, 0, "kick",
-                                        f"Automod: repeated {violations[0]} (strike {strikes})",
-                                        source="automod")
-            elif member and step == "ban" and strikes >= 5:
-                await member.ban(reason=f"Automod: repeated {violations[0]}", delete_message_days=0)
-                await database.add_case(message.guild.id, member.id, 0, "ban",
-                                        f"Automod: repeated {violations[0]} (strike {strikes})",
-                                        source="automod")
-        except discord.Forbidden:
+            await database.log_automod_event(
+                guild.id, rule=decision.rule, member_id=getattr(member, "id", 0),
+                action=step, reason=decision.reason, detail=decision.detail,
+                channel_id=getattr(message.channel, "id", ""), message_id=message.id,
+                strikes=decision.strikes, source="automod")
+        except Exception:
             pass
-        except discord.HTTPException:
-            pass
-        await message.channel.send(
-            f"{message.author.mention} message removed ({violations[0]}) — strike {strikes}.",
-            delete_after=5)
+        if not member or step == "delete" or step == "none":
+            # No member punishment was attempted — the audit still records the
+            # rule fire, because "the message was deleted" is an action.
+            await database.log_mod_audit(
+                guild.id, f"automod_{decision.rule}", moderator_id=0,
+                target_id=getattr(member, "id", 0) or 0, source="automod", success=True,
+                reason=decision.reason, detail=decision.detail,
+                reversible=True, meta={"delete": str(deleted), "strikes": str(decision.strikes)})
+        embed = utils.base_embed(
+            f"🤖 AutoMod · {decision.rule}",
+            f"**Member:** {getattr(member, 'mention', 'unknown')} (`{getattr(member, 'id', 0)}`)\n"
+            f"**Channel:** {getattr(message.channel, 'mention', '?')}\n"
+            f"**Matched:** {decision.reason}\n**Strikes:** {decision.strikes}\n"
+            f"**Action:** {step}" + ("" if result.get("ok") else
+                                     f"\n**Failed:** {result.get('error')}"))
+        await self._log(guild, embed)
+        if cfg.get("notifyUser", True):
+            try:
+                await message.channel.send(
+                    f"{getattr(member, 'mention', '')} message removed "
+                    f"({decision.rule}) — strike {decision.strikes}.",
+                    delete_after=5)
+            except discord.HTTPException:
+                pass
+        if decision.strikes and cfg.get("cooldownSeconds"):
+            # Only armed after a real violation, so the cooldown suppresses
+            # repeat PUNISHMENTS without hiding the violation itself.
+            await automod.apply_cooldown(cfg, self._state, guild.id, getattr(member, "id", 0))
 
     def _is_mod_msg(self, message: discord.Message) -> bool:
-        perms = message.author.guild_permissions if isinstance(message.author, discord.Member) else None
-        return bool(perms and (perms.manage_guild or perms.moderate_members))
+        return automod.is_staff_member(getattr(message, "author", None))
 
 
 async def setup(bot: commands.Bot):

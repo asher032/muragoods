@@ -402,48 +402,73 @@ async def on_guild_unavailable(guild: discord.Guild):
     _unregister_guild(guild.id)
 
 
+def _forward_targets(event: str):
+    """Cogs that still need THIS module to call their `event` handler.
+
+    discord.py dispatches a cog method itself ONLY when it is decorated with
+    ``@commands.Cog.listener()``; every other ``on_*`` method on a cog exists
+    but is never called by the library. main.py's forwarding loops are what
+    covers those — and calling a *decorated* one from here as well runs it a
+    second time.
+
+    That is not theoretical: ``on_member_join`` was registered in the security,
+    community and moderation cogs AND forwarded here, so every join produced
+    two welcome messages and was counted twice by raid detection — a doubled
+    join counter is exactly how a small server gets flagged as a raid. Yielding
+    only the unregistered handlers makes each event run once, while keeping the
+    undecorated handlers (delete logging, for one) reachable.
+    """
+    for cog in bot.cogs.values():
+        handler = getattr(cog, event, None)
+        if handler is None:
+            continue
+        try:
+            registered = {name for name, _ in cog.get_listeners()}
+        except Exception:
+            registered = set()
+        if event in registered:
+            continue
+        yield cog, handler
+
+
 @bot.event
 async def on_member_join(member: discord.Member):
-    """New member joined. Forward to every cog that opted in."""
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_member_join"):
-            try:
-                await cog.on_member_join(member)
-            except Exception:
-                log.exception("cog.on_member_join raised in %s", cog.qualified_name)
+    """New member joined. Forward to every cog that has NOT registered itself."""
+    for cog, handler in _forward_targets("on_member_join"):
+        try:
+            await handler(member)
+        except Exception:
+            log.exception("cog.on_member_join raised in %s", cog.qualified_name)
 
 
 @bot.event
 async def on_member_remove(member: discord.Member):
-    """Member left/banned/kicked. Forward to every cog that opted in."""
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_member_remove"):
-            try:
-                await cog.on_member_remove(member)
-            except Exception:
-                log.exception("cog.on_member_remove raised in %s", cog.qualified_name)
+    """Member left/banned/kicked. Forward to every cog that has NOT registered."""
+    for cog, handler in _forward_targets("on_member_remove"):
+        try:
+            await handler(member)
+        except Exception:
+            log.exception("cog.on_member_remove raised in %s", cog.qualified_name)
 
 
 @bot.event
 async def on_member_ban(guild: discord.Guild, user: discord.User):
-    """User banned. Forward to every cog that opted in."""
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_member_ban"):
-            try:
-                await cog.on_member_ban(guild, user)
-            except Exception:
-                log.exception("cog.on_member_ban raised in %s", cog.qualified_name)
+    """User banned. Forward to every cog that has NOT registered."""
+    for cog, handler in _forward_targets("on_member_ban"):
+        try:
+            await handler(guild, user)
+        except Exception:
+            log.exception("cog.on_member_ban raised in %s", cog.qualified_name)
 
 
 @bot.event
 async def on_member_unban(guild: discord.Guild, user: discord.User):
-    """User unbanned. Forward to every cog that opted in."""
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_member_unban"):
-            try:
-                await cog.on_member_unban(guild, user)
-            except Exception:
-                log.exception("cog.on_member_unban raised in %s", cog.qualified_name)
+    """User unbanned. Forward to every cog that has NOT registered."""
+    for cog, handler in _forward_targets("on_member_unban"):
+        try:
+            await handler(guild, user)
+        except Exception:
+            log.exception("cog.on_member_unban raised in %s", cog.qualified_name)
 
 
 @bot.event
@@ -451,76 +476,69 @@ async def on_member_update(before: discord.Member, after: discord.Member):
     """Member metadata changed: roles, nickname, pending, timed_out."""
     if (before.roles != after.roles or before.nick != after.nick or before.pending != after.pending or
             (hasattr(before, "timed_out_until") and before.timed_out_until != after.timed_out_until)):
-        for cog in bot.cogs.values():
-            if hasattr(cog, "on_member_update"):
-                try:
-                    await cog.on_member_update(before, after)
-                except Exception:
-                    log.exception("cog.on_member_update raised in %s", cog.qualified_name)
+        for cog, handler in _forward_targets("on_member_update"):
+            try:
+                await handler(before, after)
+            except Exception:
+                log.exception("cog.on_member_update raised in %s", cog.qualified_name)
 
 
 @bot.event
 async def on_guild_channel_create(channel: discord.abc.GuildChannel):
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_guild_channel_create"):
-            try:
-                await cog.on_guild_channel_create(channel)
-            except Exception:
-                log.exception("cog.on_guild_channel_create raised in %s", cog.qualified_name)
+    for cog, handler in _forward_targets("on_guild_channel_create"):
+        try:
+            await handler(channel)
+        except Exception:
+            log.exception("cog.on_guild_channel_create raised in %s", cog.qualified_name)
 
 
 @bot.event
 async def on_guild_channel_update(before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
     if (before.name != after.name or before.permission_overwrites != after.permission_overwrites or
             before.category_id != after.category_id or before.topic != after.topic):
-        for cog in bot.cogs.values():
-            if hasattr(cog, "on_guild_channel_update"):
-                try:
-                    await cog.on_guild_channel_update(before, after)
-                except Exception:
-                    log.exception("cog.on_guild_channel_update raised in %s", cog.qualified_name)
+        for cog, handler in _forward_targets("on_guild_channel_update"):
+            try:
+                await handler(before, after)
+            except Exception:
+                log.exception("cog.on_guild_channel_update raised in %s", cog.qualified_name)
 
 
 @bot.event
 async def on_guild_channel_delete(channel: discord.abc.GuildChannel):
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_guild_channel_delete"):
-            try:
-                await cog.on_guild_channel_delete(channel)
-            except Exception:
-                log.exception("cog.on_guild_channel_delete raised in %s", cog.qualified_name)
+    for cog, handler in _forward_targets("on_guild_channel_delete"):
+        try:
+            await handler(channel)
+        except Exception:
+            log.exception("cog.on_guild_channel_delete raised in %s", cog.qualified_name)
 
 
 @bot.event
 async def on_guild_role_create(role: discord.Role):
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_guild_role_create"):
-            try:
-                await cog.on_guild_role_create(role)
-            except Exception:
-                log.exception("cog.on_guild_role_create raised in %s", cog.qualified_name)
+    for cog, handler in _forward_targets("on_guild_role_create"):
+        try:
+            await handler(role)
+        except Exception:
+            log.exception("cog.on_guild_role_create raised in %s", cog.qualified_name)
 
 
 @bot.event
 async def on_guild_role_update(before: discord.Role, after: discord.Role):
     if (before.name != after.name or before.color != after.color or before.hoist != after.hoist or
             before.permissions != after.permissions or before.position != after.position):
-        for cog in bot.cogs.values():
-            if hasattr(cog, "on_guild_role_update"):
-                try:
-                    await cog.on_guild_role_update(before, after)
-                except Exception:
-                    log.exception("cog.on_guild_role_update raised in %s", cog.qualified_name)
+        for cog, handler in _forward_targets("on_guild_role_update"):
+            try:
+                await handler(before, after)
+            except Exception:
+                log.exception("cog.on_guild_role_update raised in %s", cog.qualified_name)
 
 
 @bot.event
 async def on_guild_role_delete(role: discord.Role):
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_guild_role_delete"):
-            try:
-                await cog.on_guild_role_delete(role)
-            except Exception:
-                log.exception("cog.on_guild_role_delete raised in %s", cog.qualified_name)
+    for cog, handler in _forward_targets("on_guild_role_delete"):
+        try:
+            await handler(role)
+        except Exception:
+            log.exception("cog.on_guild_role_delete raised in %s", cog.qualified_name)
 
 
 @bot.event
@@ -530,12 +548,11 @@ async def on_message_edit(before: discord.Message, after: discord.Message):
         return
     if before.content == after.content and before.embeds == after.embeds and before.attachments == after.attachments:
         return
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_message_edit"):
-            try:
-                await cog.on_message_edit(before, after)
-            except Exception:
-                log.exception("cog.on_message_edit raised in %s", cog.qualified_name)
+    for cog, handler in _forward_targets("on_message_edit"):
+        try:
+            await handler(before, after)
+        except Exception:
+            log.exception("cog.on_message_edit raised in %s", cog.qualified_name)
 
 
 @bot.event
@@ -543,12 +560,11 @@ async def on_message_delete(message: discord.Message):
     """A single message was deleted. Forward to every cog that opted in."""
     if not message.guild or message.author.bot:
         return
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_message_delete"):
-            try:
-                await cog.on_message_delete(message)
-            except Exception:
-                log.exception("cog.on_message_delete raised in %s", cog.qualified_name)
+    for cog, handler in _forward_targets("on_message_delete"):
+        try:
+            await handler(message)
+        except Exception:
+            log.exception("cog.on_message_delete raised in %s", cog.qualified_name)
 
 
 @bot.event
@@ -559,12 +575,11 @@ async def on_bulk_message_delete(messages: list[discord.Message]):
     guild = messages[0].guild
     if not guild:
         return
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_bulk_message_delete"):
-            try:
-                await cog.on_bulk_message_delete(messages)
-            except Exception:
-                log.exception("cog.on_bulk_message_delete raised in %s", cog.qualified_name)
+    for cog, handler in _forward_targets("on_bulk_message_delete"):
+        try:
+            await handler(messages)
+        except Exception:
+            log.exception("cog.on_bulk_message_delete raised in %s", cog.qualified_name)
 
 
 @bot.event
@@ -572,12 +587,11 @@ async def on_reaction_add(reaction: discord.Reaction, user: discord.User | disco
     """Reaction added. Forward to every cog that opted in."""
     if not user.guild or user.bot:
         return
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_reaction_add"):
-            try:
-                await cog.on_reaction_add(reaction, user)
-            except Exception:
-                log.exception("cog.on_reaction_add raised in %s", cog.qualified_name)
+    for cog, handler in _forward_targets("on_reaction_add"):
+        try:
+            await handler(reaction, user)
+        except Exception:
+            log.exception("cog.on_reaction_add raised in %s", cog.qualified_name)
 
 
 @bot.event
@@ -585,12 +599,11 @@ async def on_reaction_remove(reaction: discord.Reaction, user: discord.User | di
     """Reaction removed. Forward to every cog that opted in."""
     if not user.guild or user.bot:
         return
-    for cog in bot.cogs.values():
-        if hasattr(cog, "on_reaction_remove"):
-            try:
-                await cog.on_reaction_remove(reaction, user)
-            except Exception:
-                log.exception("cog.on_reaction_remove raised in %s", cog.qualified_name)
+    for cog, handler in _forward_targets("on_reaction_remove"):
+        try:
+            await handler(reaction, user)
+        except Exception:
+            log.exception("cog.on_reaction_remove raised in %s", cog.qualified_name)
 
 
 @bot.event
@@ -598,12 +611,11 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
     """Voice join/move/leave/mute/deaf/afk. Forward to every cog that opted in."""
     if (before.channel != after.channel or before.self_mute != after.self_mute or before.self_deaf != after.self_deaf or
             before.afk != after.afk or before.self_stream != after.self_stream):
-        for cog in bot.cogs.values():
-            if hasattr(cog, "on_voice_state_update"):
-                try:
-                    await cog.on_voice_state_update(member, before, after)
-                except Exception:
-                    log.exception("cog.on_voice_state_update raised in %s", cog.qualified_name)
+        for cog, handler in _forward_targets("on_voice_state_update"):
+            try:
+                await handler(member, before, after)
+            except Exception:
+                log.exception("cog.on_voice_state_update raised in %s", cog.qualified_name)
 
 
 def gateway_liveness(bot) -> tuple[bool, float | None, str | None]:
@@ -1537,8 +1549,15 @@ async def _health_server() -> None:
                 return web.json_response({"ok": True, "autoplay": p.autoplay})
             return web.json_response({"ok": False, "error": f"Unknown action: {action}"}, status=400)
         except Exception as exc:
-            log.warning("music_control %s failed for guild %s: %s", action, guild_id, str(exc)[:150])
-            return web.json_response({"ok": False, "error": str(exc)[:200]}, status=500)
+            log.warning("music_control %s failed for guild %s: %s", action, guild_id,
+                        music_mod.sanitize_for_log(str(exc), limit=150))
+            # The dashboard renders this `error`. A raw exception string is
+            # neither a useful message nor a safe one, and scrubbing it answers
+            # "[redacted: possible credential]" — so the copy is fixed here and
+            # the detail stays in the log.
+            return web.json_response(
+                {"ok": False, "error": "The music service could not handle that action.",
+                 "reason": "YT_SEARCH_FAILED"}, status=500)
 
     async def music_search(request: web.Request) -> web.Response:
         """Dashboard music search: top metadata results WITHOUT extracting
@@ -1561,9 +1580,12 @@ async def _health_server() -> None:
         try:
             results = await music_mod.engine.search_top(query, limit=5, timeout=40)
         except Exception as exc:
+            log.warning("music search raised: %s: %s", type(exc).__name__,
+                        music_mod.sanitize_for_log(f"{type(exc).__name__}: {exc}", limit=300))
             return web.json_response(
                 {"ok": False,
-                 "error": music_mod.sanitize_for_log(f"{type(exc).__name__}: {exc}", limit=200) or "Search failed"},
+                 "error": "Music search failed unexpectedly. Please try again.",
+                 "reason": "YT_SEARCH_FAILED"},
                 status=502)
         return web.json_response({"ok": True, "results": results})
 
@@ -1614,9 +1636,17 @@ async def _health_server() -> None:
         except asyncio.TimeoutError:
             return web.json_response({"ok": False, "error": "Resolving timed out — try again"}, status=504)
         except Exception as exc:
+            # A crash inside resolve() is a fault, not a provider message. The
+            # detail is scrubbed and logged; the dashboard gets fixed copy —
+            # `sanitize_for_log` on a provider-flavoured exception answers
+            # "[redacted: possible credential]", which is the exact string this
+            # whole path was rewritten to stop showing users.
+            log.warning("queue resolve raised: %s: %s", type(exc).__name__,
+                        music_mod.sanitize_for_log(f"{type(exc).__name__}: {exc}", limit=300))
             return web.json_response(
                 {"ok": False,
-                 "error": music_mod.sanitize_for_log(f"{type(exc).__name__}: {exc}", limit=200) or "Resolve failed"},
+                 "error": "Music search failed unexpectedly. Please try again.",
+                 "reason": "YT_SEARCH_FAILED"},
                 status=502)
         if track is None:
             # The dashboard renders this `error` string to the user, so it must
@@ -1774,6 +1804,15 @@ async def _health_server() -> None:
         action = str(body.get("action") or "")
         target_id = int(body.get("userId") or 0)
         reason = str(body.get("reason") or "Dashboard action")[:300]
+        # The acting moderator's Discord id, taken from the signed-in session by
+        # the dashboard route. It is NOT trusted for what it claims to allow —
+        # the service re-reads that member's live permissions and role position
+        # from Discord — but without it there is no human to authorize at all,
+        # and an action with no actor is refused (INVALID_ACTOR).
+        try:
+            actor_id = int(str(body.get("actorId") or "").strip() or 0)
+        except (TypeError, ValueError):
+            actor_id = 0
         minutes = max(1, min(int(body.get("minutes") or 10), 40320))
         duration_raw = body.get("duration") or body.get("minutes") or 10
         delete_days = max(0, min(int(body.get("deleteMessageDays") or 0), 7))
@@ -1804,7 +1843,7 @@ async def _health_server() -> None:
                                       "error": "Valid userId required"}, status=400)
         try:
             if action == "warn":
-                return _out(await svc.warn_member(bot, db, guild_id, target_id, reason, 0, "dashboard"))
+                return _out(await svc.warn_member(bot, db, guild_id, target_id, reason, actor_id, "dashboard"))
             if action in ("timeout", "mute"):
                 # Dashboard timeout buttons send minutes; duration strings also accepted.
                 mins = minutes
@@ -1812,8 +1851,8 @@ async def _health_server() -> None:
                     parsed = svc.parse_duration_minutes(duration_raw, default=-1)
                     mins = parsed if parsed and parsed > 0 else None
                 if action == "mute":
-                    return _out(await svc.mute_member(bot, db, guild_id, target_id, reason, mins, 0, "dashboard"))
-                return _out(await svc.timeout_member(bot, db, guild_id, target_id, mins, reason, 0, "dashboard"))
+                    return _out(await svc.mute_member(bot, db, guild_id, target_id, reason, mins, actor_id, "dashboard"))
+                return _out(await svc.timeout_member(bot, db, guild_id, target_id, mins, reason, actor_id, "dashboard"))
             if action == "hardmute":
                 mins = None
                 if isinstance(duration_raw, str):
@@ -1821,26 +1860,37 @@ async def _health_server() -> None:
                     mins = parsed if parsed and parsed > 0 else None
                 elif isinstance(duration_raw, (int, float)):
                     mins = max(1, min(int(duration_raw), 40320))
-                return _out(await svc.hardmute_member(bot, db, guild_id, target_id, reason, mins, 0, "dashboard"))
+                return _out(await svc.hardmute_member(bot, db, guild_id, target_id, reason, mins, actor_id, "dashboard"))
             if action == "unmute":
-                return _out(await svc.unmute_member(bot, db, guild_id, target_id, reason, 0, "dashboard"))
+                return _out(await svc.unmute_member(bot, db, guild_id, target_id, reason, actor_id, "dashboard"))
             if action in ("untimeout", "removetimeout"):
-                return _out(await svc.remove_timeout(bot, db, guild_id, target_id, reason, 0, "dashboard"))
+                return _out(await svc.remove_timeout(bot, db, guild_id, target_id, reason, actor_id, "dashboard"))
             if action == "kick":
-                return _out(await svc.kick_member(bot, db, guild_id, target_id, reason, 0, "dashboard"))
+                return _out(await svc.kick_member(bot, db, guild_id, target_id, reason, actor_id, "dashboard"))
             if action == "ban":
-                return _out(await svc.ban_member(bot, db, guild_id, target_id, reason, delete_days, 0, "dashboard"))
+                return _out(await svc.ban_member(bot, db, guild_id, target_id, reason, delete_days, actor_id, "dashboard"))
             if action == "softban":
-                return _out(await svc.softban_member(bot, db, guild_id, target_id, reason, delete_days, 0, "dashboard"))
+                return _out(await svc.softban_member(bot, db, guild_id, target_id, reason, delete_days, actor_id, "dashboard"))
             if action == "tempban":
                 mins = minutes
                 if isinstance(duration_raw, str):
                     parsed = svc.parse_duration_minutes(duration_raw, default=-1)
                     mins = parsed if parsed and parsed > 0 else minutes
                 return _out(await svc.tempban_member(bot, db, guild_id, target_id, reason,
-                                                     delete_days, mins, 0, "dashboard"))
+                                                     delete_days, mins, actor_id, "dashboard"))
             if action == "unban":
-                return _out(await svc.unban_member(bot, db, guild_id, target_id, reason, 0, "dashboard"))
+                return _out(await svc.unban_member(bot, db, guild_id, target_id, reason, actor_id, "dashboard"))
+            if action == "restore_roles":
+                guild = bot.get_guild(guild_id)
+                if not guild:
+                    return web.json_response({"ok": False, "code": "BOT_NOT_IN_GUILD",
+                                              "error": "I'm not in that server."}, status=404)
+                member = guild.get_member(target_id)
+                if member is None:
+                    return web.json_response({"ok": False, "code": "TARGET_NOT_FOUND",
+                                              "error": "That member is not on this server."}, status=404)
+                res = await svc.restore_member_roles(bot, db, guild, member)
+                return _out(res)
             return web.json_response({"ok": False, "code": "INVALID_INPUT",
                                       "error": f"Unknown action: {action}"}, status=400)
         except discord.Forbidden as exc:
@@ -2043,6 +2093,28 @@ async def _health_server() -> None:
         stats["bans"] = bans
         stats["activeTimeouts"] = timeouts
         stats["members"] = guild.member_count
+        # Everything below is COUNTED from stored rows, never estimated: an
+        # operator deciding whether to change a rule needs real numbers.
+        try:
+            stats["automod24h"] = await db.automod_recent_counts(guild_id, 24)
+        except Exception:
+            stats["automod24h"] = {}
+        try:
+            state = await db.get_security_state(guild_id)
+            stats["raidMode"] = bool(state.get("raidMode"))
+            stats["pendingReview"] = int(state.get("pendingReview") or 0)
+        except Exception:
+            stats["raidMode"] = None
+            stats["pendingReview"] = None
+        try:
+            pending = await db.pending_scheduled_actions(guild_id)
+            stats["pendingExpiries"] = [
+                {"action": str(r.get("action")),
+                 "userId": str(r.get("userId") or ""),
+                 "runAt": r["runAt"].isoformat() if hasattr(r.get("runAt"), "isoformat") else None}
+                for r in pending[:25]]
+        except Exception:
+            stats["pendingExpiries"] = []
         return web.json_response({"ok": True, "stats": stats})
 
     async def mod_warnings(request: web.Request) -> web.Response:
@@ -2241,6 +2313,348 @@ async def _health_server() -> None:
     GENERAL_CONFIG_FIELDS = ("language", "welcomeChannelId", "welcomeMessage",
                              "leaveChannelId", "leaveMessage")
 
+    # ── Phase 3: audit trail, AutoMod read-back, security posture ──────
+    class _NullAutomodState:
+        """Dry-run state: every hit is a first hit, nothing is remembered.
+
+        A rule test must not consume a real window or arm a real cooldown —
+        otherwise testing a rule against a member's text would pre-load their
+        strike count.
+        """
+
+        async def hit(self, guild_id, user_id, key, window_seconds):  # noqa: D102
+            return 1
+
+        async def cooldown(self, guild_id, user_id, seconds):  # noqa: D102
+            return 0
+
+        async def seen(self, guild_id, message_id, digest):  # noqa: D102
+            return False
+
+    class _ProbeMessage:
+        """The smallest object automod.evaluate() needs. No Discord calls."""
+
+        class _Author:
+            def __init__(self, user_id: int, role_ids):
+                self.id = user_id
+                self.bot = False
+                self.guild_permissions = None
+                self.roles = [type("R", (), {"id": rid})() for rid in role_ids]
+
+        class _Channel:
+            def __init__(self, channel_id: int, name: str):
+                self.id = channel_id
+                self.name = name
+
+        class _Guild:
+            def __init__(self, guild_id: int):
+                self.id = guild_id
+
+        def __init__(self, guild_id: int, content: str, *, user_id: int = 1,
+                     channel_id: int = 1, channel_name: str = "probe",
+                     mentions: int = 0, role_ids=()):
+            self.id = 0
+            self.guild = self._Guild(guild_id)
+            self.author = self._Author(user_id, role_ids)
+            self.channel = self._Channel(channel_id, channel_name)
+            self.content = content
+            self.mentions = list(range(mentions))
+            self.attachments = []
+            self.embeds = []
+
+    async def mod_audit(request: web.Request) -> web.Response:
+        """Murabot's own moderation audit trail — filtered and paginated.
+
+        Distinct from Discord's audit log on purpose (see mod_discord_audit):
+        these rows know the SOURCE (discord / dashboard / automod / anti-raid),
+        whether the action SUCCEEDED, which case it belongs to and when a
+        temporary action expires. Discord's log knows none of that.
+        """
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        q = request.rel_url.query
+        success_raw = (q.get("success") or "").strip().lower()
+        success = None if success_raw in ("", "any", "all") else success_raw in ("1", "true", "yes")
+        import database as db
+        try:
+            data = await db.query_mod_audit(
+                guild_id,
+                action=(q.get("action") or "")[:60],
+                moderator_id=(q.get("moderatorId") or "")[:25],
+                target_id=(q.get("targetId") or "")[:25],
+                source=(q.get("source") or "")[:20],
+                success=success,
+                since=q.get("from"), until=q.get("to"),
+                limit=q.get("limit") or 50, skip=q.get("skip") or 0)
+        except Exception as exc:
+            log.warning("Audit query failed for %s: %s", guild_id, type(exc).__name__)
+            return web.json_response({"ok": False, "code": "DATABASE_ERROR",
+                                      "error": "Audit trail unavailable"}, status=503)
+        return web.json_response({"ok": True, **data, "sources": list(db.AUDIT_SOURCES)})
+
+    async def mod_discord_audit(request: web.Request) -> web.Response:
+        """Discord's OWN audit log, labelled as such.
+
+        Two logs, never merged into one list: Discord knows that a human clicked
+        delete in the client; it cannot report a failure, an automatic rule, an
+        expiry or a dashboard action. When the bot lacks View Audit Log this
+        says so with the permission name instead of returning an empty list that
+        looks like "nothing happened".
+        """
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            return web.json_response({"ok": False, "code": "BOT_NOT_IN_GUILD",
+                                      "error": "Bot not in that guild"}, status=404)
+        q = request.rel_url.query
+        try:
+            limit = max(1, min(int(q.get("limit") or 50), 100))
+        except (TypeError, ValueError):
+            limit = 50
+        action_name = (q.get("action") or "").strip()
+        action = None
+        if action_name:
+            action = getattr(discord.AuditLogAction, action_name, None)
+            if action is None:
+                return web.json_response({"ok": False, "code": "INVALID_OP",
+                                          "error": f"Unknown audit action {action_name!r}"}, status=400)
+        try:
+            entries = [e async for e in guild.audit_logs(limit=limit, action=action)]
+        except discord.Forbidden:
+            return web.json_response({
+                "ok": False, "code": "BOT_MISSING_PERMISSION", "permission": "View Audit Log",
+                "error": "I need **View Audit Log** to read Discord's audit log."}, status=403)
+        except discord.HTTPException:
+            return web.json_response({"ok": False, "code": "DISCORD_API_ERROR",
+                                      "status": "discord-error",
+                                      "error": "Discord refused the audit-log read — retry in a moment."},
+                                     status=502)
+        out = []
+        for entry in entries:
+            actor = getattr(entry, "user", None)
+            target = getattr(entry, "target", None)
+            out.append({
+                "id": str(getattr(entry, "id", "")),
+                "action": str(getattr(getattr(entry, "action", None), "name", "unknown")),
+                "actorId": str(getattr(actor, "id", "")),
+                "actorName": str(getattr(actor, "display_name", "") or getattr(actor, "name", "")),
+                "targetId": str(getattr(target, "id", "")),
+                "targetName": str(getattr(target, "name", "") or getattr(target, "display_name", "")),
+                "reason": str(getattr(entry, "reason", "") or "")[:300],
+                "at": (entry.created_at.isoformat() if hasattr(entry, "created_at")
+                       and entry.created_at else None),
+                "source": "discord-audit",
+            })
+        return web.json_response({"ok": True, "entries": out, "source": "discord-audit"})
+
+    async def mod_automod(request: web.Request) -> web.Response:
+        """AutoMod read-back: the rules that WILL run, and whether they can."""
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        import database as db
+        import automod as automod_mod
+        try:
+            cfg = await db.get_guild_config(guild_id)
+        except Exception as exc:
+            return web.json_response({"ok": False, "code": "DATABASE_ERROR",
+                                      "error": type(exc).__name__}, status=503)
+        moderation = cfg.get("moderation") or {}
+        norm = automod_mod.normalize_config(moderation, cfg.get("automod"))
+        cog = bot.get_cog("ModerationCog")
+        availability = (cog.automod_availability() if cog is not None else {
+            "messageContentIntent": bool(getattr(bot.intents, "message_content", False)),
+            "membersIntent": bool(getattr(bot.intents, "members", False)),
+            "operational": bool(getattr(bot.intents, "message_content", False)),
+            "code": "MODERATION_COG_NOT_LOADED",
+            "message": "The moderation module did not load, so no rule is evaluated."})
+        try:
+            recent = await db.automod_recent_counts(guild_id, 24)
+        except Exception:
+            recent = {}
+        return web.json_response({
+            "ok": True,
+            "config": norm,
+            "summary": automod_mod.summarize(norm),
+            "problems": automod_mod.config_problems(moderation, cfg.get("automod")),
+            "availability": availability,
+            "recent24h": recent,
+        })
+
+    async def mod_automod_test(request: web.Request) -> web.Response:
+        """Dry-run a text against the stored rules. No message, no punishment.
+
+        So an operator can see WHICH rule fires and WHY before arming it, rather
+        than discovering it by muting their own members. The probe consumes no
+        window, arms no cooldown and touches no Discord object.
+        """
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+        guild_id = str(body.get("guildId") or "").strip()
+        if not guild_id.isdigit():
+            return web.json_response({"ok": False, "error": "Valid guildId required"}, status=400)
+        content = str(body.get("content") or "")[:2000]
+        if not content.strip():
+            return web.json_response({"ok": False, "code": "INVALID_INPUT",
+                                      "error": "Provide the text to test"}, status=400)
+        import database as db
+        import automod as automod_mod
+        cfg = await db.get_guild_config(guild_id)
+        norm = automod_mod.normalize_config(cfg.get("moderation"), cfg.get("automod"))
+        probe = _ProbeMessage(int(guild_id), content,
+                             channel_id=int(str(body.get("channelId") or 1) or 1),
+                             mentions=max(0, min(int(body.get("mentions") or 0), 100)))
+        try:
+            decision = await automod_mod.evaluate(probe, norm, _NullAutomodState(),
+                                                 has_message_content=True)
+        except automod_mod.AutomodUnavailable as exc:
+            # Fixed copy, deliberately: the repo forbids handing an exception's
+            # own text to a user (scripts/test_music_errors.py enforces it), and
+            # this message is a constant anyway.
+            return web.json_response({
+                "ok": True, "violation": False, "skip": exc.code,
+                "error": "AutoMod needs the Message Content intent: Discord sends no guild "
+                         "message text without it, so no rule can be evaluated."})
+        cog = bot.get_cog("ModerationCog")
+        availability = cog.automod_availability() if cog is not None else None
+        return web.json_response({"ok": True, **decision.as_dict(),
+                                  "availability": availability})
+
+    async def mod_security(request: web.Request) -> web.Response:
+        """Security posture read (GET) and administrator actions (POST).
+
+        Actions: raidmode-on, raidmode-off, verification, undo, review,
+        restore-roles. Every one of them goes through the same services the
+        slash commands use, so the dashboard cannot do anything a moderator
+        with the same Discord permissions could not.
+        """
+        if not _authorized(request):
+            return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+        guild_id = int(request.match_info["guild_id"])
+        guild = bot.get_guild(guild_id)
+        if not guild:
+            return web.json_response({"ok": False, "code": "BOT_NOT_IN_GUILD",
+                                      "error": "Bot not in that guild"}, status=404)
+        import database as db
+        import modservice as svc
+        cog = bot.get_cog("SecurityCog")
+        if request.method == "GET":
+            capabilities = (await cog.capabilities(guild) if cog is not None else {
+                "operational": False, "problems": ["The security module did not load."]})
+            settings = await cog._settings(guild_id) if cog is not None else {}
+            channel_where = None
+            if cog is not None:
+                channel, how = await cog._alert_channel(guild, settings)
+                channel_where = {"channelId": str(getattr(channel, "id", "")),
+                                 "channelName": str(getattr(channel, "name", "")),
+                                 "how": how} if channel else {"channelId": "", "how": how}
+            try:
+                review = await db.unreviewed_auto_actions(guild_id, 25)
+            except Exception:
+                review = []
+            try:
+                pending = await db.pending_scheduled_actions(guild_id)
+            except Exception:
+                pending = []
+            return web.json_response({
+                "ok": True, "capabilities": capabilities, "settings": settings,
+                "alerts": channel_where,
+                "review": review,
+                "pending": [{"action": str(r.get("action")), "userId": str(r.get("userId") or ""),
+                             "runAt": r["runAt"].isoformat() if hasattr(r.get("runAt"), "isoformat") else None}
+                            for r in pending[:25]],
+            })
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+        action = str(body.get("action") or "").strip()
+        try:
+            actor_id = int(str(body.get("actorId") or "").strip() or 0)
+        except (TypeError, ValueError):
+            actor_id = 0
+        if action in ("raidmode-on", "raidmode-off") and not actor_id:
+            return web.json_response({"ok": False, "code": "INVALID_ACTOR",
+                                      "error": "Sign in again so the action can be attributed."}, status=400)
+        if action == "raidmode-on":
+            minutes = max(1, min(int(body.get("minutes") or 10), 1440))
+            res = await svc.begin_raid_mode(bot, db, guild_id, minutes=minutes,
+                                            reason=f"Enabled from the dashboard by {actor_id}",
+                                            automatic=False, actor_id=actor_id, source="dashboard")
+            return _svc_out(res)
+        if action == "raidmode-off":
+            res = await svc.end_raid_mode(bot, db, guild_id,
+                                          reason=f"Disabled from the dashboard by {actor_id}",
+                                          actor_id=actor_id, source="dashboard")
+            return _svc_out(res)
+        if action == "verification":
+            enabled = bool(body.get("enabled"))
+            role_id = str(body.get("roleId") or "").strip()
+            channel_id = str(body.get("channelId") or "").strip()
+            if enabled and not (role_id.isdigit()):
+                return web.json_response({"ok": False, "code": "INVALID_INPUT",
+                                          "error": "Pick a verification role"}, status=400)
+            if enabled:
+                role = guild.get_role(int(role_id))
+                if role is None:
+                    return web.json_response({"ok": False, "code": "TARGET_NOT_FOUND",
+                                              "error": "That role no longer exists"}, status=404)
+                dangerous = [name for name in ("administrator", "manage_guild", "manage_roles",
+                                               "ban_members", "kick_members")
+                             if bool(getattr(role.permissions, name, False))]
+                if dangerous and not bool(body.get("allowDangerous")):
+                    return web.json_response({
+                        "ok": False, "code": "DANGEROUS_ROLE",
+                        "error": f"@{role.name} grants {', '.join(dangerous)} — a verification role "
+                                 f"is assigned automatically, so it must not carry power."}, status=400)
+            await db.set_security_state(guild_id, verificationEnabled=enabled,
+                                        verificationRoleId=role_id if enabled else "",
+                                        verificationChannelId=channel_id)
+            await db.log_mod_audit(guild_id, "verification_setup", moderator_id=actor_id,
+                                   target_id=role_id or 0, source="dashboard", success=True,
+                                   reason=("verification enabled" if enabled else "verification disabled"))
+            return web.json_response({"ok": True, "enabled": enabled})
+        if action == "restore-roles":
+            target_id = str(body.get("userId") or "").strip()
+            member = guild.get_member(int(target_id)) if target_id.isdigit() else None
+            if member is None:
+                return web.json_response({"ok": False, "code": "TARGET_NOT_FOUND",
+                                          "error": "That member is not on this server"}, status=404)
+            res = await svc.restore_member_roles(bot, db, guild, member)
+            return web.json_response({**res, "ok": bool(res.get("ok"))},
+                                     status=200 if res.get("ok") else 409)
+        if action in ("review", "undo"):
+            rows = await db.unreviewed_auto_actions(guild_id, 100)
+            if action == "review":
+                return web.json_response({"ok": True, "review": rows})
+            audit_id = str(body.get("id") or "").strip()
+            row = next((r for r in rows if r["id"] == audit_id or r["id"].endswith(audit_id)), None)
+            if row is None:
+                return web.json_response({"ok": False, "code": "TARGET_NOT_FOUND",
+                                          "error": "No unreviewed automatic action matches that id"},
+                                         status=404)
+            undo_actor = actor_id or 1  # 0 is the system actor; a human must be named
+            result = (await cog._reverse(guild, row, actor_id=undo_actor)) if cog is not None else {
+                "ok": False, "error": "The security module did not load"}
+            await db.mark_audit_reviewed(guild_id, row["id"], note=f"undo via dashboard by {undo_actor}")
+            try:
+                await db.bump_pending_review(guild_id, -1)
+            except Exception:
+                pass
+            return web.json_response({"ok": bool(result.get("ok")),
+                                      "detail": result.get("detail"),
+                                      "error": result.get("error")},
+                                     status=200 if result.get("ok") else 409)
+        return web.json_response({"ok": False, "code": "INVALID_OP",
+                                  "error": f"Unknown security action {action!r}"}, status=400)
+
     async def config_refresh(request: web.Request) -> web.Response:
         """Dashboard pushes a guild's general settings; Murabot answers with
         what is actually STORED.
@@ -2291,6 +2705,16 @@ async def _health_server() -> None:
         except Exception as exc:
             log.warning("General config store failed for guild %s: %s", guild_id, str(exc)[:150])
             return web.json_response({"ok": False, "error": "Storage unavailable"}, status=503)
+        # A saved setting must take effect NOW. The security cog keeps a 60s
+        # settings cache, so without this the dashboard would report "applied"
+        # while the old thresholds kept running — the same class of lie this
+        # whole read-back exists to prevent.
+        try:
+            sec = bot.get_cog("SecurityCog")
+            if sec is not None:
+                sec._settings_cache.pop(int(guild_id), None)
+        except Exception:
+            pass
         return web.json_response({
             "ok": True,
             "general": {key: stored.get(key) for key in GENERAL_CONFIG_FIELDS},
@@ -2569,6 +2993,13 @@ async def _health_server() -> None:
     app.router.add_post("/mod/notes-clear/{guild_id:\\d+}", mod_notes)
     app.router.add_post("/mod/lockdown/{guild_id:\\d+}", mod_lockdown)
     app.router.add_post("/mod/purge/{guild_id:\\d+}", mod_purge)
+    # Phase 3: audit trail, AutoMod read-back/dry-run, security posture.
+    app.router.add_get("/mod/audit/{guild_id:\\d+}", mod_audit)
+    app.router.add_get("/mod/discord-audit/{guild_id:\\d+}", mod_discord_audit)
+    app.router.add_get("/mod/automod/{guild_id:\\d+}", mod_automod)
+    app.router.add_post("/mod/automod/test", mod_automod_test)
+    app.router.add_get("/mod/security/{guild_id:\\d+}", mod_security)
+    app.router.add_post("/mod/security/{guild_id:\\d+}", mod_security)
 
     async def _economy_guild(request: web.Request) -> tuple[object | None, web.Response | None]:
         """Shared guard: bridge auth + bot membership for economy reads/writes.

@@ -31,6 +31,7 @@ via BOT_PERMISSIONS and reported as BOT_MISSING_PERMISSION — never as a user
 permission failure.
 """
 
+import functools
 import logging
 import re
 from datetime import datetime, timedelta, timezone
@@ -53,6 +54,7 @@ USER_PERMISSIONS: dict[str, str] = {
     "warnings": "manage_roles",
     "removewarning": "manage_roles",
     "clearwarnings": "manage_roles",
+    "warning": "manage_roles",
     "kick": "kick_members",
     "timeout": "moderate_members",
     "removetimeout": "moderate_members",
@@ -64,6 +66,11 @@ USER_PERMISSIONS: dict[str, str] = {
     "unlockdown": "manage_channels",
     "purge": "manage_guild",
     "cleanup": "manage_guild",
+    # Phase 3 security actions. They change a server's protective posture, so
+    # they are Manage Server, and they are listed here (rather than special-
+    # cased in the route) so the ONE invoker check applies to them too.
+    "raidmode": "manage_guild",
+    "verification": "manage_guild",
 }
 
 # Bot-side Discord permission attribute per action (None = DB-only action).
@@ -76,6 +83,7 @@ BOT_PERMISSIONS: dict[str, str | None] = {
     "hardmute": "manage_roles",
     "unmute": "manage_roles",
     "warn": None,
+    "warning": None,
     "kick": "kick_members",
     "timeout": "moderate_members",
     "removetimeout": "moderate_members",
@@ -303,7 +311,338 @@ async def _record(db, guild_id: int, target_id: int, moderator_id: int,
     return case_id
 
 
+# ── Audit trail (spec §3) ─────────────────────────────────────────────
+# Every attempt is recorded — success AND failure — because a ban that nobody
+# can see fail is how a moderator ends up believing someone was banned. The
+# record carries the acting moderator, the target, the source (discord /
+# dashboard / automatic rule), the case it belongs to and, for temporary
+# actions, when it expires. Discriminator fields stay out of it by
+# construction: nothing credential-shaped is ever passed in here.
+INVOKER_SOURCES: tuple[str, ...] = ("discord", "dashboard", "verification")
+
+
+def _audit_source(source: str) -> str:
+    value = str(source or "system").lower()
+    return value if value in ("discord", "dashboard", "automod", "anti-raid",
+                             "system", "verification") else "system"
+
+
+async def _audit(db, guild_id: int, action: str, *, moderator_id: int | str = 0,
+                 target_id: int | str = 0, source: str = "dashboard", success: bool = True,
+                 reason: str = "", case_id: int | None = None,
+                 expires_at: datetime | None = None, detail: str = "",
+                 reversible: bool = False, meta: dict | None = None) -> None:
+    """Write one audit row. Never raises: logging must not break the action."""
+    try:
+        await db.log_mod_audit(
+            guild_id, action, moderator_id=moderator_id or 0, target_id=target_id or 0,
+            source=_audit_source(source), success=success, reason=reason, case_id=case_id,
+            expires_at=expires_at, detail=detail, reversible=reversible, meta=meta)
+    except Exception as exc:
+        log.warning("Audit write failed for %s: %s", action, type(exc).__name__)
+
+
+def _reason_from(args: tuple, kwargs: dict) -> str:
+    """The reason, positional or keyword.
+
+    Most service calls pass it as the first string after the ids; purge passes
+    a kind first, which is why purge records its own audit line instead of
+    relying on this.
+    """
+    if isinstance(kwargs.get("reason"), str) and kwargs["reason"].strip():
+        return str(kwargs["reason"])
+    for value in args:
+        if isinstance(value, str) and value.strip():
+            return value
+    return ""
+
+
+async def _audit_attempt(db, guild_id: int, target_id: int, action: str,
+                         args: tuple, kwargs: dict, res: dict) -> None:
+    """One record per attempt, derived from the call and its result."""
+    source = kwargs.get("source") or "dashboard"
+    ok = bool(res.get("ok"))
+    minutes = res.get("expiresInMinutes")
+    expires = None
+    if isinstance(minutes, (int, float)) and minutes > 0:
+        expires = _utcnow() + timedelta(minutes=int(minutes))
+    await _audit(
+        db, guild_id, action,
+        moderator_id=kwargs.get("actor_id") or 0,
+        target_id=target_id,
+        source=source,
+        success=ok,
+        reason=_reason_from(args, kwargs),
+        case_id=res.get("caseId"),
+        expires_at=expires,
+        detail="" if ok else str(res.get("error") or res.get("code") or "failed"),
+        # Automatic actions are reversible by requirement: an unverified
+        # heuristic must never be the last word (spec §5).
+        reversible=_audit_source(source) in ("automod", "anti-raid"),
+        meta={"code": res.get("code") or "OK"},
+    )
+
+
+def audited(action: str):
+    """Decorator: audit the outcome of a service call, success or failure.
+
+    Applied to the functions whose signature is (bot, db, guild_id, target_id,
+    ...) — the ones with a different shape (server-wide lockdown, purge, notes)
+    write their own record, because their target is a channel or a note rather
+    than a member.
+    """
+    def decorate(fn):
+        @functools.wraps(fn)
+        async def wrapper(bot, db, guild_id, target_id, *args, **kwargs):
+            try:
+                res = await fn(bot, db, guild_id, target_id, *args, **kwargs)
+            except Exception as exc:
+                await _audit_attempt(db, int(guild_id), int(target_id or 0), action, args, kwargs,
+                                     {"ok": False, "code": "BOT_ERROR",
+                                      "error": f"{action} raised {type(exc).__name__}"})
+                raise
+            await _audit_attempt(db, int(guild_id), int(target_id or 0), action, args, kwargs, res)
+            return res
+        return wrapper
+    return decorate
+
+
+def audited_any(action: str, *, target_of=None, reason_of=None):
+    """Audit a service call whose signature is not (bot, db, guild_id, target_id…).
+
+    Server-wide lockdown, channel purge and the note bookkeeping take a channel,
+    a filter or a note id where the others take a member — so the target and
+    the reason are supplied by the caller instead of being guessed. Everything
+    else about the record is identical, which is what keeps one audit trail
+    answering "who did what to whom, from where, and did it work".
+    """
+    target_fn = target_of or (lambda args, kwargs, res: 0)
+    reason_fn = reason_of or (lambda args, kwargs, res: "")
+
+    def decorate(fn):
+        @functools.wraps(fn)
+        async def wrapper(bot, db, guild_id, *args, **kwargs):
+            source = kwargs.get("source") or "dashboard"
+            actor = kwargs.get("actor_id") or 0
+            try:
+                res = await fn(bot, db, guild_id, *args, **kwargs)
+            except Exception as exc:
+                await _audit(db, guild_id, action, moderator_id=actor,
+                             target_id=target_fn(args, kwargs, {}), source=source,
+                             success=False, reason=reason_fn(args, kwargs, {}),
+                             detail=f"{action} raised {type(exc).__name__}")
+                raise
+            minutes = res.get("expiresInMinutes")
+            await _audit(
+                db, guild_id, action, moderator_id=actor,
+                target_id=target_fn(args, kwargs, res), source=source,
+                success=bool(res.get("ok")),
+                reason=reason_fn(args, kwargs, res),
+                case_id=res.get("caseId"),
+                expires_at=(_utcnow() + timedelta(minutes=int(minutes))
+                            if isinstance(minutes, (int, float)) and minutes > 0 else None),
+                detail="" if res.get("ok") else str(res.get("error") or res.get("code") or "failed"),
+                reversible=_audit_source(source) in ("automod", "anti-raid"),
+                meta={"code": res.get("code") or "OK"})
+            return res
+        return wrapper
+    return decorate
+
+
+# ── Invoker authorization (spec §7) ───────────────────────────────────
+# The dashboard already checked "this account may manage the guild", but that
+# check runs in a browser and its inputs are untrusted. The bot re-derives the
+# human side from Discord itself, twice:
+#   1. the invoker holds the permission THIS action needs (Manage Server is not
+#      Ban Members);
+#   2. the invoker OUTRANKS the target — Discord's role hierarchy, re-read from
+#      the live member, so a moderator cannot punish someone above them.
+async def _resolve_actor_member(guild, actor_id):
+    """Live member for the acting human: cache first, then one REST fetch.
+
+    GET /guilds/{id}/members/{user} needs no privileged intent, so this works
+    even when the member cache is partial — and a permission decision is never
+    made from a member we could not resolve.
+    """
+    try:
+        cached = guild.get_member(int(actor_id))
+    except Exception:
+        cached = None
+    if cached is not None:
+        return cached
+    fetch = getattr(guild, "fetch_member", None)
+    if fetch is None:
+        return None
+    try:
+        return await fetch(int(actor_id))
+    except Exception:
+        return None
+
+
+async def _guard_invoker(guild, action: str, actor_id: int, source: str, target=None) -> dict | None:
+    """Validate the HUMANS involved. None when the call may proceed."""
+    if _audit_source(source) not in INVOKER_SOURCES:
+        return None  # automod / anti-raid / system: there is no invoker
+    try:
+        actor = int(actor_id or 0)
+    except (TypeError, ValueError):
+        actor = 0
+    if not actor:
+        return _fail("INVALID_ACTOR",
+                     "An action from the website must identify the signed-in moderator.")
+    if target is not None and actor == int(getattr(target, "id", 0) or 0):
+        return _fail("TARGET_NOT_ACTIONABLE", "You can't moderate yourself.")
+    member = await _resolve_actor_member(guild, actor)
+    if member is None:
+        return _fail("INVALID_ACTOR",
+                     "Your Discord account is not in this server — rejoin it or sign in again.")
+    attr = USER_PERMISSIONS.get(action)
+    if attr:
+        try:
+            granted = bool(getattr(member.guild_permissions, attr, False))
+        except Exception:
+            return _fail("DISCORD_API_ERROR",
+                         "Your permissions could not be evaluated — retry in a moment.")
+        if not granted:
+            label = PERM_LABELS.get(attr, attr)
+            return _fail("INVOKER_MISSING_PERMISSION",
+                         f"You need the **{label}** permission for this.", permission=label)
+    if actor == int(getattr(guild, "owner_id", 0) or 0):
+        return None
+    top = getattr(target, "top_role", None) if target is not None else None
+    if top is not None:
+        try:
+            if top >= member.top_role:
+                return _fail(
+                    "ROLE_HIERARCHY_ERROR",
+                    f"You can't act on **{getattr(target, 'display_name', 'that member')}** — their "
+                    f"highest role **{top.name}** is at or above yours.")
+        except TypeError:
+            return _fail("DISCORD_API_ERROR", "Role hierarchy could not be evaluated.")
+    return None
+
+
+# ── Persistent roles (restore on rejoin, spec §6) ─────────────────────
+# "Restore what they had" must never mean "silently re-grant Administrator".
+# A role is kept only when Murabot could legitimately have assigned it: not
+# managed by an integration, not @everyone, strictly below the bot's own top
+# role, and — unless the guild explicitly opted into dangerous restores —
+# carrying none of the permissions that make a role a security boundary.
+DANGEROUS_ROLE_PERMS: tuple[str, ...] = (
+    "administrator", "manage_guild", "manage_roles", "manage_channels",
+    "manage_webhooks", "ban_members", "kick_members", "moderate_members",
+    "manage_messages", "mention_everyone",
+)
+
+
+def role_is_restorable(role, bot_top_position: int, *, opted_in: bool = False) -> tuple[bool, str]:
+    """(may restore, why not) for one role. Pure so it can be tested directly."""
+    if getattr(role, "is_default", None) and role.is_default():
+        return False, "everyone-role"
+    if getattr(role, "managed", False):
+        return False, "integration-managed"
+    try:
+        if int(getattr(role, "position", 0)) >= int(bot_top_position):
+            return False, "at-or-above-bot"
+    except (TypeError, ValueError):
+        return False, "unreadable-position"
+    perms = getattr(role, "permissions", None)
+    if perms is not None and not opted_in:
+        for name in DANGEROUS_ROLE_PERMS:
+            if bool(getattr(perms, name, False)):
+                return False, f"dangerous-permission:{name}"
+    return True, ""
+
+
+async def snapshot_member_roles(bot, db, guild, member) -> dict:
+    """Remember a leaving member's restorable roles.
+
+    Called on member removal (leave / kick / ban). Refuses to store anything
+    Murabot could not hand back: the point is a working restore, not a promise.
+    """
+    settings = {}
+    try:
+        cfg = await db.get_guild_config(guild.id)
+        settings = (cfg.get("moderation") or {})
+    except Exception:
+        settings = {}
+    opted_in = bool(settings.get("restoreDangerousRoles", False))
+    try:
+        bot_top = guild.me.top_role.position
+    except Exception:
+        return {"ok": False, "code": "DISCORD_API_ERROR", "error": "Bot role position unreadable"}
+    kept: list[dict] = []
+    skipped: list[str] = []
+    for role in list(getattr(member, "roles", []) or []):
+        ok, why = role_is_restorable(role, bot_top, opted_in=opted_in)
+        if ok:
+            kept.append({"id": str(role.id), "name": str(getattr(role, "name", ""))})
+        else:
+            skipped.append(f"{getattr(role, 'name', role)} ({why})")
+    try:
+        await db.save_role_snapshot(guild.id, member.id, kept, opted_in=opted_in)
+    except Exception as exc:
+        return {"ok": False, "code": "DATABASE_ERROR", "error": type(exc).__name__}
+    await _audit(db, guild.id, "role_snapshot", moderator_id=0, target_id=member.id,
+                 source="system", success=True,
+                 reason=f"{len(kept)} role(s) saved for restore on rejoin",
+                 detail="; ".join(skipped)[:300])
+    return {"ok": True, "saved": len(kept), "skipped": skipped}
+
+
+async def restore_member_roles(bot, db, guild, member) -> dict:
+    """Hand a rejoining member their saved roles back — within limits.
+
+    Skips anything the bot can no longer assign (role moved above it, deleted,
+    now managed) and anything that turned dangerous while they were away, and
+    audits every one of those decisions so "why didn't I get my roles back"
+    has an answer.
+    """
+    try:
+        snapshot = await db.get_role_snapshot(guild.id, member.id)
+    except Exception as exc:
+        return {"ok": False, "code": "DATABASE_ERROR", "error": type(exc).__name__}
+    if not snapshot:
+        return {"ok": True, "restored": 0, "reason": "no snapshot"}
+    problem = await _guard_bot(guild, "mute")  # needs Manage Roles
+    if problem:
+        # Do NOT drop the snapshot: a permission problem now must not erase what
+        # the member is owed once the role order is fixed.
+        return {**problem, "restored": 0}
+    opted_in = bool(snapshot.get("optedIn"))
+    try:
+        bot_top = guild.me.top_role.position
+    except Exception:
+        return {"ok": False, "code": "DISCORD_API_ERROR", "error": "role position unreadable"}
+    restored: list[str] = []
+    skipped: list[str] = []
+    for entry in snapshot.get("roles") or []:
+        role = guild.get_role(int(entry.get("id") or 0)) if hasattr(guild, "get_role") else None
+        if role is None:
+            skipped.append(f"{entry.get('name') or entry.get('id')} (deleted)")
+            continue
+        ok, why = role_is_restorable(role, bot_top, opted_in=opted_in)
+        if not ok:
+            skipped.append(f"{getattr(role, 'name', role)} ({why})")
+            continue
+        try:
+            await member.add_roles(role, reason="Persistent role restore (Murabot)")
+            restored.append(str(role.id))
+        except Exception:
+            skipped.append(f"{getattr(role, 'name', role)} (discord refused)")
+    try:
+        await db.clear_role_snapshot(guild.id, member.id)
+    except Exception:
+        pass
+    await _audit(db, guild.id, "role_restore", moderator_id=0, target_id=member.id,
+                 source="system", success=bool(restored),
+                 reason=f"{len(restored)} role(s) restored on rejoin",
+                 detail="; ".join(skipped)[:300])
+    return {"ok": True, "restored": len(restored), "skipped": skipped}
+
+
 # ── Punishments ───────────────────────────────────────────────────────
+@audited("warn")
 async def warn_member(bot, db, guild_id: int, target_id: int, reason: str,
                       actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
@@ -311,6 +650,9 @@ async def warn_member(bot, db, guild_id: int, target_id: int, reason: str,
         return _fail("BOT_NOT_IN_GUILD", "I'm not in that server.")
     member = guild.get_member(int(target_id)) if hasattr(guild, "get_member") else None
     problem = _guard_target(guild, member, actor_id)
+    if problem:
+        return problem
+    problem = await _guard_invoker(guild, "warn", actor_id, source, member)
     if problem:
         return problem
     reason = (reason or "No reason given").strip()[:300]
@@ -323,6 +665,7 @@ async def warn_member(bot, db, guild_id: int, target_id: int, reason: str,
     return {"ok": True, "warningCount": count, "caseId": case_id, "dmSent": dm_sent}
 
 
+@audited("timeout")
 async def timeout_member(bot, db, guild_id: int, target_id: int, minutes: int,
                          reason: str, actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
@@ -331,6 +674,9 @@ async def timeout_member(bot, db, guild_id: int, target_id: int, minutes: int,
         return problem
     member = guild.get_member(int(target_id))
     problem = _guard_target(guild, member, actor_id)
+    if problem:
+        return problem
+    problem = await _guard_invoker(guild, "timeout", actor_id, source, member)
     if problem:
         return problem
     minutes = max(1, min(int(minutes or 10), 40320))
@@ -349,6 +695,7 @@ async def timeout_member(bot, db, guild_id: int, target_id: int, minutes: int,
     return {"ok": True, "caseId": case_id, "dmSent": dm_sent}
 
 
+@audited("removetimeout")
 async def remove_timeout(bot, db, guild_id: int, target_id: int, reason: str,
                          actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
@@ -357,6 +704,9 @@ async def remove_timeout(bot, db, guild_id: int, target_id: int, reason: str,
         return problem
     member = guild.get_member(int(target_id))
     problem = _guard_target(guild, member, actor_id)
+    if problem:
+        return problem
+    problem = await _guard_invoker(guild, "removetimeout", actor_id, source, member)
     if problem:
         return problem
     try:
@@ -378,6 +728,7 @@ async def remove_timeout(bot, db, guild_id: int, target_id: int, reason: str,
     return {"ok": True, "caseId": case_id}
 
 
+@audited("kick")
 async def kick_member(bot, db, guild_id: int, target_id: int, reason: str,
                       actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
@@ -386,6 +737,9 @@ async def kick_member(bot, db, guild_id: int, target_id: int, reason: str,
         return problem
     member = guild.get_member(int(target_id))
     problem = _guard_target(guild, member, actor_id)
+    if problem:
+        return problem
+    problem = await _guard_invoker(guild, "kick", actor_id, source, member)
     if problem:
         return problem
     reason = (reason or "No reason given").strip()[:300]
@@ -402,6 +756,7 @@ async def kick_member(bot, db, guild_id: int, target_id: int, reason: str,
     return {"ok": True, "caseId": case_id, "dmSent": dm_sent}
 
 
+@audited("ban")
 async def ban_member(bot, db, guild_id: int, target_id: int, reason: str,
                      delete_days: int = 0, actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
@@ -418,6 +773,13 @@ async def ban_member(bot, db, guild_id: int, target_id: int, reason: str,
             return problem
     elif int(target_id) == int(actor_id):
         return _fail("TARGET_NOT_ACTIONABLE", "You can't moderate yourself.")
+    # A banned user is often not a member, so there is no role hierarchy to
+    # compare against — the invoker's own Ban Members permission is still
+    # re-checked, and the bot's hierarchy guard above already covered the case
+    # where they ARE still here.
+    problem = await _guard_invoker(guild, "ban", actor_id, source, member)
+    if problem:
+        return problem
     reason = (reason or "No reason given").strip()[:300]
     delete_days = max(0, min(int(delete_days or 0), 7))
     try:
@@ -435,10 +797,14 @@ async def ban_member(bot, db, guild_id: int, target_id: int, reason: str,
     return {"ok": True, "caseId": case_id, "dmSent": dm_sent}
 
 
+@audited("unban")
 async def unban_member(bot, db, guild_id: int, target_id: int, reason: str,
                        actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
     problem = await _guard_bot(guild, "unban")
+    if problem:
+        return problem
+    problem = await _guard_invoker(guild, "unban", actor_id, source, None)
     if problem:
         return problem
     reason = (reason or "Unbanned").strip()[:300]
@@ -459,6 +825,7 @@ async def unban_member(bot, db, guild_id: int, target_id: int, reason: str,
     return {"ok": True, "caseId": case_id}
 
 
+@audited("softban")
 async def softban_member(bot, db, guild_id: int, target_id: int, reason: str,
                          delete_days: int = 1, actor_id: int = 0, source: str = "dashboard") -> dict:
     """Ban (clearing message history) then immediately unban."""
@@ -475,6 +842,7 @@ async def softban_member(bot, db, guild_id: int, target_id: int, reason: str,
     return {"ok": True, "caseId": case_id}
 
 
+@audited("tempban")
 async def tempban_member(bot, db, guild_id: int, target_id: int, reason: str,
                          delete_days: int = 0, duration_minutes: int = 60,
                          actor_id: int = 0, source: str = "dashboard") -> dict:
@@ -516,6 +884,7 @@ async def _mute_role(guild, db, guild_id: int) -> tuple[dict | None, object | No
     return None, role
 
 
+@audited("mute")
 async def mute_member(bot, db, guild_id: int, target_id: int, reason: str,
                       duration_minutes: int | None = None,
                       actor_id: int = 0, source: str = "dashboard") -> dict:
@@ -525,6 +894,9 @@ async def mute_member(bot, db, guild_id: int, target_id: int, reason: str,
         return problem
     member = guild.get_member(int(target_id))
     problem = _guard_target(guild, member, actor_id)
+    if problem:
+        return problem
+    problem = await _guard_invoker(guild, "mute", actor_id, source, member)
     if problem:
         return problem
     problem, role = await _mute_role(guild, db, int(guild_id))
@@ -556,6 +928,7 @@ async def mute_member(bot, db, guild_id: int, target_id: int, reason: str,
     return {"ok": True, "caseId": case_id, "dmSent": dm_sent}
 
 
+@audited("hardmute")
 async def hardmute_member(bot, db, guild_id: int, target_id: int, reason: str,
                           duration_minutes: int | None = None,
                           actor_id: int = 0, source: str = "dashboard") -> dict:
@@ -566,6 +939,9 @@ async def hardmute_member(bot, db, guild_id: int, target_id: int, reason: str,
         return problem
     member = guild.get_member(int(target_id))
     problem = _guard_target(guild, member, actor_id)
+    if problem:
+        return problem
+    problem = await _guard_invoker(guild, "hardmute", actor_id, source, member)
     if problem:
         return problem
     problem, role = await _mute_role(guild, db, int(guild_id))
@@ -617,6 +993,7 @@ async def hardmute_member(bot, db, guild_id: int, target_id: int, reason: str,
     return {"ok": True, "caseId": case_id, "dmSent": dm_sent}
 
 
+@audited("unmute")
 async def unmute_member(bot, db, guild_id: int, target_id: int, reason: str,
                         actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
@@ -626,6 +1003,9 @@ async def unmute_member(bot, db, guild_id: int, target_id: int, reason: str,
     member = guild.get_member(int(target_id))
     if member is None:
         return _fail("TARGET_NOT_FOUND", "That member is not on this server.")
+    problem = await _guard_invoker(guild, "unmute", actor_id, source, member)
+    if problem:
+        return problem
     problem, role = await _mute_role(guild, db, int(guild_id))
     if problem:
         return problem
@@ -683,26 +1063,33 @@ async def view_warnings(db, guild_id: int, target_id: int) -> dict:
         for e in (entries or [])]}
 
 
-async def remove_warning(db, guild_id: int, target_id: int, index: int) -> dict:
+async def remove_warning(db, guild_id: int, target_id: int, index: int,
+                         actor_id: int = 0, source: str = "dashboard") -> dict:
     try:
         ok = await db.remove_warning(int(guild_id), int(target_id), int(index))
     except Exception as exc:
         return _fail("DATABASE_ERROR", f"Warning could not be removed ({type(exc).__name__}).")
     if not ok:
         return _fail("TARGET_NOT_FOUND", f"Warning #{index} does not exist.")
+    await _audit(db, guild_id, "warning_remove", moderator_id=actor_id, target_id=target_id,
+                 source=source, success=True, reason=f"warning #{index}")
     return {"ok": True, "removed": int(index)}
 
 
-async def clear_warnings(db, guild_id: int, target_id: int) -> dict:
+async def clear_warnings(db, guild_id: int, target_id: int, actor_id: int = 0,
+                         source: str = "dashboard") -> dict:
     try:
         cleared = await db.clear_warnings(int(guild_id), int(target_id))
     except Exception as exc:
         return _fail("DATABASE_ERROR", f"Warnings could not be cleared ({type(exc).__name__}).")
+    await _audit(db, guild_id, "warning_clear", moderator_id=actor_id, target_id=target_id,
+                 source=source, success=True, reason="record cleaned")
     return {"ok": True, "cleared": bool(cleared)}
 
 
 # ── User notes (Manage Server, DB-only — no Discord permission needed) ─
-async def set_note(db, guild_id: int, target_id: int, text: str, actor_id: int = 0) -> dict:
+async def set_note(db, guild_id: int, target_id: int, text: str, actor_id: int = 0,
+                   source: str = "dashboard") -> dict:
     text = (text or "").strip()[:1000]
     if not text:
         return _fail("INVALID_INPUT", "Note text is required.")
@@ -710,6 +1097,9 @@ async def set_note(db, guild_id: int, target_id: int, text: str, actor_id: int =
         note_id = await db.add_user_note(int(guild_id), int(target_id), int(actor_id), text)
     except Exception as exc:
         return _fail("DATABASE_ERROR", f"Note could not be saved ({type(exc).__name__}).")
+    await _audit(db, guild_id, "note_add", moderator_id=actor_id, target_id=target_id,
+                 source=source, success=True, reason=text,
+                 meta={"noteId": str(note_id)})
     return {"ok": True, "noteId": note_id}
 
 
@@ -725,21 +1115,27 @@ async def view_notes(db, guild_id: int, target_id: int) -> dict:
         for n in (notes or [])]}
 
 
-async def remove_note(db, guild_id: int, note_id: int) -> dict:
+async def remove_note(db, guild_id: int, note_id: int, actor_id: int = 0,
+                      source: str = "dashboard") -> dict:
     try:
         ok = await db.remove_user_note(int(guild_id), int(note_id))
     except Exception as exc:
         return _fail("DATABASE_ERROR", f"Note could not be removed ({type(exc).__name__}).")
     if not ok:
         return _fail("TARGET_NOT_FOUND", f"Note #{note_id} does not exist in this server.")
+    await _audit(db, guild_id, "note_remove", moderator_id=actor_id, source=source,
+                 success=True, reason=f"note #{note_id}")
     return {"ok": True, "removed": int(note_id)}
 
 
-async def clear_notes(db, guild_id: int, target_id: int) -> dict:
+async def clear_notes(db, guild_id: int, target_id: int, actor_id: int = 0,
+                      source: str = "dashboard") -> dict:
     try:
         count = await db.clear_user_notes(int(guild_id), int(target_id))
     except Exception as exc:
         return _fail("DATABASE_ERROR", f"Notes could not be cleared ({type(exc).__name__}).")
+    await _audit(db, guild_id, "note_clear", moderator_id=actor_id, target_id=target_id,
+                 source=source, success=True, reason=f"{count} note(s) cleared")
     return {"ok": True, "cleared": int(count)}
 
 
@@ -759,11 +1155,15 @@ def _everyone_overwrite(channel, guild):
         return None
 
 
+@audited("lockdown")
 async def lockdown_channel(bot, db, guild_id: int, channel_id: int, reason: str,
                            duration_minutes: int | None = None,
                            actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
     problem = await _guard_bot(guild, "lockdown")
+    if problem:
+        return problem
+    problem = await _guard_invoker(guild, "lockdown", actor_id, source, None)
     if problem:
         return problem
     channel = guild.get_channel(int(channel_id)) if hasattr(guild, "get_channel") else None
@@ -830,10 +1230,14 @@ async def lockdown_channel(bot, db, guild_id: int, channel_id: int, reason: str,
     return {"ok": True, "caseId": case_id, "channelId": str(channel_id)}
 
 
+@audited("unlock")
 async def unlock_channel(bot, db, guild_id: int, channel_id: int, reason: str,
                          actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
     problem = await _guard_bot(guild, "lockdown")
+    if problem:
+        return problem
+    problem = await _guard_invoker(guild, "unlockdown", actor_id, source, None)
     if problem:
         return problem
     channel = guild.get_channel(int(channel_id)) if hasattr(guild, "get_channel") else None
@@ -870,11 +1274,15 @@ async def unlock_channel(bot, db, guild_id: int, channel_id: int, reason: str,
     return {"ok": True, "caseId": case_id}
 
 
+@audited_any("lockdown", reason_of=lambda args, kwargs, res: (args[0] if args else kwargs.get("reason") or "server lockdown"))
 async def lockdown_server(bot, db, guild_id: int, reason: str,
                           duration_minutes: int | None = None,
                           actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
     problem = await _guard_bot(guild, "lockdown")
+    if problem:
+        return problem
+    problem = await _guard_invoker(guild, "lockdown", actor_id, source, None)
     if problem:
         return problem
     reason = (reason or "Server lockdown").strip()[:300]
@@ -914,12 +1322,16 @@ async def lockdown_server(bot, db, guild_id: int, reason: str,
     return {"ok": True, "caseId": case_id, "locked": locked, "skipped": skipped}
 
 
+@audited_any("unlock", reason_of=lambda args, kwargs, res: (args[0] if args else kwargs.get("reason") or "server unlock"))
 async def unlock_server(bot, db, guild_id: int, reason: str,
                         actor_id: int = 0, source: str = "dashboard") -> dict:
     """Restore ONLY channels this service locked (saved state) — never
     unrelated administrator overwrites."""
     guild = _guild(bot, guild_id)
     problem = await _guard_bot(guild, "lockdown")
+    if problem:
+        return problem
+    problem = await _guard_invoker(guild, "unlockdown", actor_id, source, None)
     if problem:
         return problem
     restored: list[str] = []
@@ -999,12 +1411,20 @@ def _purge_match(kind: str, msg, user_id: int | None, text: str) -> bool:
         return False
 
 
+@audited_any(
+    "purge",
+    target_of=lambda args, kwargs, res: (args[0] if args else kwargs.get("channel_id") or 0),
+    reason_of=lambda args, kwargs, res: f"{(args[1] if len(args) > 1 else kwargs.get('kind')) or 'all'} "
+                                        f"purge ×{args[2] if len(args) > 2 else kwargs.get('count') or 0}")
 async def purge_messages(bot, db, guild_id: int, channel_id: int, kind: str, count: int,
                          user_id: int | None = None, text: str = "",
                          include_pinned: bool = False,
                          actor_id: int = 0, source: str = "dashboard") -> dict:
     guild = _guild(bot, guild_id)
     problem = await _guard_bot(guild, "purge")
+    if problem:
+        return problem
+    problem = await _guard_invoker(guild, "purge", actor_id, source, None)
     if problem:
         return problem
     kind = (kind or "all").lower()
@@ -1069,23 +1489,44 @@ async def purge_messages(bot, db, guild_id: int, channel_id: int, kind: str, cou
 
 
 # ── Scheduled-action dispatcher (survives restarts) ───────────────────
+#: Failures worth retrying: the row goes back to `pending` and the next sweep
+#: tries again. A permanent refusal (the channel is gone, the user is not
+#: banned) is NOT retried forever — it is recorded and closed.
+RETRYABLE_CODES = ("DISCORD_API_ERROR", "DATABASE_ERROR", "BOT_MISSING_PERMISSION")
+MAX_SCHEDULED_ATTEMPTS = 5
+
+
 async def run_due(bot, db) -> dict:
-    """Execute due scheduled rows: unban / unmute (+role restore) /
-    unlock_channel / unlock_server. Runs every minute from the bot loop."""
+    """Execute due scheduled rows exactly once each: unban / unmute (+role
+    restore) / unlock_channel / unlock_server / raid-mode expiry.
+
+    Idempotency is enforced by CLAIMING the row first (pending → running is
+    atomic), so two overlapping sweeps — or a restart mid-sweep — can never
+    perform the same expiry twice. A transient Discord failure is handed back
+    for retry; a permanent one is closed with its reason recorded.
+    """
     try:
         rows = await db.due_scheduled_actions()
     except Exception as exc:
         return {"ok": False, "code": "DATABASE_ERROR", "error": type(exc).__name__}
     done = 0
+    retried = 0
     for row in rows:
-        gid = row.get("guildId")
-        action = row.get("action")
-        uid = row.get("userId")
-        payload = row.get("payload") or {}
+        try:
+            claimed = await db.claim_scheduled_action(row.get("_id"))
+        except Exception:
+            claimed = None
+        if not claimed:
+            continue  # another sweep owns it (or it is already finished)
+        gid = claimed.get("guildId")
+        action = claimed.get("action")
+        uid = claimed.get("userId")
+        payload = claimed.get("payload") or {}
+        attempts = int(claimed.get("attempts") or 0)
         try:
             if action == "unban":
                 res = await unban_member(bot, db, int(gid), int(uid),
-                                         f"Temporary ban expired", 0, "system")
+                                         "Temporary ban expired", 0, "system")
             elif action in ("unmute", "restore_roles"):
                 res = await unmute_member(bot, db, int(gid), int(uid),
                                           "Mute expired", 0, "system")
@@ -1094,15 +1535,103 @@ async def run_due(bot, db) -> dict:
                                            "Scheduled unlock", 0, "system")
             elif action == "unlock_server":
                 res = await unlock_server(bot, db, int(gid), "Scheduled unlock", 0, "system")
+            elif action == "disable_raid_mode":
+                res = await end_raid_mode(bot, db, int(gid), reason="Protection window expired")
+            elif action == "restore_roles_on_rejoin":
+                # Members who left while muted: their snapshot is restorable
+                # through the join path, so the row is informational only.
+                res = {"ok": True}
             else:
-                res = {"ok": False, "error": f"unknown scheduled action {action}"}
-            await db.complete_scheduled_action(
-                row["_id"], "ok" if res.get("ok") else str(res.get("error", "failed"))[:200])
-            if res.get("ok"):
-                done += 1
+                res = {"ok": False, "code": "INVALID_INPUT",
+                       "error": f"unknown scheduled action {action}"}
         except Exception as exc:
-            try:
-                await db.complete_scheduled_action(row["_id"], f"exception {type(exc).__name__}")
-            except Exception:
-                pass
-    return {"ok": True, "processed": done, "due": len(rows)}
+            res = {"ok": False, "code": "BOT_ERROR", "error": type(exc).__name__}
+        code = str(res.get("code") or "")
+        if res.get("ok"):
+            done += 1
+            await db.release_scheduled_action(claimed["_id"], "ok")
+            continue
+        if code in RETRYABLE_CODES and attempts + 1 < MAX_SCHEDULED_ATTEMPTS:
+            retried += 1
+            await db.release_scheduled_action(
+                claimed["_id"], f"{code}: {res.get('error')}", retry=True)
+            await _audit(db, int(gid), action, moderator_id=0, target_id=uid,
+                         source="system", success=False,
+                         reason="scheduled action retry",
+                         detail=f"{code}: {res.get('error')}"[:300])
+            continue
+        await db.release_scheduled_action(
+            claimed["_id"], f"{code or 'FAILED'}: {res.get('error')}"[:200])
+        await _audit(db, int(gid), action, moderator_id=0, target_id=uid,
+                     source="system", success=False,
+                     reason="scheduled action gave up",
+                     detail=f"{code}: {res.get('error')}"[:300])
+    return {"ok": True, "processed": done, "retried": retried, "due": len(rows)}
+
+
+# ── Anti-raid state (shared with the security cog) ────────────────────
+async def begin_raid_mode(bot, db, guild_id: int, *, minutes: int = 10, reason: str = "",
+                          automatic: bool = True, actor_id: int = 0,
+                          source: str = "anti-raid") -> dict:
+    """Turn protection ON and STORE it, along with its own expiry.
+
+    Stored because "raid mode is on" has to survive a restart, and because the
+    automatic expiry is a scheduled row: the same dispatcher that lifts a temp
+    ban lifts the protection window, so recovery is guaranteed even if the bot
+    restarts during the raid.
+    """
+    minutes = max(1, min(int(minutes or 10), 1440))
+    until = _utcnow() + timedelta(minutes=minutes)
+    try:
+        await db.set_security_state(int(guild_id), raidMode=True, raidModeUntil=until,
+                                    raidTriggeredAt=_utcnow(), raidReason=reason[:200],
+                                    raidAuto=bool(automatic))
+    except Exception as exc:
+        return _fail("DATABASE_ERROR", f"Raid mode could not be stored ({type(exc).__name__}).")
+    try:
+        await db.schedule_action(int(guild_id), "disable_raid_mode", 0, until,
+                                 {"reason": reason[:150], "actorId": int(actor_id),
+                                  "source": source})
+    except Exception as exc:
+        return _fail("DATABASE_ERROR",
+                     f"Raid mode is ON but the expiry could not be scheduled "
+                     f"({type(exc).__name__}) — turn it off manually.")
+    await _audit(db, guild_id, "raidmode_on", moderator_id=actor_id, target_id=0,
+                 source=source, success=True, reason=reason or "raid protection enabled",
+                 expires_at=until, reversible=True)
+    return {"ok": True, "until": until.isoformat(), "minutes": minutes}
+
+
+async def end_raid_mode(bot, db, guild_id: int, *, reason: str = "", actor_id: int = 0,
+                        source: str = "anti-raid") -> dict:
+    """Turn protection OFF, cancel its expiry and record the recovery."""
+    try:
+        await db.set_security_state(int(guild_id), raidMode=False, raidModeUntil=None)
+        for row in await db.pending_scheduled_actions(int(guild_id), action="disable_raid_mode"):
+            await db.release_scheduled_action(row["_id"], "raid mode ended")
+    except Exception as exc:
+        return _fail("DATABASE_ERROR", f"Raid mode could not be cleared ({type(exc).__name__}).")
+    await _audit(db, guild_id, "raidmode_off", moderator_id=actor_id, target_id=0,
+                 source=source, success=True, reason=reason or "raid protection lifted")
+    return {"ok": True}
+
+
+async def raid_mode_active(bot, db, guild_id: int) -> dict:
+    """Read the stored protection state, expiring it honestly when it lapsed.
+
+    A stale ``raidMode: true`` whose window has passed is reported as OFF and
+    repaired, rather than left to keep timing out new members forever because
+    the process that armed it died before the expiry ran.
+    """
+    try:
+        state = await db.get_security_state(int(guild_id))
+    except Exception as exc:
+        return {"active": False, "unknown": True, "error": type(exc).__name__}
+    if not state.get("raidMode"):
+        return {"active": False, "until": None, "automatic": False}
+    until = state.get("raidModeUntil")
+    if isinstance(until, datetime) and until <= _utcnow():
+        await end_raid_mode(bot, db, int(guild_id), reason="Protection window had already expired")
+        return {"active": False, "until": None, "expired": True}
+    return {"active": True, "until": until.isoformat() if isinstance(until, datetime) else None,
+            "automatic": bool(state.get("raidAuto")), "reason": state.get("raidReason", "")}
