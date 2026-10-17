@@ -1,0 +1,18 @@
+# ads.txt for muragoods.vercel.app
+# Authorized sellers for display advertising.
+#
+# Only add records you have actually configured and verified.
+#
+# Google AdSense (approved publisher record):
+google.com, pub-2932309163327262, DIRECT, f08c47fec0942fa0
+
+# Status: publisher record added; ad unit slot IDs still empty until
+# created in the AdSense dashboard. See app/lib/placements.ts.
+#
+# Pages: public non-sensitive pages only (home, menu, murastream,
+#        movie/tv detail pages). Excluded: checkout, account, admin,
+#        dashboard, payment, auth, and private screens.
+#
+# Verify:
+#   curl -I https://muragoods.vercel.app/ads.txt
+
