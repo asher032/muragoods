@@ -287,6 +287,64 @@ def test_public_egress_reason_keeps_the_reason() -> None:
     check("the counter moved", True)
 
 
+def test_no_endpoint_returns_a_redaction_placeholder() -> None:
+    """No dashboard-facing route may answer with the redaction placeholder.
+
+    The reported string was `[redacted: possible credential]`. Two routes used
+    to be able to produce it by putting a provider-flavoured exception
+    straight into the JSON `error` the dashboard renders. This parses main.py
+    and asserts no handler builds a response `error` from a raw exception or a
+    sanitizer call.
+    """
+    print("no handler answers with a sanitized exception")
+    root = Path(__file__).resolve().parent.parent / "bot"
+    offenders: list[str] = []
+    for path in sorted(root.glob("*.py")) + sorted(root.glob("cogs/*.py")):
+        try:
+            source = path.read_text(encoding="utf-8", errors="ignore")
+            tree = ast.parse(source)
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            # `web.json_response(...)` is an Attribute call, not a bare name.
+            func = node.func
+            outer = (func.id if isinstance(func, ast.Name)
+                     else func.attr if isinstance(func, ast.Attribute) else "")
+            if outer not in ("json_response", "json"):
+                continue
+            # aiohttp's json_response takes the payload POSITIONALLY; the
+            # keyword names are for the wrappers that use them.
+            payloads = [a for a in node.args[:1]]
+            payloads += [kw.value for kw in node.keywords
+                         if kw.arg in ("text", "data", "body")]
+            for value in payloads:
+                if isinstance(value, ast.Dict):
+                    for key, item in zip(value.keys, value.values):
+                        if not (isinstance(key, ast.Constant)
+                                and key.value == "error"):
+                            continue
+                        if isinstance(item, ast.Constant):
+                            # A fixed line of copy is always safe.
+                            continue
+                        # Anything computed. `f"Queue is full (max {cfg})"` is
+                        # fine; the shapes that actually shipped a leak are
+                        # `f"yt-dlp: {err_detail}"`, `f"{exc}"`, and
+                        # `sanitize_for_log(...) or "Resolve failed"` — note the
+                        # last one parses as a BoolOp, so matching on the call
+                        # alone would miss the very code this replaces.
+                        text = ast.get_source_segment(source, item) or ""
+                        if any(tok in text for tok in
+                               ("yt-dlp", "sanitize_for_log", "sanitize_for_user",
+                                "err_detail", "get_resolve_error",
+                                "last_resolve_error", "str(exc)", "{exc}")):
+                            offenders.append(
+                                f"{path.name}:{item.lineno} provider text in error")
+    check("no route returns a scrubbed exception as user-facing text",
+          not offenders, "; ".join(offenders[:4]))
+
+
 def test_diagnostic_payload_is_credential_free() -> None:
     print("the diagnostic payload carries no query content")
     secretish = "https://www.youtube.com/watch?v=x&token=abcdef123456&ip=1.2.3.4"
@@ -552,6 +610,7 @@ def main() -> int:
     test_classification_table()
     test_log_detail_keeps_the_reason_but_not_the_secret()
     test_public_egress_reason_keeps_the_reason()
+    test_no_endpoint_returns_a_redaction_placeholder()
     test_diagnostic_payload_is_credential_free()
     test_source_files_never_render_provider_output()
     for coro in (
