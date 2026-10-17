@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Press_Start_2P, Josefin_Sans } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { GoogleAdSense } from "@/app/components/GoogleAdSense";
 import "./globals.css";
 import { NotificationSetup } from "@/app/components/NotificationSetup";
 import { AppLoader } from "@/app/components/AppLoader";
@@ -84,6 +85,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body className={`${pressStart.variable} ${josefin.variable}`} style={{ fontFamily: "var(--font-body)" }}>
+        <meta name="google-adsense-account" content="ca-pub-2932309163327262" />
         <NotificationProvider>
           <AuthProvider>
           <AppLoader>
@@ -102,6 +104,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         </NotificationProvider>
         <Analytics />
         <SpeedInsights />
+        <GoogleAdSense publisherId="ca-pub-2932309163327262" />
       </body>
     </html>
   );
